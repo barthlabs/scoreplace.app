@@ -8,6 +8,10 @@ const window = {};
 const context = vm.createContext({ window });
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/next-match.js'), 'utf8'), context);
 const next = window.ScoreplaceNextMatch;
+for (const placeholder of ['Vencedor do Grupo 9', 'Perdedora do jogo 12',
+  'Classificada A1', 'A definir', 'TBD']) {
+  assert.equal(next.knownSide(placeholder), false, placeholder + ' não é uma dupla definida');
+}
 const called = { id: 'court', court: 'Quadra 4', courtCalledAt: '2026-10-23T18:00:00Z',
   p1: 'Ana / Bia', team1Uids: ['ana-uid', 'bia-uid'], p2: 'Caio / Dora', team2Uids: ['caio-uid', 'dora-uid'] };
 const busy = { id: 'busy', p1: 'Ana / Eva', team1Uids: ['ana-uid', 'eva-uid'], p2: 'Fabio / Gabi' };
@@ -28,6 +32,12 @@ assert.equal(next.conflictsWithActive({ id:'x', p1:'Ana / Outra', p2:'Zoe' }, [c
 assert.equal(next.conflictsWithActive({ id:'x', p1:'Manual / Outra', p2:'Zoe' },
   [{ id:'court2', p1:'Manual / Parceira', p2:'Pedro' }]), true,
   'nomes manuais sem ID bloqueiam a dupla correta');
+const activeTie = { phaseTieDecisions:{ '0':{ group:{ matches:[{
+  id:'tie-1', court:'Quadra 2', courtCalledAt:'2026-11-13T12:00:00Z',
+  p1:{name:'Ana'}, p2:{name:'Bia'}
+}] } } } };
+assert.equal(next.firstAvailable([{ id:'later', p1:'Ana / Eva', p2:'Caio / Dora' }],
+  [], {}, activeTie), null, 'desempate em quadra também impede chamar a mesma atleta');
 const serverDraw = require('../functions-autodraw/draw-core.js');
 assert.equal(serverDraw._window, globalThis, 'o shim do servidor compartilha window com globalThis');
 assert.equal(typeof serverDraw._window.ScoreplaceNextMatch.conflictsWithActive, 'function',

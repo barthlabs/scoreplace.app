@@ -1,3 +1,11 @@
+## 2.6.91 — 14/nov/2026 (fluxo contínuo entre fases)
+
+- A fila da operação inclui partidas com duplas definidas mesmo sem horário individual. A ordem planejada continua como prioridade; outros confrontos prontos podem ser chamados em quadras livres, inclusive na transição entre classificatórias e eliminatórias de torneios de um ou dois dias.
+- O contador de quadras livres e o seletor dos cards usam a mesma ocupação, incluindo jogos de desempate em quadra. Vagas como “Vencedor do Grupo” permanecem informativas até que as duplas sejam conhecidas.
+- Ao registrar o último placar de uma categoria, a eliminação é materializada mesmo se já não couber na previsão da grade. Nesse caso os horários existentes são preservados e os novos jogos seguem disponíveis para chamada manual; a previsão não desfaz um resultado real.
+- Em formatos cujo avanço de fase depende da decisão da organização, a operação mostra o botão “Avançar” assim que a fase termina, usando a mesma ação do chaveamento.
+- Testes cobrem seleção sem horário, prioridade e fallback da fila, ocupação de desempate, e materialização com capacidade suficiente ou excedida.
+
 ## 2.6.90 — 14/nov/2026 (cards roláveis dos próximos jogos)
 
 - A coluna de próxima chamada mostra a fila em cards completos com rolagem vertical, como os placares pendentes. Um jogo posterior já definido e liberado pode ser chamado diretamente para uma quadra livre, sem esperar a primeira posição visual. Confrontos com vagas ainda indefinidas continuam visíveis e sem chamada.

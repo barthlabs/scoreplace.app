@@ -4652,9 +4652,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       }
       const all = drawWindow._collectAllMatches(t);
       if (!Array.isArray(all)) throw _drawFail('internal', 'Não foi possível conferir a ocupação das quadras.', { tId, matchId });
-      const activeTies = Object.values(t.phaseTieDecisions || {}).flatMap(book =>
-        Object.values(book || {}).flatMap(decision => decision && decision.matches || []))
-        .filter(item => item && item.courtCalledAt && !item.courtReleasedAt && !item.winnerKey);
+      const activeTies = _courtOccupancy.activeMatches([], released, t);
       const activeCandidates = all.filter(item => item && !released[String(item.id)]).concat(activeTies);
       if (confirmCall && !m.courtCalledAt) {
         if (Number(m.phaseIndex || 0) > 0 &&
@@ -4683,7 +4681,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
             }
           }
         }
-        const activeMatches = activeCandidates.filter(item => _courtOccupancy.occupiesCourt(item));
+        const activeMatches = _courtOccupancy.activeMatches(all, released, t);
         if (!drawWindow.ScoreplaceNextMatch ||
             drawWindow.ScoreplaceNextMatch.conflictsWithActive(m, activeMatches)) {
           throw _drawFail('failed-precondition', 'Uma das duplas já está em quadra. Chame outro jogo e tente novamente depois.', { tId, matchId });
@@ -6734,11 +6732,18 @@ function _materializeInterleavedReadyCategories(t, tId, nowIso) {
       ? drawWindow._collectAllMatches(t) : t.matches || [];
     const realIds = new Set(scheduledMatches.filter(m => m && !m.isBye && !m.isSitOut && m.id != null)
       .map(m => String(m.id)));
-    if (!schedule || !schedule.cabe || !schedule.interleaved ||
-        schedule.slots.length !== realIds.size) {
-      throw new HttpsError('failed-precondition', 'A eliminatória de ' + category + ' não cabe na agenda publicada.');
+    // A capacidade é uma previsão, não uma condição para aceitar um resultado
+    // real. Se a etapa avançou além da janela planejada, conserve os horários
+    // já publicados e deixe os confrontos novos sem estimativa individual:
+    // a operação ainda pode chamá-los manualmente em quadras livres.
+    if (schedule && schedule.cabe && schedule.interleaved &&
+        schedule.slots.length === realIds.size) {
+      drawWindow._schAplicarGrade(t);
+    } else {
+      console.warn('Eliminatória materializada fora da capacidade estimada da agenda',
+        { tId, category, plannedSlots:schedule && schedule.slots && schedule.slots.length,
+          matches:realIds.size });
     }
-    drawWindow._schAplicarGrade(t);
     if (typeof drawWindow._assignGlobalGameNumbers === 'function') drawWindow._assignGlobalGameNumbers(t);
     materialized.push(category);
   }

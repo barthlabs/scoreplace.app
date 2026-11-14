@@ -64,6 +64,8 @@
   overflow:hidden;
 }
 .sp-operations-next-scroll { display:flex;flex-direction:column;align-content:start;gap:8px;height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin; }
+.sp-operations-phase-advance { display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-card-hover);color:var(--text-bright);font-size:.82rem; }
+.sp-operations-phase-advance button { white-space:normal;text-align:center; }
 .sp-operations-next .sp-operations-replica { display:grid;grid-template-rows:var(--sp-operations-line-height) var(--sp-operations-line-height) var(--sp-operations-card-height);gap:0;flex:0 0 auto; }
 .sp-operations-next-scroll > .sp-operations-empty { min-height:54px; }
 .sp-operations-courts { display:grid;grid-template-rows:var(--sp-operations-line-height) calc(var(--sp-operations-line-height) + var(--sp-operations-card-height));flex:0 0 auto;width:max-content; }

@@ -1128,8 +1128,22 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketOperationsRefresh(t, root);
       const noCallable = { fullCard:!!strip.querySelector('.sp-operations-next-scroll > .sp-operations-replica .sp-match-card .team'),
         noEmpty:!strip.querySelector('.sp-operations-next-scroll > .sp-operations-empty') };
+      t.phases = [{ name:'Classificatória' }, { name:'Eliminatória' }];
+      t.currentPhaseIndex = 0;
+      window._isMultiPhase = () => true;
+      window._phasesPhaseComplete = () => true;
+      window._advanceMultiPhase = id => { window.advancedPhase = id; };
+      await new Promise(resolve => setTimeout(resolve, 0));
+      window._bracketOperationsRefresh(t, root);
+      const advanceButton = strip.querySelector('[data-operations-advance-phase]');
+      if (advanceButton) advanceButton.click();
+      window.AppStore.currentUser = { uid:'ref' };
+      window._bracketOperationsRefresh(t, root);
+      const refereeAdvanceHidden = !strip.querySelector('[data-operations-advance-phase]');
+      window.AppStore.currentUser = { uid:'org' };
       return { ids, cardPhases, stageLabels, scrollPreserved, hiddenScrollPreserved, hiddenScroll, cardFits, renders, called:window.called,
-        callDebug, noCallable, earlyUncalled:!t.matches[0].courtCalledAt, laterCalled };
+        callDebug, noCallable, phaseAdvance:advanceButton && advanceButton.textContent.trim(),
+        refereeAdvanceHidden, advancedPhase:window.advancedPhase, earlyUncalled:!t.matches[0].courtCalledAt, laterCalled };
     });
     assert.deepEqual(laterCall.ids, ['early', 'later', 'unknown']);
     assert(laterCall.cardPhases.every(card => card.phase),
@@ -1149,6 +1163,11 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert(laterCall.earlyUncalled && laterCall.laterCalled, 'chamar o jogo posterior não chama o primeiro');
     assert(laterCall.noCallable.fullCard && laterCall.noCallable.noEmpty,
       'sem confronto chamável, a próxima partida continua como card completo');
+    assert.match(laterCall.phaseAdvance || '', /Eliminatória/,
+      'fase concluída mostra o avanço dentro da operação');
+    assert.equal(laterCall.advancedPhase, 'sb_test',
+      'o avanço da operação usa a mesma ação canônica do chaveamento');
+    assert(laterCall.refereeAdvanceHidden, 'árbitro pode operar jogos sem receber o botão de avanço de fase');
     await page.setViewportSize({ width:360, height:800 });
     const phaseVisible = await page.evaluate(() => [...document.querySelectorAll('.sp-operations-next .sp-operations-availability')]
       .filter(row => row.querySelector('.sp-operations-stage'))

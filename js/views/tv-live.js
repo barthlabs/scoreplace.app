@@ -367,7 +367,7 @@
       }).map(function (m) { return { item: { m: m, tId: t.id } }; });
       nextCandidates.sort(window._dashboardNextMatchCompare);
       nextQueue = nextCandidates.map(function (entry) { return entry.item.m; });
-      nextMatch = window.ScoreplaceNextMatch.firstAvailable(nextQueue, matches, released);
+      nextMatch = window.ScoreplaceNextMatch.firstAvailable(nextQueue, matches, released, t);
       if (nextMatch) nextQueue = [nextMatch].concat(nextQueue.filter(function (m) { return String(m.id) !== String(nextMatch.id); }));
     }
     var nextGame = nextMatch ? {
@@ -451,7 +451,7 @@
       if (publishedElimination.indexOf(m) !== -1 && Number(m.round || 1) > 1 &&
           (!window.ScoreplaceNextMatch.knownSide(m.p1) || !window.ScoreplaceNextMatch.knownSide(m.p2))) return true;
       return m.isTieBreak || !window.ScoreplaceNextMatch || typeof window.ScoreplaceNextMatch.firstAvailable !== 'function' ||
-        window.ScoreplaceNextMatch.firstAvailable([m], matches, released) === m;
+        window.ScoreplaceNextMatch.firstAvailable([m], matches, released, t) === m;
     })
       .map(function (m) { return { number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '',
         category: String(m.category || m.tierLabel || ''), stage:upcomingStage(m), a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),

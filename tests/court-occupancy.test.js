@@ -18,6 +18,15 @@ const all = [
 assert.equal(core.occupant(all, 'Quadra 4', 'other').id, 'one', 'horários diferentes não liberam quadra ativa');
 assert.equal(core.occupant(all, 'Quadra 4', 'one'), null, 'o próprio jogo pode conservar sua quadra');
 assert.equal(core.occupant(all, 'Quadra 5', 'one'), null, 'sugestão sem chamada não ocupa');
+const released = { one:'2026-10-20T18:10:00Z' };
+const tieTournament = { phaseTieDecisions:{ '0':{ tie:{ matches:[{
+  id:'tie-1', court:'Quadra 3', courtCalledAt:'2026-10-20T18:00:00Z',
+  p1:{name:'Ana'}, p2:{name:'Bia'}
+}] } } } };
+const occupied = core.activeMatches(all, released, tieTournament);
+assert.deepEqual(core.freeCourts(['Quadra 3', 'Quadra 4', 'Quadra 5'], occupied),
+  ['Quadra 4', 'Quadra 5'], 'liberação e desempate usam a mesma ocupação do card e do resumo');
+assert.equal(occupied.find(m => m.id === 'tie-1').p1, 'Ana', 'atleta da simples permanece identificável');
 const serviceWorker = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
 assert.match(serviceWorker, /'\/js\/domain\/court-occupancy\.js'/,
   'a regra de ocupação fica disponível no cache offline da chave');

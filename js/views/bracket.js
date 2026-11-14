@@ -1368,6 +1368,7 @@ window._bracketOperationsSelect = function (t) {
   });
   var active = matches.filter(function (m) { return !released[String(m.id)] && occupancy.occupiesCourt(m); })
     .concat(tieMatches.filter(function (m) { return !m.winnerKey && m.court && m.courtCalledAt && !m.courtReleasedAt; }));
+  var courtOccupants = occupancy.activeMatches(matches, released, t);
   var pending = matches.filter(function (m) { return m && released[String(m.id)] && !occupancy.isFinished(m); })
     .concat(tieMatches.filter(function (m) { return !m.winnerKey && !!m.courtReleasedAt; }));
   // Os placares dos jogos 1 e 2 continuam acessíveis pelas setas do card da
@@ -1384,7 +1385,7 @@ window._bracketOperationsSelect = function (t) {
   });
   var upcoming = matches.filter(function (m) {
     if (!m || released[String(m.id)] || occupancy.isFinished(m) || m.isBye || m.isSitOut || occupancy.occupiesCourt(m) ||
-        m.courtCalledAt || m.startedAt || !_matchCardTimestamp(m.scheduledAt)) return false;
+        m.courtCalledAt || m.startedAt) return false;
     var a = m.p1 || (Array.isArray(m.team1) ? m.team1.join(' / ') : '');
     var b = m.p2 || (Array.isArray(m.team2) ? m.team2.join(' / ') : '');
     return known(a) && known(b);
@@ -1396,16 +1397,21 @@ window._bracketOperationsSelect = function (t) {
   var courts = Array.isArray(t.courtNames) ? t.courtNames.map(String) :
     (typeof t.courtNames === 'string' ? t.courtNames.split(',').map(function (name) { return name.trim(); }).filter(Boolean) : []);
   if (!courts.length) for (var c = 1; c <= Math.max(0, Number(t.courtCount) || 0); c++) courts.push('Quadra ' + c);
-  active.forEach(function (m) { if (courts.indexOf(String(m.court)) === -1) courts.push(String(m.court)); });
+  courtOccupants.forEach(function (m) { if (courts.indexOf(String(m.court)) === -1) courts.push(String(m.court)); });
   // Os três jogos do quarteto são uma série: só o primeiro ainda sem resultado
   // pode entrar na fila. Pular o primeiro nunca libera o segundo ou o terceiro.
   var seriesCandidates = upcoming.map(function (entry) { return entry.item.m; }).filter(function (m) {
     var group = _bracketOperationsGroup(t, m, matches);
     return !group || String((group.matches.find(function (item) { return !occupancy.isFinished(item); }) || {}).id) === String(m.id);
   });
-  var candidates = seriesCandidates.filter(function (m) {
+  var preferred = seriesCandidates.filter(function (m) {
     return !window.ScoreplacePhaseCallOrder || window.ScoreplacePhaseCallOrder.allowed(t, matches, m, occupancy.isFinished);
   });
+  // A ordem da grade prioriza a chamada, mas não é uma restrição do servidor.
+  // Com duplas definidas, a organização pode usar uma quadra livre mesmo
+  // quando placares de outra etapa ainda estão pendentes.
+  var preferredIds = new Set(preferred.map(function (m) { return String(m.id); }));
+  var candidates = preferred.concat(seriesCandidates.filter(function (m) { return !preferredIds.has(String(m.id)); }));
   var postponed = window._bracketCourtPostponed(t.id);
   var ready = window._bracketCourtPostponedReady(t.id);
   // Estados anteriores a esta versão não tinham a fila de retorno. Se um jogo
@@ -1418,16 +1424,11 @@ window._bracketOperationsSelect = function (t) {
   }
   var ordered = window._bracketPostponedOrder(candidates, postponed, ready);
   var next = window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
-    ? window.ScoreplaceNextMatch.firstAvailable(ordered, matches, released) : null;
-  // Na agenda intercalada publicada, a fila não antecipa uma etapa bloqueada:
-  // a eliminatória Diamante só começa quando terminarem os grupos Ouro.
-  var preview = !next && !(t.scheduleWindow && t.scheduleWindow.interleavedPlan) &&
-    window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
-    ? window.ScoreplaceNextMatch.firstAvailable(seriesCandidates, matches, released) : null;
+    ? window.ScoreplaceNextMatch.firstAvailable(ordered, matches, released, t) : null;
   var nextTie = tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt && !m.postponedAt; }) ||
     tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt; }) ||
     tieMatches.find(function (m) { return m.tieStatus === 'review'; });
-  var otherReady = next || preview;
+  var otherReady = next;
   var returnedTie = nextTie && nextTie.postponedAt && matches.some(function (called) {
     return called && called.courtCalledAt &&
       Date.parse(String(called.courtCalledAt)) > Date.parse(String(nextTie.postponedAt));
@@ -1435,7 +1436,7 @@ window._bracketOperationsSelect = function (t) {
   var callableTie = nextTie && (!nextTie.postponedAt || !otherReady || returnedTie) ? nextTie : null;
   // Uma simples já chamada ocupa só a própria quadra. As outras quadras
   // continuam recebendo jogos de categorias que estejam prontos na grade.
-  var suggested = callableTie || next || preview;
+  var suggested = callableTie || next;
   var waitingForTie = !suggested && tieMatches.some(function (m) {
     return m && !m.winnerKey && m.courtCalledAt;
   });
@@ -1446,8 +1447,7 @@ window._bracketOperationsSelect = function (t) {
   // confrontos são apenas informativos até que ambos os lados sejam conhecidos.
   var future = matches.filter(function (m) {
     return m && !released[String(m.id)] && !occupancy.isFinished(m) && !m.isBye && !m.isSitOut &&
-      !m.courtCalledAt && !m.startedAt && !occupancy.occupiesCourt(m) &&
-      (_matchCardTimestamp(m.scheduledAt) || (Number(m.phaseIndex) > 0 && Number(m._gameNum) > 0));
+      !m.courtCalledAt && !m.startedAt && !occupancy.occupiesCourt(m);
   }).filter(function (m) {
     var group = _bracketOperationsGroup(t, m, matches);
     return !group || String((group.matches.find(function (item) { return !occupancy.isFinished(item); }) || {}).id) === String(m.id);
@@ -1457,7 +1457,7 @@ window._bracketOperationsSelect = function (t) {
   });
   return { next: suggested, queue: queued, future: future, nextCallable: !!suggested, waitingForTie: waitingForTie,
     tieCanPostpone: !!(callableTie && otherReady),
-    active: active, pending: pending, courts: courts, matches: matches };
+    active: active, pending: pending, courts: courts, freeCourts: occupancy.freeCourts(courts, courtOccupants), matches: matches };
 };
 
 // Cada clique registra somente a leva que já ocupa as quadras. A próxima
@@ -2659,9 +2659,7 @@ window._bracketOperationsRefresh = function (t, root) {
   });
   var canCall = authorized;
   var nextLabel = canCall ? 'PRÓXIMO JOGO A CHAMAR' : 'PRÓXIMO JOGO';
-  var freeCourts = state.courts.filter(function (court) {
-    return !state.active.some(function (m) { return String(m.court) === String(court); });
-  });
+  var freeCourts = state.freeCourts;
   var freeCount = freeCourts.length;
   var safe = window._safeHtml || String;
   var nextCards = [state.next].concat(state.future || []).filter(function (m, index, list) {
@@ -2670,11 +2668,20 @@ window._bracketOperationsRefresh = function (t, root) {
   var readyIds = new Set((state.queue || []).map(function (m) { return String(m.id); }));
   var releasedMatches = window._bracketCourtReleased(t.id);
   var estimates = _bracketOperationsFutureEstimates(state, t);
+  var canAdvancePhase = canCall && typeof window._isUserOrgOrCoHost === 'function' &&
+    window._isUserOrgOrCoHost(t, user) && !(t.scheduleWindow && t.scheduleWindow.interleavedPlan) &&
+    window._isMultiPhase && window._isMultiPhase(t) &&
+    window._phasesPhaseComplete && window._phasesPhaseComplete(t) &&
+    Number(t.currentPhaseIndex || 0) + 1 < ((t.phases || []).length);
+  var advancePhaseHtml = canAdvancePhase
+    ? '<div class="sp-operations-phase-advance"><strong>Fase concluída</strong><button type="button" class="btn btn-success" data-operations-advance-phase="1">Avançar para ' +
+      safe(((t.phases || [])[Number(t.currentPhaseIndex || 0) + 1] || {}).name || 'próxima fase') + '</button></div>'
+    : '';
   var nextAvailability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '"><span>' +
     freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</span></div>';
   var nextCardsHtml = nextCards.map(function (m, index) {
     var available = readyIds.has(String(m.id)) && window.ScoreplaceNextMatch &&
-      window.ScoreplaceNextMatch.firstAvailable([m], state.matches, releasedMatches) === m;
+      window.ScoreplaceNextMatch.firstAvailable([m], state.matches, releasedMatches, t) === m;
     var callable = canCall && available && state.nextCallable !== false;
     var at = estimates.get(String(m.id));
     var estimate = Number.isFinite(at) ? new Date(at).toLocaleTimeString('pt-BR', {
@@ -2697,6 +2704,7 @@ window._bracketOperationsRefresh = function (t, root) {
   }).join('');
   if (existing._spNextScrollRestoreObserver) { existing._spNextScrollRestoreObserver.disconnect(); existing._spNextScrollRestoreObserver = null; }
   existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll" aria-label="Próximos jogos">' +
+    advancePhaseHtml +
     (nextCardsHtml || '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
         'Nenhum jogo aguardando chamada') + '</div>') + '</div></div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
@@ -2710,10 +2718,15 @@ window._bracketOperationsRefresh = function (t, root) {
       var games = state.active.filter(function (m) { return String(m.court) === court; });
       return '<div class="sp-operations-court-slot' + (games.length ? ' sp-operations-court-slot--active' : '') + '">' +
         (games.length ? games.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: true }, court, '', root, state.matches, 'court:' + String(m.id)); }).join('') :
-          '<span class="sp-operations-label">' + window._safeHtml(court) + '</span><div class="sp-operations-court-free"><span>Livre</span></div>') +
+          '<span class="sp-operations-label">' + window._safeHtml(court) + '</span><div class="sp-operations-court-free"><span>' +
+          (freeCourts.includes(court) ? 'Livre' : 'Ocupada') + '</span></div>') +
         '</div>';
     }).join('') +
     '</div></div></div><div class="sp-operations-scrollbar" role="scrollbar" tabindex="0" aria-label="Rolar jogos em quadra" aria-orientation="horizontal" aria-valuemin="0"><div class="sp-operations-scrollbar-thumb"></div></div>';
+  var advancePhaseButton = existing.querySelector('[data-operations-advance-phase]');
+  if (advancePhaseButton) advancePhaseButton.addEventListener('click', function () {
+    if (typeof window._advanceMultiPhase === 'function') window._advanceMultiPhase(t.id);
+  });
   _bracketReconcileOperationalOrder(root);
   var compactProgress = root._bracketOperationsProgress;
   if (!compactProgress) {
@@ -6037,10 +6050,10 @@ window._cancelCourtAction = function (tId, matchId, action, button) {
 function _syncMatchCourtCopies(tId, matchId, value, persisted) {
   var t = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(tId)) : null;
   var released = window._bracketCourtReleased ? window._bracketCourtReleased(tId) : {};
-  var matches = t && typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t).filter(function (item) { return item && !released[String(item.id)]; }) : [];
-  var m = matches.find(function (item) { return String(item.id) === String(matchId); });
+  var allMatches = t && typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : [];
+  var m = allMatches.find(function (item) { return String(item.id) === String(matchId); });
   var occupancy = window.ScoreplaceCourtOccupancy;
-  var active = occupancy && window.ScoreplaceNextMatch ? matches.filter(function (item) { return occupancy.occupiesCourt(item); }) : [];
+  var active = occupancy ? occupancy.activeMatches(allMatches, released, t) : [];
   var playerBusy = !!(m && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(m, active));
   var copies = Array.prototype.filter.call(document.querySelectorAll('select[data-match-id]'), function (node) {
     return node.getAttribute('data-match-id') === String(matchId);
@@ -6049,7 +6062,7 @@ function _syncMatchCourtCopies(tId, matchId, value, persisted) {
     node.disabled = playerBusy;
     var courtOptions = Array.prototype.filter.call(node.options, function (option) { return !!option.value; });
     courtOptions.forEach(function (option) {
-      var busy = !!(occupancy && occupancy.occupant(matches, option.value, matchId));
+      var busy = !!(occupancy && occupancy.occupant(active, option.value, matchId));
       option.disabled = busy;
       option.classList.toggle('sp-court-occupied', busy);
       option.textContent = option.value + (busy ? ' · ocupada' : ' · livre');
@@ -6057,7 +6070,7 @@ function _syncMatchCourtCopies(tId, matchId, value, persisted) {
     var free = courtOptions.some(function (option) { return !option.disabled; });
     var stored = persisted == null ? node.getAttribute('data-persisted-court') || '' : String(persisted);
     if (persisted != null) node.setAttribute('data-persisted-court', stored);
-    var storedBusy = !!(stored && occupancy && occupancy.occupant(matches, stored, matchId));
+    var storedBusy = !!(stored && occupancy && occupancy.occupant(active, stored, matchId));
     var empty = Array.prototype.find.call(node.options, function (option) { return option.value === ''; });
     if (empty) {
       var isCard = !!node.closest('.sp-match-operational');
@@ -6068,7 +6081,7 @@ function _syncMatchCourtCopies(tId, matchId, value, persisted) {
     var requestedFree = value && courtOptions.some(function (option) { return option.value === value && !option.disabled; });
     var preferred = courtOptions.find(function (option) { return option.value === stored && !option.disabled; });
     node.value = requestedFree ? value : (preferred ? preferred.value : ((courtOptions.find(function (option) { return !option.disabled; }) || {}).value || ''));
-    var selectedBusy = !!(node.value && occupancy && occupancy.occupant(matches, node.value, matchId));
+    var selectedBusy = !!(node.value && occupancy && occupancy.occupant(active, node.value, matchId));
     node.classList.toggle('sp-court-placeholder-busy', !node.value && (storedBusy || !free || selectedBusy));
     var row = node.closest('.sp-match-operational');
     var button = row && row.querySelector('button.sp-match-confirm');
@@ -6082,7 +6095,7 @@ window._assignMatchCourtFromSelect = function(select, tId, matchId) {
   var candidate = all.find(function (item) { return item && String(item.id) === String(matchId); });
   var occupancy = window.ScoreplaceCourtOccupancy;
   if (candidate && occupancy && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(candidate,
-      all.filter(function (item) { return occupancy.occupiesCourt(item); }))) {
+      occupancy.activeMatches(all, window._bracketCourtReleased(tId), current))) {
     return Promise.reject(new Error('Uma das duplas já está em quadra.'));
   }
   var prior = select.getAttribute('data-persisted-court') || '';
@@ -6110,7 +6123,7 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
   var candidate = allMatches.find(function (item) { return item && String(item.id) === String(matchId); });
   var occupancy = window.ScoreplaceCourtOccupancy;
   if (candidate && occupancy && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(candidate,
-      allMatches.filter(function (item) { return occupancy.occupiesCourt(item); }))) {
+      occupancy.activeMatches(allMatches, window._bracketCourtReleased(tId), currentTournament))) {
     if (typeof showNotification === 'function') showNotification('Atleta em quadra', 'Uma das duplas já está em outra quadra. Chame outro jogo.', 'error');
     return;
   }
@@ -10360,12 +10373,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     : '';
   if (_canChangeCardCourt && _cardCourts.length) {
     var _suggestedCourt = (typeof window._suggestFreedCourtForMatch === 'function') ? window._suggestFreedCourtForMatch(t, m) : '';
-    var _allForCourts = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t).filter(function (item) { return item && !_releasedForCard[String(item.id)]; }) : [];
     var _occupancy = window.ScoreplaceCourtOccupancy;
+    var _allForCourts = _occupancy && typeof window._collectAllMatches === 'function'
+      ? _occupancy.activeMatches(window._collectAllMatches(t), _releasedForCard, t) : [];
     if (_suggestedCourt && _occupancy && _occupancy.occupant(_allForCourts, _suggestedCourt, m.id)) _suggestedCourt = '';
     var _persistedCourt = String(m.court || '');
     var _persistedBusy = !!(_persistedCourt && _occupancy && _occupancy.occupant(_allForCourts, _persistedCourt, m.id));
-    var _freeCourts = _cardCourts.filter(function (court) { return !_occupancy || !_occupancy.occupant(_allForCourts, court, m.id); });
+    var _freeCourts = _occupancy ? _occupancy.freeCourts(_cardCourts,
+      _allForCourts.filter(function (item) { return String(item.id) !== String(m.id); })) : _cardCourts;
     // A agenda pode apontar uma quadra já ocupada enquanto outra está livre.
     // A sugestão é apenas visual; a callable ainda valida a ocupação no clique.
     var _preferredCourt = opts && opts.preferredCourt && _freeCourts.includes(opts.preferredCourt) ? opts.preferredCourt : '';

@@ -18,7 +18,30 @@
         String(match.court || '') === String(court) && occupiesCourt(match);
     }) || null;
   }
-  var api = { isFinished: isFinished, occupiesCourt: occupiesCourt, occupant: occupant };
+  function activeMatches(matches, released, tournament) {
+    var regular = (matches || []).filter(function (match) {
+      return match && !(released || {})[String(match.id)] && occupiesCourt(match);
+    });
+    var books = tournament && tournament.phaseTieDecisions || {};
+    var ties = Object.keys(books).flatMap(function (phase) {
+      var decisions = books[phase] || {};
+      return Object.keys(decisions).flatMap(function (id) { return decisions[id] && decisions[id].matches || []; });
+    }).filter(function (match) {
+      return match && match.court && match.courtCalledAt && !match.courtReleasedAt &&
+        !match.winnerKey && !match.woWinnerKey;
+    }).map(function (match) {
+      return Object.assign({}, match, {
+        p1:match.p1 && match.p1.name || match.p1,
+        p2:match.p2 && match.p2.name || match.p2
+      });
+    });
+    return regular.concat(ties);
+  }
+  function freeCourts(courts, active) {
+    return (courts || []).filter(function (court) { return !occupant(active, court); });
+  }
+  var api = { isFinished: isFinished, occupiesCourt: occupiesCourt, occupant: occupant,
+    activeMatches: activeMatches, freeCourts: freeCourts };
   root.ScoreplaceCourtOccupancy = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

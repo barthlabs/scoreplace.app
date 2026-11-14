@@ -1,3 +1,8 @@
+// 2.6.91 — A operação mantém jogos definidos na fila mesmo sem horário individual,
+// oferece os cards prontos de outras etapas e calcula quadras livres pela mesma
+// ocupação usada no seletor. Uma grade cuja estimativa estourou não desfaz um
+// placar nem impede a geração da eliminatória; os confrontos seguem chamáveis.
+// Quando a fase exige avanço manual, o botão aparece também na operação.
 // 2.6.90 — Na operação, todos os próximos jogos aparecem como cards completos
 // na mesma coluna rolável. Jogos já definidos podem ser chamados fora da
 // primeira posição; a fase aparece em cada card, inclusive as primeiras rodadas

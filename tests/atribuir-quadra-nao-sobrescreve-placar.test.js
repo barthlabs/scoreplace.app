@@ -34,7 +34,7 @@ if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
   const agenda=require('../functions-autodraw/agenda-core.js');
   const testApply=(m,court,confirmCall,agoraIso,fail,tId,matchId,t,drawWindow) =>
     apply(m,court,confirmCall,agoraIso,fail,tId,matchId,t,
-      drawWindow ? { ...drawWindow, ScoreplaceNextMatch: { conflictsWithActive: () => false, knownSide: side => !!side && side !== 'TBD' } } :
+      drawWindow ? { ...drawWindow, ScoreplaceNextMatch: drawWindow.ScoreplaceNextMatch || { conflictsWithActive: () => false, knownSide: side => !!side && side !== 'TBD' } } :
         {_collectAllMatches:()=>[m], ScoreplaceNextMatch: { conflictsWithActive: () => false, knownSide: side => !!side && side !== 'TBD' }},
       _matchTiming,true,occupancy,agenda,{},reply=>reply,'owner',require('../functions-autodraw/tournament-rehearsal.js'),require('../js/domain/phase-call-order.js'));
   const m={court:'Quadra 4'};
@@ -77,6 +77,20 @@ if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
     {games:[unresolved]}, {_collectAllMatches: tournament=>tournament.games}); }
   catch (_) { dependency=true; }
   ok(dependency && !unresolved.courtCalledAt,'Function recusa eliminatória com dupla ainda indefinida');
+  const serverDraw=require('../functions-autodraw/draw-core.js');
+  const busyAthlete={id:'after-tie',p1:'Ana / Eva',p2:'Clara / Dora',court:'Quadra 2'};
+  const tieTournament={games:[busyAthlete],phaseTieDecisions:{'0':{decision:{matches:[{
+    id:'tie-1',court:'Quadra 1',courtCalledAt:'2026-11-14T12:00:00Z',
+    p1:{name:'Ana'},p2:{name:'Bia'},winnerKey:null
+  }]}}}};
+  const realValidation={_collectAllMatches:tournament=>tournament.games,
+    ScoreplaceNextMatch:serverDraw._window.ScoreplaceNextMatch};
+  let tieConflict='';
+  try { await testApply(busyAthlete,'Quadra 2',true,'2026-11-14T12:10:00Z',
+    (code,message)=>new Error(message),'t','after-tie',tieTournament,realValidation); }
+  catch (error) { tieConflict=error.message; }
+  ok(/já está em quadra/.test(tieConflict) && !busyAthlete.courtCalledAt,
+    'Function recusa chamar Ana em outra quadra enquanto disputa desempate');
 }
 ok(src.includes('data-start-ms') && src.includes('_matchCardTimestamp(m.courtClockBaseAt || m.courtCalledAt)') && src.includes('_matchCardTimestamp(m.startedAt)'),
   'card usa chamada para espera e início real para jogo ao vivo');

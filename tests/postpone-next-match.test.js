@@ -27,7 +27,7 @@ assert.deepEqual(Array.from(context.window._bracketPostponedOrder(
 const selectStart = source.indexOf('window._bracketOperationsSelect = function');
 const selectEnd = source.indexOf('\nfunction _bracketReconcileOperationalOrder(', selectStart);
 assert(selectStart > end && selectEnd > selectStart);
-context.window.ScoreplaceCourtOccupancy = { occupiesCourt:() => false, isFinished:() => false };
+vm.runInNewContext(fs.readFileSync('js/domain/court-occupancy.js', 'utf8'), context);
 context.window.ScoreplaceNextMatch = { knownSide:() => true, firstAvailable:list => list[0] || null };
 context.window._collectAllMatches = t => t.matches;
 context.window._bracketCourtReleased = () => ({});
@@ -78,7 +78,6 @@ const activeDiamond = Array.from({ length: 8 }, (_, index) => ({
 }));
 const firstGold = { id:'gold-1', category:'Fem Ouro', phaseIndex:1, p1:'Ouro A', p2:'Ouro B',
   scheduledAt:'2026-11-13T12:40:00.000Z' };
-context.window.ScoreplaceCourtOccupancy = { occupiesCourt:m => !!m.courtCalledAt, isFinished:() => false };
 context.window.ScoreplacePhaseCallOrder = { allowed:(_, __, m) => m.category === 'Fem Diamante' };
 context.window._bracketCourtPostponed = () => [];
 context.window._bracketCourtPostponedReady = () => [];
@@ -89,9 +88,23 @@ assert.equal(fullCourts.next.id, 'gold-1', 'mostra o primeiro Ouro mesmo com tod
 assert.equal(fullCourts.nextCallable, true, 'jogo definido de outra etapa admite chamada ou adiamento manual');
 const scheduledPlan = { id:'tour_interleaved_order', courtCount:8,
   scheduleWindow:{ interleavedPlan:{ schema:1, editorVersion:2, blocks:[] } }, matches:[firstGold] };
-assert.equal(context.window._bracketOperationsSelect(scheduledPlan).next, null,
-  'agenda intercalada não antecipa a eliminatória enquanto a classificatória anterior está aberta');
-assert.equal(context.window._bracketOperationsSelect(scheduledPlan).nextCallable, false);
+assert.equal(context.window._bracketOperationsSelect(scheduledPlan).next.id, firstGold.id,
+  'ordem da agenda prioriza, mas não esconde confronto definido quando não há outro jogo disponível');
+assert.equal(context.window._bracketOperationsSelect(scheduledPlan).nextCallable, true);
+const withoutHour = { id:'gold-without-hour', category:'Fem Ouro', phaseIndex:1,
+  p1:'Ouro A', p2:'Ouro B' };
+const unscheduled = context.window._bracketOperationsSelect({ id:'tour_unscheduled', courtCount:2,
+  scheduleWindow:{ days:[{ day:'2026-11-14' }, { day:'2026-11-15' }] },
+  matches:[withoutHour] });
+assert.equal(unscheduled.next.id, withoutHour.id,
+  'confronto definido sem horário entra na fila operacional também em torneio de dois dias');
+assert(unscheduled.freeCourts.includes('Quadra 2'), 'quadra livre é calculada junto da fila');
+const priority = context.window._bracketOperationsSelect({ id:'tour_priority', courtCount:2,
+  matches:[firstGold, { ...withoutHour, id:'diamond-priority', category:'Fem Diamante' }] });
+assert.equal(priority.next.id, 'diamond-priority',
+  'agenda prioriza sua fase, mesmo se o confronto de outra fase tem horário anterior');
+assert(priority.queue.some(m => m.id === firstGold.id),
+  'a fase adiada continua selecionável pelo organizador');
 const withTie = { id:'tour_full_courts', courtCount:8, matches:[...activeDiamond, firstGold],
   phaseTieDecisions:{ '0':{ 'group-0:1:2':{ choice:'play', status:'pending', groupName:'Fem Diamante · Grupo A1',
     matches:[{ id:'tie-a', displayGameNumber:'3A', p1:{name:'Ana'}, p2:{name:'Bia'} }] } } } };

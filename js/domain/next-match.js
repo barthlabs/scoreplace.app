@@ -3,7 +3,7 @@
   'use strict';
   function knownSide(side) {
     var value = String(side || '').trim();
-    return !!value && !/^(?:TBD|BYE|a definir|(?:vencedor|vencedora|perdedor|perdedora) d[oea] jogo\b|(?:winner|loser) of match\b)/i.test(value);
+    return !!value && !/^(?:TBD|BYE|a definir|aguardando\b|classificad[oa]\b|(?:vencedor|vencedora|perdedor|perdedora) d[oea] (?:jogo|grupo)\b|(?:winner|loser) of (?:match|group)\b)/i.test(value);
   }
   function normalizeName(value) {
     return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -39,10 +39,10 @@
       });
     });
   }
-  function firstAvailable(candidates, matches, released) {
+  function firstAvailable(candidates, matches, released, tournament) {
     var occupancy = window.ScoreplaceCourtOccupancy; // index.html carrega este módulo depois deste arquivo.
     if (!occupancy || typeof occupancy.occupiesCourt !== 'function') return candidates[0] || null;
-    var active = (matches || []).filter(function (match) {
+    var active = typeof occupancy.activeMatches === 'function' ? occupancy.activeMatches(matches, released, tournament) : (matches || []).filter(function (match) {
       return match && !(released || {})[String(match.id)] && occupancy.occupiesCourt(match);
     });
     return candidates.find(function (match) { return !conflictsWithActive(match, active); }) || null;

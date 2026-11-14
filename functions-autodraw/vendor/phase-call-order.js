@@ -54,7 +54,7 @@
   }
   function knownSide(side) {
     var value = String(side || '').trim();
-    return !!value && !/^(?:TBD|BYE|a definir|(?:vencedor|vencedora|perdedor|perdedora) d[oea] jogo\b|(?:winner|loser) of match\b)/i.test(value);
+    return !!value && !/^(?:TBD|BYE|a definir|aguardando\b|classificad[oa]\b|(?:vencedor|vencedora|perdedor|perdedora) d[oea] (?:jogo|grupo)\b|(?:winner|loser) of (?:match|group)\b)/i.test(value);
   }
   function stageScheduledGamesDone(t, matches, stage, finished) {
     var ids = new Set();
