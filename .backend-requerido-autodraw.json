@@ -1,8 +1,11 @@
 {
   "schema": 1,
-  "backendCommit": "11345588204978d753531ffae90bf46279df3618",
-  "scopeNote": "Bloqueio do reset de ensaio depois da publicação ou conclusão do torneio.",
+  "backendCommit": "95f238fd4d60f3e5e7f7183065c55064644fa5a8",
+  "scopeNote": "Bloqueio do reset de ensaio e encerramento do torneio contínuo após o último resultado, com resumo público e desempates jogados.",
   "functions": [
-    "resetTournamentToEnrollment"
+    "resetTournamentToEnrollment",
+    "applyMatchResult",
+    "applyQueuedResult",
+    "tournamentSummary"
   ]
 }
