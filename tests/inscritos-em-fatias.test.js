@@ -261,7 +261,7 @@ function servidor() {
   ok(acao.travaSolta, 'a pintura termina e solta a trava mesmo após rolagem manual');
 
   const remocao = await p.evaluate(async () => {
-    const t = window.AppStore.tournaments[0];
+    const t = window._findTournamentById('x');
     const uid = t.participants[0].uid;
     window.showConfirmDialog = function (_title, _message, yes) { yes(); };
     window.showNotification = function () {};
@@ -289,7 +289,7 @@ function servidor() {
 
   const detalhe = await p.evaluate(async () => {
     const c = document.getElementById('view-container');
-    const t = window.AppStore.tournaments[0];
+    const t = window._findTournamentById('x');
     history.replaceState(null, '', '#tournaments/x');
     window.renderTournaments(c, 'x');
     // O detalhe carrega conteúdo assíncrono. Só medir a rolagem quando ele já
@@ -329,7 +329,7 @@ function servidor() {
     'exclusão pelo detalhe mantém o local na página ' + JSON.stringify(detalhe));
 
   const manualNoDetalhe = await p.evaluate(async () => {
-    const t = window.AppStore.tournaments[0];
+    const t = window._findTournamentById('x');
     const uid = t.participants[0].uid;
     window.scrollTo(0, 2500);
     window.FirestoreDB._callFn = function () {
