@@ -30,9 +30,17 @@
       return match && match.court && match.courtCalledAt && !match.courtReleasedAt &&
         !match.winnerKey && !match.woWinnerKey;
     }).map(function (match) {
+      function uidOf(side) {
+        if (!side || typeof side !== 'object') return '';
+        if (side.uid) return String(side.uid);
+        var key = String(side.key || '');
+        return key.indexOf('uid:') === 0 ? key.slice(4) : '';
+      }
       return Object.assign({}, match, {
         p1:match.p1 && match.p1.name || match.p1,
-        p2:match.p2 && match.p2.name || match.p2
+        p2:match.p2 && match.p2.name || match.p2,
+        p1Uid: uidOf(match.p1) || match.p1Uid || '',
+        p2Uid: uidOf(match.p2) || match.p2Uid || ''
       });
     });
     return regular.concat(ties);

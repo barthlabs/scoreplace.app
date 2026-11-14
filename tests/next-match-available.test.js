@@ -38,6 +38,14 @@ const activeTie = { phaseTieDecisions:{ '0':{ group:{ matches:[{
 }] } } } };
 assert.equal(next.firstAvailable([{ id:'later', p1:'Ana / Eva', p2:'Caio / Dora' }],
   [], {}, activeTie), null, 'desempate em quadra também impede chamar a mesma atleta');
+const identifiedTie = { phaseTieDecisions:{ '0':{ group:{ matches:[{
+  id:'tie-uid', court:'Quadra 2', courtCalledAt:'2026-11-13T12:00:00Z',
+  p1:{name:'Ana', key:'uid:ana-1'}, p2:{name:'Bia', key:'uid:bia-1'}
+}] } } } };
+assert.equal(next.firstAvailable([{ id:'other-ana', p1:'Ana', p1Uid:'ana-2', p2:'Zoe' }],
+  [], {}, identifiedTie).id, 'other-ana', 'nome igual com UID distinto continua chamável');
+assert.equal(next.firstAvailable([{ id:'same-ana', p1:'Ana', p1Uid:'ana-1', p2:'Zoe' }],
+  [], {}, identifiedTie), null, 'UID do desempate ainda bloqueia a mesma atleta');
 const serverDraw = require('../functions-autodraw/draw-core.js');
 assert.equal(serverDraw._window, globalThis, 'o shim do servidor compartilha window com globalThis');
 assert.equal(typeof serverDraw._window.ScoreplaceNextMatch.conflictsWithActive, 'function',
