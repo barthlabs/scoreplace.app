@@ -1,13 +1,8 @@
 {
   "schema": 1,
-  "backendCommit": "ac0a012082209d401815063d0ad073892e5dce86",
-  "scopeNote": "Fila de chamada e transição de fases, resultados sem bloqueio por capacidade da agenda e ocupação de quadras incluindo desempates ativos.",
+  "backendCommit": "11345588204978d753531ffae90bf46279df3618",
+  "scopeNote": "Bloqueio do reset de ensaio depois da publicação ou conclusão do torneio.",
   "functions": [
-    "applyMatchResult",
-    "applyQueuedResult",
-    "assignMatchCourt",
-    "manageWOClaim",
-    "applyTournamentWO",
-    "advanceTournamentPhase"
+    "resetTournamentToEnrollment"
   ]
 }
