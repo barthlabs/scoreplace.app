@@ -16,11 +16,11 @@ if ([requireScoreRefresh, requireCourtControlRefresh, requireCurrent, allowLegac
 // SHA fixado para este corte; no próximo release regional, atualizar junto com
 // sync-operation-regions-current.js e os manifestos, antes de abrir o Hosting.
 const releaseCommit = '470c6c972130c2d4225952f214755d622595e0a6';
-const scoreRefreshCommit = 'e574289309c48a6894708a8c3b9cfdd92e415890';
+const scoreRefreshCommit = '7675ce5c6bcddd7fa563bc3b5c80fa6cc5fa5760';
 // O manifesto registra a revisão efetivamente publicada para chamada e controle.
 // Mudanças em outros arquivos de functions-autodraw (por exemplo, um vendor usado
 // no sorteio) não alteram a imagem desses dois serviços na malha regional.
-const courtControlRefreshCommit = 'e574289309c48a6894708a8c3b9cfdd92e415890';
+const courtControlRefreshCommit = '7675ce5c6bcddd7fa563bc3b5c80fa6cc5fa5760';
 const endCourtRefreshCommit = '6982eca74abb7cf898fd437a3301b6180c4c8be5';
 const regions = version === 'v2'
   ? ['us-east1', 'us-east4', 'us-south1']
