@@ -50,4 +50,39 @@ const serverDraw = require('../functions-autodraw/draw-core.js');
 assert.equal(serverDraw._window, globalThis, 'o shim do servidor compartilha window com globalThis');
 assert.equal(typeof serverDraw._window.ScoreplaceNextMatch.conflictsWithActive, 'function',
   'a callable de quadra recebe a mesma regra de conflito no servidor real');
+const backend = fs.readFileSync(path.join(root, 'functions-autodraw/index.js'), 'utf8');
+const groupGuardStart = backend.indexOf("if (court && ['call', 'restore'].includes(requestedTieAction.type))");
+const groupGuardEnd = backend.indexOf("if (requestedTieAction.type === 'clock')", groupGuardStart);
+const titleGuardStart = backend.indexOf("if (['call', 'restore'].includes(action.type))", backend.indexOf('const next = { source:'));
+const titleGuardEnd = backend.indexOf("if (action.type === 'clock')", titleGuardStart);
+assert(groupGuardStart >= 0 && groupGuardEnd > groupGuardStart &&
+  titleGuardStart >= 0 && titleGuardEnd > titleGuardStart,
+  'guardas das duas chamadas de desempate localizadas');
+class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } }
+const occupancy = require('../js/domain/court-occupancy.js');
+const groupGuard = new Function('t', 'target', 'court', 'requestedTieAction', 'drawWindow', '_courtOccupancy', 'HttpsError',
+  backend.slice(groupGuardStart, groupGuardEnd) + ' return true;');
+const titleGuard = new Function('t', 'match', 'court', 'action', 'drawWindow', '_courtOccupancy', 'HttpsError',
+  backend.slice(titleGuardStart, titleGuardEnd) + ' return true;');
+const regularAna = { id:'regular-ana', court:'Quadra 1', courtCalledAt:'2026-11-14T12:00:00Z',
+  p1:'Ana', p1Uid:'ana-1', p2:'Beatriz', p2Uid:'bia-1' };
+const regularTournament = { games:[regularAna] };
+const validationWindow = { _collectAllMatches:tournament=>tournament.games,
+  ScoreplaceNextMatch:serverDraw._window.ScoreplaceNextMatch };
+for (const [label, guard] of [
+  ['classificatório', groupGuard, 'requestedTieAction'],
+  ['de título', titleGuard, 'action']
+]) {
+  const tie = { id:'tie-ana', court:'Quadra 2', p1:{ name:'Ana', key:'uid:ana-1' },
+    p2:{ name:'Carla', key:'uid:carla-1' } };
+  const action = { type:'call' };
+  assert.throws(() => guard(regularTournament, tie, 'Quadra 2', action,
+    validationWindow, occupancy, HttpsError), /já está em quadra/,
+  `desempate ${label} não chama Ana já em jogo regular noutra quadra`);
+  assert.equal(tie.courtCalledAt, undefined, `desempate ${label} recusado não registra chamada`);
+  const otherAna = { ...tie, id:'tie-other-ana', p1:{ name:'Ana', key:'uid:ana-2' } };
+  assert.equal(guard(regularTournament, otherAna, 'Quadra 2', action,
+    validationWindow, occupancy, HttpsError), true,
+  `desempate ${label} permite Ana distinta com outro UID`);
+}
 console.log('✓ próximo jogo pula participantes ocupados e respeita identidade');

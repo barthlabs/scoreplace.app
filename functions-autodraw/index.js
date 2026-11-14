@@ -6863,6 +6863,11 @@ exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) =
               otherTieMatches.some(m => String(m.court || '') === court)) {
             throw new HttpsError('failed-precondition', 'Quadra ocupada por outro jogo.');
           }
+          if (!drawWindow.ScoreplaceNextMatch ||
+              drawWindow.ScoreplaceNextMatch.conflictsWithActive(
+                _courtOccupancy.normalizeTieMatch(target), activeRegular)) {
+            throw new HttpsError('failed-precondition', 'Um dos atletas já está em quadra.');
+          }
           const playerKeys = [target.p1 && target.p1.key, target.p2 && target.p2.key].filter(Boolean);
           if (otherTieMatches.some(m => playerKeys.includes(m.p1 && m.p1.key) || playerKeys.includes(m.p2 && m.p2.key))) {
             throw new HttpsError('failed-precondition', 'Um dos atletas já está em quadra.');
@@ -7814,6 +7819,11 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
       if (occupied.some(item => String(item.court || '') === court) ||
           otherExtras.some(item => String(item.court || '') === court)) {
         throw new HttpsError('failed-precondition', 'Quadra ocupada por outro jogo.');
+      }
+      if (!drawWindow.ScoreplaceNextMatch ||
+          drawWindow.ScoreplaceNextMatch.conflictsWithActive(
+            _courtOccupancy.normalizeTieMatch(match), occupied)) {
+        throw new HttpsError('failed-precondition', 'Um dos atletas já está em quadra.');
       }
       const athletes = [match.p1 && match.p1.key, match.p2 && match.p2.key].filter(Boolean);
       if (otherExtras.some(item => athletes.includes(item.p1 && item.p1.key) ||
