@@ -435,10 +435,8 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Fim de jogo — MESMO modelo das outras telas: modalidade curva no topo,
-         🏆 + Vencedor + nomes + placar (games; vencedor VERDE, perdedor VERMELHO)
-         FLUTUAM no centro; casual = toggle "Re-sortear" (compacto, OFF) + barra
-         dividida Fechar (vermelho) / Iniciar (verde) na base. Cobre as metades. -->
+    <!-- Fim de jogo: conteúdo em fluxo rolável. Com fonte ampliada, os nomes,
+         opções e botões precisam crescer sem se sobrepor ou sair do disco. -->
     <FrameLayout
         android:id="@+id/winner_overlay"
         android:layout_width="match_parent"
@@ -448,19 +446,39 @@
         android:focusable="true"
         android:visibility="gone">
 
-        <LinearLayout
+        <ScrollView
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="vertical">
+            android:fillViewport="true"
+            android:scrollbars="none"
+            android:overScrollMode="never">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_vertical"
+            android:paddingTop="28dp"
+            android:paddingBottom="28dp">
 
-            <!-- Central flutuante (weight=1). -->
+            <TextView
+                android:id="@+id/winner_arc_sport"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="34dp"
+                android:layout_marginEnd="34dp"
+                android:gravity="center"
+                android:maxLines="2"
+                android:text="⚡ Beach Tennis"
+                android:textColor="@color/meta"
+                android:textSize="12sp" />
+
+            <!-- Resultado no fluxo: cresce com a fonte escolhida no sistema. -->
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:gravity="center"
-                android:paddingTop="14dp"
+                android:paddingTop="8dp"
                 android:paddingStart="18dp"
                 android:paddingEnd="18dp">
 
@@ -587,6 +605,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
+                android:layout_marginStart="32dp"
+                android:layout_marginEnd="32dp"
+                android:layout_marginTop="8dp"
                 android:visibility="gone">
 
                 <!-- SÓ ENTRE PARTIDAS (tela Fechar/Iniciar): três opções, cada uma
@@ -670,55 +691,51 @@
                     </LinearLayout>
                 </LinearLayout>
 
-                <!-- Barra dividida: Fechar (vermelho) | Iniciar (verde), topo reto. -->
+                <!-- Ações empilhadas: cada rótulo tem largura inteira no relógio
+                     pequeno mesmo quando a fonte do sistema está ampliada. -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal">
+                    android:orientation="vertical">
                     <TextView
                         android:id="@+id/btn_replay_cancel"
-                        android:layout_width="0dp"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="end"
-                        android:paddingEnd="6dp"
+                        android:gravity="center"
                         android:text="Fechar"
                         android:textColor="#FFFFFF"
-                        android:textSize="14sp"
+                        android:textSize="12sp"
                         android:textStyle="bold"
-                        android:paddingTop="4dp"
-                        android:paddingBottom="7dp"
+                        android:minHeight="48dp"
+                        android:autoSizeTextType="uniform"
+                        android:autoSizeMinTextSize="12sp"
+                        android:autoSizeStepGranularity="1sp"
                         android:background="@color/win_red"
                         android:clickable="true"
                         android:focusable="true" />
+                    <Space
+                        android:layout_width="match_parent"
+                        android:layout_height="8dp" />
                     <TextView
                         android:id="@+id/btn_replay_confirm"
-                        android:layout_width="0dp"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="start"
-                        android:paddingStart="6dp"
+                        android:gravity="center"
                         android:text="Iniciar"
                         android:textColor="@color/start_green_text"
-                        android:textSize="14sp"
+                        android:textSize="12sp"
                         android:textStyle="bold"
-                        android:paddingTop="4dp"
-                        android:paddingBottom="7dp"
+                        android:minHeight="48dp"
+                        android:autoSizeTextType="uniform"
+                        android:autoSizeMinTextSize="12sp"
+                        android:autoSizeStepGranularity="1sp"
                         android:background="@color/start_green"
                         android:clickable="true"
                         android:focusable="true" />
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>
-
-        <!-- Modalidade curva às 11h (igual às outras telas). -->
-        <androidx.wear.widget.CurvedTextView
-            android:id="@+id/winner_arc_sport"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:text="⚡ Beach Tennis"
-            android:textColor="@color/meta"
-            android:textSize="12sp" />
+        </ScrollView>
     </FrameLayout>
 
     <!-- Empate (5-5, 6-6, 7-7…) esperando decisão: cobre tudo e trava os +1 até

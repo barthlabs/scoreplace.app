@@ -74,7 +74,8 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private TextView nameL1, nameL2, nameR1, nameR2, ballL1, ballL2, ballR1, ballR2;
     private View winnerOverlay, replayControls, reshuffleRow, tieOverlay;
     private TextView winnerLabel, winnerNames, winnerScoreL, winnerScoreR;
-    private androidx.wear.widget.CurvedTextView setsArcL, setsArcR, setsWordArc, winnerArcSport;
+    private androidx.wear.widget.CurvedTextView setsArcL, setsArcR, setsWordArc;
+    private TextView winnerSport;
     private TextView hrPill;      // ♥ BPM em cápsula no topo-centro (cor da faixa de queima)
     private int hrMax = 0;        // FCmáx vinda do celular (220 − idade do perfil); 0 = sem faixa
     private TextView btnReplayCancel, btnReplayConfirm, reshuffleLabel;
@@ -162,8 +163,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         winnerNames = findViewById(R.id.winner_names);
         winnerScoreL = findViewById(R.id.winner_score_l);
         winnerScoreR = findViewById(R.id.winner_score_r);
-        winnerArcSport = findViewById(R.id.winner_arc_sport);
-        winnerArcSport.setAnchorType(2); winnerArcSport.setAnchorAngleDegrees(330f); winnerArcSport.setClockwise(true); // 11h
+        winnerSport = findViewById(R.id.winner_arc_sport);
         replayControls = findViewById(R.id.replay_controls);
         reshuffleRow = findViewById(R.id.reshuffle_row);
         reshuffleSwitch = findViewById(R.id.reshuffle_switch);
@@ -954,7 +954,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             // Modalidade curva às 11h (igual às outras telas).
             boolean isCasualW = s.optBoolean("isCasual", false);
             String sportW = s.optString("sportName", "");
-            winnerArcSport.setText((isCasualW ? "⚡ " : "🏆 ") + (sportW.isEmpty() ? "Partida" : sportW));
+            winnerSport.setText((isCasualW ? "⚡ " : "🏆 ") + (sportW.isEmpty() ? "Partida" : sportW));
             if (winner == 1 || winner == 2) {
                 winnerLabel.setText("Vencedor");
                 winnerNames.setText(teamNames(teams, winner));
