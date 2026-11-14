@@ -115,6 +115,20 @@ assert.equal(t.currentPhaseIndex, 0, 'Prata ainda joga a classificatória');
 for (const g of groups.filter(g => g.category === 'Fem Prata')) {
   g.matches.forEach(m => { m.winner=g.players[0]; });
 }
+const preinstalled = structuredClone(t);
+preinstalled.phases[1].officialGroupBracketOrder = ['Fem Ouro', 'Fem Prata'];
+preinstalled.matches.push(...Array.from({ length:12 }, (_, i) => ({
+  id:'official-prata-' + (133+i), _gameNum:133+i, category:'Fem Prata', phaseIndex:1,
+  officialGroupBracket:true, scheduledAt:'2026-11-13T19:00:00Z',
+  p1:'Prata ' + i, p2:'Prata ' + (i+1), roundName:i < 4 ? 'Oitavas de final' : 'Quartas de final'
+})));
+const scheduleBefore = drawWindow._schGradeEstimada;
+drawWindow._schGradeEstimada = () => { throw Error('chave oficial já instalada não recalcula agenda'); };
+assert.deepEqual(Array.from(advance(preinstalled, preinstalled.id, '2026-11-13T18:20:00Z')), ['Fem Prata'],
+  'chave oficial já instalada só recupera o marcador e não bloqueia resultado com agenda cheia');
+assert.equal(preinstalled.phaseCategoryMaterialized['Fem Prata'].count, 12);
+assert.equal(preinstalled.matches.length, t.matches.length + 12, 'não duplica confrontos da Prata');
+drawWindow._schGradeEstimada = scheduleBefore;
 assert.deepEqual(Array.from(advance(t, t.id, '2026-11-13T18:20:00Z')), ['Fem Prata']);
 assert.equal(t.currentPhaseIndex, 1);
 assert.equal(t.matches.filter(m => !m.isBye).length, 36);

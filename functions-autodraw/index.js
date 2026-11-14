@@ -6682,6 +6682,25 @@ function _materializeInterleavedReadyCategories(t, tId, nowIso) {
   const materialized = [];
   for (const category of (t.combinedCategories || []).map(String)) {
     if (t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[category]) continue;
+    // Uma chave oficial pode ter sido instalada pela operação antes do último
+    // placar classificatório. Se seus jogos já ocupam todos os slots publicados,
+    // reparar o marcador em vez de tentar gerar a chave outra vez: a segunda
+    // geração falha no cálculo da agenda e aborta até placares da semifinal.
+    const officialBracket = Array.isArray(t.phases && t.phases[1] && t.phases[1].officialGroupBracketOrder) &&
+      t.phases[1].officialGroupBracketOrder.includes(category);
+    const expectedOfficial = (plan.blocks || []).filter(block => block.kind === 'elimination' &&
+      String(block.category) === category).reduce((count, block) =>
+      count + (Array.isArray(block.courts) ? block.courts.length : 0), 0);
+    const existingOfficial = officialBracket ? (t.matches || []).filter(m => m &&
+      m.category === category && Number(m.phaseIndex) === 1 && m.officialGroupBracket && !m.isBye) : [];
+    if (expectedOfficial > 0 && existingOfficial.length === expectedOfficial &&
+        new Set(existingOfficial.map(m => String(m.id))).size === expectedOfficial &&
+        existingOfficial.every(m => m.id && m.scheduledAt && Number.isInteger(Number(m._gameNum || m.scheduledGameNumber)))) {
+      t.phaseCategoryMaterialized = t.phaseCategoryMaterialized || {};
+      t.phaseCategoryMaterialized[category] = { at:nowIso, count:existingOfficial.length };
+      materialized.push(category);
+      continue;
+    }
     const pools = tieRuntime.pools.filter(pool => categoryOf(pool.group) === category);
     if (!expectedGroups[category] || pools.length !== expectedGroups[category]) continue;
     const done = pools.every(pool => {
@@ -6691,8 +6710,6 @@ function _materializeInterleavedReadyCategories(t, tId, nowIso) {
     if (!done) continue;
     // A planilha oficial já fixou as duplas desta categoria. Uma simples
     // automática da classificação não pode voltar a bloquear suas oitavas.
-    const officialBracket = Array.isArray(t.phases && t.phases[1] && t.phases[1].officialGroupBracketOrder) &&
-      t.phases[1].officialGroupBracketOrder.includes(category);
     const flow = officialBracket
       ? { status:'ready', orderedPools:pools.map(pool => ({ id:pool.id, rows:standings(pool.group) })) }
       : _phaseTieCore.resolvePhaseTies(t, 0, pools, tieRuntime.nextCfg,
