@@ -1091,6 +1091,12 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const scroller = strip.querySelector('.sp-operations-next-scroll');
       const cards = [...scroller.querySelectorAll(':scope > .sp-operations-replica')];
       const ids = cards.map(card => card.getAttribute('data-operations-base-match'));
+      const cardPhases = cards.map(card => ({ id:card.getAttribute('data-operations-base-match'),
+        phase:card.querySelector('.sp-operations-availability .sp-operations-stage')?.textContent?.trim() }));
+      const bracketRounds = Array.from({ length:6 }, (_, i) => ({ id:'round-' + i, category:'Fem Prata',
+        phaseIndex:0, bracket:'main', round:i + 1 }));
+      const stageLabels = bracketRounds.map(match => window._bracketOperationsStageLabel(match,
+        { phases:[{ kind:'elimination' }] }, bracketRounds));
       scroller.scrollTop = cards[1].offsetTop + 20;
       window._bracketOperationsRefresh(t, root);
       const afterRefresh = strip.querySelector('.sp-operations-next-scroll');
@@ -1106,10 +1112,14 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketOperationsRefresh(t, root);
       const noCallable = { fullCard:!!strip.querySelector('.sp-operations-next-scroll > .sp-operations-replica .sp-match-card .team'),
         noEmpty:!strip.querySelector('.sp-operations-next-scroll > .sp-operations-empty') };
-      return { ids, scrollPreserved, cardFits, renders, called:window.called,
+      return { ids, cardPhases, stageLabels, scrollPreserved, cardFits, renders, called:window.called,
         callDebug, noCallable, earlyUncalled:!t.matches[0].courtCalledAt, laterCalled };
     });
     assert.deepEqual(laterCall.ids, ['early', 'later', 'unknown']);
+    assert(laterCall.cardPhases.every(card => card.phase),
+      'cada card seguinte mostra sua fase junto à disponibilidade: ' + JSON.stringify(laterCall.cardPhases));
+    assert.deepEqual(laterCall.stageLabels, ['Eliminatória · Rodada 1', '16 avos de final',
+      'Oitavas de final', 'Quartas de final', 'Semifinal', 'Final']);
     assert(laterCall.scrollPreserved, 'atualizar a faixa preserva a posição do jogo escolhido');
     assert(laterCall.cardFits.every(card => card.scrollHeight <= card.clientHeight + 2),
       'nenhum card seguinte pode cortar o conteúdo: ' + JSON.stringify(laterCall.cardFits));
@@ -1121,6 +1131,11 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert(laterCall.earlyUncalled && laterCall.laterCalled, 'chamar o jogo posterior não chama o primeiro');
     assert(laterCall.noCallable.fullCard && laterCall.noCallable.noEmpty,
       'sem confronto chamável, a próxima partida continua como card completo');
+    await page.setViewportSize({ width:360, height:800 });
+    const phaseVisible = await page.evaluate(() => [...document.querySelectorAll('.sp-operations-next .sp-operations-availability')]
+      .filter(row => row.querySelector('.sp-operations-stage'))
+      .every(row => row.querySelector('.sp-operations-stage').getBoundingClientRect().right <= row.getBoundingClientRect().right + 1));
+    assert(phaseVisible, 'a fase de cada card permanece dentro da coluna em tela estreita');
     console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

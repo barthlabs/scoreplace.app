@@ -1806,14 +1806,14 @@ function _bracketOperationsStage(m, t, allMatches) {
       String(other.bracket || 'main') === String(m.bracket || 'main') &&
       Number.isInteger(Number(other.round));
   });
-  if (!peers.length) return String(m.roundName || m.phaseName || 'Classificatória');
+  if (!peers.length) return String(m.roundName || m.phaseName || (config && config.kind === 'elimination' ? 'Eliminatória' : 'Classificatória'));
   var maxRound = Math.max.apply(null, peers.map(function (other) { return Number(other.round); }));
   var remaining = maxRound - Number(m.round || 1);
   if (remaining === 0 && peers.filter(function (other) { return Number(other.round) === maxRound; }).length > 1)
     return 'Classificatória';
   return remaining === 0 ? 'Final' : remaining === 1 ? 'Semifinal' :
     remaining === 2 ? 'Quartas de final' : remaining === 3 ? 'Oitavas de final' :
-    remaining === 4 ? '16 avos de final' : 'Rodada ' + String(m.round || 1);
+    remaining === 4 ? '16 avos de final' : 'Eliminatória · Rodada ' + String(m.round || 1);
 }
 
 function _bracketOperationsStageLabel(m, t, allMatches) {
