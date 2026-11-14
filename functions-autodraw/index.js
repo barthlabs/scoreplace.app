@@ -2534,9 +2534,13 @@ exports.resetTournamentToEnrollment = onCall({ timeoutSeconds: 540, memory: '512
     // Não há reset genérico para torneio real. Cada intenção tem uma autorização
     // própria e explícita: Sandbox ou o único torneio liberado para voltar ao
     // estado imediatamente anterior à publicação.
-    const isSandboxRestore = restoreMode === 'sandbox' && sandbox && t.isSandbox === true;
-    const isPrePublicationRestore = restoreMode === 'prePublication' && sandbox && t.isSandbox === true && t.allowPrePublicationRestore === true;
-    if (!isSandboxRestore && !isPrePublicationRestore) {
+    const isFinished = t.status === 'finished' || t._finished === true;
+    const isSandboxRestore = restoreMode === 'sandbox' && sandbox && t.isSandbox === true && !isFinished;
+    const isPrePublicationRestore = restoreMode === 'prePublication' && sandbox &&
+      t.isSandbox === true && t.allowPrePublicationRestore === true;
+    const mayRestorePrePublication = isPrePublicationRestore && !isFinished && !t.tournamentStarted &&
+      typeof drawWindow._hasAnyMatchResult === 'function' && !drawWindow._hasAnyMatchResult(t);
+    if (!isSandboxRestore && !mayRestorePrePublication) {
       throw _drawFail('permission-denied', 'Esta restauração não está habilitada para este torneio.', { tId, uid, restoreMode });
     }
     const before = _antesDoMotor(t), wasAuto = t.drawManual !== true && t.drawFirstDate;

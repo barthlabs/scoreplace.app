@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.0';
+window.SCOREPLACE_VERSION = '2.7.1';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -16055,7 +16055,7 @@ window._renderPodiumsAndClassif = function (t) {
       ] });
     }
     var _deCls = (Array.isArray(_deMap) ? _deMap.length : Object.keys(_deMap).length)
-      ? window._renderClassifBlock(t, _deMap, { label: '📊 Classificação geral', color: '#fbbf24', open: false }) : '';
+      ? window._renderClassifBlock(t, _deMap, { label: '📊 Classificação geral', color: '#fbbf24', open: true }) : '';
     if (_dePod || _deCls) return _dePod + _deCls;
   }
 
@@ -16074,7 +16074,7 @@ window._renderPodiumsAndClassif = function (t) {
       var color = tierColors[bk] || palette[i % palette.length];
       var pod = window._linePodiumHtml(t, lm, title, color);
       if (!pod) return '';
-      var cls = window._renderClassifBlock(t, window._classifEntriesFromMatches(t, lm), { label: '📊 Classificação · ' + title, color: color, open: false });
+      var cls = window._renderClassifBlock(t, window._classifEntriesFromMatches(t, lm), { label: '📊 Classificação · ' + title, color: color, open: true });
       return '<div style="margin-bottom:1.25rem;">' + pod + cls + '</div>';
     }).join('');
     if (out) return out;
@@ -16172,7 +16172,7 @@ window._renderPodiumsAndClassif = function (t) {
       classifMap = smap;
     }
   }
-  var classif = classifMap ? window._renderClassifBlock(t, classifMap, { label: '📊 Classificação geral', color: '#fbbf24', open: false }) : '';
+  var classif = classifMap ? window._renderClassifBlock(t, classifMap, { label: '📊 Classificação geral', color: '#fbbf24', open: true }) : '';
   return podium + classif;
 };
 

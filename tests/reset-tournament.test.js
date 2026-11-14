@@ -119,8 +119,10 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
     'a callable do codebase functions-autodraw devolve a fotografia pós-transação efetivamente persistida para a UI refletir');
   ok(/async _callFn\(name, payload, msgs\)/.test(db) && resetStart >= 0,
     'o transporte canônico e a callable de restauração existem');
-  ok(/isSandboxRestore/.test(server) && /isPrePublicationRestore/.test(server) && /!isSandboxRestore && !isPrePublicationRestore/.test(server),
+  ok(/isSandboxRestore/.test(server) && /isPrePublicationRestore/.test(server) && /!isSandboxRestore && !mayRestorePrePublication/.test(server),
     'o servidor só aceita restauração de Sandbox ou a pré-publicação explicitamente habilitada');
+  ok(/const mayRestorePrePublication = [\s\S]*?!t\.tournamentStarted[\s\S]*?!drawWindow\._hasAnyMatchResult\(t\)/.test(resetServer),
+    'a permissão de pré-publicação não apaga um torneio que já começou ou tem resultado');
 })();
 
 // ── v1.2.45: RESETAR desfaz a dupla SORTEADA mesmo com entrada só-uid ────────

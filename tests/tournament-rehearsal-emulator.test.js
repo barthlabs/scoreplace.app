@@ -193,6 +193,11 @@ const service = makeService({ db, HttpsError });
   await ref.update({ matches:[{ id:'post-draw', winner:'B' }] });
   assert.equal((await service.restore(request())).state, 'active', 'Resetar teste pode ser repetido');
   assert.deepEqual((await ref.get()).data().matches, checkpointRoot.matches);
+  // Uma marca de ensaio esquecida não pode apagar um torneio já publicado.
+  await ref.update({ isPublic:true, organizerOnly:false });
+  const publishedBefore = (await ref.get()).data();
+  await assert.rejects(service.restore(request()), error => error.code === 'failed-precondition');
+  assert.deepEqual((await ref.get()).data(), publishedBefore, 'reset recusado sem alterar o torneio público');
   console.log('ensaio real: 144 inscrições intactas; reset completo e retomada após interrupções na exclusão e na gravação');
   await admin.app().delete();
 })().catch(error => { console.error(error); process.exitCode = 1; });

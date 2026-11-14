@@ -7,5 +7,5 @@ ok(!/AppStore\.mutate|commitTournamentTx|_clearTournamentDraw\(ft\)/.test(part),
 const fn=fs.readFileSync('functions-autodraw/index.js','utf8'),x=fn.indexOf('exports.resetTournamentToEnrollment'),y=fn.indexOf('// ─── Rodada extra manual',x),srv=fn.slice(x,y);
 ok(/db\.runTransaction/.test(srv)&&/_leTorneio/.test(srv)&&/_gravaTorneio/.test(srv),'Function reseta o documento fresco em transação');
 ok(/_isTournamentAdmin/.test(srv)&&/_clearTournamentDraw/.test(srv)&&/drawFirstDate/.test(srv),'Function autoriza, usa limpeza canônica e reagenda auto-draw vencido');
-ok(/restoreMode === 'sandbox'/.test(srv)&&/restoreMode === 'prePublication'/.test(srv)&&/!isSandboxRestore && !isPrePublicationRestore/.test(srv),'Function recusa reset sem modo autorizado');
+ok(/restoreMode === 'sandbox'/.test(srv)&&/restoreMode === 'prePublication'/.test(srv)&&/!isSandboxRestore && !mayRestorePrePublication/.test(srv),'Function recusa reset sem modo autorizado');
 process.exitCode=bad?1:0;
