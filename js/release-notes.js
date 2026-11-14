@@ -1,5 +1,8 @@
 // 2.7.1 — A classificação final fica visível para todos em torneios concluídos.
 // Controles de operação e de teste somem; reset do ensaio é bloqueado após a publicação.
+// Classificatória Rei/Rainha e eliminatórias da mesma grade contam como um torneio.
+// Desempates disputados entram no total, finais por categoria recebem seus títulos
+// e o tempo para no último placar lançado.
 // 2.7.0 — Corte unificado para web, iOS, Android e Wear. A operação mantém
 // todos os próximos jogos chamáveis entre fases, calcula quadras livres pela
 // ocupação real e registra resultados sem bloquear por estimativa da agenda.

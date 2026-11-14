@@ -2318,7 +2318,9 @@ window._bracketOperationsRefresh = function (t, root) {
   var user = window.AppStore && window.AppStore.currentUser;
   var authorized = typeof window._isUserAuthority === 'function' && window._isUserAuthority(t, user);
   var concentrated = typeof window._isConcentratedTournament === 'function' && window._isConcentratedTournament(t);
-  if (!authorized || !concentrated || !document.getElementById('tourn-grid-container')) {
+  if (!authorized || !concentrated ||
+      (window._tournamentResultsComplete && window._tournamentResultsComplete(t)) ||
+      !document.getElementById('tourn-grid-container')) {
     if (existing && existing._spOperationsOnResize) window.removeEventListener('resize', existing._spOperationsOnResize);
     if (existing && existing.parentNode) existing.remove();
     if (root._bracketOperationsProgress) root._bracketOperationsProgress.remove();
@@ -3359,9 +3361,9 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       if (groupCode) bundle.setAttribute('data-group-code', groupCode);
       var categoryGenders = groups[key].filter(function (member) { return member.monarchAnchor === entry; })
         .map(function (member) { return member.card.getAttribute('data-bracket-tab-gender'); });
-      var phaseLabel = categoryGenders.length && categoryGenders.every(function (value) { return value === 'fem'; })
+      var phaseLabel = 'Classificatória ' + (categoryGenders.length && categoryGenders.every(function (value) { return value === 'fem'; })
         ? 'Rainha da Praia' : categoryGenders.length && categoryGenders.every(function (value) { return value === 'masc'; })
-          ? 'Rei da Praia' : 'Rei/Rainha';
+          ? 'Rei da Praia' : 'Rei/Rainha');
       bundle.setAttribute('data-bracket-phase-label', phaseLabel);
       bundle._monarchSource = entry.monarchSource;
       var title = document.createElement('h5');
@@ -10517,8 +10519,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   if (t && Array.isArray(t.phases) && t.phases.length > 1) {
     var _phaseAgendaIndex = Number(m.phaseIndex) || 0;
     var _phaseAgendaCfg = t.phases[_phaseAgendaIndex] || {};
-    _phaseAgendaLabel = (m.isMonarch || _phaseAgendaCfg.kind === 'classification')
-      ? 'Classificatória' : (_phaseAgendaIndex > 0 || _phaseAgendaCfg.kind === 'elimination' ? 'Eliminatória' : '');
+    var _phaseGender = _bracketTabGender(String(m.category || m.tierLabel || ''));
+    _phaseAgendaLabel = m.isMonarch
+      ? 'Classificatória ' + (_phaseGender === 'fem' ? 'Rainha da Praia' : _phaseGender === 'masc' ? 'Rei da Praia' : 'Rei/Rainha')
+      : (_phaseAgendaCfg.kind === 'classification' ? 'Classificatória' :
+        (_phaseAgendaIndex > 0 || _phaseAgendaCfg.kind === 'elimination' ? 'Eliminatória' : ''));
   }
 
   // Detect if current user participates in this match

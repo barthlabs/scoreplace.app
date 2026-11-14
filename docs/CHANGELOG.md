@@ -1,6 +1,8 @@
 ## 2.7.1 — 14/nov/2026 (Encerramento e teste seguro)
 
 - Torneios concluídos mostram a classificação final para todas as pessoas e ocultam a operação, o avanço de fase e controles de ensaio. O reset de teste some quando o torneio é público e o servidor recusa sua restauração após a publicação.
+- A classificatória Rei/Rainha e as eliminatórias de uma grade intercalada contam como um torneio só. Desempates com placar aumentam o total de jogos; desempates dispensados não entram. O relógio congela no último resultado.
+- Finais independentes de Diamante, Ouro e Prata geram títulos por categoria, mesmo quando todas pertencem à mesma chave técnica. A classificação Rei/Rainha passa a ser identificada como classificatória.
 
 ## 2.7.0 — 14/nov/2026 (corte conjunto web, iOS e Android)
 

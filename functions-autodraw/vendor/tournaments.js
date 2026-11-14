@@ -3572,7 +3572,8 @@ function renderTournaments(container, tournamentId = null) {
         if (typeof window._requestExpiredLeagueSeasonClose === 'function') window._requestExpiredLeagueSeasonClose(t);
 
         // Inscrições fecham após sorteio (status 'active'), exceto Liga/Ranking com inscrições abertas na temporada
-        const isFinished = t.status === 'finished' || t._finished === true;
+        const isFinished = t.status === 'finished' || t._finished === true ||
+            !!(window._tournamentResultsComplete && window._tournamentResultsComplete(t));
         const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
         // v2.1.6: torneio encerrado (campeão definido) SEMPRE fecha inscrição,
         // inclusive Liga — ligaAberta nunca vale com status 'finished'.

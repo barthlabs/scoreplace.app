@@ -3965,11 +3965,17 @@ function _updateProgressiveClassification(t) {
 function _maybeFinishMultiPhase(t) {
   if (!t || t.status === 'finished') return false;
   if (!(window._isMultiPhase && window._isMultiPhase(t))) return false;
-  // v4.5.12: mesma regra da inscrição tardia POR FASE — janela aberta (R1 da fase atual) não
-  // auto-encerra; fecha no 1º resultado de R2 (ver window._lateEnrollWindowOpen).
-  if (window._lateEnrollWindowOpen && window._lateEnrollWindowOpen(t)) return false;
   var cur = t.currentPhaseIndex || 0;
   var last = t.phases.length - 1;
+  // Num evento concentrado, a chave final pode ter sido materializada enquanto o
+  // índice operacional ainda aponta para a classificatória. Só aceitar esse
+  // caminho quando TODOS os jogos reais de TODAS as etapas estão decididos.
+  var completedWithStaleIndex = cur < last && window._tournamentResultsComplete &&
+    window._tournamentResultsComplete(t);
+  // v4.5.12: mesma regra da inscrição tardia POR FASE — janela aberta (R1 da fase atual) não
+  // auto-encerra; fecha no 1º resultado de R2 (ver window._lateEnrollWindowOpen).
+  if (!completedWithStaleIndex && window._lateEnrollWindowOpen && window._lateEnrollWindowOpen(t)) return false;
+  if (completedWithStaleIndex) cur = last;
   if (cur < 1 || cur < last) return false; // ainda em fase classificatória ou há fases por vir
   var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === cur; });
   // v3.1.16 (inc 8): última fase = Liga incremental (Pontos Corridos rodada a rodada) →
@@ -4014,15 +4020,31 @@ function _maybeFinishMultiPhase(t) {
     }
   }
 
-  if (!_publishTitlesIfReady(t)) return false;
+  var previousPhaseIndex = t.currentPhaseIndex || 0;
+  if (completedWithStaleIndex) t.currentPhaseIndex = last;
+  if (!_publishTitlesIfReady(t)) {
+    if (completedWithStaleIndex) t.currentPhaseIndex = previousPhaseIndex;
+    return false;
+  }
   if (t.rulesContractVersion >= 2) {
     champion = Array.isArray(t.titleAwards) && t.titleAwards.length === 1 && t.titleAwards[0].scope === 'overall'
       ? t.titleAwards[0].winnerName : null;
   }
   t.status = 'finished';
-  if (!t.finishedAt) t.finishedAt = new Date().toISOString();
-  var _startMs = (typeof t.tournamentStarted === 'number' && t.tournamentStarted > 0) ? t.tournamentStarted : null;
-  if (_startMs && (t.durationMs == null)) t.durationMs = Math.max(0, Date.now() - _startMs);
+  // O fechamento pode ser reconciliado depois. O relógio para no último placar,
+  // nunca no instante da próxima abertura do app ou da rotina de reparo.
+  var _finishStamps = (t.matches || []).concat((t.rounds || []).reduce(function (all, round) {
+    return all.concat(round && round.matches || []);
+  }, []), window._playedTournamentTieMatches ? window._playedTournamentTieMatches(t) : [])
+    .filter(function (match) { return match && (match.winner || match.winnerKey) && match.resultAt; })
+    .map(function (match) { return typeof match.resultAt === 'number' ? match.resultAt : new Date(match.resultAt).getTime(); })
+    .filter(function (ms) { return Number.isFinite(ms) && ms > 0; });
+  var _finishedMs = _finishStamps.length ? Math.max.apply(null, _finishStamps) : Date.now();
+  if (!t.finishedAt) t.finishedAt = new Date(_finishedMs).toISOString();
+  var _startMs = window._isContinuousClassificationTournament && window._isContinuousClassificationTournament(t) &&
+    typeof window._tournamentPlayableFromTs === 'function' ? window._tournamentPlayableFromTs(t) : null;
+  if (!_startMs) _startMs = (typeof t.tournamentStarted === 'number' && t.tournamentStarted > 0) ? t.tournamentStarted : null;
+  if (_startMs && (t.durationMs == null)) t.durationMs = Math.max(0, _finishedMs - _startMs);
   if (typeof showNotification === 'function') {
     showNotification(_t('bui.tournamentFinished'), champion ? _t('bui.tournamentFinishedChamp', { name: champion }) : _t('bui.tournamentFinishedMsg'), 'success');
   }

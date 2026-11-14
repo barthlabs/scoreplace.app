@@ -249,7 +249,16 @@ function summaryMudou(antes, depois, id, H) {
 function helpersDe(win) {
   win = win || (typeof window !== 'undefined' ? window : null) || {};
   var H = {};
-  if (typeof win._getTournamentProgress === 'function') H.progress = function (t) { return win._getTournamentProgress(t); };
+  if (typeof win._getTournamentProgress === 'function') H.progress = function (t) {
+    if (typeof win._isContinuousClassificationTournament === 'function' &&
+        win._isContinuousClassificationTournament(t) && typeof win._tournamentGamesPlan === 'function') {
+      var plan = win._tournamentGamesPlan(t);
+      if (plan && plan.totalPlanned > 0) return {
+        total: plan.totalPlanned, completed: plan.totalDone, pct: plan.pct
+      };
+    }
+    return win._getTournamentProgress(t);
+  };
   if (typeof win._countCompetitors === 'function') H.competitors = function (t) { return win._countCompetitors(t); };
   if (typeof win._waitlistPeopleCount === 'function') H.waitlistPeople = function (t) { return win._waitlistPeopleCount(t); };
   return H;

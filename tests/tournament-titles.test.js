@@ -25,6 +25,20 @@ const independent = { phases: [{ kind: 'elimination' }], currentPhaseIndex: 0, m
 ] };
 assert.deepEqual(resolve(independent).titles.map(x => [x.scope, x.label, x.winnerName]),
   [['line', 'Mar', 'A'], ['line', 'Serra', 'D']]);
+const categorized = { phases: [{ kind: 'classification' }, { kind: 'elimination' }],
+  currentPhaseIndex: 1, matches: [
+    { id: 'diamante', phaseIndex: 1, category: 'Fem Diamante', bracket: 'main',
+      p1: 'Ana / Bia', p2: 'Cris / Dani', winner: 'Ana / Bia' },
+    { id: 'ouro', phaseIndex: 1, category: 'Fem Ouro', bracket: 'main',
+      p1: 'Eva / Fê', p2: 'Gi / Hê', winner: 'Gi / Hê' },
+    { id: 'prata', phaseIndex: 1, category: 'Fem Prata', bracket: 'main',
+      p1: 'Isa / Ju', p2: 'Ka / Lu', winner: 'Isa / Ju' }
+  ] };
+assert.deepEqual(resolve(categorized).titles.map(x => [x.scope, x.label, x.winnerName]), [
+  ['category', 'Fem Diamante', 'Ana / Bia'],
+  ['category', 'Fem Ouro', 'Gi / Hê'],
+  ['category', 'Fem Prata', 'Isa / Ju']
+], 'finais de categorias diferentes na mesma chave geram três títulos');
 assert.deepEqual(resolve({ ...independent, matches: [independent.matches[0], {
   id: 'c-bye', bracket: 'line3', tierLabel: 'Vale', p1: 'E', p2: 'BYE (Avança Direto)',
   winner: 'E', isBye: true, p1Uid: 'uE'

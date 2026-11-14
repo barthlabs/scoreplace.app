@@ -478,9 +478,9 @@ function trecho(inicio, fim) {
   ok(groupedSchedule.find(group => group.code === 'B2')?.cards.join(',') === 'b25,b26,b27' &&
     groupedSchedule.find(group => group.code === 'C2')?.cards.join(',') === 'c31,c32' && groupedSchedule.every(group => group.standings),
     'cada grupo conserva a classificação e seus jogos juntos');
-  ok(groupedSchedule.find(group => group.code === 'A1')?.label === 'Rei da Praia' &&
-    groupedSchedule.filter(group => group.code !== 'A1').every(group => group.label === 'Rainha da Praia'),
-    'título da série usa o gênero dos confrontos do grupo');
+  ok(groupedSchedule.find(group => group.code === 'A1')?.label === 'Classificatória Rei da Praia' &&
+    groupedSchedule.filter(group => group.code !== 'A1').every(group => group.label === 'Classificatória Rainha da Praia'),
+    'título da série indica a classificatória e o gênero dos confrontos do grupo');
 
   const stableAgenda = await page.evaluate(() => {
     const at = Date.UTC(2026, 9, 22, 21);

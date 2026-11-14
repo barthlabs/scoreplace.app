@@ -1087,6 +1087,13 @@ window._cardProgresso = function (t) {
     var pct = _num(t.progressPct);
     return { total: tot, completed: done, pct: (pct != null) ? pct : (tot > 0 ? Math.round(done / tot * 100) : 0) };
   }
+  if (window._isContinuousClassificationTournament && window._isContinuousClassificationTournament(t) &&
+      window._tournamentGamesPlan) {
+    var plan = window._tournamentGamesPlan(t);
+    if (plan && plan.totalPlanned > 0) return {
+      total: plan.totalPlanned, completed: plan.totalDone, pct: plan.pct
+    };
+  }
   return (typeof window._getTournamentProgress === 'function')
     ? window._getTournamentProgress(t) : { total: 0, completed: 0, pct: 0 };
 };
@@ -1222,6 +1229,56 @@ window._ligaTournamentProgress = function(t) {
 // Construtor de fases: total previsto = SOMA de todas as fases. Fase materializada
 // conta jogos REAIS; próxima fase é contada RODANDO O MOTOR (não fórmula). Canônico.
 window._isMultiPhase = function (t) { return !!(t && Array.isArray(t.phases) && t.phases.length > 1); };
+
+// A classificatória e a chave podem ser etapas técnicas de um mesmo evento
+// concentrado. O público acompanha todos os jogos numa contagem única.
+window._isContinuousClassificationTournament = function (t) {
+  // Um calendário concentrado, por si só, também pode conter fases realmente
+  // separadas. O plano intercalado identifica a classificatória + chave contínua.
+  var concentrated = !!(t && t.scheduleWindow && t.scheduleWindow.interleavedPlan &&
+    t.scheduleWindow.interleavedPlan.schema === 1);
+  return !!(concentrated &&
+    Array.isArray(t.phases) && t.phases.length > 1 &&
+    t.phases[0] && t.phases[0].kind === 'classification' &&
+    t.phases.slice(1).some(function (phase) { return phase && phase.kind === 'elimination'; }));
+};
+
+// Desempates são partidas extras. A decisão pode reservar jogos que nunca serão
+// necessários; apenas um placar efetivamente lançado aumenta o total. IDs evitam
+// contar duas vezes um desempate que também tenha sido materializado na chave.
+window._playedTournamentTieMatches = function (t) {
+  var seen = {};
+  function remember(match) { if (match && match.id) seen[String(match.id)] = true; }
+  (t && t.matches || []).forEach(remember);
+  (t && t.rounds || []).forEach(function (round) { (round && round.matches || []).forEach(remember); });
+  Object.keys(t && t.phaseRounds || {}).forEach(function (phase) {
+    ((t.phaseRounds[phase] || {}).rounds || []).forEach(function (round) {
+      (round && round.matches || []).forEach(remember);
+    });
+  });
+  var played = [];
+  function includeDecision(decision, keyPrefix) {
+    (decision && decision.matches || []).forEach(function (match, index) {
+      if (!match || !match.winnerKey || !Array.isArray(match.sets) || !match.sets.length) return;
+      var matchId = String(match.id || keyPrefix + ':' + index);
+      if (seen[matchId]) return;
+      seen[matchId] = true;
+      played.push(match);
+    });
+  }
+  Object.keys(t && t.phaseTieDecisions || {}).forEach(function (phase) {
+    var decisions = t.phaseTieDecisions[phase] || {};
+    Object.keys(decisions).forEach(function (id) {
+      includeDecision(decisions[id], phase + ':' + id);
+    });
+  });
+  // Uma correção posterior pode arquivar a decisão quando o empate deixa de
+  // existir. O resultado jogado continua sendo um fato histórico do torneio.
+  (t && t.history || []).forEach(function (event, index) {
+    if (event && event.phaseTieDecision) includeDecision(event.phaseTieDecision, 'history:' + index);
+  });
+  return played;
+};
 
 // Jogos reais já materializados de uma fase (i=0 → t.rounds; i>0 → t.matches[phaseIndex]).
 function _materializedPhaseGames(t, phaseIdx) {
@@ -1435,26 +1492,34 @@ window._sumulaUpcomingBracket = function (t, phaseIdx) {
 window._tournamentGamesPlan = function (t) {
   var prog = window._getTournamentProgress(t);
   var done = prog.completed != null ? prog.completed : (prog.completedAll || 0);
+  var extraPlayed = window._playedTournamentTieMatches(t).length;
   if (!window._isMultiPhase(t)) {
     var lp = window._ligaTournamentProgress(t);
-    var totalSingle = lp ? lp.totalPlanned : prog.total;
+    var totalSingle = (lp ? lp.totalPlanned : prog.total) + extraPlayed;
+    done += extraPlayed;
     return { multiPhase: false, totalPlanned: totalSingle, totalDone: done,
              pct: totalSingle > 0 ? Math.round(done / totalSingle * 100) : 0, phasesCount: 1 };
   }
   var phases = t.phases;
   var curIdx = t.currentPhaseIndex || 0;
-  var totalP = 0, doneP = 0, simComplete = true;
+  var totalP = 0, doneP = 0, simComplete = true, allMaterialized = true;
   for (var i = 0; i < phases.length; i++) {
-    if (i <= curIdx) {
+    // O índice operacional pode ficar para trás depois que a chave foi criada.
+    // Jogos reais da etapa posterior prevalecem sobre a projeção do sorteio.
+    if (i <= curIdx || _materializedPhaseGames(t, i) > 0) {
       totalP += _materializedPhaseGames(t, i);            // fase já sorteada → jogos reais
       doneP += _completedPhaseGames(t, i);                // v4.4.57: MESMA contagem (real+vencedor)
     } else if (i === curIdx + 1) {
+      allMaterialized = false;
       var sim = _simulatePhaseGames(t, i);                // próxima fase → motor real
       if (sim == null) simComplete = false; else totalP += sim;
     } else {
+      allMaterialized = false;
       simComplete = false;                                // fases 3+ só entram ao materializar a anterior
     }
   }
+  totalP += extraPlayed;
+  doneP += extraPlayed;
   // v4.4.57: `done` do TORNEIO COMPLETO vem da soma por-fase (_completedPhaseGames),
   // NÃO de _getTournamentProgress().completed — este superconta 1 no multi-fase (contava
   // 125/123 pra 124/122 reais), fazendo a barra dizer "falta 1 jogo" quando faltam 2
@@ -1462,7 +1527,14 @@ window._tournamentGamesPlan = function (t) {
   if (totalP < doneP) totalP = doneP;
   return { multiPhase: true, totalPlanned: totalP, totalDone: doneP,
            pct: totalP > 0 ? Math.round(doneP / totalP * 100) : 0,
-           phasesCount: phases.length, currentPhaseIndex: curIdx, partial: !simComplete };
+           phasesCount: phases.length, currentPhaseIndex: curIdx, partial: !simComplete,
+           complete: allMaterialized && totalP > 0 && doneP === totalP };
+};
+
+window._tournamentResultsComplete = function (t) {
+  if (!window._isContinuousClassificationTournament(t)) return false;
+  var plan = window._tournamentGamesPlan(t);
+  return !!(plan && plan.complete);
 };
 
 // v4.4.48: progresso da FASE ATUAL (só o estágio corrente) — total = jogos planejados
@@ -1816,6 +1888,9 @@ window._tProgByDay = function(t) {
 window._buildProgressInner = function(t, barsOnly) {
   var prog = window._getTournamentProgress(t);
   var dayStages = window._tProgByDay(t);
+  var _continuous = !!(window._isContinuousClassificationTournament && window._isContinuousClassificationTournament(t));
+  if (_continuous) dayStages = null;
+  var _continuousPlan = _continuous && window._tournamentGamesPlan ? window._tournamentGamesPlan(t) : null;
   // v4.4.48: Multi-fase (ex.: Fase de Grupos → Eliminatória): a barra VERDE do topo reflete
   // a FASE ATUAL (só o estágio corrente). Numa classificatória de 72 jogos, quando os 72
   // saem → 100% e o botão "avançar de fase" aparece — é o que o dono quer VER no topo. O
@@ -1823,14 +1898,16 @@ window._buildProgressInner = function(t, barsOnly) {
   // Rodadas de grupos diferentes se encavalam → escopar por rodada enganaria; a fase toda é
   // a medida certa. Liga (Pontos Corridos) e fase posterior de chave têm escopo-de-rodada
   // próprio nos ramos _isLiga / _inLaterPhase abaixo (que re-sobrepõem este prog).
-  if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._currentPhaseGames === 'function') {
+  if (_continuousPlan && _continuousPlan.totalPlanned > 0) {
+    prog = { total: _continuousPlan.totalPlanned, completed: _continuousPlan.totalDone, pct: _continuousPlan.pct };
+  } else if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._currentPhaseGames === 'function') {
     var _cpHead = window._currentPhaseGames(t);
     if (_cpHead && _cpHead.total > 0) {
       prog = { total: _cpHead.total, completed: _cpHead.done, pct: _cpHead.pct };
     }
   }
   if (!prog.total) return '';
-  var isFinished = t.status === 'finished' || !!t.finishedAt;
+  var isFinished = t.status === 'finished' || !!t.finishedAt || !!(_continuousPlan && _continuousPlan.complete);
   var now = Date.now();
   // INÍCIO EFETIVO = tournamentStarted OU, na falta dele, o PRIMEIRO jogo jogado (menor
   // startedAt/resultAt). Lançar resultado É iniciar → a barra não pode ficar em "aguardando
@@ -1849,6 +1926,10 @@ window._buildProgressInner = function(t, barsOnly) {
       var _scheduledGameMs = window._tProgParseMs(m.scheduledAt);
       if (_scheduledGameMs) _scheduledGamesG.push(_scheduledGameMs);
     }
+  });
+  window._playedTournamentTieMatches(t).forEach(function (m) {
+    var stamp = window._tProgParseMs(m.resultAt);
+    if (stamp) { _allStampsG.push(stamp); _endStampsG.push(stamp); }
   });
   var _earliestGameMs = _allStampsG.length ? Math.min.apply(null, _allStampsG) : null;
   var _latestGameMs = _endStampsG.length ? Math.max.apply(null, _endStampsG) : null;
@@ -1904,7 +1985,7 @@ window._buildProgressInner = function(t, barsOnly) {
   // reflete a RODADA ATUAL DESSA fase, não os rounds da Fase 0 (t.rounds). Senão ficava
   // presa na última rodada da classificatória (bug: "RODADA 1 75/75" estando na R1 da fase 2).
   var _inLaterPhase = _mp && _cp >= 1 && Array.isArray(t.matches) && t.matches.some(function(m){ return m && (m.phaseIndex || 0) === _cp; });
-  var _isLiga = !!(window._isLigaFormat && window._isLigaFormat(t)) && Array.isArray(t.rounds) && t.rounds.length > 0 && !_inLaterPhase;
+  var _isLiga = !_continuous && !!(window._isLigaFormat && window._isLigaFormat(t)) && Array.isArray(t.rounds) && t.rounds.length > 0 && !_inLaterPhase;
   var _phaseRoundActive = false;
   var _roundComplete = false, _roundCompletedMs = null, _roundNum = 0;
   var _labelSchedStart = 'início programado', _labelSchedEnd = 'final programado', _labelHead = 'Progresso do Torneio';
@@ -2150,7 +2231,7 @@ window._buildProgressInner = function(t, barsOnly) {
     var _barDone = dayStages ? dayStages.completed : (_useGp ? _gp.totalDone : (_multiRound ? _lp.completedAll : _wholeProg.completed));
     var _barTotal = dayStages ? dayStages.total : (_useGp ? _gp.totalPlanned : (_multiRound ? _lp.totalPlanned : _wholeProg.total));
     var _barPct = _barTotal > 0 ? Math.round(_barDone / _barTotal * 100) : 0;
-    var _barSuffix = dayStages ? '' : (_useGp ? (' · fase ' + (((_gp.currentPhaseIndex) || 0) + 1) + ' de ' + _gp.phasesCount)
+    var _barSuffix = dayStages || _continuous ? '' : (_useGp ? (' · fase ' + (((_gp.currentPhaseIndex) || 0) + 1) + ' de ' + _gp.phasesCount)
       : (_multiRound ? (' · rodada ' + _lp.currentRoundNum + ' de ' + _lp.roundsPlanned) : ''));
     // v2.4.78: duração REAL do torneio inteiro — do 1º placar lançado (primeiro
     // m.startedAt de todas as rodadas) ao último (maior m.resultAt). Espelha o
@@ -2173,6 +2254,12 @@ window._buildProgressInner = function(t, barsOnly) {
         _allStarts.push(dayStages ? window.ScoreplaceMatchDay.timestamp(m.startedAt) : +m.startedAt);
       if (m.resultAt) _allEnds.push(dayStages ? window.ScoreplaceMatchDay.timestamp(m.resultAt) : +m.resultAt);
     });
+    window._playedTournamentTieMatches(t).forEach(function (m) {
+      var started = window._tProgParseMs(m.startedAt);
+      var result = window._tProgParseMs(m.resultAt);
+      if (started) _allStarts.push(started);
+      if (result) _allEnds.push(result);
+    });
     var _firstPointMs = dayStages && _allEnds.length
       ? Math.min.apply(null, _allStarts.concat(_allEnds))
       : (_allStarts.length ? Math.min.apply(null, _allStarts) : (t.tournamentStarted ? (+t.tournamentStarted) : null));
@@ -2186,7 +2273,7 @@ window._buildProgressInner = function(t, barsOnly) {
             dayStages.days[dayStages.days.length - 1].endTime, dayStages.zone) }
       : ((_mp && window._tournamentScheduledWindow) ? window._tournamentScheduledWindow(t) : null);
     var _deadlineMs = (_win && _win.endMs) ? _win.endMs : window._tProgParseMs(t.endDate);
-    var _tournDone = _barPct >= 100;
+    var _tournDone = _continuous ? !!(_gp && _gp.complete) : _barDone >= _barTotal && _barTotal > 0;
 
     // Linha INÍCIO REAL / DUROU / FINAL REAL (só quando há 1º e último placar).
     var _durRow = '';
@@ -2362,7 +2449,7 @@ window._buildProgressInner = function(t, barsOnly) {
   if (finishedMs != null && isNaN(finishedMs)) finishedMs = null;
   // fim "real" da rodada (Liga) quando completa → congela o cronômetro
   var _roundEndReal = ((_isLiga || _phaseRoundActive) && _roundComplete && _roundCompletedMs) ? _roundCompletedMs : null;
-  var endForElapsed = _roundEndReal ? _roundEndReal : ((isFinished && finishedMs != null) ? finishedMs : now);
+  var endForElapsed = _roundEndReal ? _roundEndReal : (isFinished ? (finishedMs || _latestGameMs || now) : now);
   // v2.7.79: não iniciado (sorteado, sem 1º ponto) → modo "aguardando início":
   // não há "início real / decorrido"; usamos só a janela programada + barras.
   var _notStarted = !actualStart;

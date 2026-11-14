@@ -111,9 +111,12 @@
         if (global) titles.push(global);
       } else {
         var byLine = {};
+        var categories = new Set(matches.filter(function (m) { return m && !m.isThirdPlace; })
+          .map(function (m) { return String(m.category || ''); }));
+        var multipleCategories = categories.size > 1;
         matches.forEach(function (m) {
           if (!m || m.isThirdPlace || m.bracket === 'thirdplace' || m.bracket === 'finalstage') return;
-          var key = String(m.bracket || 'main');
+          var key = String(m.category || '') + '\u0000' + String(m.bracket || 'main');
           (byLine[key] || (byLine[key] = [])).push(m);
         });
         Object.keys(byLine).forEach(function (key) {
@@ -123,10 +126,12 @@
           if (roots.size !== 1) return;
           finals.sort(function (a, b) { return Number(b.seriesGameNumber || 1) - Number(a.seriesGameNumber || 1); });
           var classicDouble = phase.elimination && phase.elimination.bracketType === 'double';
-          var lineLabel = classicDouble && key === 'upper' ? 'Chave superior'
-            : classicDouble && key === 'lower' ? 'Chave inferior' : finals[0].tierLabel || '';
-          var title = awardFromMatch(finals[0], Object.keys(byLine).length > 1 ? 'line' : 'overall',
-            lineLabel);
+          var bracket = String(finals[0].bracket || 'main');
+          var lineLabel = classicDouble && bracket === 'upper' ? 'Chave superior'
+            : classicDouble && bracket === 'lower' ? 'Chave inferior' : finals[0].tierLabel || '';
+          var label = [finals[0].category || '', lineLabel].filter(Boolean).join(' · ');
+          var scope = multipleCategories ? 'category' : Object.keys(byLine).length > 1 ? 'line' : 'overall';
+          var title = awardFromMatch(finals[0], scope, label);
           if (title) titles.push(title);
         });
       }
