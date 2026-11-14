@@ -1,3 +1,9 @@
+## 2.7.0 — 14/nov/2026 (corte conjunto web, iOS e Android)
+
+- Consolida na versão nativa o código web acumulado desde o último corte 2.6.0, incluindo a fila de cards roláveis, a transição entre fases, a identificação de quadras livres e o registro de placares sem bloqueio pela estimativa da agenda. Os formatos equivalentes de torneio usam as mesmas regras; nenhum dado do Camis Day é alterado por este corte.
+- Na tela de resultado do Wear OS, a modalidade, os nomes, o placar e as ações ficam em fluxo rolável dentro do mostrador circular. Os botões “Fechar” e “Iniciar” ficam empilhados, com área de toque de 48 dp. Verificado no emulador 384×384 com fonte do sistema em 150% e 200%, após a rejeição da versão 179 pelo Google Play.
+- Versões de produto alinhadas em 2.7.0: web, iOS, aplicativo Android e Wear. Novos números de build: iOS 294; Android 180; Wear 181.
+
 ## 2.6.91 — 14/nov/2026 (fluxo contínuo entre fases)
 
 - A fila da operação inclui partidas com duplas definidas mesmo sem horário individual. A ordem planejada continua como prioridade; outros confrontos prontos podem ser chamados em quadras livres, inclusive na transição entre classificatórias e eliminatórias de torneios de um ou dois dias.

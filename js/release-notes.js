@@ -1,3 +1,8 @@
+// 2.7.0 — Corte unificado para web, iOS, Android e Wear. A operação mantém
+// todos os próximos jogos chamáveis entre fases, calcula quadras livres pela
+// ocupação real e registra resultados sem bloquear por estimativa da agenda.
+// No Wear, a tela de resultado rola e mantém texto e ações acessíveis com
+// fonte ampliada no sistema.
 // 2.6.91 — A operação mantém jogos definidos na fila mesmo sem horário individual,
 // oferece os cards prontos de outras etapas e calcula quadras livres pela mesma
 // ocupação usada no seletor. Uma grade cuja estimativa estourou não desfaz um
@@ -1750,6 +1755,16 @@ window._RELEASE_NOTES_HTML = (function () {
     // quem está com a 2.0.4 no iPhone lê um torneio que o banco não guarda mais desse jeito.
     // Mesma lição da 1.7.35: quando o formato do dado muda, a ida à loja É o conserto.
     // Os itens abaixo são consolidados por tema, como manda a convenção do arquivo.
+    // v2.7 — fluxo de operação de ponta a ponta e fonte do Wear.
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
+      '<div style="font-weight:800;color:var(--sp-c-a7f3d0,#a7f3d0);font-size:1rem;margin-bottom:8px;">🎾 v2.7 — Torneios sem interrupção <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(Novembro, 2026)</span></div>' +
+      '<ul style="margin:0;padding-left:1.1rem;font-size:0.86rem;line-height:1.5;color:var(--text-main);">' +
+        '<li>Na operação, os próximos jogos aparecem em cards roláveis, com a fase de cada partida. Jogos prontos de outra fase continuam disponíveis para chamada.</li>' +
+        '<li>A lista de quadras livres considera os jogos realmente em andamento. O placar registrado continua válido mesmo quando uma estimativa de horário da agenda é ultrapassada.</li>' +
+        '<li>Na tela No Ar, é possível escolher o monitor de apresentação quando o navegador permite identificar as telas conectadas.</li>' +
+        '<li>No relógio Wear, a tela de resultado acompanha a fonte escolhida no sistema e permite rolar até as ações sem cortar nomes ou botões.</li>' +
+      '</ul>' +
+    '</div>' +
     // v2.6 — operação Rei/Rainha concentrada em um dia.
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800;color:var(--sp-c-a7f3d0,#a7f3d0);font-size:1rem;margin-bottom:8px;">🎾 v2.6 — Jogos do quarteto <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(Novembro, 2026)</span></div>' +
