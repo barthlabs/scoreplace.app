@@ -1095,6 +1095,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketOperationsRefresh(t, root);
       const afterRefresh = strip.querySelector('.sp-operations-next-scroll');
       const scrollPreserved = afterRefresh.scrollTop >= cards[1].offsetTop;
+      const cardFits = [...afterRefresh.querySelectorAll(':scope > .sp-operations-replica .sp-match-card')]
+        .map(card => ({ scrollHeight:card.scrollHeight, clientHeight:card.clientHeight }));
       const later = afterRefresh.querySelector('[data-operations-base-match="later"]');
       const callButton = later.querySelector('.sp-match-confirm');
       const callDebug = { disabled:callButton.disabled, match:later.getAttribute('data-operations-match'), html:callButton.outerHTML };
@@ -1104,11 +1106,13 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketOperationsRefresh(t, root);
       const noCallable = { fullCard:!!strip.querySelector('.sp-operations-next-scroll > .sp-operations-replica .sp-match-card .team'),
         noEmpty:!strip.querySelector('.sp-operations-next-scroll > .sp-operations-empty') };
-      return { ids, scrollPreserved, renders, called:window.called,
+      return { ids, scrollPreserved, cardFits, renders, called:window.called,
         callDebug, noCallable, earlyUncalled:!t.matches[0].courtCalledAt, laterCalled };
     });
     assert.deepEqual(laterCall.ids, ['early', 'later', 'unknown']);
     assert(laterCall.scrollPreserved, 'atualizar a faixa preserva a posição do jogo escolhido');
+    assert(laterCall.cardFits.every(card => card.scrollHeight <= card.clientHeight + 2),
+      'nenhum card seguinte pode cortar o conteúdo: ' + JSON.stringify(laterCall.cardFits));
     assert(laterCall.renders.some(render => render.id === 'later' && render.canEnter && !render.readOnly),
       'jogo posterior já definido permite chamada');
     assert(laterCall.renders.some(render => render.id === 'unknown' && render.readOnly),
