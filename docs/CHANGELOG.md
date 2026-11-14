@@ -1,3 +1,8 @@
+## 2.6.90 — 14/nov/2026 (cards roláveis dos próximos jogos)
+
+- A coluna de próxima chamada mostra a fila em cards completos com rolagem vertical, como os placares pendentes. Um jogo posterior já definido e liberado pode ser chamado diretamente para uma quadra livre, sem esperar a primeira posição visual. Confrontos com vagas ainda indefinidas continuam visíveis e sem chamada.
+- A fase e o horário estimado aparecem junto de cada card. A rolagem permanece no jogo observado após atualizações da operação.
+
 ## 2.6.88 — 13/nov/2026 (rolagem condicional na tela No Ar)
 
 - “Próximos jogos” e “Últimos resultados” permanecem estáticos quando todo o conteúdo cabe no painel. A rolagem automática inicia apenas quando o conteúdo ultrapassa a altura disponível, inclusive após atualizações da tela.

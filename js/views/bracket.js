@@ -1828,16 +1828,7 @@ function _bracketOperationsStageLabel(m, t, allMatches) {
   return stage + (group ? ' · ' + group : '');
 }
 
-function _bracketOperationsFutureHtml(state, t) {
-  var safe = window._safeHtml || function (s) { return String(s); };
-  var known = window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.knownSide || function (value) { return !!value && value !== 'TBD'; };
-  var other = (state.future || []).filter(function (m) { return !state.next || String(m.id) !== String(state.next.id); });
-  if (!other.length) return '';
-  function side(m, slot) {
-    var name = m[slot] || (Array.isArray(m[slot === 'p1' ? 'team1' : 'team2']) ?
-      m[slot === 'p1' ? 'team1' : 'team2'].join(' / ') : '');
-    return known(name) ? name : (typeof window._directBracketSlotLabel === 'function' && window._directBracketSlotLabel(t, m, slot)) || 'A definir';
-  }
+function _bracketOperationsFutureEstimates(state, t) {
   var now = Date.now();
   var timing = window.ScoreplaceMatchTiming && window.ScoreplaceMatchTiming.config(t) || {};
   var gameMs = Math.max(10, Number(timing.game) || 40) * 60000;
@@ -1859,19 +1850,7 @@ function _bracketOperationsFutureHtml(state, t) {
     estimates.set(String(m.id), at);
     courts[slot] = at + gameMs;
   });
-  return '<section class="sp-operations-future" aria-label="Próximos jogos"><span class="sp-operations-section-title">PRÓXIMOS JOGOS · ' +
-    other.length + ' NA SEQUÊNCIA ↓</span>' +
-    '<div class="sp-operations-future-list">' + other.map(function (m) {
-      var number = m._gameNum || m.scheduledGameNumber || '';
-      var at = estimates.get(String(m.id));
-      var estimate = Number.isFinite(at) ? new Date(at).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', hour12:false,
-        timeZone:typeof _matchCardTimeZone === 'function' ? _matchCardTimeZone(t) : 'America/Sao_Paulo' }) : '';
-      return '<div class="sp-operations-future-row"><div class="sp-operations-future-heading">JOGO ' + safe(number) +
-        ' · ' + safe(m.category || '') + ' · ' + safe(_bracketOperationsStageLabel(m, t, state.matches)) +
-        (estimate ? ' · <time title="Horário estimado, atualizado conforme as quadras liberam">🕒 ≈ ' + safe(estimate) + '</time>' : '') +
-        '</div><div class="sp-operations-future-pair">' + safe(side(m, 'p1')) +
-        '<span>×</span>' + safe(side(m, 'p2')) + '</div></div>';
-    }).join('') + '</div></section>';
+  return estimates;
 }
 
 function _bracketOperationsReplica(m, t, role, label, availability, root, allMatches, slot) {
@@ -2642,8 +2621,12 @@ window._bracketOperationsRefresh = function (t, root) {
   var scrollMemory = window._spOperationsScrollByTournament || (window._spOperationsScrollByTournament = {});
   var trackScroll = previousTrack ? previousTrack.scrollLeft : Number(scrollMemory[String(t.id)] || 0);
   var previousNextScroll = previousTrack && previousTrack.querySelector('.sp-operations-next-scroll');
-  var nextScrollTop = previousNextScroll && String(previousNextScroll.getAttribute('data-next-match') || '') ===
-    String(state.next && state.next.id || '') ? previousNextScroll.scrollTop : 0;
+  var nextScrollTop = previousNextScroll ? previousNextScroll.scrollTop : 0;
+  var visibleNext = previousNextScroll && Array.prototype.find.call(previousNextScroll.querySelectorAll('.sp-operations-replica'), function (card) {
+    return card.offsetTop + card.offsetHeight > previousNextScroll.scrollTop;
+  });
+  var visibleNextId = visibleNext && visibleNext.getAttribute('data-operations-base-match');
+  var visibleNextOffset = visibleNext ? nextScrollTop - visibleNext.offsetTop : 0;
   var pageX = window.scrollX, pageY = window.scrollY;
   var focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.sp-operations-replica');
   var focusState = focused && { match: focused.getAttribute('data-operations-match'),
@@ -2678,22 +2661,42 @@ window._bracketOperationsRefresh = function (t, root) {
     return !state.active.some(function (m) { return String(m.court) === String(court); });
   });
   var freeCount = freeCourts.length;
-  var displayedNext = state.next || state.future[0] || null;
+  var safe = window._safeHtml || String;
+  var nextCards = [state.next].concat(state.future || []).filter(function (m, index, list) {
+    return m && list.findIndex(function (item) { return item && String(item.id) === String(m.id); }) === index;
+  });
+  var readyIds = new Set((state.queue || []).map(function (m) { return String(m.id); }));
+  var releasedMatches = window._bracketCourtReleased(t.id);
+  var estimates = _bracketOperationsFutureEstimates(state, t);
   var nextAvailability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '"><span>' +
-    freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</span>' +
-    (displayedNext ? '<strong class="sp-operations-stage">' + (window._safeHtml || String)(_bracketOperationsStageLabel(displayedNext, t, state.matches)) + '</strong>' : '') + '</div>';
-  existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll' +
-    '" aria-label="Próximos jogos" data-next-match="' +
-    (window._safeHtml || String)(String(displayedNext && displayedNext.id || '')) + '">' +
-    (displayedNext ? _bracketOperationsReplica(displayedNext, t, { canCall: canCall && !!state.next && state.nextCallable !== false, active: false,
-      readOnly: !state.next || state.nextCallable === false,
-      postponeReady: canCall && !!state.next && state.nextCallable !== false, postponeBusy: existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
-      tieCanPostpone: !!state.tieCanPostpone,
-      preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(displayedNext.id)] || '' }, nextLabel, nextAvailability, root, state.matches, 'next') :
-      '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
+    freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</span></div>';
+  var nextCardsHtml = nextCards.map(function (m, index) {
+    var available = readyIds.has(String(m.id)) && window.ScoreplaceNextMatch &&
+      window.ScoreplaceNextMatch.firstAvailable([m], state.matches, releasedMatches) === m;
+    var callable = canCall && available && state.nextCallable !== false;
+    var at = estimates.get(String(m.id));
+    var estimate = Number.isFinite(at) ? new Date(at).toLocaleTimeString('pt-BR', {
+      hour:'2-digit', minute:'2-digit', hour12:false,
+      timeZone:typeof _matchCardTimeZone === 'function' ? _matchCardTimeZone(t) : 'America/Sao_Paulo'
+    }) : '';
+    var availability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '"><span>' +
+      (index === 0 ? freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') :
+        (estimate ? '🕒 ≈ ' + safe(estimate) : (available ? 'PRONTO PARA CHAMAR' : 'AGUARDANDO DEFINIÇÃO'))) + '</span>' +
+      '<strong class="sp-operations-stage">' + safe(_bracketOperationsStageLabel(m, t, state.matches)) + '</strong></div>';
+    return _bracketOperationsReplica(m, t, {
+      canCall:callable, active:false, readOnly:!available,
+      postponeReady:callable && index === 0,
+      postponeBusy:existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
+      tieCanPostpone:!!state.tieCanPostpone && index === 0,
+      preferFirstFreeCourt:true,
+      preferredCourt:(root._bracketOperationsManualCourt || {})[String(m.id)] || ''
+    }, index === 0 ? nextLabel : 'PRÓXIMO JOGO · ' + (index + 1) + '/' + nextCards.length,
+    availability, root, state.matches, 'next:' + String(m.id));
+  }).join('');
+  existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll" aria-label="Próximos jogos">' +
+    (nextCardsHtml || '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
-        'Nenhum jogo aguardando chamada') + '</div>') +
-    _bracketOperationsFutureHtml(Object.assign({}, state, { next:displayedNext }), t) + '</div></div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
+        'Nenhum jogo aguardando chamada') + '</div>') + '</div></div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
     state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false, pending: true }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
     '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><div class="sp-operations-courts-heading"><span class="sp-operations-section-title">EM QUADRA</span>' +
     (typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user) ?
@@ -2746,7 +2749,12 @@ window._bracketOperationsRefresh = function (t, root) {
       scrollMemory[String(t.id)] = operationsTrack.scrollLeft;
     }, { passive:true });
     var nextScroll = operationsTrack.querySelector('.sp-operations-next-scroll');
-    if (nextScroll) nextScroll.scrollTop = nextScrollTop;
+    if (nextScroll) {
+      var anchor = visibleNextId && Array.prototype.find.call(nextScroll.querySelectorAll('.sp-operations-replica'), function (card) {
+        return card.getAttribute('data-operations-base-match') === visibleNextId;
+      });
+      nextScroll.scrollTop = anchor ? anchor.offsetTop + visibleNextOffset : nextScrollTop;
+    }
     _bracketOperationsBindScrollbar(operationsTrack, existing.querySelector('.sp-operations-scrollbar'));
     if (window.scrollY !== pageY || window.scrollX !== pageX) window.scrollTo(pageX, pageY);
   }

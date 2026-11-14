@@ -24,7 +24,7 @@ assert.equal(operationStage(goldRounds[0], { phases:[{ kind:'classification' }, 
   'Oitavas de final', 'jogo 85 da Ouro identifica a etapa no placar pendente');
 assert.equal(operationStage({ ...diamondRounds[0], isMonarch:true, phaseIndex:0 }, { phases:[{ kind:'classification' }] }, diamondRounds), 'Classificatória');
 assert.equal(operationStage({ isTieBreak:true }, {}, []), 'Desempate');
-const futureStart = source.indexOf('function _bracketOperationsFutureHtml(');
+const futureStart = source.indexOf('function _bracketOperationsFutureEstimates(');
 const operationStageLabel = new Function(source.slice(stageStart, futureStart) + '\nreturn _bracketOperationsStageLabel;')();
 assert.equal(operationStageLabel({ isMonarch:true, groupName:'R1 Grupo F' }, { phases:[{ kind:'classification' }] }, []),
   'Classificatória · Grupo F', 'jogo em quadra identifica o grupo da classificatória');
@@ -33,13 +33,8 @@ assert.equal(operationStageLabel({ isMonarch:true, monarchGroup:5, category:'Fem
   'Classificatória · Grupo F', 'segundo jogo recupera o grupo da mesma série');
 const futureEnd = source.indexOf('function _bracketOperationsReplica(', futureStart);
 assert(futureStart > 0 && futureEnd > futureStart);
-const futureHtml = new Function('window', source.slice(stageStart, futureEnd) +
-  '\nreturn _bracketOperationsFutureHtml;')({
-    _safeHtml: value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;'),
-    ScoreplaceNextMatch: { knownSide:value => !!value && value !== 'TBD' },
-    _directBracketSlotLabel: (_t, m, slot) => ({ '94:p1':'Vencedor do jogo 91', '94:p2':'Vencedor do jogo 92',
-      '95:p1':'Vencedor do jogo 93', '95:p2':'Vencedor do jogo 94' })[m._gameNum + ':' + slot] || ''
-  });
+const futureEstimates = new Function('window', source.slice(futureStart, futureEnd) +
+  '\nreturn _bracketOperationsFutureEstimates;')({ ScoreplaceMatchTiming: { config: () => ({ game: 40 }) } });
 const futureMatches = [
   { id:'semi-93', _gameNum:93, category:'Fem Ouro', phaseIndex:1, round:3, roundName:'Semifinal', officialGroupBracket:true,
     p1:'Almeida / Pieri', p2:'Gava / Batochio' },
@@ -49,14 +44,8 @@ const futureMatches = [
     p1:'TBD', p2:'TBD' },
   { id:'prata', _gameNum:104, category:'Fem Prata', phaseIndex:0, isMonarch:true, p1:'Ana', p2:'Bia' }
 ];
-const futureMarkup = futureHtml({ next:futureMatches[0], future:futureMatches, matches:futureMatches }, {});
-assert(!futureMarkup.includes('JOGO 93'), 'a partida principal não duplica na fila visual');
-assert(futureMarkup.includes('JOGO 94') && futureMarkup.includes('Semifinal'));
-assert(futureMarkup.includes('JOGO 95') && futureMarkup.includes('Final'));
-assert(futureMarkup.includes('Vencedor do jogo 91') && futureMarkup.includes('Vencedor do jogo 94'));
-assert(futureMarkup.includes('JOGO 104') && futureMarkup.includes('Classificatória'));
-assert(futureMarkup.includes('PRÓXIMOS JOGOS · 3 NA SEQUÊNCIA ↓'), 'a fila indica quantos confrontos existem abaixo');
-assert.match(futureMarkup, /🕒 ≈ \d{2}:\d{2}/, 'fila futura mostra horário estimado');
+const estimated = futureEstimates({ future:futureMatches, courts:['Quadra 1'], active:[] }, {});
+assert(estimated.get('semi-94') > estimated.get('semi-93'), 'estimativas acompanham a ordem da fila');
 
 const start = source.indexOf('function _bracketAgendaCompare(');
 const end = source.indexOf('function _bracketAgendaExpected(', start);
@@ -134,8 +123,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       let next = strip.querySelector('.sp-operations-next .sp-match-card');
       const ids = [...document.querySelectorAll('[id]')].map(node => node.id);
       const initial = { full: !!next && next.querySelectorAll('.team').length === 2 && !!next.querySelector('.sp-mc-head, .versus, .sp-match-operational'),
-        futureInsideNext: !!strip.querySelector('.sp-operations-next-scroll .sp-operations-future'),
-        futureOutsideNext: !!strip.querySelector('.sp-operations-track > .sp-operations-future'),
+        nextCards: [...strip.querySelectorAll('.sp-operations-next-scroll > .sp-operations-replica')].map(card => card.getAttribute('data-operations-base-match')),
+        futureAsFullCard: !!strip.querySelector('.sp-operations-next-scroll [data-operations-base-match="m2"] .sp-match-card .team'),
+        noTextList: !strip.querySelector('.sp-operations-future'),
         futureScrollable: (() => { const scroller = strip.querySelector('.sp-operations-next-scroll');
           return scroller.scrollHeight > scroller.clientHeight; })(),
         stage:strip.querySelector('.sp-operations-next .sp-operations-stage')?.textContent,
@@ -233,8 +223,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         selectorStayedInStrip, outsiderHidden: !document.querySelector('[data-bracket-operations-strip]') };
     });
     assert(state.initial.full && state.initial.names && state.initial.noCanonical && state.initial.uniqueIds && state.initial.linked && state.initial.noInline);
-    assert(state.initial.futureInsideNext && !state.initial.futureOutsideNext && state.initial.futureScrollable,
-      'outros próximos jogos rolam dentro da primeira coluna, sem painel intermediário');
+    assert.deepEqual(state.initial.nextCards, ['m1', 'm2']);
+    assert(state.initial.futureAsFullCard && state.initial.noTextList && state.initial.futureScrollable,
+      'os próximos jogos são cards completos e rolam dentro da primeira coluna');
     assert.equal(state.initial.stage, 'Classificatória', 'o próximo jogo na operação mostra a etapa da rodada');
     assert(state.initial.simulateVisible, 'Simular deve aparecer ao lado de EM QUADRA, sem rolar até a última quadra');
     assert.deepEqual(state.initial.courts, ['Quadra 4', 'Quadra 5']);
@@ -828,7 +819,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketOperationsRefresh(t, root);
       const camisUi = {
         title: strip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent,
-        arrows: strip.querySelectorAll('.sp-operations-next .sp-operations-nav-arrow').length
+        arrows: strip.querySelectorAll('.sp-operations-next .sp-operations-replica:first-child .sp-operations-nav-arrow').length
       };
       const gameTitle = strip.querySelector('.sp-operations-next .sp-operations-nav-title');
       const previousArrow = strip.querySelector('.sp-operations-next [data-operations-nav="prev"]');
@@ -842,7 +833,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         getComputedStyle(groupCode).fontSize === getComputedStyle(categoryWord).fontSize &&
         getComputedStyle(groupCode).color === getComputedStyle(categoryWord).color &&
         getComputedStyle(groupCode).fontWeight === getComputedStyle(categoryWord).fontWeight;
-      const actionButtons = [...strip.querySelectorAll('.sp-operations-next .sp-mc-acts button')];
+      const actionButtons = [...strip.querySelectorAll('.sp-operations-next .sp-operations-replica:first-child .sp-mc-acts button')];
       camisUi.fontSize = parseFloat(getComputedStyle(gameTitle).fontSize);
       camisUi.arrowGap = {
         left: gameTitle.getBoundingClientRect().left - previousGlyph.getBoundingClientRect().right,
@@ -1071,16 +1062,61 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(tieNavigation.titles.length, 6, 'simples desempate navega por jogo e contexto sem travar: ' + JSON.stringify(tieNavigation));
     assert.equal(tieNavigation.tabs, 1, 'abas permanecem montadas após navegar no desempate');
     assert.equal(tieNavigation.strip, 1, 'faixa de operação permanece montada após navegar no desempate');
-    await page.setContent('<div class="sp-operations-track" style="--sp-operations-card-height:300px"><div class="sp-operations-next"><div class="sp-operations-next-scroll sp-operations-next-scroll--future-only"><span class="sp-operations-label">PRÓXIMO JOGO</span><div class="sp-operations-availability">1 QUADRA LIVRE</div><div class="sp-operations-empty">Aguardando definição das duplas</div><section class="sp-operations-future"><span class="sp-operations-section-title">PRÓXIMOS JOGOS · 9 NA SEQUÊNCIA ↓</span><div class="sp-operations-future-list"><div class="sp-operations-future-row">JOGO 136</div></div></section></div></div></div>');
-    const futureOnly = await page.evaluate(() => {
-      const column = document.querySelector('.sp-operations-next').getBoundingClientRect();
-      const heading = document.querySelector('.sp-operations-future .sp-operations-section-title').getBoundingClientRect();
-      const row = document.querySelector('.sp-operations-future-row').getBoundingClientRect();
-      return { headingVisible:heading.bottom <= column.bottom, firstRowVisible:row.bottom <= column.bottom,
-        headingNearTop:heading.top - column.top < 140 };
+    const laterCall = await page.evaluate(() => {
+      const t = window._findTournamentById();
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      window.AppStore.currentUser = { uid:'org' };
+      window._bracketCourtReleaseCache = { sb_test:{ released:{} } };
+      t.phaseTieDecisions = {};
+      t.matches = [
+        { id:'early', _gameNum:1, p1:'Ana / Bia', p2:'Carla / Dora', scheduledAt:'2026-10-22T18:00:00Z', court:'Quadra 5' },
+        { id:'later', _gameNum:2, p1:'Eva / Fabi', p2:'Gabi / Helena', scheduledAt:'2026-10-22T18:35:00Z', court:'Quadra 4' },
+        { id:'unknown', _gameNum:3, p1:'TBD', p2:'TBD', scheduledAt:'2026-10-22T19:10:00Z', phaseIndex:1, court:'' }
+      ];
+      t._nJogos = 3;
+      window._confirmMatchCourtCall = (button, tid, mid) => {
+        window.called = [tid, mid, button.closest('.sp-match-operational').querySelector('select').value];
+        t.matches.find(match => match.id === mid).courtCalledAt = '2026-10-22T18:40:00Z';
+        window._bracketOperationsRefresh(t, root);
+      };
+      const originalRender = window.renderMatchCard;
+      const renders = [];
+      window.renderMatchCard = function (m, canEnter, tid, num, compact, pending, opts) {
+        renders.push({ id:m.id, canEnter, readOnly:!!opts?.readOnly });
+        return originalRender.apply(this, arguments);
+      };
+      root._bracketOperationsNav = {};
+      window._bracketOperationsRefresh(t, root);
+      const strip = root._bracketOperationsStrip;
+      const scroller = strip.querySelector('.sp-operations-next-scroll');
+      const cards = [...scroller.querySelectorAll(':scope > .sp-operations-replica')];
+      const ids = cards.map(card => card.getAttribute('data-operations-base-match'));
+      scroller.scrollTop = cards[1].offsetTop + 20;
+      window._bracketOperationsRefresh(t, root);
+      const afterRefresh = strip.querySelector('.sp-operations-next-scroll');
+      const scrollPreserved = afterRefresh.scrollTop >= cards[1].offsetTop;
+      const later = afterRefresh.querySelector('[data-operations-base-match="later"]');
+      const callButton = later.querySelector('.sp-match-confirm');
+      const callDebug = { disabled:callButton.disabled, match:later.getAttribute('data-operations-match'), html:callButton.outerHTML };
+      callButton.click();
+      const laterCalled = !!t.matches[1].courtCalledAt;
+      t.matches[0].p1 = 'TBD';
+      window._bracketOperationsRefresh(t, root);
+      const noCallable = { fullCard:!!strip.querySelector('.sp-operations-next-scroll > .sp-operations-replica .sp-match-card .team'),
+        noEmpty:!strip.querySelector('.sp-operations-next-scroll > .sp-operations-empty') };
+      return { ids, scrollPreserved, renders, called:window.called,
+        callDebug, noCallable, earlyUncalled:!t.matches[0].courtCalledAt, laterCalled };
     });
-    assert(futureOnly.headingVisible && futureOnly.firstRowVisible && futureOnly.headingNearTop,
-      'sem jogo chamável, a lista futura deve aparecer imediatamente: ' + JSON.stringify(futureOnly));
+    assert.deepEqual(laterCall.ids, ['early', 'later', 'unknown']);
+    assert(laterCall.scrollPreserved, 'atualizar a faixa preserva a posição do jogo escolhido');
+    assert(laterCall.renders.some(render => render.id === 'later' && render.canEnter && !render.readOnly),
+      'jogo posterior já definido permite chamada');
+    assert(laterCall.renders.some(render => render.id === 'unknown' && render.readOnly),
+      'jogo com duplas a definir permanece informativo');
+    assert.deepEqual(laterCall.called, ['sb_test', 'later', 'Quadra 4'], JSON.stringify(laterCall));
+    assert(laterCall.earlyUncalled && laterCall.laterCalled, 'chamar o jogo posterior não chama o primeiro');
+    assert(laterCall.noCallable.fullCard && laterCall.noCallable.noEmpty,
+      'sem confronto chamável, a próxima partida continua como card completo');
     console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

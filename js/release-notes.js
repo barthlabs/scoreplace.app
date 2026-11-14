@@ -1,3 +1,6 @@
+// 2.6.90 — Na operação, todos os próximos jogos aparecem como cards completos
+// na mesma coluna rolável. Jogos já definidos podem ser chamados fora da
+// primeira posição; confrontos com vagas pendentes permanecem informativos.
 // 2.6.88 — A tela No Ar mantém “Últimos resultados” e “Próximos jogos”
 // parados enquanto todos os cards couberem; a rolagem começa só com excesso.
 // 2.6.87 — O próximo jogo volta a ser um card completo na operação.
