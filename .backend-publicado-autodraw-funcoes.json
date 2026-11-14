@@ -104,8 +104,8 @@
       "mode": "only"
     },
     "advanceTournamentPhase": {
-      "backendCommit": "1ddac55e279f7ddbbb91d91d7f803387733ee200",
-      "deployedAt": "2026-11-13T16:45:05.422Z",
+      "backendCommit": "e574289309c48a6894708a8c3b9cfdd92e415890",
+      "deployedAt": "2026-11-14T17:02:01.060Z",
       "result": "success",
       "mode": "only"
     },
@@ -134,14 +134,14 @@
       "mode": "only"
     },
     "assignMatchCourt": {
-      "backendCommit": "92b7c240a189c4612dcd65dea28ba6dcb48f9e2d",
-      "deployedAt": "2026-11-12T14:00:40.346Z",
+      "backendCommit": "e574289309c48a6894708a8c3b9cfdd92e415890",
+      "deployedAt": "2026-11-14T17:02:01.060Z",
       "result": "success",
       "mode": "only"
     },
     "applyMatchResult": {
-      "backendCommit": "b00e956d84ecdf274fcf53d87d13cc1d0c8a5d82",
-      "deployedAt": "2026-11-14T00:05:55.189Z",
+      "backendCommit": "e574289309c48a6894708a8c3b9cfdd92e415890",
+      "deployedAt": "2026-11-14T17:02:01.060Z",
       "result": "success",
       "mode": "only"
     },
@@ -152,8 +152,8 @@
       "mode": "only"
     },
     "applyTournamentWO": {
-      "backendCommit": "ae7ca8f303b341b98fd222bce0c57be10619f8f7",
-      "deployedAt": "2026-11-12T20:48:05.024Z",
+      "backendCommit": "e574289309c48a6894708a8c3b9cfdd92e415890",
+      "deployedAt": "2026-11-14T17:02:01.060Z",
       "result": "success",
       "mode": "only"
     },
@@ -170,8 +170,8 @@
       "mode": "only"
     },
     "applyQueuedResult": {
-      "backendCommit": "a13b8bdfaa6328bebdfe8655018ea3ed0e65cfa3",
-      "deployedAt": "2026-11-13T18:42:29.384Z",
+      "backendCommit": "e574289309c48a6894708a8c3b9cfdd92e415890",
+      "deployedAt": "2026-11-14T17:02:01.060Z",
       "result": "success",
       "mode": "only"
     },
@@ -422,8 +422,8 @@
       "mode": "only"
     },
     "manageWOClaim": {
-      "backendCommit": "ae7ca8f303b341b98fd222bce0c57be10619f8f7",
-      "deployedAt": "2026-11-12T20:48:05.024Z",
+      "backendCommit": "e574289309c48a6894708a8c3b9cfdd92e415890",
+      "deployedAt": "2026-11-14T17:02:01.060Z",
       "result": "success",
       "mode": "only"
     },
