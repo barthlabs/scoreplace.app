@@ -15,7 +15,7 @@
       }
     },
     "sp-op-score-v2": {
-      "digest": "609af6ec7ec08dc78445064484d5ec7df12a38e0fcec03228da996c6f3e3dca4",
+      "digest": "3ec1d43d5c6ce1ea671fe9314038521964644985955164f7962ec374e70397a4",
       "urls": {
         "us-east1": "https://sp-op-score-v2-4f45krjr3a-ue.a.run.app",
         "us-east4": "https://sp-op-score-v2-4f45krjr3a-uk.a.run.app",
