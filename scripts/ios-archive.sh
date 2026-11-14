@@ -96,7 +96,8 @@ echo "▶ Sincronizando web assets (npm run cap:sync)…"
 "$REPO_ROOT/scripts/check-embedded-www.sh" ios
 
 echo "▶ Arquivando esquema '$SCHEME'…  → $ARCHIVE"
-xcodebuild \
+ARCHIVE_LOG="${TMPDIR:-/tmp}/scoreplace-$STAMP-archive.log"
+if xcodebuild \
   -project "$PROJECT" \
   -scheme "$SCHEME" \
   -configuration Release \
@@ -104,7 +105,21 @@ xcodebuild \
   -archivePath "$ARCHIVE" \
   -allowProvisioningUpdates \
   "${AUTH_ARGS[@]}" \
-  archive
+  archive 2>&1 | tee "$ARCHIVE_LOG"; then
+  :
+else
+  echo "❌ O archive iOS falhou. Diagnóstico do xcodebuild:"
+  DIAGNOSTIC_LINES="$(grep -E 'error:|\*\* ARCHIVE FAILED \*\*|No Accounts|provisioning profile|CodeSign' "$ARCHIVE_LOG" | tail -n 25 || true)"
+  printf '%s\n' "${DIAGNOSTIC_LINES:-Nenhuma linha de erro encontrada no log do xcodebuild.}"
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    {
+      printf '### Falha do archive iOS\n\n```text\n'
+      printf '%s\n' "${DIAGNOSTIC_LINES:-Nenhuma linha de erro encontrada no log do xcodebuild.}"
+      printf '```\n'
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
+  exit 70
+fi
 
 # ── VALIDAÇÃO CRÍTICA: o watch app precisa estar embutido ──
 WATCH_PATH="$ARCHIVE/$EMBEDDED_WATCH"
