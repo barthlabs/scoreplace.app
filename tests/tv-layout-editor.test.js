@@ -502,6 +502,10 @@ const { chromium } = require('@playwright/test');
     await page.evaluate(() => {
       window._editingTournament.id = 'tour_1793804848447_94bfe2282535789667cb35f1080024ee';
       window._editingTournament.name = 'Camis Day';
+      window._editingTournament.phases = [
+        { kind:'classification', classification:{ pairing:{ strategy:'monarch_groups' } } },
+        { kind:'elimination', fixedPairs:true, source:{ type:'previous_phase', scope:'per_group', qualifyTopN:2 } }
+      ];
       const layout = window.ScoreplaceTvLayout.defaults();
       Object.assign(layout.sections.courts, { x:0, y:9.7, w:67, h:90.3 });
       layout.sections.rankings.visible = false;

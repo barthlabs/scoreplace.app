@@ -1,3 +1,7 @@
+## 2.6.90 — 14/nov/2026 (cards roláveis dos próximos jogos)
+
+- A coluna de próxima chamada mostra a fila em cards completos com rolagem vertical, como os placares pendentes. Um jogo posterior já definido e liberado pode ser chamado diretamente para uma quadra livre, sem esperar a primeira posição visual. Confrontos com vagas ainda indefinidas continuam visíveis e sem chamada.
+- A fase e o horário estimado aparecem junto de cada card. A rolagem permanece no jogo observado após atualizações da operação.
 ## 2.6.89 — 14/nov/2026 (formato reutilizável e seleção de monitor)
 
 - A tela No Ar apresenta o seletor de monitores dentro da operação, abre a janela nas coordenadas da tela escolhida e solicita fullscreen no próprio `window.open` do Chrome. Mantém a ação manual de tela cheia quando o navegador recusa.

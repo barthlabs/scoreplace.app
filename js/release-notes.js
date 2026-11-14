@@ -1,3 +1,6 @@
+// 2.6.90 — Na operação, todos os próximos jogos aparecem como cards completos
+// na mesma coluna rolável. Jogos já definidos podem ser chamados fora da
+// primeira posição; confrontos com vagas pendentes permanecem informativos.
 // 2.6.89 — O botão No Ar escolhe o monitor na própria operação e abre
 // a apresentação diretamente na tela selecionada. O painel Rei/Rainha
 // com duplas eliminatórias vale para outros torneios do mesmo formato.
