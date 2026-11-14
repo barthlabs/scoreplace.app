@@ -1,8 +1,13 @@
 {
   "schema": 1,
-  "backendCommit": "f44035b0d2d96704063afba4938f9745982dc8c1",
-  "scopeNote": "Fila da classificação Prata pode continuar após a primeira chamada; vendor sincronizado com o cliente.",
+  "backendCommit": "e574289309c48a6894708a8c3b9cfdd92e415890",
+  "scopeNote": "Fila de chamada e transição de fases, resultados sem bloqueio por capacidade da agenda e ocupação de quadras incluindo desempates ativos.",
   "functions": [
-    "updateTournamentConfiguration"
+    "applyMatchResult",
+    "applyQueuedResult",
+    "assignMatchCourt",
+    "manageWOClaim",
+    "applyTournamentWO",
+    "advanceTournamentPhase"
   ]
 }
