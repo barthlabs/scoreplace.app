@@ -83,6 +83,10 @@ function servidor() {
   const fx = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', 'confra-pos-sorteio.json'), 'utf8'));
   await p.evaluate((t) => {
     t.id = 'x';
+    // O boot assíncrono pode substituir AppStore.tournaments depois da
+    // preparação do harness (mais comum no runner da CI). A referência da
+    // fixture fica estável para as medições posteriores.
+    window.__inscritosFixture = t;
     window._findTournamentById = () => t;
     // O fixture já contém o elenco inteiro; este teste mede pintura e rolagem,
     // sem buscar a subcoleção canônica no Firestore.
@@ -261,7 +265,7 @@ function servidor() {
   ok(acao.travaSolta, 'a pintura termina e solta a trava mesmo após rolagem manual');
 
   const remocao = await p.evaluate(async () => {
-    const t = window.AppStore.tournaments[0];
+    const t = window.__inscritosFixture;
     const uid = t.participants[0].uid;
     window.showConfirmDialog = function (_title, _message, yes) { yes(); };
     window.showNotification = function () {};
@@ -289,7 +293,7 @@ function servidor() {
 
   const detalhe = await p.evaluate(async () => {
     const c = document.getElementById('view-container');
-    const t = window.AppStore.tournaments[0];
+    const t = window.__inscritosFixture;
     history.replaceState(null, '', '#tournaments/x');
     window.renderTournaments(c, 'x');
     // O detalhe carrega conteúdo assíncrono. Só medir a rolagem quando ele já
@@ -329,7 +333,7 @@ function servidor() {
     'exclusão pelo detalhe mantém o local na página ' + JSON.stringify(detalhe));
 
   const manualNoDetalhe = await p.evaluate(async () => {
-    const t = window.AppStore.tournaments[0];
+    const t = window.__inscritosFixture;
     const uid = t.participants[0].uid;
     window.scrollTo(0, 2500);
     window.FirestoreDB._callFn = function () {
