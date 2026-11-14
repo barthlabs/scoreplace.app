@@ -1990,8 +1990,13 @@ exports.resetTournamentToEnrollment = onCall(async request => {
     // Não há reset genérico para torneio real. Cada intenção tem uma autorização
     // própria e explícita: Sandbox ou o único torneio liberado para voltar ao
     // estado imediatamente anterior à publicação.
-    const isSandboxRestore = restoreMode === 'sandbox' && t.isSandbox === true;
-    const isPrePublicationRestore = restoreMode === 'prePublication' && t.allowPrePublicationRestore === true;
+    const isFinished = t.status === 'finished' || t._finished === true;
+    const isSandboxRestore = restoreMode === 'sandbox' && t.isSandbox === true && !isFinished;
+    // Uma chave real só pode ser restaurada antes da primeira partida. A permissão
+    // histórica, sozinha, não autoriza apagar placares de um torneio em andamento.
+    const isPrePublicationRestore = restoreMode === 'prePublication' && t.allowPrePublicationRestore === true &&
+      !isFinished && !t.tournamentStarted && typeof drawWindow._hasAnyMatchResult === 'function' &&
+      !drawWindow._hasAnyMatchResult(t);
     if (!isSandboxRestore && !isPrePublicationRestore) {
       throw _drawFail('permission-denied', 'Esta restauração não está habilitada para este torneio.', { tId, uid, restoreMode });
     }

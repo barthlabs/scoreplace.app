@@ -404,7 +404,7 @@
     return { activeDay:activeDay, days:days, tabsHtml:tabsHtml, gridHtml:gridHtml, html:'<div style="margin:10px 0 8px;">' + tabsHtml + '</div>' + gridHtml };
   };
   window._renderOperationalSchedule = function (slot, t) {
-    if (!slot || !t || !window._souOrganizador || !window._souOrganizador(t)) return;
+    if (!slot || !t || t.status === 'finished' || t._finished === true || !window._souOrganizador || !window._souOrganizador(t)) return;
     var manual = {}, activeDay = '', revealNames = false;
     function draftForFresh() {
       var fresh = (window._findTournamentById && window._findTournamentById(t.id)) || t;

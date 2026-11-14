@@ -121,6 +121,8 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
     'o transporte canônico e a callable de restauração existem');
   ok(/isSandboxRestore/.test(server) && /isPrePublicationRestore/.test(server) && /!isSandboxRestore && !isPrePublicationRestore/.test(server),
     'o servidor só aceita restauração de Sandbox ou a pré-publicação explicitamente habilitada');
+  ok(/const isPrePublicationRestore = [\s\S]*?!t\.tournamentStarted[\s\S]*?!drawWindow\._hasAnyMatchResult\(t\)/.test(resetServer),
+    'a permissão de pré-publicação não apaga um torneio que já começou ou tem resultado');
 })();
 
 // ── v1.2.45: RESETAR desfaz a dupla SORTEADA mesmo com entrada só-uid ────────

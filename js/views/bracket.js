@@ -2038,7 +2038,7 @@ window._bracketCategoryTabsMount = function () {
   // A cópia de fase pode não transportar `teamCompetition`, mas não pode por
   // isso transformar Neon em "Grupo A". A janela operacional é a fonte de
   // verdade para diferenciar Neon da Confra.
-  var isTeamSchedule = !!((window._isConcentratedTournament && window._isConcentratedTournament(currentTournament)) ||
+  var isTeamSchedule = currentTournament.status !== 'finished' && !currentTournament._finished && !!((window._isConcentratedTournament && window._isConcentratedTournament(currentTournament)) ||
     (teamCfg.enabled && teamCfg.schedule && teamCfg.schedule.enabled));
   /* [[regression_neon_all_planned_rounds_visible]] Não reintroduzir abas de
    * rodada para agenda concentrada: elas filtram os cards por `m.round` e
@@ -3064,7 +3064,7 @@ function renderBracket(container, tournamentId, isInline) {
   // _expandMonarchFromWaitlist continuam DEFINIDAS só porque a CF as roda via vendor/ — o cliente
   // nunca mais as chama. Regra do dono: "no cliente só o disparo do sorteio e as respostas às
   // perguntas que vão pra CF". Ver [[feedback_draw_is_cf_only]] / [[project_autodraw_server_parity]].
-  if (isOrg && typeof window._triggerLateIntegration === 'function') {
+  if (isOrg && t.status !== 'finished' && t._finished !== true && typeof window._triggerLateIntegration === 'function') {
     try { window._triggerLateIntegration(t); } catch (e) {}
   }
   const canEnterResult = isOrg || window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee');
@@ -3090,6 +3090,7 @@ function renderBracket(container, tournamentId, isInline) {
     ? (currentPhase.kind === 'classification' && currentPhase.classification && currentPhase.classification.structure === 'groups')
     : t.format === 'Fase de Grupos + Eliminatórias';
   const hasContent = (t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length);
+  const isTournamentFinished = t.status === 'finished' || t._finished === true;
 
   const _tIdSafe = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
@@ -3103,10 +3104,10 @@ function renderBracket(container, tournamentId, isInline) {
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._printTournament('${_tIdSafe}')">🖨️ Imprimir</button>` : '<span></span>'}
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift" onclick="window._exportTournamentCSV('${_tIdSafe}')">📊 CSV</button>` : '<span></span>'}
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._tvMode('${_tIdSafe}')">📺 Modo TV</button>` : '<span></span>'}
-      ${isOrg && !hasContent ? `<button class="btn btn-primary btn-sm hover-lift" style="grid-column:span 2;" onclick="if(window._handleSortearClick)window._handleSortearClick('${_tIdSafe}',false);else window.generateDrawFunction('${_tIdSafe}')">🎲 Realizar Sorteio</button>` : ''}
+      ${isOrg && !isTournamentFinished && !hasContent ? `<button class="btn btn-primary btn-sm hover-lift" style="grid-column:span 2;" onclick="if(window._handleSortearClick)window._handleSortearClick('${_tIdSafe}',false);else window.generateDrawFunction('${_tIdSafe}')">🎲 Realizar Sorteio</button>` : ''}
       ${/* Reset + Simular fase: SÓ no SB e só pro dev (removidos dos torneios normais). */ ''}
-      ${(hasContent && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-warning btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._resetTournamentToEnrollment('${_tIdSafe}')" title="SB: re-sincroniza o roster do original agora e apaga sorteio/resultados/adições de teste">🔄 Resetar (manter inscritos)</button>` : ''}
-      ${(hasContent && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-purple btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._devSimulateCurrentPhase('${_tIdSafe}')" title="SB (só você): simula os resultados da fase atual com horários reais">🎲 Simular fase (dev)</button>` : ''}
+      ${(hasContent && !isTournamentFinished && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-warning btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._resetTournamentToEnrollment('${_tIdSafe}')" title="SB: re-sincroniza o roster do original agora e apaga sorteio/resultados/adições de teste">🔄 Resetar (manter inscritos)</button>` : ''}
+      ${(hasContent && !isTournamentFinished && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-purple btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._devSimulateCurrentPhase('${_tIdSafe}')" title="SB (só você): simula os resultados da fase atual com horários reais">🎲 Simular fase (dev)</button>` : ''}
     </div>
     <style>
       @media (min-width: 768px) {
@@ -3117,7 +3118,7 @@ function renderBracket(container, tournamentId, isInline) {
   // Filtros operacionais do cabeçalho — mesmos controles da visualização inline.
   window._showOnlyMyMatches = false;
   window._showOnlyPendingMatches = false;
-  const _myMatchesToggleHtml = window._bracketHeaderFilterButtons(isOrg, hasContent);
+  const _myMatchesToggleHtml = window._bracketHeaderFilterButtons(isOrg && !isTournamentFinished, hasContent);
 
   // Group nav buttons for Fase de Grupos (also shown inline)
   const _hasGroupStage = t.groups && t.groups.length > 0;
@@ -3188,7 +3189,7 @@ function renderBracket(container, tournamentId, isInline) {
   // v2.7.5: banner "Iniciar Torneio" segue SÓ tournamentStarted (fonte única). Auto-draw
   // Pontos Corridos já marca tournamentStarted no sorteio (_generateNextRound), então o
   // banner some sozinho — sem caso especial _ligaAutoDraw. Manual mantém o banner.
-  const startTournamentBanner = (!isInline && isOrg && hasDrawContent && !t.tournamentStarted && !(window._hasAnyMatchResult && window._hasAnyMatchResult(t))) ? `
+  const startTournamentBanner = (!isInline && isOrg && !isTournamentFinished && hasDrawContent && !t.tournamentStarted && !(window._hasAnyMatchResult && window._hasAnyMatchResult(t))) ? `
     <div style="margin:1rem 0 1.5rem;padding:20px;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(5,150,105,0.1));border:2px solid rgba(16,185,129,0.4);border-radius:16px;text-align:center;">
         <p style="color:var(--sp-c-94a3b8,#94a3b8);font-size:0.85rem;margin-bottom:12px;">Sorteio realizado. Inicie o torneio para habilitar a chamada de presença.</p>
         <button class="btn btn-success btn-cta hover-lift" onclick="window._startTournament('${_tIdSafe}')">
@@ -3207,14 +3208,14 @@ function renderBracket(container, tournamentId, isInline) {
   // ── "Só meus jogos" toggle is now inside the sticky header (headerHtml) ──
 
   // Banner "Jogos Prontos" — shown at the top of every bracket view after tournament start
-  const readyBannerHtml = (typeof window._renderReadyMatchesBanner === 'function') ? window._renderReadyMatchesBanner(t) : '';
+  const readyBannerHtml = (!isTournamentFinished && typeof window._renderReadyMatchesBanner === 'function') ? window._renderReadyMatchesBanner(t) : '';
   // Waitlist panel — shown at the end of every bracket view (Liga/Suíço/Grupos/Monarch/Elim)
   const standbyHtml = _renderStandbyPanel(t, isOrg);
 
   // Banner: W.O. onde nenhum suplente presente atende a categoria — o organizador escolhe
   // quem assume (ou dá W.O. ao time). Persistente até resolver (o dialog pode ser fechado).
   var _subChoiceBanner = '';
-  if (isOrg && Array.isArray(t.woSubChoices) && t.woSubChoices.some(function (x) { return x && !x.resolved; })) {
+  if (isOrg && !isTournamentFinished && Array.isArray(t.woSubChoices) && t.woSubChoices.some(function (x) { return x && !x.resolved; })) {
     var _nPend = t.woSubChoices.filter(function (x) { return x && !x.resolved; }).length;
     _subChoiceBanner = '<div style="margin:0 0 1rem;padding:13px 16px;background:linear-gradient(135deg,rgba(251,191,36,0.16),rgba(239,68,68,0.12));border:1px solid rgba(251,191,36,0.5);border-radius:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
       '<span style="font-size:1.3rem;">⚠️</span>' +
@@ -3238,7 +3239,7 @@ function renderBracket(container, tournamentId, isInline) {
 
       // Fase de chave concluída E existe próxima fase → banner pra avançar (fase ATUAL).
       var _nextBanner = '';
-      if (isOrg && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && (_curPh + 1) < ((t.phases || []).length)) {
+      if (isOrg && !isTournamentFinished && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && (_curPh + 1) < ((t.phases || []).length)) {
         var _nnNm = window._safeHtml(((t.phases[_curPh + 1] || {}).name) || 'próxima fase');
         _nextBanner = '<div id="phase-advance-banner" style="margin:0 0 1rem;padding:14px 16px;background:linear-gradient(135deg,rgba(251,191,36,0.16),rgba(99,102,241,0.12));border:1px solid rgba(251,191,36,0.45);border-radius:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
           '<div style="flex:1;min-width:180px;"><div style="font-weight:800;color:var(--text-bright);">Fase concluída ✓</div><div style="font-size:0.82rem;color:var(--text-muted);margin-top:2px;">Avance para <strong>' + _nnNm + '</strong> — as chaves serão geradas pelas colocações desta fase.</div></div>' +
@@ -3294,7 +3295,7 @@ function renderBracket(container, tournamentId, isInline) {
       _applyMyMatchesFilter();
       return;
     }
-    if (_curPh === 0 && isOrg && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && (_curPh + 1) < ((t.phases || []).length)) {
+    if (_curPh === 0 && isOrg && !isTournamentFinished && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && (_curPh + 1) < ((t.phases || []).length)) {
       var _nextPhaseName = window._safeHtml(((t.phases[_curPh + 1] || {}).name) || 'próxima fase');
       // v4.2.2 (pedido do dono): SEM auto-avanço — botão explícito "Avançar" (o
       // organizador decide quando). Mesmo padrão do banner da Fase 1+ (_nextBanner).
@@ -3390,7 +3391,7 @@ function renderBracket(container, tournamentId, isInline) {
   // Swiss-as-p2 past rounds render as columns inside the main bracket strip
   // (see renderSingleElimBracket / renderDoubleElimBracket). No separate card.
   var _opSlotId = 'operational-schedule-' + String(t.id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
-  var operationalSlot = isOrg ? '<div id="' + _opSlotId + '"></div>' : '';
+  var operationalSlot = isOrg && !isTournamentFinished ? '<div id="' + _opSlotId + '"></div>' : '';
   try {
     if (isDupla) {
       container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + operationalSlot + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
@@ -3454,7 +3455,7 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t, opts) {
   // Antes exigia t.tournamentStarted — mas lançar/simular resultado já MARCA presença
   // (checkedIn) sem sempre gravar o flag. A presença (hasAnyCheckin abaixo) É o gate real:
   // se há jogador presente, há jogo pra chamar. Ver feedback_resolution_one_logic / _hasAnyMatchResult.
-  if (!t || !t.checkedIn) return '';
+  if (!t || t.status === 'finished' || t._finished === true || !t.checkedIn) return '';
   // v0.16.86: pula em Liga/Ranking/Suíço — formatos contínuos sem ato de
   // "chamar pra quadra" no sentido de evento. Pedido do usuário: "essas
   // sessoes tambem não fazem sentido serem mostradas na liga." Liga tem

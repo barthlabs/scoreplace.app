@@ -3244,7 +3244,7 @@ function renderTournaments(container, tournamentId = null) {
         if (typeof window._requestExpiredLeagueSeasonClose === 'function') window._requestExpiredLeagueSeasonClose(t);
 
         // Inscrições fecham após sorteio (status 'active'), exceto Liga/Ranking com inscrições abertas na temporada
-        const isFinished = t.status === 'finished';
+        const isFinished = t.status === 'finished' || t._finished === true;
         const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
         // v2.1.6: torneio encerrado (campeão definido) SEMPRE fecha inscrição,
         // inclusive Liga — ligaAberta nunca vale com status 'finished'.
@@ -3594,7 +3594,9 @@ function renderTournaments(container, tournamentId = null) {
         let actionsHtml = '';
         // v2.1.16: pódio do torneio encerrado agora vive no TOPO do card (logo
         // abaixo do nome), não dentro de actionsHtml. Declarado no escopo do card.
-        let podiumHtml = '';
+        // A classificação é pública: a mesma fonte canônica atende todos os visitantes.
+        let podiumHtml = (tournamentId && isFinished && !(window._isAutoClosed && window._isAutoClosed(t)) &&
+            typeof window._renderPodiumsAndClassif === 'function') ? window._renderPodiumsAndClassif(t) : '';
         const hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
 
         // --- Variáveis de botões do organizador (escopo global do card para evitar ReferenceError) ---
@@ -3685,7 +3687,7 @@ function renderTournaments(container, tournamentId = null) {
         // para reabrir não pode sumir nem depender de achar outra tela.
         const _regIsClosed = t.status === 'closed';
         const _regLabel = _regIsClosed ? 'Abrir inscrições' : 'Fechar inscrições';
-        let toggleRegBtn = ((!hasDraw || (lateEnrollManaged && !_r2Started)) && !isLigaOpenEnroll && isOrg) ? `<button class="btn ${_regIsClosed ? 'btn-success' : 'btn-danger'} hover-lift" title="${_regIsClosed ? 'Reabrir inscrições' : 'Encerrar inscrições'}" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${_regIsClosed ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${_regLabel}</button>` : '';
+        let toggleRegBtn = (!isFinished && (!hasDraw || (lateEnrollManaged && !_r2Started)) && !isLigaOpenEnroll && isOrg) ? `<button class="btn ${_regIsClosed ? 'btn-success' : 'btn-danger'} hover-lift" title="${_regIsClosed ? 'Reabrir inscrições' : 'Encerrar inscrições'}" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${_regIsClosed ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${_regLabel}</button>` : '';
         // v4.1.18: Reabrir/Encerrar EM ANDAMENTO deste torneio → botão cinza "Reabrindo…"/
         // "Encerrando…" (mesma UX do Sortear) mesmo se o detalhe re-renderizar antes de
         // concluir. Limpo em _regBtnDone (dialog/painel/refresh/backstop).
@@ -3706,7 +3708,7 @@ function renderTournaments(container, tournamentId = null) {
         const isAutoDrawFormat = isClassificationRounds || isLigaAutoDraw;
         let sortearBtn = '';
         let sortearAberto = '';
-        if (isOrg) {
+        if (isOrg && !isFinished) {
             /* ── "AVANÇAR DE FASE" É UM BOTÃO SÓ, E ELE MORA AQUI ────────────────────────
              * ⛔ Havia DOIS nas Ferramentas do Organizador, lado a lado, disparando a MESMA
              * `_advanceMultiPhase`: este (dentro do ramo `isLigaAutoDraw`, rotulado
@@ -3891,7 +3893,7 @@ function renderTournaments(container, tournamentId = null) {
             if (isOrg) {
                 // Botão "Iniciar Torneio" — SÓ aparece após sorteio realizado, antes de iniciar
                 // Ao clicar: inicia o torneio E navega para o chaveamento
-                const startTournamentBanner = (hasDraw && !tournamentStarted && !(window._hasAnyMatchResult && window._hasAnyMatchResult(t))) ? `
+                const startTournamentBanner = (!isFinished && hasDraw && !tournamentStarted && !(window._hasAnyMatchResult && window._hasAnyMatchResult(t))) ? `
                   <div style="margin-top:1.5rem;padding:20px;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(5,150,105,0.1));border:2px solid rgba(16,185,129,0.4);border-radius:16px;text-align:center;">
                       <p style="color:var(--sp-c-94a3b8,#94a3b8);font-size:0.85rem;margin-bottom:12px;">Sorteio realizado. Inicie o torneio para habilitar a chamada de presença.</p>
                       <button class="btn btn-success btn-cta hover-lift" onclick="event.stopPropagation(); window._startTournament('${t.id}'); window.location.hash='#bracket/${t.id}';">
@@ -3939,7 +3941,6 @@ function renderTournaments(container, tournamentId = null) {
                     // ou N linhas com grande final → 1 pódio + classificação geral; 2/4 linhas
                     // separadas → 1 pódio + 1 classificação POR linha. NÃO duplicar a lógica
                     // aqui — qualquer ajuste de apresentação é feito SÓ na função canônica.
-                    podiumHtml = (typeof window._renderPodiumsAndClassif === 'function') ? window._renderPodiumsAndClassif(t) : '';
                     actionsHtml = `
                    ${inviteModalHtml}
                    <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:1rem;">
@@ -4112,7 +4113,7 @@ function renderTournaments(container, tournamentId = null) {
             ${/* v2.1.16: pódio do torneio encerrado logo abaixo do nome/logo */ ''}
             ${/* Encerrado por INATIVIDADE não fecha classificação → não tem pódio (ordem do
                   dono). Pódio de torneio que parou no meio seria uma mentira campeã. */ ''}
-            ${(tournamentId && isFinished && !(window._isAutoClosed && window._isAutoClosed(t))) ? podiumHtml : ''}
+            ${tournamentId ? podiumHtml : ''}
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               ${/* Grupo do torneio no WhatsApp — BOTÃO ÚNICO (1.8.31). Ele mora à esquerda de
@@ -4444,7 +4445,7 @@ function renderTournaments(container, tournamentId = null) {
                       _setPhaseLateEnrollment DELETADAS (v1.3.66). Pedido do dono. */ ''}
                 ${sortearBtn}
                 ${sortearAberto}
-                ${isOrg && hasDraw && t.allowPrePublicationRestore === true ? `<button class="btn btn-warning hover-lift" onclick="event.stopPropagation(); window._restoreTournamentPrePublication('${t.id}')" title="Apaga a chave, os placares e os horários publicados, preservando inscritos, duplas formadas manualmente e os ajustes confirmados">↩️ Voltar ao estado antes do sorteio</button>` : ''}
+                ${isOrg && hasDraw && t.allowPrePublicationRestore === true && !isFinished && !t.tournamentStarted && typeof window._hasAnyMatchResult === 'function' && !window._hasAnyMatchResult(t) ? `<button class="btn btn-warning hover-lift" onclick="event.stopPropagation(); window._restoreTournamentPrePublication('${t.id}')" title="Apaga a chave, preservando inscritos, duplas formadas manualmente e os ajustes confirmados">↩️ Voltar ao estado antes do sorteio</button>` : ''}
                 ${/* ⛔ REMOVIDO: a segunda renderização de "Avançar de fase" (bloco v4.4.50).
                       Ela criava "🏆 Avançar de fase" sob a MESMA condição do "⏭️ Avançar de
                       Fase" que já vem em `sortearBtn` logo acima — os dois apareciam LADO A
@@ -4462,8 +4463,8 @@ function renderTournaments(container, tournamentId = null) {
                       torneio no banco usava. A fase final da Liga agora é uma fase do
                       construtor de fases (t.phases[]), adicionada em sequência à Liga. */ ''}
                 ${/* Reset + Simular fase: SÓ no SB e só pro dev (some dos torneios normais). */ ''}
-                ${(window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity() && hasDraw) ? `<button class="btn btn-tool-amber hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window._resetTournamentToEnrollment('${t.id}')" title="SB: re-sincroniza o roster do original agora e apaga sorteio/resultados/adições de teste">🔄 Resetar (manter inscritos)</button>` : ''}
-                ${(window._isSandboxTournament && window._isSandboxTournament(t) && hasDraw && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-purple hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window._devSimulateCurrentPhase('${t.id}')" title="SB (só você): simula os resultados da fase atual com horários reais">🎲 Simular fase (dev)</button>` : ''}
+                ${(!isFinished && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity() && hasDraw) ? `<button class="btn btn-tool-amber hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window._resetTournamentToEnrollment('${t.id}')" title="SB: re-sincroniza o roster do original agora e apaga sorteio/resultados/adições de teste">🔄 Resetar (manter inscritos)</button>` : ''}
+                ${(!isFinished && window._isSandboxTournament && window._isSandboxTournament(t) && hasDraw && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-purple hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window._devSimulateCurrentPhase('${t.id}')" title="SB (só você): simula os resultados da fase atual com horários reais">🎲 Simular fase (dev)</button>` : ''}
                 ${window.AppStore.isCreator(t) ? `<button class="btn btn-danger hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window.deleteTournamentFunction('${t.id}')">🗑️ ${_t('enroll.deleteTournament') || 'Apagar Torneio'}</button>` : ''}
               </div>
             </div>`;

@@ -1,3 +1,6 @@
+## 2.4.120 — 14/nov/2026 (Encerramento de torneios)
+- A classificação final aparece para visitantes, participantes e organização em torneios concluídos. A operação, avanço de fase e controles de teste desaparecem; o servidor recusa restauração depois do início ou do primeiro resultado.
+
 ## 2.4.118 — 19/out/2026 (visibilidade e consentimento)
 
 - O Neon foi colocado em “Apenas organizadores” antes do sorteio. Firestore Rules, índice principal e resumo foram conferidos no banco; ambos os índices entregam somente dois UIDs de organização. Inscrições, duplas e jogos não foram alterados por essa restrição.
