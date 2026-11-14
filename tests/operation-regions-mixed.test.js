@@ -54,18 +54,19 @@ for (const version of ['v2', 'v3']) {
     assert.equal(run(original, true).status, 0,
       'manifesto histórico íntegro é válido somente na verificação que permite legado');
     const legacy = structuredClone(original);
-    const legacyCommit = legacy.find(row => row.name === `sp-op-court-${version}`).commit;
-    const legacyDigest = execFileSync('node', ['scripts/operation-source-digest.js', 'functions-autodraw',
-      'endMatchOnCourt', legacyCommit, '--from-git'], { cwd: root }).toString().trim();
-    for (const row of legacy.filter(row => row.name === `sp-op-end-court-${version}`)) {
-      row.commit = legacyCommit;
-      row.sourceDigest = legacyDigest;
-    }
-    const legacyScoreDigest = execFileSync('node', ['scripts/operation-source-digest.js', 'functions-autodraw',
-      'applyMatchResult', legacyCommit, '--from-git'], { cwd: root }).toString().trim();
-    for (const row of legacy.filter(row => row.name === `sp-op-score-${version}`)) {
-      row.commit = legacyCommit;
-      row.sourceDigest = legacyScoreDigest;
+    // O corte atual toma 470c6c97 como base. Nenhuma das quatro portas dirigidas
+    // pode continuar nessa base sem uma implantação regional posterior.
+    const releaseCommit = '470c6c972130c2d4225952f214755d622595e0a6';
+    const directedTargets = {
+      court:'assignMatchCourt', score:'applyMatchResult',
+      'end-court':'endMatchOnCourt', control:'tournamentOperationControl'
+    };
+    const releaseSources = sourceDescriptor('functions-autodraw', releaseCommit, true);
+    for (const row of legacy) {
+      const type = row.name.slice('sp-op-'.length, -(`-${version}`.length));
+      if (!directedTargets[type]) continue;
+      row.commit = releaseCommit;
+      row.sourceDigest = sourceDigest(directedTargets[type], releaseCommit, releaseSources);
     }
     assert.equal(run(legacy, true).status, 0);
     assert.notEqual(run(legacy).status, 0, 'Hosting barra quadra antiga');
@@ -135,16 +136,16 @@ for (const version of ['v2', 'v3']) {
     // nos manifestos operacionais; o backend central em us-central1 tem recibo
     // separado e mais recente. Usar HEAD aqui atestaria uma implantação
     // regional que ainda não ocorreu.
-    const recordedScoreCommit = '611de1560b8c51d3de84eefc085bc3a05e952492';
+    const recordedScoreCommit = '536c8f47db1fd1441fd94b5b46d919b0d1afa227';
     const recordedScoreDigest = sourceDigest('applyMatchResult', recordedScoreCommit,
       sourceDescriptor('functions-autodraw', recordedScoreCommit, true));
     const scoreFresh = original.filter(row => row.name === `sp-op-score-${version}`)
       .every(row => row.commit === recordedScoreCommit && row.sourceDigest === recordedScoreDigest);
-    const recordedCourtCommit = '48b107f9ad59d1fb992139d61c35a6e28ee656fc';
+    const recordedCourtCommit = '6982eca74abb7cf898fd437a3301b6180c4c8be5';
     const courtSources = sourceDescriptor('functions-autodraw', recordedCourtCommit, true);
     const courtFresh = original.filter(row => [`sp-op-court-${version}`, `sp-op-control-${version}`].includes(row.name))
       .every(row => row.commit === recordedCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedCourtCommit, courtSources));
-    const recordedEndCourtCommit = '225fca3e34009c03346991bb9b2b001cc2173b12';
+    const recordedEndCourtCommit = '6982eca74abb7cf898fd437a3301b6180c4c8be5';
     const endCourtSources = sourceDescriptor('functions-autodraw', recordedEndCourtCommit, true);
     const endCourtFresh = original.filter(row => row.name === `sp-op-end-court-${version}`)
       .every(row => row.commit === recordedEndCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedEndCourtCommit, endCourtSources));

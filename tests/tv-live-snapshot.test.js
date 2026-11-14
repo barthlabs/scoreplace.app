@@ -288,12 +288,25 @@ for (const id of Object.keys(camisLayout.sections)) {
 }
 const camisHtml = window._tvLiveBodyHtml(window._tvLiveBuildSnapshot({ ...t,
   id:'tour_1793804848447_94bfe2282535789667cb35f1080024ee', tvLayout:camisLayout }));
-assert.match(camisHtml, /tv-custom-board tv-custom-board-camis/);
+assert.match(camisHtml, /tv-custom-board tv-custom-board-event/);
 assert.match(camisHtml, /tv-custom-header" style="left:0%;top:0%;width:100%;/,
   'cabeçalho CAMIS alcança a borda direita');
 assert.match(camisHtml, /tv-custom-courts" style="left:0%;top:[^"]+%;width:[^"]+%;height:[^"]+%"/);
-assert.match(camisHtml, /tv-qr-tournament-logo-camis[\s\S]*tv-qr-code[\s\S]*tv-qr-brand/,
+assert.match(camisHtml, /tv-qr-tournament-logo-event[\s\S]*tv-qr-code[\s\S]*tv-qr-brand/,
   'logo, QR e chamada continuam juntos na coluna CAMIS');
+const cult = { ...t, id:'cult-same-format', name:'Cult', courtNames:['Quadra 1','Quadra 2','Quadra 3','Quadra 4'],
+  combinedCategories:['Categoria A','Categoria B'], tvLayout:null, tvScreens:null,
+  phases:[{ kind:'classification', classification:{ pairing:{ strategy:'monarch_groups' } } },
+    { kind:'elimination', fixedPairs:true, source:{ type:'previous_phase', scope:'per_group', qualifyTopN:2 } }] };
+const cultSnapshot = window._tvLiveBuildSnapshot(cult);
+assert(cultSnapshot.tvLayout, 'o mesmo formato recebe o painel de operação sem depender do ID');
+assert.equal(cultSnapshot.courts.length, 4, 'o número de quadras segue o torneio novo');
+assert.match(window._tvLiveBodyHtml(cultSnapshot), /tv-custom-board-event/, 'o painel de evento funciona com outro torneio');
+const cultCustom = window.ScoreplaceTvLayout.defaults();
+assert.equal(window._tvLiveBuildSnapshot({ ...cult, tvLayout:cultCustom }).tvLayout.sections.courts.w,
+  cultCustom.sections.courts.w, 'layout escolhido pelo organizador prevalece sobre o padrão do formato');
+const otherFormat = window._tvLiveBuildSnapshot({ ...cult, phases:[] });
+assert.equal(otherFormat.tvLayout, null, 'outros formatos não recebem o painel por engano');
 assert.match(customHtml, /tv-custom-qr/, 'QR permanece mesmo se um layout antigo o ocultou');
 assert.doesNotMatch(customHtml, /class="tv-score"/);
 assert.match(customHtml, /tv-custom-rankings/);

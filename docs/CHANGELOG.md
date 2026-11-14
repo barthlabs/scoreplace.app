@@ -1,3 +1,9 @@
+## 2.6.89 — 14/nov/2026 (formato reutilizável e seleção de monitor)
+
+- A tela No Ar apresenta o seletor de monitores dentro da operação, abre a janela nas coordenadas da tela escolhida e solicita fullscreen no próprio `window.open` do Chrome. Mantém a ação manual de tela cheia quando o navegador recusa.
+- O painel de TV do formato Rei/Rainha seguido de duplas eliminatórias passa a ser padrão para qualquer torneio com essa configuração, preservando layouts explícitos. A ordem oficial de grupos e a súmula aceitam um campo genérico, mantendo leitura do campo histórico do Camis Day.
+- Testes cobrem a escolha da tela HDMI e um torneio com 48 atletas em 2 categorias.
+
 ## 2.6.88 — 13/nov/2026 (rolagem condicional na tela No Ar)
 
 - “Próximos jogos” e “Últimos resultados” permanecem estáticos quando todo o conteúdo cabe no painel. A rolagem automática inicia apenas quando o conteúdo ultrapassa a altura disponível, inclusive após atualizações da tela.

@@ -157,7 +157,7 @@
           court:text(first && (first.court || plannedCourts[text(first.id)])) };
       }); } catch (e) { tiebreakGroups = []; }
     }
-    var groupStandings = Object.entries(t.camisOfficialGroups || {}).flatMap(function (entry) {
+    var groupStandings = Object.entries(t.officialGroupsByCategory || t.camisOfficialGroups || {}).flatMap(function (entry) {
       return (Array.isArray(entry[1]) ? entry[1] : []).map(function (names, index) {
         return { category:entry[0], name:'Grupo ' + (index + 1),
           athletes:Array.isArray(names) ? names.map(text).filter(Boolean) : [] };

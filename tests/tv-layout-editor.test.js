@@ -439,30 +439,21 @@ const { chromium } = require('@playwright/test');
       const originalOpen = window.open.bind(window);
       window.open = (...args) => {
         window.__tvOpenFeatures = args[2];
-        const opened = originalOpen(...args);
-        if (opened) {
-          opened.moveTo = (x,y) => { window.__tvMove = {x,y}; };
-          opened.resizeTo = (width,height) => { window.__tvResize = {width,height}; };
-        }
-        return opened;
+        return originalOpen(...args);
       };
     });
-    const secondPopupPromise = page.waitForEvent('popup');
     await page.locator('#open-tv-test').click();
-    const secondPopup = await secondPopupPromise;
-    await secondPopup.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
-    assert.equal(await secondPopup.getByRole('button', { name:/Tela principal.*Principal/ }).count(), 1);
-    assert.equal(await secondPopup.getByRole('button', { name:/Tela secundária.*Projetor/ }).count(), 1,
+    await page.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
+    assert.equal(await page.getByRole('button', { name:/Tela principal.*Principal/ }).count(), 1);
+    assert.equal(await page.getByRole('button', { name:/Tela secundária.*Projetor/ }).count(), 1,
       'a lista da API prevalece mesmo quando isExtended informa falso');
-    await secondPopup.getByRole('button', { name:/Projetor/ }).click();
-    assert.deepEqual(await page.evaluate(() => ({move:window.__tvMove,resize:window.__tvResize})),
-      { move:{x:1400,y:0}, resize:{width:1268,height:704} },
-      'TV é movida e dimensionada para o monitor escolhido');
-    await secondPopup.waitForFunction(() => document.fullscreenElement === document.documentElement ||
-      !!document.querySelector('#tv-fullscreen-action')?.title);
-    assert.equal(await secondPopup.evaluate(() => ({active:document.fullscreenElement === document.documentElement,
-      reason:document.querySelector('#tv-fullscreen-action')?.title})).then(x => x.active ? '' : x.reason), '',
-      'escolha do monitor ativa tela cheia automaticamente');
+    const secondPopupPromise = page.waitForEvent('popup');
+    await page.getByRole('button', { name:/Tela secundária.*Projetor/ }).click();
+    const secondPopup = await secondPopupPromise;
+    assert.match(await page.evaluate(() => window.__tvOpenFeatures),
+      /left=1400,top=0,width=1280,height=720,fullscreen/,
+      'o clique na operação abre a TV direto no monitor escolhido e pede tela cheia');
+    await secondPopup.waitForSelector('#tv-root');
     assert.equal(await page.locator('iframe[title^="TV · "]').count(), 0,
       'a tela escolhida recebe a TV sem deslocar a operação para o segundo monitor');
     assert.equal(await secondPopup.locator('#tv-exit-action').count(), 0,
@@ -474,19 +465,17 @@ const { chromium } = require('@playwright/test');
     await page.evaluate(() => { window.getScreenDetails = async () => ({ screens:[
       { label:'Principal', isPrimary:true, availLeft:0, availTop:0, availWidth:1400, availHeight:1000, width:1400, height:1000 }
     ] }); });
-    const repeatPopupPromise = page.waitForEvent('popup');
     await page.locator('#open-tv-test').click();
-    const repeatPopup = await repeatPopupPromise;
-    await repeatPopup.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
-    assert.equal(await repeatPopup.getByRole('button', { name:/Tela secundária/ }).count(), 0);
-    await repeatPopup.evaluate(() => { window.getScreenDetails = async () => ({ screens:[
+    await page.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
+    assert.equal(await page.getByRole('button', { name:/Tela secundária/ }).count(), 0);
+    await page.evaluate(() => { window.getScreenDetails = async () => ({ screens:[
       { label:'Principal', isPrimary:true, width:1400, height:1000 },
       { label:'Projetor', isPrimary:false, width:1280, height:720 }
     ] }); });
-    await repeatPopup.getByRole('button', { name:'Detectar novamente' }).click();
-    assert.equal(await repeatPopup.getByRole('button', { name:/Tela secundária.*Projetor/ }).count(), 1,
+    await page.getByRole('button', { name:'Detectar novamente' }).click();
+    assert.equal(await page.getByRole('button', { name:/Tela secundária.*Projetor/ }).count(), 1,
       'a lista pode ser atualizada quando o HDMI aparece depois da primeira leitura');
-    await repeatPopup.getByRole('button', { name:'Cancelar' }).click();
+    await page.getByRole('button', { name:'Cancelar' }).click();
     await page.evaluate(() => { window.getScreenDetails = undefined; });
     await page.evaluate(() => {
       const actualMatchMedia = window.matchMedia.bind(window);
@@ -523,13 +512,13 @@ const { chromium } = require('@playwright/test');
     });
     await page.waitForFunction(() => {
       const doc = document.querySelector('[data-tv-frame]')?.contentDocument;
-      return doc && doc.querySelector('.tv-custom-qr .tv-qr-tournament-logo-camis');
+      return doc && doc.querySelector('.tv-custom-qr .tv-qr-tournament-logo-event');
     });
     assert.ok(await page.evaluate(() => {
       const doc = document.querySelector('[data-tv-frame]').contentDocument;
       const board = doc.querySelector('.tv-custom-board').getBoundingClientRect();
       const slot = doc.querySelector('.tv-custom-qr').getBoundingClientRect();
-      const logo = doc.querySelector('.tv-custom-qr .tv-qr-tournament-logo-camis').getBoundingClientRect();
+      const logo = doc.querySelector('.tv-custom-qr .tv-qr-tournament-logo-event').getBoundingClientRect();
       const code = doc.querySelector('.tv-custom-qr .tv-qr-code').getBoundingClientRect();
       const title = doc.querySelector('.tv-custom-header h1').getBoundingClientRect();
       const header = doc.querySelector('.tv-custom-header').getBoundingClientRect();
@@ -551,7 +540,7 @@ const { chromium } = require('@playwright/test');
       const doc = document.querySelector('[data-tv-frame]').contentDocument;
       const box = s => doc.querySelector(s).getBoundingClientRect();
       const slot = box('.tv-custom-qr');
-      const logo = box('.tv-qr-tournament-logo-camis');
+      const logo = box('.tv-qr-tournament-logo-event');
       const code = box('.tv-custom-qr .tv-qr-code');
       const brand = box('.tv-custom-qr .tv-qr-brand');
       const center = r => (r.left + r.right) / 2;
