@@ -20,4 +20,9 @@ for (const cat of categories) {
   assert.deepEqual(drawn.map(group => Array.from(group.players || [])), official[cat],
     'a ordem oficial é aplicada pelo formato, sem ID específico do Camis');
 }
+const invalid = { ...t, rounds:[], matches:[], officialGroupsByCategory:{ ...official,
+  'Categoria A':official['Categoria A'].slice(1) } };
+assert.throws(() => W._generateReiRainhaRoundForPlayers(invalid, 'Categoria A', 1, {ts:1,rnd:() => .5}),
+  /officialGroupsByCategory do torneio cult-new-tournament.*divergem das inscrições/,
+  'um elenco oficial divergente é bloqueado com a origem do erro');
 console.log('✓ Rei/Rainha reutiliza grupos oficiais em torneio de 48 atletas e 2 categorias');

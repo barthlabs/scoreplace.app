@@ -639,7 +639,7 @@
       logoShape: t.logoShape === 'circle' ? 'circle' : 'square',
       logoRadius: typeof window._tournamentLogoRadius === 'function'
         ? window._tournamentLogoRadius(t) : (t.logoShape === 'circle' ? '50%' : '14%'),
-      tvLayout: tvLayout, theme: theme,
+      tvLayout: tvLayout, eventBoard: isMonarchPairElimination(t), theme: theme,
       qrUrl: qrUrl, qrImage: typeof window._qrCodeUrl === 'function' ? window._qrCodeUrl(qrUrl, 320, false) :
         'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(qrUrl) + '&bgcolor=ffffff&color=1a1e2e&margin=10',
       courts: courtCards, nextGame: nextGame, nextGames: nextGames, waitingForTie:!!(nextSelection && nextSelection.waitingForTie),
@@ -756,7 +756,7 @@
   }
   function isEventBoard(snapshot) {
     var s = snapshot.tvLayout && snapshot.tvLayout.sections;
-    return !!(s && s.header && s.header.visible && s.courts && s.courts.visible &&
+    return !!(snapshot.eventBoard && s && s.header && s.header.visible && s.courts && s.courts.visible &&
       s.results && s.results.visible && s.upcoming && s.upcoming.visible &&
       s.qr && s.qr.visible && s.logo && !s.logo.visible &&
       s.courts.x <= 1 && s.courts.w >= 60 &&
