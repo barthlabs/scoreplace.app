@@ -1,3 +1,7 @@
+// 2.7.10 — A versão do cabeçalho alinha pela base do pódio. No detalhe do torneio,
+// Voltar alinha com A–Z; contato, convite e grupo oficial têm a mesma altura,
+// sobem para junto do logo, e o card de data alinha pela base desses botões.
+// Na dashboard, a barra de organização e busca ocupa a largura da tela.
 // 2.7.9 — Atletas com conta anterior ao torneio podem reconhecer, após entrar,
 // participações antigas indexadas e digitadas pela organização. A confirmação associa os
 // jogos ao histórico e às estatísticas sem alterar placares. Com apenas uma
