@@ -4,6 +4,7 @@
 const assert = require('assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const root = path.join(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file));
 const favicon = read('icons/favicon.svg').toString();
@@ -34,4 +35,13 @@ assert.equal(read('favicon.ico').compare(read('icons/favicon.ico')),0,'favicon d
 const manifest=JSON.parse(read('manifest.json').toString());
 assert.ok(manifest.icons.some(icon=>icon.purpose==='maskable' && icon.src.includes('icon-maskable-512.png')),
   'manifest aponta para ícone seguro para máscara');
+assert.ok(manifest.icons.some(icon=>icon.purpose==='maskable' && icon.src.includes('icon-maskable-192.png')),
+  'manifest oferece ícone maskable também em 192 px');
+for (const file of ['ic_launcher.xml', 'ic_launcher_round.xml']) {
+  const xml = read('android/app/src/main/res/mipmap-anydpi-v26/' + file).toString();
+  assert.doesNotMatch(xml, /<inset\b/, file + ' não encolhe o fundo nem o pódio');
+  assert.match(xml, /<background android:drawable="@mipmap\/ic_launcher_background"/, file);
+  assert.match(xml, /<foreground android:drawable="@mipmap\/ic_launcher_foreground"/, file);
+}
+execFileSync(process.execPath, ['scripts/gerar-icones.js'], { cwd: root, stdio: 'pipe' });
 console.log('✓ favicon maximizado, íntegro e consistente com os ícones de instalação');

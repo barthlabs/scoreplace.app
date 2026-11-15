@@ -1,3 +1,6 @@
+// 2.7.7 — O nome ScorePlace.app cresce e se aproxima do pódio; a versão
+// menor fica alinhada à direita, sob ".app". Ícones de instalação usam
+// pódio maior e camadas adaptativas sem quadrado encolhido no Android.
 // 2.7.6 — O cabeçalho usa o mesmo azul do fundo, amplia o pódio e o nome
 // ScorePlace.app e mostra a versão sob o nome.
 // 2.7.5 — A fase anterior Rei/Rainha mostra os jogos, placares, desempates

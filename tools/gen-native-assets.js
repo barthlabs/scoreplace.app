@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // scoreplace.app — gera os assets-fonte do app NATIVO (assets/icon.png + splash) rasterizando
 // o pódio (icons/icon-512.svg) via Chromium do Playwright. Depois `npx @capacitor/assets generate`
-// produz todos os tamanhos pra ios/ e android/.
+// produz todos os tamanhos pra ios/ e android/. Depois, `node scripts/gerar-icones.js --apply`
+// restaura as camadas adaptativas corretas do Android (fundo azul opaco e pódio transparente).
 //
 // Uso: node tools/gen-native-assets.js   →   npx @capacitor/assets generate
 
@@ -13,7 +14,7 @@ const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'assets');
 fs.mkdirSync(OUT, { recursive: true });
 
-// ÍCONE: o pódio full-bleed sobre o gradiente escuro (o SO aplica a máscara/cantos).
+// ÍCONE: o pódio ampliado sobre o gradiente azul (o SO aplica a máscara/cantos).
 const iconSvg = fs.readFileSync(path.join(ROOT, 'icons/icon-512.svg'), 'utf8');
 
 // SPLASH: mesmo símbolo transparente oficial, centralizado sobre o azul do app.

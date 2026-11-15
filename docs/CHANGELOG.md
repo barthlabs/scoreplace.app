@@ -1,3 +1,10 @@
+## 2.7.7 — 15/nov/2026 (ajuste fino da marca no cabeçalho)
+
+- O nome ScorePlace.app fica discretamente maior e mais próximo do pódio.
+- A versão fica menor e alinhada ao lado direito do wordmark, sob `.app`, inclusive em telas estreitas.
+- Ícones de instalação comuns mostram o pódio maior sem ultrapassar a máscara circular. Os ícones maskable usam a área segura do PWA; as camadas adaptativas do Android deixam de criar um quadrado azul encolhido dentro do círculo.
+- Favicon, PNGs, manifest e cache dos ícones recebem URLs da nova versão. Os arquivos nativos de Android e iOS ficam preparados no repositório para os próximos builds das lojas.
+
 ## 2.7.6 — 15/nov/2026 (cabeçalho da marca azul)
 
 - O topo acompanha o gradiente azul do fundo da página, sem faixa de cor diferente.
