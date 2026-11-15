@@ -1,3 +1,5 @@
+// 2.7.5 — A fase anterior Rei/Rainha mostra os jogos, placares, desempates
+// e a classificação de cada grupo, mesmo quando o torneio guarda só partidas.
 // 2.7.4 — A lista de torneios mostra o total confirmado de inscritos.
 // Classificações finais começam fechadas e apresentam duplas em uma linha, separadas por /.
 // 2.7.3 — Tema único azul e nova marca ScorePlace em telas, splash, favicon e instalação.
@@ -1769,6 +1771,13 @@ window._RELEASE_NOTES_HTML = (function () {
     // quem está com a 2.0.4 no iPhone lê um torneio que o banco não guarda mais desse jeito.
     // Mesma lição da 1.7.35: quando o formato do dado muda, a ida à loja É o conserto.
     // Os itens abaixo são consolidados por tema, como manda a convenção do arquivo.
+    // v2.7.5 — histórico completo da classificatória Rei/Rainha.
+    '<div style="margin-bottom:1rem;border:2px solid #75c7e7;border-radius:12px;padding:14px 16px;background:rgba(117,199,231,0.10);">' +
+      '<div style="font-weight:800;color:var(--text-bright);font-size:1rem;margin-bottom:8px;">📋 v2.7.5 — Conferência da fase anterior</div>' +
+      '<ul style="margin:0;padding-left:1.1rem;font-size:0.86rem;line-height:1.5;color:var(--text-main);">' +
+        '<li>Em torneios com classificatória Rei/Rainha, a fase anterior exibe os cards dos jogos, seus placares, desempates e a classificação de cada grupo, inclusive quando o torneio guarda as partidas sem uma coleção separada de grupos.</li>' +
+      '</ul>' +
+    '</div>' +
     // v2.7.3 — atualização visual inicial, sem mudar telas ou fluxos.
     '<div style="margin-bottom:1rem;border:2px solid #75c7e7;border-radius:12px;padding:14px 16px;background:rgba(117,199,231,0.10);">' +
       '<div style="font-weight:800;color:var(--text-bright);font-size:1rem;margin-bottom:8px;">🎨 v2.7.3 — Nova aparência</div>' +

@@ -116,6 +116,40 @@ async function main() {
     W._rerenderBracket = rerenderBefore;
     delete W._phasePrevOpen[t.id];
   }
+
+  // Storage canônico: as partidas ficam em matches e não existe coleção de
+  // grupos nem rounds. É o formato de torneios novos; a fase histórica ainda
+  // precisa mostrar todos os jogos e a classificação de cada quarteto.
+  const canonical = H.hydrateMonarchGroups(H.buildViaDraw('Liga', 8, {
+    ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true
+  }));
+  H.simulateRounds(canonical);
+  canonical.id = 'historic-canonical-test';
+  canonical.phases = t.phases;
+  canonical.currentPhaseIndex = 1;
+  canonical.matches = canonical.rounds.flatMap((round) =>
+    round.matches.map((match) => Object.assign({}, match, { phaseIndex: 0 })));
+  canonical.matches.push({ id: 'elim', phaseIndex: 1, bracket: 'main', round: 1,
+    p1: 'J1', p2: 'J2' });
+  canonical.rounds = [];
+  canonical.groups = [];
+  const canonicalBefore = JSON.stringify(canonical);
+  const historical = W._renderPhase0ReadOnly(canonical);
+  assert.equal((historical.match(/data-group-box="1"/g) || []).length, 2,
+    'reconstrói os dois grupos a partir das partidas canônicas');
+  canonical.matches.filter((m) => m.phaseIndex === 0).forEach((m) => {
+    assert.ok(historical.includes('id="card-' + m.id + '"'), 'card histórico do jogo ' + m.id);
+  });
+  assert.match(historical, /<th[^>]*>Pts<\/th>/, 'mostra classificação por grupo');
+  assert.match(historical, />6<\//, 'mantém os placares gravados');
+  assert.doesNotMatch(historical, /card-elim/, 'não mistura partidas da eliminatória');
+  assert.equal(JSON.stringify(canonical), canonicalBefore, 'consulta canônica não modifica o torneio');
+  canonical._faltamPesados = true;
+  canonical._faltaOQue = ['matches'];
+  assert.match(W._renderPhase0ReadOnly(canonical), /Carregando|Loading|Tentar novamente|Try again/,
+    'não inventa classificação enquanto as partidas canônicas estão incompletas');
+  delete canonical._faltamPesados;
+  delete canonical._faltaOQue;
   console.log('fase-historica-grupos-externos: ok');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

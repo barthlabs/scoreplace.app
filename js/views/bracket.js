@@ -1766,13 +1766,13 @@ function _bracketTieGroupCards(t, sg, phaseIndex) {
   var category = String((sg.matches || []).find(function (match) { return match && match.category; })?.category || sg.category || '');
   return Object.keys(book).sort().flatMap(function (id) {
     var decision = book[id];
-    if (!decision || decision.choice !== 'play' || !groupNumbers.has(Number(decision.baseGameNumber)) ||
+    if (!decision || !groupNumbers.has(Number(decision.baseGameNumber)) ||
         (decision.category && category && String(decision.category) !== category)) return [];
     return (decision.matches || []).filter(Boolean).map(function (match) {
-      var score = match.winnerKey && match.sets && match.sets[0] || match.livePoints || { p1:0, p2:0 };
+      var score = match.winnerKey && match.sets && match.sets[0] || match.livePoints || null;
       var display = { id:match.id, isTieBreak:true, label:'JOGO ' + String(match.displayGameNumber || ''),
         _gameNum:match.displayGameNumber, p1:match.p1 && match.p1.name || '', p2:match.p2 && match.p2.name || '',
-        scoreP1:score.p1, scoreP2:score.p2, category:category, court:match.court || '',
+        scoreP1:score && score.p1, scoreP2:score && score.p2, category:category, court:match.court || '',
         courtCalledAt:match.courtCalledAt, courtClockBaseAt:match.courtClockBaseAt,
         resultAt:match.resultAt, winner:match.winnerKey === (match.p1 && match.p1.key) ? match.p1.name :
           match.winnerKey === (match.p2 && match.p2.key) ? match.p2.name : null,
@@ -1783,7 +1783,19 @@ function _bracketTieGroupCards(t, sg, phaseIndex) {
       var card = host.content.firstElementChild;
       if (card) {
         var status = card.querySelector('[data-match-time-status]');
-        if (status) status.insertAdjacentHTML('afterend', '<span class="sp-operations-tie-designation">SIMPLES DESEMPATE</span>');
+        if (status) status.insertAdjacentHTML('afterend', '<span class="sp-operations-tie-designation">' +
+          (decision.choice === 'draw' && !match.winnerKey ? 'DESEMPATE NÃO DISPUTADO' : 'SIMPLES DESEMPATE') + '</span>');
+        var labels = Object.fromEntries((decision.players || []).map(function (p) { return [p.key, p.name]; }));
+        var reason = decision.choice === 'draw'
+          ? (decision.reason === 'organizer-used-original-draw-order'
+            ? 'Jogos extras dispensados pela organização; aplicada a ordem do sorteio original.'
+            : 'Aplicada a ordem do sorteio original.') : '';
+        var order = decision.status === 'complete' && Array.isArray(decision.order)
+          ? 'Ordem definida: ' + decision.order.map(function (key) {
+            return labels[key] || String(key).replace(/^name:/, '');
+          }).join(' → ') : '';
+        if (reason || order) card.insertAdjacentHTML('beforeend',
+          '<div class="sp-group-tie-note">' + (window._safeHtml || String)([reason, order].filter(Boolean).join(' ')) + '</div>');
       }
       return '<div class="sp-group-tie-card" data-group-tie="' + (window._safeHtml || String)(String(match.id)) + '">' +
         (card ? card.outerHTML : html) + '</div>';
@@ -5392,11 +5404,35 @@ function renderBracket(container, tournamentId, isInline) {
   // Ele mora fora de t.matches porque não altera a pontuação da classificatória.
   if (t.phaseTieDecisions && typeof t.phaseTieDecisions === 'object') {
     const tieItems = [];
+    let historicalTieGroups;
     Object.keys(t.phaseTieDecisions).sort((a, b) => Number(a) - Number(b)).forEach(phaseIndex => {
       const book = t.phaseTieDecisions[phaseIndex] || {};
       Object.keys(book).sort().forEach(decisionId => {
         const decision = book[decisionId];
         if (!decision || !Array.isArray(decision.contenders)) return;
+        // Em Rei/Rainha, a simples aparece no próprio grupo como card canônico,
+        // junto dos três jogos e da classificação. O resumo textual no topo
+        // repetia o resultado e separava o desempate do grupo que ele resolveu.
+        const tiePhase = _phaseCfgForHistoricalRead(t, Number(phaseIndex));
+        const tieIsMonarch = tiePhase && window._phasesEngine &&
+          window._phasesEngine.phaseIsMonarch && window._phasesEngine.phaseIsMonarch(tiePhase);
+        // O resumo só pode sair quando a fase anterior vai desenhar os mesmos
+        // cards a partir das partidas canônicas. Um jogo com número igual em
+        // outra categoria (ou uma fase sem grupos carregados) não basta.
+        const canonicalHistory = Number(phaseIndex) === 0 && Number(t.currentPhaseIndex || 0) > 0 &&
+          !Number((t._nPartes && t._nPartes.grupos) || t._nGrupos || 0) &&
+          !(t.rounds || []).some(rd => rd && rd.monarchGroups && rd.monarchGroups.length) &&
+          !(t._faltamPesados && Array.isArray(t._faltaOQue) && t._faltaOQue.includes('matches'));
+        if (canonicalHistory && historicalTieGroups === undefined) {
+          historicalTieGroups = window._phasesEngine && typeof window._phasesEngine.prevPhaseGroups === 'function'
+            ? window._phasesEngine.prevPhaseGroups(t) : [];
+        }
+        const tieHasGroupCard = tieIsMonarch && canonicalHistory && (decision.matches || []).length &&
+          (historicalTieGroups || []).some(sg =>
+            (!decision.category || !sg.category || String(sg.category) === String(decision.category)) &&
+            (sg.matches || []).some(m => Number(m && (m._gameNum || m.scheduledGameNumber)) ===
+              Number(decision.baseGameNumber)));
+        if (tieHasGroupCard) return;
         const labels = Object.fromEntries((decision.players || []).map(p => [p.key, p.name]));
         const names = decision.contenders.map(k => labels[k] || String(k).replace(/^name:/, ''));
         const groupName = String(decision.groupName || '').trim();
@@ -8940,6 +8976,26 @@ window._renderPhase0ReadOnly = function (t) {
   if (monarch) {
     var inline = (t.rounds || []).reduce(function (n, rd) { return n + ((rd && rd.monarchGroups && rd.monarchGroups.length) || 0); }, 0);
     var promised = Number((t._nPartes && t._nPartes.grupos) || t._nGrupos || 0);
+    if (t._faltamPesados && Array.isArray(t._faltaOQue) && t._faltaOQue.indexOf('matches') !== -1)
+      return _historicalMonarchMessage(t, !!(window.AppStore && window.AppStore._partesEmErro && window.AppStore._partesEmErro[t.id]));
+    // Torneios novos guardam a classificatória em t.matches, sem t.rounds nem
+    // subcoleção de grupos. A mesma porta do motor que apurou a fase seguinte
+    // recompõe os quartetos; o renderer de antes do avanço desenha seus cards,
+    // placares e tabelas sobre uma cópia, sem reabrir a fase ou gravar dados.
+    if (!inline && !promised && window._phasesEngine &&
+        typeof window._phasesEngine.prevPhaseGroups === 'function' &&
+        (t.matches || []).some(function (m) { return m && Number(m.phaseIndex || 0) === 0 &&
+          (m.isMonarch === true || m.monarchGroup != null); })) {
+      var reconstructed = window._phasesEngine.prevPhaseGroups(t);
+      if (Array.isArray(reconstructed) && reconstructed.length) {
+        var historical = Object.assign({}, t, { currentPhaseIndex: 0, rounds: [], matches: [],
+          groups: reconstructed.map(function (g) { return Object.assign({}, g, {
+            matches: (g.matches || []).map(function (m) { return Object.assign({}, m); })
+          }); }) });
+        return _renderMonarchStage(historical, false, false,
+          { suppressAutoAdvance: true, showHistoricalFullStandings: true });
+      }
+    }
     if (promised > inline) return _historicalMonarchRead(t);
     if (inline) {
       var docs = [];

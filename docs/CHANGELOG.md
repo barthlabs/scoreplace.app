@@ -1,3 +1,8 @@
+## 2.7.5 — 15/nov/2026 (histórico da classificatória Rei/Rainha)
+
+- A fase anterior recompõe grupos, cards dos jogos, placares e classificação a partir das partidas canônicas quando não há subcoleção de grupos. Vale para qualquer torneio Rei/Rainha seguido de eliminatória; o render não altera dados.
+- Jogos simples de desempate aparecem como cards no grupo correspondente, inclusive se foram dispensados. O resumo textual duplicado deixa de aparecer quando há card.
+
 ## 2.7.4 — 15/nov/2026 (inscritos e classificação)
 
 - A lista compacta mostra o total confirmado de inscritos também em torneios encerrados antigos, incluindo Duplas Mistas Sorteadas e BT Corpus Christi 2026.
