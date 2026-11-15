@@ -56,6 +56,8 @@ assert.equal(replaced.liveMatches.length,2,'somente jogos futuros mudam');
 assert.equal(replaced.nextRoot.canonicalRegistrationMigration.registrationCount,5);
 assert.equal(registrations.length,4);
 assert.equal(replaced.nextReg.status,'confirmed','a nova inscrição ocupa a vaga ativa');
+assert.equal(replaced.nextReg.manualDisplayName,'Nova Atleta',
+  'a inscrição substituta preserva o nome usado pelo índice histórico');
 assert.equal(replaced.nextBaseline.root.canonicalRegistrationMigration.registrationCount,4,
   'reset retorna a uma lista limpa de quatro vagas');
 assert.equal(replaced.nextBaseline.tree.filter(item => item.path.startsWith('registrations/')).length,4);
