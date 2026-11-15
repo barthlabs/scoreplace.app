@@ -8,8 +8,8 @@
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "4ebd29eb0056fa9ee43f997a9b8b2394f0aaebc2",
-      "deployedAt": "2026-11-15T14:08:57.389Z",
+      "backendCommit": "bbd794e79d153bbcfa4d02d70287bf51a9fc6901",
+      "deployedAt": "2026-11-15T16:54:40.432Z",
       "result": "success",
       "mode": "only"
     },
@@ -194,8 +194,8 @@
       "mode": "only"
     },
     "setTournamentCategoryConfig": {
-      "backendCommit": "4ffa76ea3f887de9a985f6a93aa104df7d532a72",
-      "deployedAt": "2026-11-09T22:31:20.324Z",
+      "backendCommit": "bbd794e79d153bbcfa4d02d70287bf51a9fc6901",
+      "deployedAt": "2026-11-15T16:54:40.432Z",
       "result": "success",
       "mode": "only"
     },
@@ -380,8 +380,8 @@
       "mode": "only"
     },
     "deleteEmptyTournamentCategory": {
-      "backendCommit": "4ffa76ea3f887de9a985f6a93aa104df7d532a72",
-      "deployedAt": "2026-11-09T22:31:20.324Z",
+      "backendCommit": "bbd794e79d153bbcfa4d02d70287bf51a9fc6901",
+      "deployedAt": "2026-11-15T16:54:40.432Z",
       "result": "success",
       "mode": "only"
     },
