@@ -656,7 +656,7 @@ window._showPlayerStats = function(playerName, currentTournamentId, playerUid) {
             var isP1 = left.uids.indexOf(_viewedUid) !== -1;
             var isP2 = right.uids.indexOf(_viewedUid) !== -1;
             if (isP1 === isP2) return;
-            var winnerSide = ownHistoricalClaim && (!left.complete || !right.complete)
+            var winnerSide = ownHistoricalClaim
                 ? (typeof window._spVerifiedHistoricalWinnerSide === 'function'
                     ? window._spVerifiedHistoricalWinnerSide(m) : null)
                 : _statsWinnerSide(m, left, right);

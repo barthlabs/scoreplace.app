@@ -74,6 +74,8 @@ window._spVerifiedHistoricalWinnerSide = function (game) {
     isFinite(Number(a)) && isFinite(Number(b));
   var scoreSide = sets.length && wins1 !== wins2 ? (wins1 > wins2 ? 1 : 2)
     : hasScore && Number(a) !== Number(b) ? (Number(a) > Number(b) ? 1 : 2) : null;
+  if (winner === 0 && scoreSide === null &&
+      ((sets.length && wins1 === wins2) || (hasScore && Number(a) === Number(b)))) return 0;
   return winner === scoreSide ? winner : null;
 };
 
@@ -110,8 +112,7 @@ window._spTournamentHistoryRecord = function (game) {
     return { gamesP1: x, gamesP2: y, tiebreak: set && set.tiebreak || null };
   }) : [];
   if (!hasScore && !sets.length) return null;
-  if (partialClaim && (!one.length || !two.length) &&
-      window._spVerifiedHistoricalWinnerSide(game) === null) return null;
+  if (partialClaim && window._spVerifiedHistoricalWinnerSide(game) === null) return null;
   var summary = sets.length ? sets.map(function (set) {
     var text = set.gamesP1 + '-' + set.gamesP2;
     var tb = set.tiebreak;

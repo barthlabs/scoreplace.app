@@ -57,6 +57,10 @@ assert.equal(window._spTournamentHistoryRecord({ ...game, team1Uids: ['ana', nul
   team2Uids: [null, null], winnerUids: ['ana'], scoreP1: 2, scoreP2: 6,
   sets: [{ gamesP1: 2, gamesP2: 6 }], historicalClaimUids: ['ana'] }), null,
   'vencedor legado incompatível com o placar não gera estatística pessoal');
+assert.equal(window._spTournamentHistoryRecord({ ...game, historicalClaimUids: ['ana'],
+  winnerUids: ['ana'], scoreP1: 2, scoreP2: 6,
+  sets: [{ gamesP1: 2, gamesP2: 6 }] }), null,
+  'mesmo com os dois lados vinculados, placar contraditório não gera V/D histórico');
 
 (async () => {
   const filters = [];
