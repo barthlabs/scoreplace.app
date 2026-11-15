@@ -1,3 +1,4 @@
+// 2.7.3 — Tema único azul e nova marca ScorePlace em telas, splash, favicon e instalação.
 // 2.7.2 — O reset de teste pré-sorteio pode ser repetido: cada retorno preserva
 // os inscritos e a configuração fotografados, sem sorteio ou placares.
 // Encerrar o ensaio restaura o pré-sorteio e libera as inscrições e notificações.
@@ -1766,6 +1767,14 @@ window._RELEASE_NOTES_HTML = (function () {
     // quem está com a 2.0.4 no iPhone lê um torneio que o banco não guarda mais desse jeito.
     // Mesma lição da 1.7.35: quando o formato do dado muda, a ida à loja É o conserto.
     // Os itens abaixo são consolidados por tema, como manda a convenção do arquivo.
+    // v2.7.3 — atualização visual inicial, sem mudar telas ou fluxos.
+    '<div style="margin-bottom:1rem;border:2px solid #75c7e7;border-radius:12px;padding:14px 16px;background:rgba(117,199,231,0.10);">' +
+      '<div style="font-weight:800;color:var(--text-bright);font-size:1rem;margin-bottom:8px;">🎨 v2.7.3 — Nova aparência</div>' +
+      '<ul style="margin:0;padding-left:1.1rem;font-size:0.86rem;line-height:1.5;color:var(--text-main);">' +
+        '<li>O ScorePlace.app agora usa sempre o azul padrão e a nova marca com pódio e estrela. Não é mais necessário escolher entre temas.</li>' +
+        '<li>Telas, navegação e funções continuam no mesmo lugar.</li>' +
+      '</ul>' +
+    '</div>' +
     // v2.7 — fluxo de operação de ponta a ponta e fonte do Wear.
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800;color:var(--sp-c-a7f3d0,#a7f3d0);font-size:1rem;margin-bottom:8px;">🎾 v2.7 — Torneios sem interrupção <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(Novembro, 2026)</span></div>' +

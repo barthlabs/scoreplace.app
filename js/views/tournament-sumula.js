@@ -229,24 +229,26 @@
     return { width:width, height:height, commands:commands, line:line, rect:rect,
       fillRect:fillRect, logo:logo, box:box, write:write };
   }
-  // Forma vetorial gerada do SVG canônico no cabeçalho do app (index.html).
-  // Gerar novamente com scripts/generate-sumula-logo.py se o cabeçalho mudar.
+  // Forma vetorial gerada do pódio transparente oficial para fundo claro.
+  // Gerar novamente com scripts/generate-sumula-logo.py se a marca mudar.
   // BEGIN OFFICIAL PDF LOGO
-  var officialLogoSourceSha256 = 'b4d9b4333a0b09f5f1f0460ee49d8db61bf7304c8417c46d4bba02a58d963fb9';
+  var officialLogoSourceSha256 = 'b4237837f8cdc59600be69013efe3e48193089565437b448e21de9188eab6ca5';
   var officialLogoVector =
-    'MSAwIDAgLTEgMCAzNiBjbQpxCjAuNzk2MDc4IDAuODM1Mjk0IDAuODgyMzUzIHJnIC9hMCBncwo2IDE5LjUgbSAxMC41IDE5LjUg' +
-    'bCAxMS4zMjggMTkuNSAxMiAyMC4xNzIgMTIgMjEgYyAxMiAyOC41IGwgMTIgMjkuMzI4IAoxMS4zMjggMzAgMTAuNSAzMCBjIDYg' +
-    'MzAgbCA1LjE3MiAzMCA0LjUgMjkuMzI4IDQuNSAyOC41IGMgNC41IDIxIGwgNC41IDIwLjE3MgogNS4xNzIgMTkuNSA2IDE5LjUg' +
-    'YyBoCjYgMTkuNSBtIGYKMC45NjA3ODQgMC42MTk2MDggMC4wNDMxMzczIHJnIDE1Ljc1IDEyIG0gMjAuMjUgMTIgbCAyMS4wNzgg' +
-    'MTIgMjEuNzUgMTIuNjcyIDIxLjc1IDEzLjUgYyAyMS43NSAyOC41IGwgCjIxLjc1IDI5LjMyOCAyMS4wNzggMzAgMjAuMjUgMzAg' +
-    'YyAxNS43NSAzMCBsIDE0LjkyMiAzMCAxNC4yNSAyOS4zMjggMTQuMjUKIDI4LjUgYyAxNC4yNSAxMy41IGwgMTQuMjUgMTIuNjcy' +
-    'IDE0LjkyMiAxMiAxNS43NSAxMiBjIGgKMTUuNzUgMTIgbSBmCjAuOTg0MzE0IDAuNTcyNTQ5IDAuMjM1Mjk0IHJnIDI1LjUgMjIu' +
-    'NSBtIDMwIDIyLjUgbCAzMC44MjggMjIuNSAzMS41IDIzLjE3MiAzMS41IDI0IGMgMzEuNSAyOC41IGwgMzEuNQogMjkuMzI4IDMw' +
-    'LjgyOCAzMCAzMCAzMCBjIDI1LjUgMzAgbCAyNC42NzIgMzAgMjQgMjkuMzI4IDI0IDI4LjUgYyAyNCAyNCAKbCAyNCAyMy4xNzIg' +
-    'MjQuNjcyIDIyLjUgMjUuNSAyMi41IGMgaAoyNS41IDIyLjUgbSBmCjAuOTYwNzg0IDAuNjE5NjA4IDAuMDQzMTM3MyByZyAxOCA2' +
-    'LjYwMiBtIDE4Ljc1IDguNjk5IGwgMjAuODUyIDguNjk5IGwgMTkuMTk5IDEwLjA1MSBsIDE5LjgwMSAxMiBsIDE4IAoxMC44MDEg' +
-    'bCAxNi4xOTkgMTIgbCAxNi44MDEgMTAuMDUxIGwgMTUuMTQ4IDguNjk5IGwgMTcuMjUgOC42OTkgbCBoCjE4IDYuNjAyIG0gZgpR' +
-    'Cg==';
+    'MSAwIDAgLTEgMCAzNiBjbQpxCjAuNjgyMzUzIDAuNzM3MjU1IDAuOCByZyAvYTAgZ3MKOSAxNy4yOTcgbSAxMy42NDEgMTcuMjk3' +
+    'IGwgMTQuMDI3IDE3LjI5NyAxNC4zNDQgMTcuNjEzIDE0LjM0NCAxOCBjIDE0LjM0NAogMjcuODQ0IGwgMTQuMzQ0IDI4LjIzIDE0' +
+    'LjAyNyAyOC41NDcgMTMuNjQxIDI4LjU0NyBjIDkgMjguNTQ3IGwgOC42MTMgMjguNTQ3CiA4LjI5NyAyOC4yMyA4LjI5NyAyNy44' +
+    'NDQgYyA4LjI5NyAxOCBsIDguMjk3IDE3LjYxMyA4LjYxMyAxNy4yOTcgOSAxNy4yOTcKIGMgaAo5IDE3LjI5NyBtIGYKMSAwLjc3' +
+    'MjU0OSAwIHJnIDE1LjY4IDEyLjc5NyBtIDIwLjMyIDEyLjc5NyBsIDIwLjcwNyAxMi43OTcgMjEuMDIzIDEzLjExMyAyMS4wMjMg' +
+    'MTMuNSBjCiAyMS4wMjMgMjcuODQ0IGwgMjEuMDIzIDI4LjIzIDIwLjcwNyAyOC41NDcgMjAuMzIgMjguNTQ3IGMgMTUuNjggMjgu' +
+    'NTQ3IApsIDE1LjI5MyAyOC41NDcgMTQuOTc3IDI4LjIzIDE0Ljk3NyAyNy44NDQgYyAxNC45NzcgMTMuNSBsIDE0Ljk3NyAxMy4x' +
+    'MTMKIDE1LjI5MyAxMi43OTcgMTUuNjggMTIuNzk3IGMgaAoxNS42OCAxMi43OTcgbSBmCjAuOTAxOTYxIDAuNTQ1MDk4IDAuMTg0' +
+    'MzE0IHJnIDIyLjQzIDIxLjE2NCBtIDI3LjA3IDIxLjE2NCBsIDI3LjQ1NyAyMS4xNjQgMjcuNzczIDIxLjQ4IDI3Ljc3MyAyMS44' +
+    'NjcgCmMgMjcuNzczIDI3Ljg0NCBsIDI3Ljc3MyAyOC4yMyAyNy40NTcgMjguNTQ3IDI3LjA3IDI4LjU0NyBjIDIyLjQzIDI4LjU0' +
+    'NwogbCAyMi4wNDMgMjguNTQ3IDIxLjcyNyAyOC4yMyAyMS43MjcgMjcuODQ0IGMgMjEuNzI3IDIxLjg2NyBsIDIxLjcyNyAyMS40' +
+    'OAogMjIuMDQzIDIxLjE2NCAyMi40MyAyMS4xNjQgYyBoCjIyLjQzIDIxLjE2NCBtIGYKMSAwLjc3MjU0OSAwIHJnIDE4IDcuMDMx' +
+    'IG0gMTguNzAzIDkuMTQxIGwgMjEuMDIzIDkuMTQxIGwgMTkuMTI1IDEwLjU0NyBsIDE5LjgyOCAxMi41ODYgCmwgMTggMTEuMjUg' +
+    'bCAxNi4xNzIgMTIuNTg2IGwgMTYuODc1IDEwLjU0NyBsIDE0Ljk3NyA5LjE0MSBsIDE3LjI5NyA5LjE0MQogbCBoCjE4IDcuMDMx' +
+    'IG0gZgpRCg==';
   // END OFFICIAL PDF LOGO
   function binaryFromBase64(value) {
     if (typeof atob === 'function') return atob(value);

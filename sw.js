@@ -97,7 +97,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v2.7.2';
+var CACHE_NAME = 'scoreplace-v2.7.3';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do
@@ -188,11 +188,16 @@ var STATIC_ASSETS = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon-180.png',
+  '/icons/icon-16.png',
   '/icons/icon-32.png',
   '/icons/icon-192.svg',
   '/icons/icon-512.svg',
   '/icons/logo-podium.svg',
-  '/icons/logo-wordmark.svg'
+  '/icons/logo-wordmark.svg',
+  '/icons/favicon.svg',
+  '/icons/scoreplace-lockup-inverse.svg',
+  '/icons/scoreplace-lockup.svg',
+  '/icons/scoreplace-wordmark-inverse.svg'
 ];
 
 // Domains that should NEVER be cached (APIs, auth, real-time data)

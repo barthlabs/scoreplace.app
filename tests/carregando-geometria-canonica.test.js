@@ -41,10 +41,12 @@ const barFn = store.slice(store.indexOf('window._spLoaderBarHtml = function'), s
 
 // ── 1. LOGO: mesmo símbolo, mesmas dimensões ────────────────────────────────
 {
-  const m = logoFn.match(/<svg width="(\d+)" height="(\d+)"/);
+  const m = logoFn.match(/<img[^>]*width="(\d+)" height="(\d+)"/);
   ok(!!m, 'o corpo único declara as dimensões do logo');
-  ok(m && splash.indexOf('<svg width="' + m[1] + '" height="' + m[2] + '"') !== -1,
+  ok(m && splash.indexOf('width="' + m[1] + '" height="' + m[2] + '"') !== -1,
      'o splash usa o logo EXATAMENTE em ' + (m && m[1] + '×' + m[2]) + ' (era 208×156 — o 1º pulo visível)');
+  ok(splash.includes('icons/logo-podium.svg?v=2.7.3') && logoFn.includes('icons/logo-podium.svg?v=2.7.3'), 'splash e corpo usam o mesmo símbolo transparente');
+  ok(splash.includes('icons/scoreplace-wordmark-inverse.svg?v=2.7.3') && logoFn.includes('icons/scoreplace-wordmark-inverse.svg?v=2.7.3'), 'splash e corpo usam o mesmo wordmark');
   ok(splash.indexOf('width="208"') === -1, 'o logo dobrado do splash (v1.8.75) morreu');
 }
 

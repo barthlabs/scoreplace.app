@@ -1107,18 +1107,22 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       strip.style.display = 'none';
       window._bracketOperationsRefresh(t, root);
       strip.style.display = '';
-      const afterHidden = strip.querySelector('.sp-operations-next-scroll');
       const hiddenScrollPreserved = await new Promise(resolve => {
         let frames = 0;
         function check() {
-          if (Math.abs(afterHidden.scrollTop - beforeHidden) <= 2) return resolve(true);
+          // Um refresh assíncrono pode recriar o scroller enquanto aguardamos.
+          // A posição visível pertence ao nó atual, não ao nó já removido.
+          const current = strip.querySelector('.sp-operations-next-scroll');
+          if (current && current.isConnected && Math.abs(current.scrollTop - beforeHidden) <= 2) return resolve(true);
           if (++frames >= 60) return resolve(false);
           requestAnimationFrame(check);
         }
         requestAnimationFrame(check);
       });
+      const afterHidden = strip.querySelector('.sp-operations-next-scroll');
       const hiddenScroll = { before:beforeHidden, after:afterHidden.scrollTop,
-        height:afterHidden.clientHeight, observer:!!strip._spNextScrollRestoreObserver };
+        height:afterHidden.clientHeight, connected:afterHidden.isConnected,
+        observer:!!strip._spNextScrollRestoreObserver };
       const later = afterHidden.querySelector('[data-operations-base-match="later"]');
       const callButton = later.querySelector('.sp-match-confirm');
       const callDebug = { disabled:callButton.disabled, match:later.getAttribute('data-operations-match'), html:callButton.outerHTML };

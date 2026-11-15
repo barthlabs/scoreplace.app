@@ -389,7 +389,7 @@ function setupHelpModal() {
         '<div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:12px;margin-bottom:12px;">' +
           '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Configurações</div>' +
           '<p><b>Idioma</b> — 🇧🇷 Português ou 🇺🇸 English. Bandeiras clicáveis com destaque visual.</p>' +
-          '<p><b>Tema</b> — Noturno (escuro), Claro, Pôr do Sol, Oceano. 4 opções visuais.</p>' +
+          '<p><b>Aparência</b> — Azul padrão do ScorePlace.app em todas as telas.</p>' +
           '<p><b>Notificações</b> — Todas (padrão), Só Importantes ou Só Fundamentais. Canais: Plataforma, E-mail, WhatsApp.</p>' +
           '<p><b>Dicas visuais</b> — Ative/desative as dicas que aparecem quando você fica parado.</p>' +
           '<p><b>Arbitrar</b> — Toggle por modalidade na seção de esportes preferidos. Quando ativado em uma modalidade, seu nome aparece na lista de "🧑‍⚖️ Árbitros disponíveis" para organizadores de torneios daquela modalidade próximos à sua localização. O organizador convida via página <b>Árbitros</b> nas ferramentas do torneio.</p>' +
@@ -857,7 +857,7 @@ function setupHelpModal() {
             '• <b>Login</b> — Faça login para criar e gerenciar torneios<br>' +
             '• <b>Menu ☰</b> — Abra o menu para navegar pelo app<br>' +
             '• <b>Perfil</b> — Acesse estatísticas e configurações<br>' +
-            '• <b>Tema</b> — Noturno, Claro, Pôr do Sol e Oceano<br>' +
+            '• <b>Aparência</b> — Azul padrão do ScorePlace.app<br>' +
             '• <b>Ajuda (?)</b> — Manual completo com todas as funcionalidades<br>' +
             '• <b>Busca rápida</b> — Ctrl+K para buscar torneios e jogadores<br>' +
             '• <b>Notificações</b> — Avisos de torneios e convites' +

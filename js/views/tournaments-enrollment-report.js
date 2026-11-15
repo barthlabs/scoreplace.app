@@ -1870,10 +1870,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // 18×14 pra bater com o peso visual do "LP" (0.74rem bold). A 13×10 o pódio ficava
       // visivelmente menor que a sigla irmã — os dois selos têm que pesar igual na linha.
       '<svg viewBox="0 0 80 60" width="18" height="14" aria-hidden="true" focusable="false">' +
-        '<rect x="2" y="30" width="22" height="30" rx="3" fill="#CBD5E1"/>' +
-        '<rect x="29" y="10" width="22" height="50" rx="3" fill="#F59E0B"/>' +
-        '<rect x="56" y="40" width="22" height="20" rx="3" fill="#FB923C"/>' +
-        '<path d="M 40 0 L 42 6 L 48 6 L 43 10 L 45 16 L 40 12 L 35 16 L 37 10 L 32 6 L 38 6 Z" fill="#F59E0B"/>' +
+        '<rect x="2" y="30" width="22" height="30" rx="3" fill="#D5DEEB"/>' +
+        '<rect x="29" y="10" width="22" height="50" rx="3" fill="#FFC500"/>' +
+        '<rect x="56" y="40" width="22" height="20" rx="3" fill="#E68B2F"/>' +
+        '<path d="M 40 0 L 42 6 L 48 6 L 43 10 L 45 16 L 40 12 L 35 16 L 37 10 L 32 6 L 38 6 Z" fill="#FFC500"/>' +
       '</svg></span>';
   }
 

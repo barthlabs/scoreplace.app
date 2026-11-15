@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Embed the exact app-header SVG as a PDF vector Form XObject."""
+"""Embed the official transparent podium for light paper as a PDF vector."""
 import base64
 import hashlib
 import io
-import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -11,17 +10,13 @@ from pathlib import Path
 from pypdf import PdfReader
 
 ROOT = Path(__file__).resolve().parents[1]
-html_path = ROOT / 'index.html'
+logo_path = ROOT / 'icons/logo-podium-print.svg'
 js_path = ROOT / 'js/views/tournament-sumula.js'
-html = html_path.read_text()
-match = re.search(r'<svg width="48" height="48" viewBox="0 0 24 24".*?</svg>', html, re.S)
-if not match:
-    raise SystemExit('Canonical SVG not found in the app header')
-svg = match.group(0).encode()
+svg = logo_path.read_bytes()
 with tempfile.NamedTemporaryFile(suffix='.svg') as source:
     source.write(svg)
     source.flush()
-    pdf = subprocess.check_output(['rsvg-convert', '-f', 'pdf', source.name])
+    pdf = subprocess.check_output(['rsvg-convert', '-f', 'pdf', '-w', '48', '-h', '48', source.name])
 page = PdfReader(io.BytesIO(pdf)).pages[0]
 if list(page.mediabox) != [0, 0, 36, 36]:
     raise SystemExit(f'Unexpected vector box: {page.mediabox}')
@@ -45,4 +40,4 @@ source, count = re.subn(
 if count != 1:
     raise SystemExit('Expected one logo block in tournament-sumula.js')
 js_path.write_text(source)
-print('Embedded app-header SVG as PDF vector', hashlib.sha256(svg).hexdigest())
+print('Embedded official transparent podium as PDF vector', hashlib.sha256(svg).hexdigest())

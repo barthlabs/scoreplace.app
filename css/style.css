@@ -49,51 +49,43 @@
 
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   TEMAS — Variáveis CSS para todos os componentes
-   Ordem de ciclagem: dark → light (só 2 temas — ver js/theme.js)
-   ═══════════════════════════════════════════════════════════════ */
-
-/* v0.17.25: paleta Apple HIG. 4 temas — 2 light + 2 dark — cada um com
-   identidade própria mas todos atingindo WCAG AAA pra texto principal.
-   Cores systemColors oficiais da Apple onde aplicável.
-
-   Mapping:
-   - Noturno (dark) — Apple Dark Mode: systemBlue accent on systemGray6 dark
-   - Claro (light) — Apple Light Mode: systemBlue accent on white
-   - Pôr do Sol (light warm) — sépia/cream com amber-700 accent (modo leitura)
-   - Oceano (dark navy) — preserva identidade cyan/teal sobre navy profundo
-*/
+/* Aparência única azul. A chave interna `dark` mantém compatibilidade com os
+   seletores legados; `light` não é mais selecionado pelo aplicativo. */
 
 :root, [data-theme="dark"] {
-  /* NOTURNO — Apple Dark Mode */
-  --bg-darker: #111114;        /* systemBackground dark — off-black, never pure #000 */
-  --bg-dark: #1c1c1e;          /* systemGray6 dark */
-  --bg-card: #2c2c2e;          /* systemGray5 dark */
-  --bg-card-hover: #3a3a3c;    /* systemGray4 dark */
-  --er-lz-yellow: #f0b445;
-  --er-lz-red: #ff8f8f;
+  --sp-blue-top: #348dbb;
+  --sp-blue-mid: #287cad;
+  --sp-blue-deep: #1e6b9a;
+  --sp-blue-bottom: #145584;
+  --sp-brand-gold: #ffc500;
+  /* Superfícies escuras preservam a leitura dos componentes atuais. */
+  --bg-darker: #145584;
+  --bg-dark: #1e6b9a;
+  --bg-card: #1d628e;
+  --bg-card-hover: #287cad;
+  --er-lz-yellow: #fff0bf;
+  --er-lz-red: #ffe6e6;
 
-  --primary-color: #0a84ff;    /* systemBlue dark */
-  --primary-hover: #5ac8fa;    /* systemTeal dark */
-  --secondary-color: #bf5af2;  /* systemPurple dark */
-  --secondary-hover: #d18df7;
+  --primary-color: #d5eaf2;
+  --primary-hover: #ffffff;
+  --secondary-color: #ffe38a;
+  --secondary-hover: #fff0bf;
 
-  --text-main: #ebebf5;         /* secondaryLabel dark @ 100% */
-  --text-muted: #98989d;        /* tertiaryLabel dark */
-  --text-bright: #f2f2f7;       /* near-white — evita branco puro, melhor leitura em fundo escuro */
+  --text-main: #f3fbfd;
+  --text-muted: #d5eaf2;
+  --text-bright: #ffffff;
 
-  --border-color: #38383a;      /* systemGray3 dark */
-  --border-focus: #0a84ff;
+  --border-color: #b8dce8;
+  --border-focus: #ffffff;
 
   --danger-color: #ff453a;      /* systemRed dark */
   --success-color: #30d158;     /* systemGreen dark */
-  --info-color: #0a84ff;
+  --info-color: #d5eaf2;
 
   /* Componentes */
-  --btn-secondary-bg: #2c2c2e;
-  --btn-secondary-text: #ebebf5;
-  --btn-secondary-hover: #3a3a3c;
+  --btn-secondary-bg: #1d628e;
+  --btn-secondary-text: #f3fbfd;
+  --btn-secondary-hover: #287cad;
   --btn-danger-ghost-text: #ff6961;
   --btn-danger-ghost-bg: rgba(255,69,58,0.18);
   --btn-danger-ghost-border: rgba(255,69,58,0.4);
@@ -102,12 +94,12 @@
      tonalidade) em vez de overlay branco — consistente com stat-box/config-box. */
   --info-box-bg: rgba(0,0,0,0.32);
   --stat-box-bg: rgba(255,255,255,0.05);
-  --card-org-border: rgba(10,132,255,0.3);
-  --card-part-border: rgba(191,90,242,0.3);
+  --card-org-border: rgba(213,234,242,0.55);
+  --card-part-border: rgba(255,227,138,0.55);
 
   /* v0.17.31: hero-box tokens — acompanham o tema (dark→dark, light→light),
      ligeiramente mais escuros que cards comuns pra dar destaque. */
-  --hero-bg: linear-gradient(135deg, #1e3a8a 0%, #5b21b6 100%);
+  --hero-bg: linear-gradient(135deg, #287cad 0%, #145584 100%);
   --hero-text: #ffffff;
   --hero-text-soft: rgba(255,255,255,0.85);
   --hero-glass-bg: rgba(255,255,255,0.15);
@@ -222,6 +214,8 @@
 body {
   font-family: var(--font-body);
   background-color: var(--bg-darker);
+  background-image: linear-gradient(180deg, var(--sp-blue-deep), var(--sp-blue-bottom));
+  background-attachment: fixed;
   color: var(--text-main);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;

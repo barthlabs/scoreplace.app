@@ -526,13 +526,12 @@
   }
   function _menuSteps() {
     // v2.3.35: com o menu aberto, as dicas seguem a ordem da DIREITA pra ESQUERDA
-    // da topbar: Perfil (botão de login, mais à direita) → Ajuda → Tema →
+    // da topbar: Perfil (botão de login, mais à direita) → Ajuda →
     // Notificações → Início (mais à esquerda).
     return [
       _menuOpenStep(),
       { id: 'menu_perfil', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('#btn-login')); }, title: '👤 Seu perfil', text: 'Toque aqui pra abrir e completar seu perfil — é o que destrava eventos do seu interesse.' },
       { id: 'menu_ajuda', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('button[onclick*="#help"]')); }, title: '❓ Ajuda', text: 'O manual completo do app, sempre que precisar.' },
-      { id: 'menu_tema', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('#theme-toggle-btn')); }, title: '🎨 Aparência', text: 'Alterne entre os temas claro e escuro com um toque.' },
       { id: 'menu_notif', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('a[href="#notifications"]')); }, title: '🔔 Notificações', text: 'Avisos de sorteios, jogos e convites chegam aqui.' },
       { id: 'menu_inicio', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('a[href="#dashboard"]')); }, title: '🏠 Início', text: 'Sua central: torneios, partidas casuais e tudo que importa. Clique aqui a qualquer momento e volte para essa tela inicial.' }
     ];
@@ -548,7 +547,6 @@
       { id: 'ps_uiscale', el: '#profile-ui-scale', title: '🔎 Tamanho da interface', text: 'Deixe tudo maior ou menor, do jeito mais confortável pra você.' },
       { id: 'ps_presence', el: '#presence-visibility-group', title: '📡 Presença no local', text: 'Decida se (e pra quem) o app mostra que você está jogando num local.' },
       { id: 'ps_notif', el: '#profile-notify-platform', title: '🔔 Notificações', text: 'Escolha o que você recebe e por onde: no app, e-mail ou WhatsApp.' },
-      { id: 'ps_theme', el: '#theme-btn-group', title: '🎨 Temas', text: 'Quatro aparências pra deixar o app com a sua cara.' },
       { id: 'ps_lang', el: '#profile-lang-flags', title: '🌐 Idioma', text: 'Português ou inglês — você escolhe.' },
       { id: 'ps_hintsoff', el: '#profile-hints-enabled', title: '💡 Dicas', text: 'Quando quiser, desligue as dicas aqui. Elas somem sozinhas conforme você completa o perfil. 😉' }
     ];

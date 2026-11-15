@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.2';
+window.SCOREPLACE_VERSION = '2.7.3';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -5682,8 +5682,8 @@ window._spLoaderLogoHtml = function () {
   // troca de tela. Agora o splash usa EXATAMENTE estas medidas: 152×114 +
   // wordmark 1.2rem. NÃO reintroduzir tamanho "especial" em nenhum lado.
   return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;margin-bottom:2px;" aria-hidden="true">' +
-      '<svg width="152" height="114" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="13" width="5" height="7" rx="1" fill="#CBD5E1"/><rect x="9.5" y="8" width="5" height="12" rx="1" fill="#F59E0B"/><rect x="16" y="15" width="5" height="5" rx="1" fill="#FB923C"/><path d="M 12 4.4 L 12.5 5.8 L 13.9 5.8 L 12.8 6.7 L 13.2 8 L 12 7.2 L 10.8 8 L 11.2 6.7 L 10.1 5.8 L 11.5 5.8 Z" fill="#F59E0B"/></svg>' +
-      '<span style="font-size:1.2rem;font-weight:800;letter-spacing:.3px;color:#fff;">scoreplace<span style="color:var(--sp-c-fbbf24,#fbbf24)">.app</span></span>' +
+      '<img src="icons/logo-podium.svg?v=2.7.3" width="152" height="114" style="object-fit:contain;" alt="">' +
+      '<span style="font-size:1.2rem;font-weight:800;letter-spacing:.3px;color:#fff;"><img src="icons/scoreplace-wordmark-inverse.svg?v=2.7.3" width="176" height="32" alt=""></span>' +
     '</div>';
 };
 
@@ -11109,10 +11109,9 @@ window._autoCloseExpiredEnrollments = function() {
   });
 };
 
-// ─── Temas: SÓ 2 — escuro ↔ claro (v2.6.27, simplificado) ───────────────────
-window._themeOrder = ['dark', 'light'];
-window._themeIcons = { dark: '🌙', light: '☀️' };
-window._themeNames = { dark: 'Noturno', light: 'Claro' };
+// ─── Aparência única azul ────────────────────────────────────────────────────
+// Chave interna única: os seletores do tema escuro recebem a nova paleta azul.
+window._themeOrder = ['dark'];
 
 // ─── Tamanho da interface (v2.1.91) ─────────────────────────────────────────
 // --ui-scale multiplica o font-size da raiz (html), que é a base de quase todo
@@ -11269,54 +11268,8 @@ window._setUiScale = function(scale) {
   return s;
 };
 
-window._toggleTheme = function() {
-  var html = document.documentElement;
-  var current = html.getAttribute('data-theme') || 'dark';
-  var order = window._themeOrder;
-  var idx = order.indexOf(current);
-  var next = order[(idx + 1) % order.length];
-  html.setAttribute('data-theme', next);
-  try { localStorage.setItem('scoreplace_theme', next); } catch (e) {}
-  window._applyThemeIcon(next);
-  // Sync theme to Firestore so other devices pick it up
-  try {
-    var cu = window.AppStore && window.AppStore.currentUser;
-    if (cu && cu.uid && window.FirestoreDB && window.FirestoreDB.saveInterfacePreferences) {
-      window.FirestoreDB.saveInterfacePreferences({ theme: next }).catch(function() {});
-    }
-  } catch (e) {}
-};
-
-window._applyThemeIcon = function(theme) {
-  // The hamburger dropdown clones topbar nodes, producing a second element
-  // with id="theme-toggle-btn". getElementById returns only the first, so we
-  // use querySelectorAll to update every live copy.
-  var btns = document.querySelectorAll('#theme-toggle-btn');
-  if (!btns || !btns.length) return;
-  var icon = window._themeIcons[theme] || '🌙';
-  var name = window._themeNames[theme] || theme;
-  for (var i = 0; i < btns.length; i++) {
-    btns[i].textContent = icon;
-    btns[i].title = 'Tema: ' + name + ' (clique para trocar)';
-  }
-};
-
-// Apply saved theme on load
-(function() {
-  try {
-    var saved = localStorage.getItem('scoreplace_theme');
-    var valid = window._themeOrder;
-    if (saved && valid.indexOf(saved) !== -1) {
-      document.documentElement.setAttribute('data-theme', saved);
-      var _applyIcon = function() { window._applyThemeIcon(saved); };
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', _applyIcon);
-      } else {
-        _applyIcon();
-      }
-    }
-  } catch (e) {}
-})();
+// Preferências de tema anteriores permanecem no perfil por compatibilidade,
+// mas não são lidas, alternadas nem persistidas pela interface atual.
 
 // ─── Favoritos e Ocultados — VIVEM NA CONTA (users/{uid}) ────────────────────
 // v1.2.11 — POR QUE ISTO MUDOU DE CASA (não devolver pro localStorage):
@@ -13625,16 +13578,6 @@ window.AppStore = {
         }
         if (!doc.exists) return;
         var data = doc.data();
-        // Sync theme in real-time across all logged-in devices
-        if (data.theme && window._themeOrder.indexOf(data.theme) !== -1) {
-          var currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
-          if (data.theme !== currentTheme) {
-            document.documentElement.setAttribute('data-theme', data.theme);
-            try { localStorage.setItem('scoreplace_theme', data.theme); } catch (e) {}
-            window._applyThemeIcon(data.theme);
-            if (store.currentUser) store.currentUser.theme = data.theme;
-          }
-        }
         // v2.1.91: sincroniza o tamanho da interface (--ui-scale) entre dispositivos
         // v1.7.91: este é o caminho que traz a escala do PERFIL (sincroniza entre
         // aparelhos) — e é por aqui que o valor antigo voltaria depois do reset. Com o
@@ -13946,17 +13889,6 @@ window.AppStore = {
         // similar: usuário Pro virava Free temporariamente após token refresh.
         if (profile.plan) this.currentUser.plan = profile.plan;
         if (profile.planExpiresAt) this.currentUser.planExpiresAt = profile.planExpiresAt;
-        // Theme sync across devices
-        if (profile.theme && window._themeOrder.indexOf(profile.theme) !== -1) {
-          this.currentUser.theme = profile.theme;
-          // Apply remote theme if different from local
-          var localTheme = document.documentElement.getAttribute('data-theme') || 'dark';
-          if (profile.theme !== localTheme) {
-            document.documentElement.setAttribute('data-theme', profile.theme);
-            try { localStorage.setItem('scoreplace_theme', profile.theme); } catch (e) {}
-            window._applyThemeIcon(profile.theme);
-          }
-        }
         // Plan fields
         if (profile.plan) this.currentUser.plan = profile.plan;
         if (profile.planExpiresAt) this.currentUser.planExpiresAt = profile.planExpiresAt;

@@ -7,8 +7,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 require('../js/views/tournament-sumula.js');
 const sumulaSource = fs.readFileSync('js/views/tournament-sumula.js', 'utf8');
-const officialSvg = fs.readFileSync('index.html', 'utf8')
-  .match(/<svg width="48" height="48" viewBox="0 0 24 24".*?<\/svg>/s)[0];
+const officialSvg = fs.readFileSync('icons/logo-podium-print.svg');
 assert(sumulaSource.includes(crypto.createHash('sha256').update(officialSvg).digest('hex')),
   'o vetor embutido declara o hash do SVG canônico do cabeçalho');
 const detailSource = fs.readFileSync('js/views/tournaments.js', 'utf8');

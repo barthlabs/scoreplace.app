@@ -41,8 +41,8 @@
     var _ctaL2 = _sp > 0 ? _cta.slice(_sp + 1) : '';
     return '<section class="landing-hero">' +
       '<div class="landing-hero-content">' +
-        '<div class="landing-logo"><img src="icons/logo-podium.svg?v=0.15.95" alt="scoreplace" width="96" height="72" style="display:inline-block;filter:drop-shadow(0 4px 12px rgba(245,158,11,0.3));"></div>' +
-        '<h1 class="landing-title">scoreplace<span class="landing-dot">.app</span></h1>' +
+        '<div class="landing-logo"><img src="icons/logo-podium.svg?v=2.7.3" alt="" width="96" height="72" style="display:inline-block;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.2));"></div>' +
+        '<h1 class="landing-title"><img src="icons/scoreplace-wordmark-inverse.svg?v=2.7.3" alt="ScorePlace.app" width="262" height="48" style="display:inline-block;max-width:80vw;height:auto;"></h1>' +
         (ver ? '<div class="landing-version" style="font-size:0.78rem;color:var(--text-muted,#9ca3af);margin-top:-4px;margin-bottom:14px;letter-spacing:0.3px;">v' + ver + '</div>' : '') +
         '<p class="landing-tagline">' + t('landing.tagline') + '</p>' +
         '<button class="btn btn-cta btn-success landing-cta-btn landing-cta-hero" data-landing-cta onclick="if(window._spEnterClick)window._spEnterClick(this);else if(window._enterApp)window._enterApp(this);else if(window.openModal)window.openModal(\'modal-login\');">' +

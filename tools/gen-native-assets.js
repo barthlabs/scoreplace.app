@@ -16,15 +16,13 @@ fs.mkdirSync(OUT, { recursive: true });
 // ÍCONE: o pódio full-bleed sobre o gradiente escuro (o SO aplica a máscara/cantos).
 const iconSvg = fs.readFileSync(path.join(ROOT, 'icons/icon-512.svg'), 'utf8');
 
-// SPLASH: fundo escuro sólido + pódio centralizado (menor, com respiro).
-const podium =
-  '<rect x="117" y="267" width="85" height="139" rx="13" fill="#CBD5E1"/>' +
-  '<rect x="213" y="181" width="86" height="225" rx="13" fill="#F59E0B"/>' +
-  '<rect x="310" y="315" width="85" height="91" rx="13" fill="#FB923C"/>' +
-  '<path d="M 256 107 L 267 139 L 299 139 L 272 159 L 283 192 L 256 171 L 229 192 L 240 159 L 213 139 L 245 139 Z" fill="#F59E0B"/>';
+// SPLASH: mesmo símbolo transparente oficial, centralizado sobre o azul do app.
+const podium = [...fs.readFileSync(path.join(ROOT, 'icons/logo-podium.svg'), 'utf8')
+  .matchAll(/<(?:rect|polygon)\b[^>]*\/>/g)].map((match) => match[0]).join('');
 const splashSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732" width="2732" height="2732">' +
-  '<rect width="2732" height="2732" fill="#0f0f23"/>' +
+  '<defs><linearGradient id="blue" x2="0" y2="1"><stop stop-color="#348dbb"/><stop offset="1" stop-color="#145584"/></linearGradient></defs>' +
+  '<rect width="2732" height="2732" fill="url(#blue)"/>' +
   '<g transform="translate(1366,1366) scale(3.0) translate(-256,-256)">' + podium + '</g>' +
   '</svg>';
 

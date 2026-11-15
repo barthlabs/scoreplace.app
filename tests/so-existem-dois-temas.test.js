@@ -1,17 +1,5 @@
-/* SÓ EXISTEM DOIS TEMAS — ESCURO E CLARO (2.0.94)
- * node tests/so-existem-dois-temas.test.js
- *
- * `js/theme.js` diz desde a v2.6.27: _"SÓ 2 temas — escuro e claro (sunset/ocean
- * removidos)"_. Removidos da ESCOLHA — mas o código deles ficou para trás: dois blocos
- * inteiros de variáveis no style.css, regras de balão de dica, e ramos
- * `else if (_theme === 'sunset')` em três views que nunca executaram.
- *
- * Ordem do dono (25/ago/2026), ao me ver escrever "3 temas" num relatório:
- *   _"2 temas, que 3 temas?"_  ·  _"podemos eliminar esse código morto?"_
- *
- * ⛔ Código morto não é só peso — ele MENTE. Eu li o CSS, vi `[data-theme="sunset"]` e
- * reportei três temas ao dono. O próximo leitor erraria igual. Este teste impede a volta.
- */
+/* Há uma única aparência azul ativa. Seletores antigos claro/escuro podem
+ * permanecer para compatibilidade, mas não devem decidir a pintura inicial. */
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
@@ -48,11 +36,15 @@ arquivos.forEach((p) => {
   ok(mortos.length === 0, path.relative(ROOT, p) + ' ainda decide por tema morto: ' + mortos.join(', '));
 });
 
-// ── e o app segue oferecendo os DOIS que existem ─────────────────────────────
+// ── a escolha ativa é única, mesmo com preferência antiga salva ────────────
 const theme = fs.readFileSync(path.join(ROOT, 'js', 'theme.js'), 'utf8');
-ok(/light/.test(theme) && /dark/.test(theme), 'js/theme.js precisa continuar tratando dark e light');
+ok(/setAttribute\('data-theme', 'dark'\)/.test(theme), 'pré-pintura fixa a aparência azul');
+ok(!/scoreplace_theme|localStorage\.getItem\(['"]theme/.test(theme), 'pré-pintura ignora preferência de tema antiga');
+const store = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
+ok(/_themeOrder = \['dark'\]/.test(store), 'runtime oferece uma única aparência');
+ok(!/_toggleTheme\s*=|_applyThemeIcon\s*=/.test(store), 'runtime não oferece alternância');
 const style = fs.readFileSync(path.join(ROOT, 'css', 'style.css'), 'utf8');
-ok(/\[data-theme="light"\]/.test(style), 'css/style.css perdeu o tema CLARO — isso seria regressão de verdade');
+ok(/--sp-blue-top: #348dbb/.test(style) && /--sp-blue-bottom: #145584/.test(style), 'paleta azul oficial presente');
 
-console.log((fail ? '✗' : '✓') + ' so-existem-dois-temas: ' + pass + ' ok, ' + fail + ' falhas');
+console.log((fail ? '✗' : '✓') + ' tema-unico-azul: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

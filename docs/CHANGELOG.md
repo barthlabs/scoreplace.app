@@ -1,3 +1,8 @@
+## 2.7.3 — 14/nov/2026 (tema azul e marca)
+
+- O aplicativo passa a usar uma única aparência azul. O seletor de tema deixa de aparecer, e preferências antigas de claro/escuro não alteram a interface.
+- A marca nova substitui o logo antigo na abertura, na barra superior, na página inicial, na súmula PDF e nos ícones web/PWA e nativos. As telas, a navegação e os fluxos permanecem como estavam.
+
 ## 2.7.2 — 14/nov/2026 (ensaio pré-sorteio repetível)
 
 - O reset de um ensaio pré-sorteio configurado como repetível devolve a fotografia integral do torneio e mantém o ponto de retorno ativo para novos testes. Inscrições continuam congeladas e notificações silenciadas entre os testes. A ação “Encerrar ensaio” restaura a fotografia e libera ambos os controles administrativos.

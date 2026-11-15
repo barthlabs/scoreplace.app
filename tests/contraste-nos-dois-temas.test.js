@@ -220,10 +220,10 @@ console.log('\n== Contraste nos DOIS temas ==');
       'no tema ESCURO ' + cor + ' segue sendo ele mesmo (veio ' + raiz + ')');
     ok(!!(TAB.claro || {})[tk], 'e tem tradução própria no tema claro');
   });
-  // e nenhum token do bloco escuro do style.css pode ter sido alterado
+  // A paleta ativa foi atualizada para azul; a tabela legada segue íntegra.
   const blocoEscuro = style.slice(style.indexOf(':root, [data-theme="dark"]'), style.indexOf('[data-theme="light"] {'));
-  ok(/--text-muted: #98989d/.test(blocoEscuro), 'o --text-muted do tema ESCURO segue #98989d');
-  ok(/--text-main: #ebebf5/.test(blocoEscuro), 'o --text-main do tema ESCURO segue #ebebf5');
+  ok(/--text-muted: #d5eaf2/.test(blocoEscuro), 'o --text-muted da aparência azul segue #d5eaf2');
+  ok(/--text-main: #f3fbfd/.test(blocoEscuro), 'o --text-main da aparência azul segue #f3fbfd');
 })();
 
 // ---------- 8. A TARJA DE LEITURA inverte a polaridade OUTRA VEZ ----------

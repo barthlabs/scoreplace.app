@@ -4988,8 +4988,6 @@ async function simulateLoginSuccess(user) {
     if (_uiSlider) _uiSlider.value = _uiSliderPct;
     var _uiSliderLbl = document.getElementById('profile-ui-scale-val');
     if (_uiSliderLbl) _uiSliderLbl.textContent = _uiSliderPct + '%';
-    var curTheme = document.documentElement.getAttribute('data-theme') || 'dark';
-    if (typeof window._applyProfileThemeUI === 'function') window._applyProfileThemeUI(curTheme);
     // Renderizar emails + celulares vinculados
     if (typeof window._profileRenderAuthProviders === 'function') window._profileRenderAuthProviders();
     if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
@@ -7043,16 +7041,6 @@ function setupProfileModal() {
             '<div class="pf-card" style="--pf-accent:#98989d;">' +
               '<div class="pf-card-h" style="background:rgba(152,152,157,0.10);">' + '🎨 ' + _t('profile.blockLook') + '</div>' +
               '<div class="pf-card-bd">' +
-            // Theme — exclusive buttons
-            '<div class="form-group" style="margin-bottom: 1rem;">' +
-              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">' + _t('profile.labelAppearance') + '</label>' +
-              '<div id="theme-btn-group" style="display:flex;gap:6px;flex-wrap:nowrap;">' +
-                // v1.0.5-beta: idem fix #2 — pills nascem desativadas, _applyProfileThemeUI ativa o atual.
-                // v2.6.27: só 2 temas — Noturno e Claro.
-                '<button type="button" data-theme-val="dark" onclick="window._setProfileTheme(\'dark\')" class="btn btn-sm" style="flex:1;font-size:0.78rem;padding:9px 4px;border-radius:10px;transition:all 0.2s;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">' + _t('profile.themeNight') + '</button>' +
-                '<button type="button" data-theme-val="light" onclick="window._setProfileTheme(\'light\')" class="btn btn-sm" style="flex:1;font-size:0.78rem;padding:9px 4px;border-radius:10px;transition:all 0.2s;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">' + _t('profile.themeLight') + '</button>' +
-              '</div>' +
-            '</div>' +
             // v2.1.91: Tamanho da interface (escala global, proporcional + ajustável)
             '<div class="form-group" style="margin-bottom: 1rem;">' +
               '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">🔎 Tamanho da interface</label>' +
@@ -7208,44 +7196,6 @@ function setupProfileModal() {
           todasEl.checked = false;
         }
       }
-    };
-
-    // ─── Profile Theme Buttons ──────────────────────────────────────────────
-    var _themeColors = { dark: '#6366f1', light: '#f59e0b' }  // só 2 temas (js/theme.js);
-
-    window._setProfileTheme = function(theme) {
-      document.documentElement.setAttribute('data-theme', theme);
-      try { localStorage.setItem('scoreplace_theme', theme); } catch(e) {}
-      if (typeof window._applyThemeIcon === 'function') window._applyThemeIcon(theme);
-      window._applyProfileThemeUI(theme);
-      // v0.17.89: persist theme to Firestore (mesma lógica de _toggleTheme).
-      // Sem isso, mudar tema dentro do perfil só afetava localStorage —
-      // próximo loadUserProfile (token refresh, abrir em outro device,
-      // reload limpando cache) re-aplicava o `profile.theme` salvo
-      // anteriormente no Firestore, sobrescrevendo a escolha do usuário.
-      try {
-        var cu = window.AppStore && window.AppStore.currentUser;
-        if (cu) cu.theme = theme;
-        if (cu && cu.uid && window.FirestoreDB && window.FirestoreDB.saveInterfacePreferences) {
-          window.FirestoreDB.saveInterfacePreferences({ theme: theme }).catch(function() {});
-        }
-      } catch (e) {}
-    };
-
-    window._applyProfileThemeUI = function(theme) {
-      var group = document.getElementById('theme-btn-group');
-      if (!group) return;
-      var btns = group.querySelectorAll('button[data-theme-val]');
-      btns.forEach(function(btn) {
-        var val = btn.getAttribute('data-theme-val');
-        var isActive = (val === theme);
-        var color = _themeColors[val] || '#6366f1';
-        btn.style.background = isActive ? color : 'transparent';
-        btn.style.color = isActive ? '#fff' : 'var(--text-muted)';
-        btn.style.border = isActive ? ('2px solid ' + window._spCor(color, 'borda')) : '1.5px solid var(--border-color)';
-        btn.style.boxShadow = isActive ? ('0 0 10px ' + color + '40') : 'none';
-        btn.style.fontWeight = isActive ? '700' : '500';
-      });
     };
 
     // ─── Presence visibility + mute toggles ─────────────────────────────────

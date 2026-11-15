@@ -6,7 +6,7 @@ const tick = s.slice(s.indexOf('// v1.6.66-beta: auto-expirar prazo'), s.indexOf
 // A fronteira termina no próximo subsistema. A rotina histórica de recuperação de
 // adminEmails saiu: usá-la como sentinela fazia este teste incluir o resto do store
 // e encontrar atribuições de status que não pertencem ao fechamento automático.
-const boot = s.slice(s.indexOf('window._autoCloseExpiredEnrollments = function'), s.indexOf('// ─── Temas:', s.indexOf('window._autoCloseExpiredEnrollments = function')));
+const boot = s.slice(s.indexOf('window._autoCloseExpiredEnrollments = function'), s.indexOf('// ─── Aparência única azul', s.indexOf('window._autoCloseExpiredEnrollments = function')));
 ok(/_requestExpiredEnrollmentClose\(tId, _appT\)/.test(tick), 'tick pede o fecho ao servidor');
 ok(!/commitTournamentTx|\.update\(/.test(tick), 'tick não escreve status no navegador');
 ok(/_requestExpiredEnrollmentClose\(t\.id, t\)/.test(boot), 'fechamento no boot pede a Function');

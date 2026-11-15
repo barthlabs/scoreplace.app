@@ -2,7 +2,7 @@
   "appId": "app.scoreplace",
   "appName": "scoreplace",
   "webDir": "www",
-  "backgroundColor": "#0f0f23",
+  "backgroundColor": "#145584",
   "zoomEnabled": false,
   "server": {
     "hostname": "scoreplace.app",
@@ -14,7 +14,7 @@
       "launchShowDuration": 4000,
       "launchAutoHide": true,
       "launchFadeOutDuration": 300,
-      "backgroundColor": "#0f0f23",
+      "backgroundColor": "#145584",
       "showSpinner": false,
       "splashFullScreen": true,
       "splashImmersive": true

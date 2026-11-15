@@ -2834,7 +2834,7 @@ html, body,
    que o card já usa pra "atenção" (tarja do pendente, tag BYE). Contraste conferido nos
    DOIS temas: no claro o âmbar puro lava, então lá ele escurece.
    [[feedback_contraste_sempre_nos_dois_temas]] */
-.sp-tb-hint{margin-top:6px;font-size:0.58rem;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:#fbbf24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);border-radius:6px;padding:3px 8px;text-align:center;}
+.sp-tb-hint{margin-top:6px;font-size:0.58rem;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:#fff0bf;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);border-radius:6px;padding:3px 8px;text-align:center;}
 [data-theme="light"] .sp-tb-hint{color:#92400e;background:rgba(251,191,36,0.18);border-color:rgba(146,64,14,0.35);}
 /* ⭐ A palavra "SETS" fica UMA vez, colada à esquerda da coluna 1 (ordem do dono). Ela não
    entra no `space-between` do cabeçalho: vira o par da grade, e é a GRADE que continua
