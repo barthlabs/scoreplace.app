@@ -33,7 +33,8 @@ for (const role of ['visitor', 'player', 'org']) {
   const html = show(t, role);
   assert(html.length > 10000, `${role}: detalhe carregado`);
   assert(html.includes('Classificação geral'), `${role}: classificação final pública`);
-  assert(/<details\s+open/.test(html), `${role}: classificação aberta`);
+  assert(/<details(?![^>]*\bopen\b)[^>]*><summary[^>]*>[^<]*Classificação geral/.test(html),
+    `${role}: classificação final recolhida, com seta para expandir`);
   assert(!html.includes('Voltar ao estado antes do sorteio'), `${role}: sem restauração`);
   assert(!html.includes('Resetar (manter inscritos)'), `${role}: sem reset`);
   assert(!html.includes('Avançar de Fase'), `${role}: sem avanço`);

@@ -1,3 +1,5 @@
+// 2.7.4 — A lista de torneios mostra o total confirmado de inscritos.
+// Classificações finais começam fechadas e apresentam duplas em uma linha, separadas por /.
 // 2.7.3 — Tema único azul e nova marca ScorePlace em telas, splash, favicon e instalação.
 // 2.7.2 — O reset de teste pré-sorteio pode ser repetido: cada retorno preserva
 // os inscritos e a configuração fotografados, sem sorteio ou placares.

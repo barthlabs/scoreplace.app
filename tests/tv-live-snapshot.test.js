@@ -50,7 +50,9 @@ const t = { id: 'neon-test', name: 'NEON NIGHTMARE', logo: 'logo.png', courtName
   ] };
 const snapshot = window._tvLiveBuildSnapshot(t, Date.parse('2026-10-22T21:02:10Z'));
 window._categoryFinalPlacements = () => [{ category:'Fem Light', entries:[
-  { pos:5, name:'JOGADORA DEFINIDA' }, { pos:6, name:'OUTRA DEFINIDA' }
+  { pos:5, name:'JOGADORA DEFINIDA' }, { pos:5, name:'PARCEIRA DEFINIDA' }, { pos:6, name:'OUTRA DEFINIDA' }
+], displayEntries:[
+  { pos:5, name:'JOGADORA DEFINIDA / PARCEIRA DEFINIDA' }, { pos:6, name:'OUTRA DEFINIDA' }
 ] }];
 const withPlacements = window._tvLiveBuildSnapshot(t, Date.parse('2026-10-22T21:02:10Z'));
 const scrollHtml = window._tvLiveBodyHtml(withPlacements);
@@ -58,6 +60,8 @@ assert(scrollHtml.indexOf('tv-final-standings') > scrollHtml.lastIndexOf('class=
   'classificação final entra após o último placar no mesmo scroll');
 assert.match(scrollHtml, /CLASSIFICAÇÃO FINAL · POSIÇÕES DEFINIDAS[\s\S]*5º[\s\S]*JOGADORA DEFINIDA/,
   'bloco mostra as colocações definitivas disponíveis');
+assert.match(scrollHtml, /class="tv-final-row"><b>5º<\/b><span>JOGADORA DEFINIDA \/ PARCEIRA DEFINIDA<\/span>/,
+  'a TV também mostra a dupla em uma única linha');
 const customScrollHtml = window._tvLiveBodyHtml({ ...withPlacements, tvLayout:window.ScoreplaceTvLayout.defaults() });
 assert(customScrollHtml.indexOf('tv-final-standings') > customScrollHtml.lastIndexOf('class="tv-result '),
   'o layout configurável usa o mesmo bloco após os placares');

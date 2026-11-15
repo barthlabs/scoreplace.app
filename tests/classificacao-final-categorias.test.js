@@ -80,10 +80,16 @@ t.status = 'finished';
 sections = W._categoryFinalPlacements(t);
 for (const section of sections) {
   assert.equal(section.entries.length, 16, 'classificação final inclui todos os atletas');
+  assert.equal(section.displayEntries.length, 12,
+    'as quatro duplas ocupam uma linha cada e os oito eliminados na classificatória ficam sozinhos');
   for (const pos of [1, 2, 3, 4]) {
     assert.equal(section.entries.filter(row => row.pos === pos).length, 2,
       `dupla da ${pos}ª colocação tem dois atletas`);
+    assert.equal(section.displayEntries.filter(row => row.pos === pos).length, 1,
+      `dupla da ${pos}ª colocação aparece em uma linha`);
   }
+  assert(section.displayEntries.filter(row => row.pos > 4).every(row => !row.isPair),
+    'quem saiu na fase classificatória aparece individualmente');
 }
 const html = W._renderPodiumsAndClassif(t);
 assert.equal((html.match(/Classificação · Categoria/g) || []).length, 2,
@@ -91,9 +97,17 @@ assert.equal((html.match(/Classificação · Categoria/g) || []).length, 2,
 assert(html.includes(a.pairs[1].people[0]) && html.includes(b.pairs[1].people[0]),
   'o terceiro lugar aparece em ambos os pódios');
 assert(!html.includes('tournament-title-awards'), 'os títulos não suprimem a classificação');
+assert(!/<details open/.test(html), 'classificações abaixo dos pódios começam fechadas');
+assert(html.includes('data-classif-name="' + a.pairs[0].label + '"') &&
+       html.includes('data-classif-name="' + b.pairs[0].label + '"'),
+  'os dois integrantes de cada dupla são exibidos na mesma linha com /');
+assert(!html.includes('data-classif-name="' + a.pairs[0].people[0] + '"'),
+  'a primeira integrante da dupla não ganha uma segunda linha isolada');
 const bracketHtml = W._renderPhaseBracket(t, false, '');
 assert.equal((bracketHtml.match(/Classificação · Categoria/g) || []).length, 2,
   'o chaveamento usa as categorias individuais e não a chave técnica misturada');
+assert(bracketHtml.includes('data-classif-name="' + a.pairs[0].label + '"'),
+  'a classificação no chaveamento também apresenta a dupla na mesma linha');
 
 const c = category('Categoria C', 8);
 const eight = { ...t, id:'eight-pairs', status:'active', matches:c.matches,

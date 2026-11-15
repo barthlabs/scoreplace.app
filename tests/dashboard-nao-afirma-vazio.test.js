@@ -127,6 +127,8 @@ console.log('\n§1 O NÚMERO DO CARTÃO');
   if (typeof dashNum === 'function') {
     ok(dashNum(2, confraPelaMetade()) === '…',
       'com 2 de 152 no documento, o cartão NÃO imprime "2" — imprime "…"');
+    ok(dashNum(16, confraPelaMetade(), true) === 16,
+      'o total confirmado pelo resumo aparece mesmo se as partes pesadas ainda não chegaram');
     ok(dashNum(152, confraInteiroSemJogosMeus()) === 152,
       'hidratado, o número volta a ser o número (nada de "…" permanente)');
     ok(dashNum(0, confraInteiroSemJogosMeus()) === 0,
@@ -134,8 +136,8 @@ console.log('\n§1 O NÚMERO DO CARTÃO');
   }
   ok(/\$\{window\._dashNum\(individualCount, t, _ccDash\.confiavel\)\}/.test(SRC),
     'o cartão grande passa `individualCount` pelo filtro (senão a rede não cobre o primeiro render)');
-  ok(/window\._dashNum\(pCount, t\)/.test(SRC),
-    'a linha COMPACTA também — é outra porta pro mesmo número');
+  ok(/window\._dashNum\(pCount, t, _ccCompact\.confiavel\)/.test(SRC),
+    'a linha COMPACTA também usa a contagem confirmada do resumo');
 }
 
 /* ══ §2/§3 · as seções, rodando o _buildMyResultsHtml REAL ════════════════════ */

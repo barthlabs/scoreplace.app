@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.3';
+window.SCOREPLACE_VERSION = '2.7.4';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -15812,7 +15812,8 @@ window._renderClassifBlock = function (t, clMap, opts) {
    * [[project_classificacao_chave_canonica_com_fallback_manual]] */
   var entries = Array.isArray(clMap)
     ? clMap.filter(function (e) { return e && e.name != null && e.pos != null; }).map(function (e) {
-        return { name: String(e.name), pos: e.pos, uids: Array.isArray(e.uids) ? e.uids.slice() : [] };
+        var ids = Array.isArray(e.uids) ? e.uids.slice() : [];
+        return { name: String(e.name), pos: e.pos, uids: ids, isPair: e.isPair === true || ids.length > 1 };
       })
     : Object.keys(clMap || {}).map(function (k) { return { name: k, pos: clMap[k], uids: [] }; });
   if (!entries.length) return '';
@@ -15892,11 +15893,11 @@ window._renderClassifBlock = function (t, clMap, opts) {
         : 'display:flex;align-items:center;gap:8px;padding:4px 12px;';
       return '<div data-classif-name="' + esc(shown) + '" style="' + _rowSt + '">' +
         '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + window._spCor(c, 'color') + ';">' + pos + 'º</span>' +
-        '<span style="font-weight:' + (_me ? '800' : '600') + ';color:' + window._spCor(c, 'color') + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml(shown) + '</span>' +
+        '<span style="font-weight:' + (_me ? '800' : '600') + ';color:' + window._spCor(c, 'color') + ';font-size:0.85rem;flex:1;min-width:0;' + (e.isPair ? 'white-space:nowrap;overflow-x:auto;' : '') + '">' + nameHtml(shown) + '</span>' +
         (pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medals[pos] + '</span>' : '') +
         '</div>';
     }).join('');
-    countLabel = entries.length + ' definidos';
+    countLabel = (typeof opts.definedCount === 'number' ? opts.definedCount : entries.length) + ' definidos';
   }
   /* ⛔ DUAS BARRAS IGUAIS A CINCO CENTÍMETROS UMA DA OUTRA SÃO UMA BARRA DUPLICADA.
    * Relato do dono (12/set/2026, print da chave): _"continua a barra de busca duplicada aqui"_.
@@ -15935,8 +15936,9 @@ window._linePodiumHtml = function (t, lineMatches, title, color) {
 };
 
 // Colocações definitivas por categoria em torneios com classificatória seguida de
-// eliminatória. Uma dupla fixa ocupa uma colocação, mas cada integrante recebe sua
-// própria linha. Quem não avançou fica depois de todas as vagas da eliminatória,
+// eliminatória. Cada integrante mantém a própria colocação para a ficha e as
+// análises; na classificação visível a dupla fixa ocupa uma linha. Quem não
+// avançou fica sozinho depois de todas as vagas da eliminatória,
 // ordenado pelo mesmo comparador usado na transição entre fases.
 window._categoryFinalPlacements = function (t) {
   if (!t || !Array.isArray(t.phases) || t.phases.length < 2 ||
@@ -15961,7 +15963,7 @@ window._categoryFinalPlacements = function (t) {
     var list = obj && Array.isArray(obj.participants) && obj.participants.length ? obj.participants : null;
     if (list) return list.map(function (p) { return { name: p.name || p.displayName || '', uid: p.uid || null }; });
     var uids = (typeof window._slotUidsPositional === 'function') ? window._slotUidsPositional(m, side) : [];
-    return uids.length === 1 ? [{ name: m[side], uid: uids[0] }] :
+    return uids.length ? uids.map(function (uid) { return { name:'', uid:uid }; }) :
       (!uids.length && !t.phases[phaseIndex].fixedPairs ? [{ name: m[side], uid: null }] : []);
   }
   return categories.map(function (category) {
@@ -16060,8 +16062,17 @@ window._categoryFinalPlacements = function (t) {
       person.pos = prev && compare(statsById[prev.key], statsById[person.key]) === 0
         ? prev.pos : pairCount + index + 1;
     });
+    var individualEntries = people.filter(function (person) { return person.pos != null; })
+      .sort(function (a, b) { return a.pos - b.pos; });
+    var displayEntries = placed.filter(function (pair) { return pair.pos != null; }).map(function (pair) {
+      var known = pairs[pair.key];
+      return { key:pair.key, name:pair.name, pos:pair.pos,
+        uids:Array.isArray(pair.uids) ? pair.uids.slice() : [],
+        isPair:!!(known && known.members.length > 1) };
+    }).concat(leftOut.filter(function (person) { return person.pos != null; }))
+      .sort(function (a, b) { return a.pos - b.pos; });
     return { category:category || 'Geral', matches:lm, total:people.length,
-      entries:people.filter(function (person) { return person.pos != null; }).sort(function (a, b) { return a.pos - b.pos; }) };
+      entries:individualEntries, displayEntries:displayEntries };
   }).filter(Boolean);
 };
 
@@ -16072,9 +16083,9 @@ window._renderPodiumsAndClassif = function (t) {
   var categorySections = window._categoryFinalPlacements(t);
   if (categorySections.length) return categorySections.map(function (section) {
     var pod = window._linePodiumHtml(t, section.matches, section.category, '#fbbf24');
-    var cls = window._renderClassifBlock(t, section.entries, {
+    var cls = window._renderClassifBlock(t, section.displayEntries, {
       label: '📊 Classificação · ' + window._safeHtml(section.category), color: '#fbbf24',
-      open: t.status === 'finished', mode: 'individual'
+      open: false, mode: 'individual', definedCount: section.entries.length
     });
     return '<div style="margin-bottom:1.25rem;">' + pod + cls + '</div>';
   }).join('');
@@ -16134,7 +16145,7 @@ window._renderPodiumsAndClassif = function (t) {
       ] });
     }
     var _deCls = (Array.isArray(_deMap) ? _deMap.length : Object.keys(_deMap).length)
-      ? window._renderClassifBlock(t, _deMap, { label: '📊 Classificação geral', color: '#fbbf24', open: true }) : '';
+      ? window._renderClassifBlock(t, _deMap, { label: '📊 Classificação geral', color: '#fbbf24', open: false }) : '';
     if (_dePod || _deCls) return _dePod + _deCls;
   }
 
@@ -16153,7 +16164,7 @@ window._renderPodiumsAndClassif = function (t) {
       var color = tierColors[bk] || palette[i % palette.length];
       var pod = window._linePodiumHtml(t, lm, title, color);
       if (!pod) return '';
-      var cls = window._renderClassifBlock(t, window._classifEntriesFromMatches(t, lm), { label: '📊 Classificação · ' + title, color: color, open: true });
+      var cls = window._renderClassifBlock(t, window._classifEntriesFromMatches(t, lm), { label: '📊 Classificação · ' + title, color: color, open: false });
       return '<div style="margin-bottom:1.25rem;">' + pod + cls + '</div>';
     }).join('');
     if (out) return out;
@@ -16251,7 +16262,7 @@ window._renderPodiumsAndClassif = function (t) {
       classifMap = smap;
     }
   }
-  var classif = classifMap ? window._renderClassifBlock(t, classifMap, { label: '📊 Classificação geral', color: '#fbbf24', open: true }) : '';
+  var classif = classifMap ? window._renderClassifBlock(t, classifMap, { label: '📊 Classificação geral', color: '#fbbf24', open: false }) : '';
   return podium + classif || titleAwardsHtml;
 };
 

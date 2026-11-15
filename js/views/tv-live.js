@@ -776,7 +776,7 @@
     return '<section class="tv-final-standings" aria-label="Classificação final definida"><h3>CLASSIFICAÇÃO FINAL · POSIÇÕES DEFINIDAS</h3>' +
       sections.map(function (section) {
         return '<div class="tv-final-category"><h4>' + esc(section.category) + '</h4>' +
-          section.entries.map(function (entry) {
+          (section.displayEntries || section.entries).map(function (entry) {
             return '<div class="tv-final-row"><b>' + esc(entry.pos) + 'º</b><span>' + esc(entry.name) + '</span></div>';
           }).join('') + '</div>';
       }).join('') + '</section>';

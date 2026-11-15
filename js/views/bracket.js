@@ -8791,9 +8791,9 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       (_bracketIsEliminationTree(t, curPhase) ? '<span data-bracket-presentation-fallback>' + _bracketPresentationControlHtml() + '</span>' : '') + _bracketZoomControlHtml() + '</div>' : '';
   if (categoryFinalSections.length) {
     body += categoryFinalSections.map(function (section) {
-      return window._renderClassifBlock(t, section.entries, {
+      return window._renderClassifBlock(t, section.displayEntries || section.entries, {
         label:'📊 Classificação · ' + window._safeHtml(section.category),
-        color:'#fbbf24', open:false, mode:'individual'
+        color:'#fbbf24', open:false, mode:'individual', definedCount:section.entries.length
       });
     }).join('');
   }

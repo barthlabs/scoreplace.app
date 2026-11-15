@@ -3973,7 +3973,8 @@ function renderDashboard(container) {
       else { statusText = _t('status.open'); statusColor = '#60a5fa'; }
       // CANÔNICO: PESSOAS inscritas (dupla=2), não entradas. Ver _countCompetitors.
       // v2.0.77: pelos acessadores (resumo leve OU documento completo, mesmo número).
-      var pCount = window._cardCompetidores(t).people;
+      var _ccCompact = window._cardCompetidores(t);
+      var pCount = _ccCompact.people;
       var prog = window._cardProgresso(t);
       var dateStr = '';
       if (t.startDate) { try { dateStr = new Date(t.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }); } catch(e) {} }
@@ -4001,7 +4002,7 @@ function renderDashboard(container) {
           '</div>' +
           '<div class="compact-badges" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
             (t.isSandbox ? '<span style="font-size:0.62rem;font-weight:700;padding:2px 6px;border-radius:5px;background:#b91c1c;color:#fff;letter-spacing:0.5px;white-space:nowrap;">🧪 SB</span>' : '') +
-            '<span style="font-size:0.7rem;color:var(--text-muted);">👤 ' + window._dashNum(pCount, t) + '</span>' +
+            '<span style="font-size:0.7rem;color:var(--text-muted);">👤 ' + window._dashNum(pCount, t, _ccCompact.confiavel) + '</span>' +
             (hasDraw && !isFinished ? '<span style="font-size:0.7rem;color:' + window._spCor((prog.pct === 100 ? '#10b981' : '#f59e0b'), 'color') + ';">' + prog.pct + '%</span>' : '') +
             '<span style="font-size:0.68rem;font-weight:600;padding:3px 8px;border-radius:6px;background:rgba(' + statusBadgeBgRgb + ',0.15);color:' + window._spCor(statusColor, 'color') + ';white-space:nowrap;">' + statusText + '</span>' +
             (isOrg ? '<span style="font-size:0.65rem;padding:2px 6px;border-radius:4px;background:rgba(251,191,36,0.15);color:var(--sp-c-fbbf24,#fbbf24);">' + _t('auth.orgShort') + '</span>' : '') +

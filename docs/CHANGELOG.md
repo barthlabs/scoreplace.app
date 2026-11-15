@@ -1,3 +1,9 @@
+## 2.7.4 — 15/nov/2026 (inscritos e classificação)
+
+- A lista compacta mostra o total confirmado de inscritos também em torneios encerrados antigos, incluindo Duplas Mistas Sorteadas e BT Corpus Christi 2026.
+- As classificações abaixo dos pódios começam fechadas e podem ser abertas pela seta.
+- Na classificação final, cada dupla ocupa uma linha com os nomes separados por `/`; quem caiu na fase classificatória permanece em linha individual. A colocação individual continua disponível nas fichas e análises.
+
 ## 2.7.3 — 14/nov/2026 (tema azul e marca)
 
 - O aplicativo passa a usar uma única aparência azul. O seletor de tema deixa de aparecer, e preferências antigas de claro/escuro não alteram a interface.
