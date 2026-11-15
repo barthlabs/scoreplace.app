@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "backendCommit": "95f238fd4d60f3e5e7f7183065c55064644fa5a8",
-  "scopeNote": "Bloqueio do reset de ensaio e encerramento do torneio contínuo após o último resultado, com resumo público e desempates jogados.",
+  "backendCommit": "4ebd29eb0056fa9ee43f997a9b8b2394f0aaebc2",
+  "scopeNote": "Configuração de torneio e cores da data, edição durante ensaio e regra de desempate antes do sorteio; drawRound usa o vendor atualizado.",
   "functions": [
-    "resetTournamentToEnrollment",
-    "applyMatchResult",
-    "applyQueuedResult",
-    "tournamentSummary"
+    "createTournament",
+    "updateTournamentConfiguration",
+    "applyTournamentFormat",
+    "drawRound"
   ]
 }

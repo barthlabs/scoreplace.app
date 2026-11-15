@@ -2,14 +2,14 @@
   "schema": 1,
   "entries": {
     "drawRound": {
-      "backendCommit": "92b7c240a189c4612dcd65dea28ba6dcb48f9e2d",
-      "deployedAt": "2026-11-12T14:00:40.346Z",
+      "backendCommit": "4ebd29eb0056fa9ee43f997a9b8b2394f0aaebc2",
+      "deployedAt": "2026-11-15T14:08:57.389Z",
       "result": "success",
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "f44035b0d2d96704063afba4938f9745982dc8c1",
-      "deployedAt": "2026-11-13T19:30:32.517Z",
+      "backendCommit": "4ebd29eb0056fa9ee43f997a9b8b2394f0aaebc2",
+      "deployedAt": "2026-11-15T14:08:57.389Z",
       "result": "success",
       "mode": "only"
     },
@@ -38,8 +38,8 @@
       "mode": "only"
     },
     "createTournament": {
-      "backendCommit": "4ffa76ea3f887de9a985f6a93aa104df7d532a72",
-      "deployedAt": "2026-11-09T22:31:20.324Z",
+      "backendCommit": "4ebd29eb0056fa9ee43f997a9b8b2394f0aaebc2",
+      "deployedAt": "2026-11-15T14:08:57.389Z",
       "result": "success",
       "mode": "only"
     },
@@ -98,8 +98,8 @@
       "mode": "only"
     },
     "applyTournamentFormat": {
-      "backendCommit": "4ffa76ea3f887de9a985f6a93aa104df7d532a72",
-      "deployedAt": "2026-11-09T22:31:20.324Z",
+      "backendCommit": "4ebd29eb0056fa9ee43f997a9b8b2394f0aaebc2",
+      "deployedAt": "2026-11-15T14:08:57.389Z",
       "result": "success",
       "mode": "only"
     },
