@@ -91,7 +91,7 @@ console.log('▸ a fiação nas telas (o que o dono pediu, onde ele vê)');
                           tour.indexOf('_isAutoClosed && window._isAutoClosed(t)) {') + 1600);
   ok(!/openEditModal|deleteTournamentFunction|Comunicados|finishTournament/.test(bloco),
      'e NENHUMA outra ferramenta aparece junto (editar/apagar/comunicar/encerrar)');
-  ok(/isFinished && !\(window\._isAutoClosed/.test(tour),
+  ok(/let podiumHtml = \(tournamentId && !\(window\._isAutoClosed && window\._isAutoClosed\(t\)\)/.test(tour),
      'o pódio não é desenhado pra torneio encerrado por inatividade');
 
   const dash = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboard.js'), 'utf8');

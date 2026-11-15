@@ -49,6 +49,24 @@ const t = { id: 'neon-test', name: 'NEON NIGHTMARE', logo: 'logo.png', courtName
     match(7, 'Quadra 7', 'PHANTOM', 'VORTEX', { winner: 'p2', scoreP1: 1, scoreP2: 6, resultAt: '2026-10-22T19:00:00Z' })
   ] };
 const snapshot = window._tvLiveBuildSnapshot(t, Date.parse('2026-10-22T21:02:10Z'));
+window._categoryFinalPlacements = () => [{ category:'Fem Light', entries:[
+  { pos:5, name:'JOGADORA DEFINIDA' }, { pos:6, name:'OUTRA DEFINIDA' }
+] }];
+const withPlacements = window._tvLiveBuildSnapshot(t, Date.parse('2026-10-22T21:02:10Z'));
+const scrollHtml = window._tvLiveBodyHtml(withPlacements);
+assert(scrollHtml.indexOf('tv-final-standings') > scrollHtml.lastIndexOf('class="tv-result '),
+  'classificação final entra após o último placar no mesmo scroll');
+assert.match(scrollHtml, /CLASSIFICAÇÃO FINAL · POSIÇÕES DEFINIDAS[\s\S]*5º[\s\S]*JOGADORA DEFINIDA/,
+  'bloco mostra as colocações definitivas disponíveis');
+const customScrollHtml = window._tvLiveBodyHtml({ ...withPlacements, tvLayout:window.ScoreplaceTvLayout.defaults() });
+assert(customScrollHtml.indexOf('tv-final-standings') > customScrollHtml.lastIndexOf('class="tv-result '),
+  'o layout configurável usa o mesmo bloco após os placares');
+window._categoryFinalPlacements = () => [{ category:'Fem Light', entries:[
+  { pos:3, name:'JOGADORA DEFINIDA' }
+] }];
+assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot(t, Date.parse('2026-10-22T21:02:10Z'))),
+  /3º[\s\S]*JOGADORA DEFINIDA/, 'bloco acompanha a nova classificação a cada atualização');
+delete window._categoryFinalPlacements;
 const roundLogo = window._tvLiveBuildSnapshot({ ...t, logoShape:'circle', logoRadius:50 },
   Date.parse('2026-10-22T21:02:10Z'));
 assert.equal(roundLogo.logoRadius,'50%','a TV recebe o formato circular cadastrado');
@@ -730,7 +748,8 @@ const smoothRoot = { querySelector: selector => selector === '.tv-results-list' 
 Object.defineProperty(smoothRoot, 'innerHTML', { set(markup) {
   const day = (markup.match(/data-result-day="([^"]+)/) || [])[1] || '';
   const latest = markup.match(/class="tv-result tv-result-latest" data-result-id="([^"]*)" data-result-at="([^"]*)"/);
-  smoothList = makeList(day, (markup.match(/class="tv-result(?: tv-result-latest)?"/g) || []).length,
+  smoothList = makeList(day, (markup.match(/class="tv-result(?: tv-result-latest)?"/g) || []).length +
+    (markup.match(/class="tv-final-standings"/g) || []).length,
     150, latest ? latest[1] : '', latest ? Number(latest[2]) : 0);
 } });
 const smoothDocument = { visibilityState:'visible', fonts:null,
@@ -749,6 +768,12 @@ const resultMarkup = (day, count, latestId = '', latestAt = 0) => '<div class="t
   '<div class="tv-result"></div>'.repeat(count - 1) + '</div>';
 smoothWindow.__tvReplaceMarkup(resultMarkup('2026-10-23', 4));
 assert.equal(smoothList.nodes.length, 8, 'somente resultados que excedem a área recebem cópia visual');
+const withFinalBlock = resultMarkup('2026-10-23', 2).replace(/<\/div>$/,
+  '<section class="tv-final-standings"></section></div>');
+smoothWindow.__tvReplaceMarkup(withFinalBlock);
+assert.equal(smoothList.nodes.length, 6,
+  'o bloco final também é copiado no fim do ciclo antes de voltar ao primeiro placar');
+smoothWindow.__tvReplaceMarkup(resultMarkup('2026-10-23', 4));
 for (let i = 0; i < 100; i++) { frameNow += 16; frames.shift()(); }
 assert(Math.abs(smoothList.scrollTop - 35.2) < .01, '100 quadros acumulam 35,2 px sem degrau de 22 px');
 smoothWindow.__tvReplaceMarkup(resultMarkup('2026-10-23', 4));

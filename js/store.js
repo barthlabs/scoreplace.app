@@ -15662,11 +15662,17 @@ window._classifIsComplete = function (matches, clMap) {
 // exatamente esse o defeito da 1.7.46. O rótulo só é usado para EXIBIÇÃO; a chave da
 // classificação é o conjunto completo de UIDs do slot, porque a dupla não tem uid próprio.
 //
-// ⚠️ Só devolve com a classificação FECHADA (`_classifIsComplete`). Ordem do dono:
-// "classificacao final entre os participantes apenas". Torneio em andamento não publica
-// colocação na ficha de ninguém — meia-classificação vira promessa que muda sozinha.
+// Uma posição já definida na eliminatória pode aparecer antes do encerramento; o
+// restante dos formatos continua exigindo classificação completa.
 window._placementInTournament = function (t, uid) {
   if (!t || !uid) return null;
+  if (typeof window._categoryFinalPlacements === 'function') {
+    var sections = window._categoryFinalPlacements(t);
+    for (var s = 0; s < sections.length; s++) {
+      var mine = sections[s].entries.filter(function (entry) { return entry.uids.indexOf(uid) !== -1; })[0];
+      if (mine) return { pos:mine.pos, total:sections[s].total, time:mine.name, category:sections[s].category };
+    }
+  }
   var ms = (typeof window._collectAllMatches === 'function')
     ? (window._collectAllMatches(t) || []) : (Array.isArray(t.matches) ? t.matches : []);
   if (!ms.length) return null;
@@ -15996,17 +16002,158 @@ window._linePodiumHtml = function (t, lineMatches, title, color) {
   });
 };
 
+// Colocações definitivas por categoria em torneios com classificatória seguida de
+// eliminatória. Uma dupla fixa ocupa uma colocação, mas cada integrante recebe sua
+// própria linha. Quem não avançou fica depois de todas as vagas da eliminatória,
+// ordenado pelo mesmo comparador usado na transição entre fases.
+window._categoryFinalPlacements = function (t) {
+  if (!t || !Array.isArray(t.phases) || t.phases.length < 2 ||
+      t.phases[0].kind !== 'classification' ||
+      !t.phases.some(function (p) { return p && p.kind === 'elimination'; }) ||
+      typeof window._phasesEngine === 'undefined' ||
+      typeof window._computeMonarchStandings !== 'function') return [];
+  var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
+  if (!Array.isArray(all) || !all.length) return [];
+  var phaseIndex = -1;
+  t.phases.forEach(function (p, i) { if (p && p.kind === 'elimination') phaseIndex = i; });
+  var elim = all.filter(function (m) { return m && Number(m.phaseIndex || 0) === phaseIndex &&
+    !m.isMonarch && m.bracket !== 'group'; });
+  if (!elim.length) return [];
+  if (!all.some(function (m) { return m && Number(m.phaseIndex || 0) === 0 && m.isMonarch; })) return [];
+  var categories = [];
+  elim.forEach(function (m) { var c = String(m.category || ''); if (categories.indexOf(c) < 0) categories.push(c); });
+  var raw = window._phasesEngine.prevPhaseGroups(Object.assign({}, t, { matches: all }));
+  function idOf(row) { return row && row.uid ? 'uid:' + String(row.uid) : 'name:' + String(row && row.name || ''); }
+  function members(m, side) {
+    var obj = m[side === 'p1' ? 'team1Obj' : 'team2Obj'];
+    var list = obj && Array.isArray(obj.participants) && obj.participants.length ? obj.participants : null;
+    if (list) return list.map(function (p) { return { name: p.name || p.displayName || '', uid: p.uid || null }; });
+    var uids = (typeof window._slotUidsPositional === 'function') ? window._slotUidsPositional(m, side) : [];
+    return uids.length === 1 ? [{ name: m[side], uid: uids[0] }] :
+      (!uids.length && !t.phases[phaseIndex].fixedPairs ? [{ name: m[side], uid: null }] : []);
+  }
+  return categories.map(function (category) {
+    var lm = elim.filter(function (m) { return String(m.category || '') === category; });
+    var gs = raw.filter(function (g) { return g && String(g.category || '') === category; });
+    if (!gs.length || gs.some(function (g) { return !(g.matches || []).some(function (m) { return m.isMonarch; }); })) return null;
+    var standings = [];
+    gs.forEach(function (g) {
+      window._computeMonarchStandings(g, t, category).forEach(function (s) { if (!s.isGhost) standings.push(s); });
+    });
+    var primary = ['games_diff', 'wins'].indexOf(t.rankingPrimary) >= 0 ? t.rankingPrimary : 'points';
+    var compareOpts = { primaryField:primary, tiebreakers:Array.isArray(t.tiebreakers) ? t.tiebreakers : undefined };
+    if (compareOpts.tiebreakers && compareOpts.tiebreakers.indexOf('confronto_direto') >= 0 &&
+        typeof window._standingsBuildH2H === 'function') {
+      var groupMatches = gs.reduce(function (out, g) { return out.concat(g.matches || []); }, []);
+      compareOpts.h2h = window._standingsBuildH2H(groupMatches, function (m, side) {
+        var uids = (typeof window._slotUids === 'function') ? window._slotUids(m, side) : [];
+        return uids.length ? uids : (m[side === 'p1' ? 'team1' : 'team2'] || []).filter(Boolean);
+      });
+    }
+    var compare = typeof window._standingsCompareConfig === 'function'
+      ? function (a, b) { return window._standingsCompareConfig(a, b, compareOpts); }
+      : function (a, b) { return window._standingsCompare(a, b, false); };
+    standings.sort(compare);
+    var byId = {}, statsById = {}, people = [];
+    standings.forEach(function (row) {
+      var id = idOf(row);
+      if (!row.name || byId[id]) return;
+      var entry = { key:id, name:row.name, uids:row.uid ? [row.uid] : [], pos:null };
+      byId[id] = entry; statsById[id] = row; people.push(entry);
+    });
+    var pairs = {}, pairCount = 0;
+    lm.forEach(function (m) { ['p1', 'p2'].forEach(function (side) {
+      var label = m[side];
+      if (!label || label === 'TBD' || label === 'BYE') return;
+      var uids = (typeof window._slotUids === 'function') ? window._slotUids(m, side) : [];
+      var key = window._classifEntryKey(label, uids);
+      if (!key) return;
+      var found = members(m, side);
+      if (pairs[key]) { if (!pairs[key].members.length && found.length) pairs[key].members = found; return; }
+      pairs[key] = { members:found, label:label }; pairCount++;
+    }); });
+    var placed = window._classifEntriesFromMatches(t, lm);
+    // Na eliminatória simples, a rodada de eliminação define a faixa. Dentro
+    // da mesma rodada, aplica o saldo de games escolhido pelo organizador;
+    // saldos iguais preservam a mesma posição, sem critério inventado.
+    if (t.rankingPrimary === 'games_diff' && Array.isArray(t.tiebreakers) && !t.tiebreakers.length &&
+        t.phases[phaseIndex].elimination && t.phases[phaseIndex].elimination.bracketType === 'single') {
+      var performance = {}, exitRound = {};
+      lm.forEach(function (m) {
+        if (!m || !m.winner || m.isBye || m.isThirdPlace || m.bracket === 'thirdplace') return;
+        var side = window._matchWinnerSide(m);
+        if (side !== 1 && side !== 2) return;
+        var k1 = window._classifEntryKey(m.p1, window._slotUids(m, 'p1'));
+        var k2 = window._classifEntryKey(m.p2, window._slotUids(m, 'p2'));
+        var totals = [0, 0];
+        if (Array.isArray(m.sets) && m.sets.length) m.sets.forEach(function (set) {
+          if (!set || set.superTiebreak) return;
+          totals[0] += Number(set.gamesP1) || 0; totals[1] += Number(set.gamesP2) || 0;
+        });
+        else { totals[0] = Number(m.scoreP1) || 0; totals[1] = Number(m.scoreP2) || 0; }
+        performance[k1] = (performance[k1] || 0) + totals[0] - totals[1];
+        performance[k2] = (performance[k2] || 0) + totals[1] - totals[0];
+        var loser = side === 1 ? k2 : k1;
+        exitRound[loser] = Math.max(exitRound[loser] || 0, Number(m.round) || 1);
+      });
+      var byRound = {};
+      placed.forEach(function (pair) {
+        if (pair.pos < 5 || !exitRound[pair.key]) return;
+        var round = exitRound[pair.key];
+        (byRound[round] || (byRound[round] = [])).push(pair);
+      });
+      Object.keys(byRound).forEach(function (round) {
+        var group = byRound[round], base = Math.min.apply(null, group.map(function (p) { return p.pos; }));
+        group.sort(function (a, b) { return (performance[b.key] || 0) - (performance[a.key] || 0); });
+        group.forEach(function (pair, index) {
+          pair.pos = index && (performance[pair.key] || 0) === (performance[group[index - 1].key] || 0)
+            ? group[index - 1].pos : base + index;
+        });
+      });
+    }
+    placed.forEach(function (pair) {
+      var p = pairs[pair.key];
+      if (!p || pair.pos == null) return;
+      p.members.forEach(function (member) {
+        var person = byId[idOf(member)];
+        if (person) person.pos = pair.pos;
+      });
+    });
+    var advancing = {};
+    Object.keys(pairs).forEach(function (key) { pairs[key].members.forEach(function (member) { advancing[idOf(member)] = true; }); });
+    var leftOut = people.filter(function (person) { return !advancing[person.key]; });
+    leftOut.sort(function (a, b) { return compare(statsById[a.key], statsById[b.key]); });
+    leftOut.forEach(function (person, index) {
+      var prev = leftOut[index - 1];
+      person.pos = prev && compare(statsById[prev.key], statsById[person.key]) === 0
+        ? prev.pos : pairCount + index + 1;
+    });
+    return { category:category || 'Geral', matches:lm, total:people.length,
+      entries:people.filter(function (person) { return person.pos != null; }).sort(function (a, b) { return a.pos - b.pos; }) };
+  }).filter(Boolean);
+};
+
 // FUNÇÃO CANÔNICA: pódio(s) + classificação(ões). Usada na página do torneio (encerrado).
 window._renderPodiumsAndClassif = function (t) {
   if (typeof window._classifSearchReset === 'function') window._classifSearchReset();
   if (!t) return '';
-  // Torneios novos publicam os títulos derivados da configuração e dos resultados.
-  // A visualização histórica abaixo permanece exclusiva dos torneios anteriores.
+  var categorySections = window._categoryFinalPlacements(t);
+  if (categorySections.length) return categorySections.map(function (section) {
+    var pod = window._linePodiumHtml(t, section.matches, section.category, '#fbbf24');
+    var cls = window._renderClassifBlock(t, section.entries, {
+      label: '📊 Classificação · ' + window._safeHtml(section.category), color: '#fbbf24',
+      open: t.status === 'finished', mode: 'individual'
+    });
+    return '<div style="margin-bottom:1.25rem;">' + pod + cls + '</div>';
+  }).join('');
+  // O título só é fallback quando não há jogos classificáveis. A presença do
+  // campeão não pode interromper o pódio e a classificação dos demais.
+  var titleAwardsHtml = '';
   if (t.rulesContractVersion >= 2 && Array.isArray(t.titleAwards) && t.titleAwards.length) {
     var escapeTitle = function (value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     }); };
-    return '<div class="tournament-title-awards" style="display:grid;gap:10px;margin:12px 0;">' + t.titleAwards.map(function (award) {
+    titleAwardsHtml = '<div class="tournament-title-awards" style="display:grid;gap:10px;margin:12px 0;">' + t.titleAwards.map(function (award) {
       var scope = award.scope === 'group' ? 'Campeão do grupo' : award.scope === 'category' ? 'Campeão da categoria' :
         award.scope === 'line' ? 'Campeão da chave' : 'Campeão geral';
       var label = award.label ? ' · ' + escapeTitle(award.label) : '';
@@ -16173,7 +16320,7 @@ window._renderPodiumsAndClassif = function (t) {
     }
   }
   var classif = classifMap ? window._renderClassifBlock(t, classifMap, { label: '📊 Classificação geral', color: '#fbbf24', open: true }) : '';
-  return podium + classif;
+  return podium + classif || titleAwardsHtml;
 };
 
 // DEPRECATED (v3.1.33): substituída por _renderPodiumsAndClassif (que JÁ inclui o pódio +

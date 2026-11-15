@@ -3935,7 +3935,9 @@ function renderTournaments(container, tournamentId = null) {
         // v2.1.16: pódio do torneio encerrado agora vive no TOPO do card (logo
         // abaixo do nome), não dentro de actionsHtml. Declarado no escopo do card.
         // A classificação é pública: a mesma fonte canônica atende todos os visitantes.
-        let podiumHtml = (tournamentId && isFinished && !(window._isAutoClosed && window._isAutoClosed(t)) &&
+        let podiumHtml = (tournamentId && !(window._isAutoClosed && window._isAutoClosed(t)) &&
+            (isFinished || (typeof window._categoryFinalPlacements === 'function' &&
+              window._categoryFinalPlacements(t).some(function (section) { return section.entries.length; }))) &&
             typeof window._renderPodiumsAndClassif === 'function') ? window._renderPodiumsAndClassif(t) : '';
         const hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
 

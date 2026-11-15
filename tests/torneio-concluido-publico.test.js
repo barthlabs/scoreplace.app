@@ -27,7 +27,8 @@ function show(t, role) {
 const t = H.simulate(H.buildDupla(6));
 Object.assign(t, { id: 'finished-fixture', name: 'Torneio concluído', sport: 'Beach Tennis',
   organizerEmail: 'org@scoreplace.test', status: 'finished', tournamentStarted: 123,
-  allowPrePublicationRestore: true });
+  allowPrePublicationRestore: true, rulesContractVersion: 2,
+  titleAwards: [{ scope:'overall', winnerName:'Campeão' }] });
 for (const role of ['visitor', 'player', 'org']) {
   const html = show(t, role);
   assert(html.length > 10000, `${role}: detalhe carregado`);

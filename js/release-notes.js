@@ -1,6 +1,9 @@
 // 2.7.2 — O reset de teste pré-sorteio pode ser repetido: cada retorno preserva
 // os inscritos e a configuração fotografados, sem sorteio ou placares.
 // Encerrar o ensaio restaura o pré-sorteio e libera as inscrições e notificações.
+// Pódio e classificação completa por categoria mostram todos os atletas no fim.
+// Posições definitivas aparecem durante o torneio e no scroll da TV após os placares.
+// Em cada rodada eliminatória, o saldo de games ordena quem caiu ali; empates seguem empatados.
 // 2.7.1 — A classificação final fica visível para todos em torneios concluídos.
 // Controles de operação e de teste somem; reset do ensaio é bloqueado após a publicação.
 // Classificatória Rei/Rainha e eliminatórias da mesma grade contam como um torneio.

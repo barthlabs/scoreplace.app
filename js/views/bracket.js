@@ -8094,6 +8094,8 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   var curPhase = (_viewPhaseIdx != null) ? _viewPhaseIdx : _realCur;
   var phaseCfg = (t.phases && t.phases[curPhase]) || {};
   var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === curPhase; });
+  var categoryFinalSections = curPhase === _realCur && curPhase > 0 &&
+    typeof window._categoryFinalPlacements === 'function' ? window._categoryFinalPlacements(t) : [];
 
   /* ⭐ "EU TENHO JOGO NESTA FASE?" — decidido AQUI, no MODELO, e lido pelo alvo da rolagem de
    * entrada (`_alvoDeEntrada`). É ele que autoriza o custo de montar os lotes adiados: sem
@@ -8380,6 +8382,10 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   }
 
   function _tierClassifHtml(bracketKey, color) {
+    // A classificação técnica por chave mistura categorias que compartilham
+    // `bracket:'main'`. O quadro por categoria abaixo usa os mesmos resultados
+    // e inclui quem ficou na fase Rei/Rainha.
+    if (categoryFinalSections.length) return '';
     var lm = _lineMatches(bracketKey);
     /* ⛔⛔ CONTRADIÇÃO NA LINHA: não se pinta, se acusa e se relê. Ver `_contradicaoNaLinha`. */
     var _contra = _contradicaoNaLinha(bracketKey, lm);
@@ -8783,6 +8789,14 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   var zoomToolbar = (!_isMonarchPhase && !_isLeaguePhase && !_isGroupPhase)
     ? '<div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">' +
       (_bracketIsEliminationTree(t, curPhase) ? '<span data-bracket-presentation-fallback>' + _bracketPresentationControlHtml() + '</span>' : '') + _bracketZoomControlHtml() + '</div>' : '';
+  if (categoryFinalSections.length) {
+    body += categoryFinalSections.map(function (section) {
+      return window._renderClassifBlock(t, section.entries, {
+        label:'📊 Classificação · ' + window._safeHtml(section.category),
+        color:'#fbbf24', open:false, mode:'individual'
+      });
+    }).join('');
+  }
   return '<div>' + header + zoomToolbar + body + '</div>';
 }
 window._renderPhaseBracket = _renderPhaseBracket;

@@ -644,6 +644,7 @@
         'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(qrUrl) + '&bgcolor=ffffff&color=1a1e2e&margin=10',
       courts: courtCards, nextGame: nextGame, nextGames: nextGames, waitingForTie:!!(nextSelection && nextSelection.waitingForTie),
       rankings: rankingSections(t, matches, teams), results: results, resultDay: resultDay,
+      finalPlacements: typeof window._categoryFinalPlacements === 'function' ? window._categoryFinalPlacements(t) : [],
       matchChoices: matchChoices, selectedMatches: selectedMatches, lineChoices: lineChoices, lineStandings: lineStandings,
       brackets: bracketSections(t, matches),
       timing: timing };
@@ -769,6 +770,17 @@
     if (isEventBoard(snapshot)) return '<span class="tv-qr-tournament-logo tv-qr-tournament-logo-event" role="img" aria-label="Logo do torneio"><img class="tv-qr-tournament-logo-event-image" src="' + esc(snapshot.logo) + '" alt=""></span>';
     return '<img class="tv-qr-tournament-logo" src="' + esc(snapshot.logo) + '" alt="Logo do torneio">';
   }
+  function finalPlacementsHtml(snapshot) {
+    var sections = (snapshot.finalPlacements || []).filter(function (s) { return s.entries && s.entries.length; });
+    if (!sections.length) return '';
+    return '<section class="tv-final-standings" aria-label="Classificação final definida"><h3>CLASSIFICAÇÃO FINAL · POSIÇÕES DEFINIDAS</h3>' +
+      sections.map(function (section) {
+        return '<div class="tv-final-category"><h4>' + esc(section.category) + '</h4>' +
+          section.entries.map(function (entry) {
+            return '<div class="tv-final-row"><b>' + esc(entry.pos) + 'º</b><span>' + esc(entry.name) + '</span></div>';
+          }).join('') + '</div>';
+      }).join('') + '</section>';
+  }
   function bodyHtml(snapshot) {
     var theme = snapshot.theme || { background: '#060d1a', primary: '#0d1b2e', secondary: '#0d1b2e', title: '#ffffff' };
     var logoRadius = /^(?:[0-9]|[1-4][0-9]|50)%$/.test(String(snapshot.logoRadius || '')) ? snapshot.logoRadius : '14%';
@@ -781,7 +793,7 @@
       '<aside class="tv-sidebar"><section class="tv-rankings"><h2>CLASSIFICAÇÃO</h2>' +
       (snapshot.rankings.length ? snapshot.rankings.map(function (section) { return rankingHtml(section, snapshot.rankings.length > 1); }).join('') : '<p>Classificação em formação</p>') +
       '</section><section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" data-result-day="' + esc(snapshot.resultDay) + '">' +
-      snapshot.results.map(resultHtml).join('') +
+      snapshot.results.map(resultHtml).join('') + finalPlacementsHtml(snapshot) +
       '</div></div><div class="tv-qr">' + qrTournamentLogoHtml(snapshot) + '<img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para escolher App Store, Google Play ou versão web">' + qrBrandHtml() + '</div>' +
       '</section></aside></main></div>';
   }
@@ -830,7 +842,7 @@
     var qrOverlap = resultBox.visible && qrBox.visible && qrBox.y < resultBox.y + resultBox.h && qrBox.y + qrBox.h > resultBox.y
       ? Math.max(0, Math.min(resultBox.x + resultBox.w, qrBox.x + qrBox.w) - Math.max(resultBox.x, qrBox.x)) : 0;
     var qrReserve = qrOverlap ? Math.min(45, Math.ceil(qrOverlap / resultBox.w * 100) + 2) : 0;
-    var results = '<section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" style="padding-right:' + qrReserve + '%" data-result-day="' + esc(snapshot.resultDay) + '">' + snapshot.results.map(resultHtml).join('') + '</div></div></section>';
+    var results = '<section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" style="padding-right:' + qrReserve + '%" data-result-day="' + esc(snapshot.resultDay) + '">' + snapshot.results.map(resultHtml).join('') + finalPlacementsHtml(snapshot) + '</div></div></section>';
     var qr = '<div class="tv-qr' + (snapshot.logo ? ' tv-qr-has-logo' : '') + (eventBoard ? ' tv-qr-event' : '') + '">' + qrTournamentLogoHtml(snapshot) + '<img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para abrir o Scoreplace">' + qrBrandHtml() + '</div>';
     function liveGame(id) {
       var game = snapshot.selectedMatches && snapshot.selectedMatches[id];
@@ -966,7 +978,7 @@
       'while(box.scrollHeight>box.clientHeight+1&&size>10){size=Math.max(10,size-.5);names.forEach(function(el){el.style.fontSize=size+"px";});}});fitSeriesNames();}' +
       'function ensureCycle(){if(window.__tvGeneration!==gen)return;var list=document.querySelector(".tv-results-list");resultCycle=0;if(!list)return;' +
       'list.querySelectorAll("[data-tv-repeat]").forEach(function(node){node.remove();});' +
-      'var originals=list.querySelectorAll(".tv-result");if(!originals.length||list.scrollHeight-list.clientHeight<=2||' +
+      'var originals=list.querySelectorAll(".tv-result,.tv-final-standings");if(!originals.length||list.scrollHeight-list.clientHeight<=2||' +
       '(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches))return;' +
       'originals.forEach(function(node){var copy=node.cloneNode(true);if(copy.classList)copy.classList.remove("tv-result-pinned");copy.setAttribute("data-tv-repeat","");copy.setAttribute("aria-hidden","true");' +
       'copy.querySelectorAll("[id]").forEach(function(child){child.removeAttribute("id");});list.appendChild(copy);});' +
@@ -996,7 +1008,7 @@
       'if(fallback)fallback.scrollTop=resultPosition;syncResultPin();resultAt=Date.now();return;}' +
       'var draft=document.createElement("div");draft.innerHTML=html;' +
       'var incoming=draft.querySelector(".tv-results-list"),same=!!(old&&incoming&&day===incoming.getAttribute("data-result-day")&&' +
-      'Array.from(old.querySelectorAll(".tv-result:not([data-tv-repeat])")).map(function(n){return n.outerHTML.replace(/\\s+tv-result-pinned\\b/g,"");}).join("")===incoming.innerHTML);' +
+      'Array.from(old.children).filter(function(n){return !n.hasAttribute("data-tv-repeat");}).map(function(n){return n.outerHTML.replace(/\\s+tv-result-pinned\\b/g,"");}).join("")===incoming.innerHTML);' +
       'if(same)incoming.replaceWith(old);root.replaceChildren.apply(root,Array.from(draft.childNodes));fit();prepareBoxLoops();' +
       'if(!same)ensureCycle();var list=root.querySelector(".tv-results-list");' +
       'if(!same){resultPosition=list&&list.getAttribute("data-result-day")===day&&resultCycle?top%resultCycle:0;' +
@@ -1114,6 +1126,7 @@
     '.tv-upcoming-item .tv-result-match{height:auto;min-height:4.3vw;flex:1}.tv-upcoming-item .tv-result-side{min-height:4.3vw}' +
     '.tv-upcoming-series{display:grid;gap:.15vw}.tv-upcoming-series-game{display:grid;grid-template-columns:4.2vw minmax(0,1fr) 1vw minmax(0,1fr);gap:.25vw;align-items:center;min-height:2.25vw;color:#fff}.tv-upcoming-series-game>b{white-space:nowrap;font-size:clamp(.7rem,.75vw,1rem)}.tv-upcoming-series-game span{min-width:0}.tv-upcoming-series-game span span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(.7rem,.78vw,1.04rem);font-weight:750}.tv-upcoming-series-right{text-align:right}.tv-upcoming-series-game i{font-style:normal;text-align:center;color:#aaa}' +
     '.tv-results-main>h2{color:#fbbf24;font-size:clamp(.9rem,1.2vw,1.5rem);line-height:normal}' +
+    '.tv-final-standings{border:1px solid #b78a25;border-radius:.5vw;background:#122238;padding:.55vw;margin:.65vw 0;color:#fff}.tv-final-standings h3{font-size:clamp(.85rem,1vw,1.35rem);color:#fbbf24;margin:0 0 .45vw}.tv-final-category h4{color:#7dd3fc;font-size:clamp(.75rem,.9vw,1.15rem);margin:.45vw 0 .2vw}.tv-final-row{display:grid;grid-template-columns:2.3vw minmax(0,1fr);gap:.4vw;padding:.16vw 0;border-bottom:1px solid #315376;font-size:clamp(.75rem,.83vw,1.05rem)}.tv-final-row b{color:#fbbf24}.tv-final-row span{overflow-wrap:anywhere}' +
     '.tv-results .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '.tv-custom-qr{container-type:inline-size}.tv-custom-qr .tv-qr-brand{gap:2px;font-size:clamp(8px,9cqw,16px);line-height:1.05;white-space:nowrap}.tv-custom-qr .tv-scoreplace-mark{width:clamp(14px,24cqw,32px);min-width:0}.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results{padding:.55vw .8vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
     '.tv-series-game{grid-template-rows:minmax(0,1fr);overflow:hidden}.tv-series-side,.tv-series-players{height:100%;overflow:hidden}.tv-player-photo{display:block;flex:none;width:clamp(18px,1.5vw,32px);height:clamp(18px,1.5vw,32px);border-radius:50%;object-fit:cover}.tv-players>span{display:flex;align-items:center;gap:.3vw;min-width:0}.tv-series-players{justify-content:center;gap:0}.tv-series-players>span{display:grid;flex:1 1 0;height:50%;max-height:50%;grid-template-columns:clamp(13px,1vw,22px) minmax(0,1fr);align-items:center;gap:.3vw;min-width:0;min-height:0;overflow:hidden;line-height:1.05}.tv-series-player-name{display:block;min-width:0;overflow-wrap:anywhere;white-space:normal;font:inherit;line-height:1.05}.tv-series-right .tv-series-player-name{text-align:right}.tv-series-players .tv-player-photo{width:clamp(13px,1vw,22px);height:clamp(13px,1vw,22px)}' +

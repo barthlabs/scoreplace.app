@@ -1258,6 +1258,7 @@ const SUITES = [
   'tests/bracket-avatar-no-jump.test.js',
   'tests/bracket-sem-painel-presenca.test.js',
   'tests/tv-live-snapshot.test.js',
+  'tests/classificacao-final-categorias.test.js',
   'tests/tv-live-monitor-picker.test.js',
   'tests/tv-layout.test.js',
   'tests/tv-layout-editor.test.js',

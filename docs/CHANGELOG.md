@@ -2,6 +2,8 @@
 
 - O reset de um ensaio pré-sorteio configurado como repetível devolve a fotografia integral do torneio e mantém o ponto de retorno ativo para novos testes. Inscrições continuam congeladas e notificações silenciadas entre os testes. A ação “Encerrar ensaio” restaura a fotografia e libera ambos os controles administrativos.
 - O diálogo de restauração pós-sorteio descreve os grupos do próprio torneio, sem quantidade fixa de outro evento.
+- O encerramento apresenta pódio e classificação de todos os atletas por categoria nas competições Rei/Rainha seguidas de duplas fixas. Colocações definitivas surgem durante a disputa na página do torneio, no chaveamento e depois dos placares no scroll de “Últimos resultados” da TV.
+- Quem não avança da classificatória aparece depois das vagas eliminatórias, ordenado pelo critério primário configurado (saldo de games no CAMIS). Duplas eliminadas na mesma rodada também são ordenadas pelo saldo de games da eliminatória. Critérios adicionais só desempatarão se configurados e aplicáveis; empates sem desempate permanecem na mesma colocação.
 
 ## 2.7.1 — 14/nov/2026 (Encerramento e teste seguro)
 
