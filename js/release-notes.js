@@ -1,6 +1,8 @@
 // 2.7.9 — Atletas com conta anterior ao torneio podem reconhecer, após entrar,
 // participações antigas indexadas e digitadas pela organização. A confirmação associa os
-// jogos ao histórico e às estatísticas sem alterar placares. A marca no
+// jogos ao histórico e às estatísticas sem alterar placares. Com apenas uma
+// conta vinculada, o resultado só entra nas estatísticas se o vencedor
+// registrado concordar com o placar. A marca no
 // cabeçalho fica cerca de 20% menor e reduz mais quando a janela estreita.
 // Na ficha do torneio, toque na data para abrir a agenda. Convite, contato e
 // grupo oficial ficam juntos; a previsão só aparece quando estiver disponível.
