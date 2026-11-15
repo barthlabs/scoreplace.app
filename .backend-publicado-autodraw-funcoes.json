@@ -380,8 +380,8 @@
       "mode": "only"
     },
     "deleteEmptyTournamentCategory": {
-      "backendCommit": "bbd794e79d153bbcfa4d02d70287bf51a9fc6901",
-      "deployedAt": "2026-11-15T16:54:40.432Z",
+      "backendCommit": "83a434a0231db54d4d30b62fa1682377ca641135",
+      "deployedAt": "2026-11-15T17:23:04.651Z",
       "result": "success",
       "mode": "only"
     },
