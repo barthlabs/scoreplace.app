@@ -80,11 +80,16 @@
   box-sizing: border-box;
   min-height: 60px;
   background-color: var(--bg-darker);
+  background-image: linear-gradient(180deg, var(--sp-blue-deep), var(--sp-blue-bottom));
+  /* A barra é fixa; dimensionar o gradiente pela tela reproduz o fundo do body
+     sem depender de background-attachment:fixed no Safari do iPhone. */
+  background-size: 100% 100vh;
+  background-repeat: no-repeat;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 2rem;
-  /* v2.4.96: removido backdrop-filter:blur(10px). O fundo (--bg-darker) é OPACO,
+  /* v2.4.96: removido backdrop-filter:blur(10px). O fundo azul é OPACO,
      então o blur era 100% invisível — mas, num elemento sticky, o navegador
      re-borrava o backdrop a CADA frame de scroll (jank pesado no iOS). Tirar =
      zero mudança visual + scroll bem mais leve. */
@@ -185,6 +190,17 @@ html.sp-native .modal-overlay.active .modal-header {
   width: 48px !important;
   height: 48px !important;
   flex-shrink: 0;
+}
+.sp-header-brand { gap: clamp(6px, 1vw, 10px); }
+.sp-header-symbol { display: block; flex: none; width: clamp(44px, 13vw, 64px); height: auto; }
+.sp-header-copy { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.sp-header-copy h1 { margin: 0; line-height: 1; }
+.sp-header-wordmark { display: block; width: clamp(140px, 45vw, 260px); height: auto; }
+.sp-header-version { display: block; margin-top: 2px; color: var(--text-muted); font-size: 0.65rem; font-weight: 600; letter-spacing: 0.3px; line-height: 1.15; white-space: nowrap; }
+@media (max-width: 319px) {
+  .sp-header-brand { gap: 4px; }
+  .sp-header-symbol { width: 40px; }
+  .sp-header-wordmark { width: clamp(118px, 44vw, 136px); }
 }
 
 .view-container {

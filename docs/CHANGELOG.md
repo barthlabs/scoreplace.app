@@ -1,3 +1,9 @@
+## 2.7.6 — 15/nov/2026 (cabeçalho da marca azul)
+
+- O topo acompanha o gradiente azul do fundo da página, sem faixa de cor diferente.
+- O pódio e o nome ScorePlace.app aparecem maiores e separados; a versão fica sob o nome, sem ocupar a área do símbolo.
+- O símbolo no cabeçalho usa a mesma arte oficial com a margem transparente interna recortada, sem distorção ou corte do desenho.
+
 ## 2.7.5 — 15/nov/2026 (histórico da classificatória Rei/Rainha)
 
 - A fase anterior recompõe grupos, cards dos jogos, placares e classificação a partir das partidas canônicas quando não há subcoleção de grupos. Vale para qualquer torneio Rei/Rainha seguido de eliminatória; o render não altera dados.

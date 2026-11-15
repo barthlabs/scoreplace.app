@@ -1,3 +1,5 @@
+// 2.7.6 — O cabeçalho usa o mesmo azul do fundo, amplia o pódio e o nome
+// ScorePlace.app e mostra a versão sob o nome.
 // 2.7.5 — A fase anterior Rei/Rainha mostra os jogos, placares, desempates
 // e a classificação de cada grupo, mesmo quando o torneio guarda só partidas.
 // 2.7.4 — A lista de torneios mostra o total confirmado de inscritos.

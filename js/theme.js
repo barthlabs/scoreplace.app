@@ -58,7 +58,7 @@ document.documentElement.setAttribute('data-theme', 'dark');
       // Android edge-to-edge mostra o windowBackground azul do styles.xml.
       SB.setStyle({ style: 'DARK' }); // no plugin: ícones claros
       if (!isAndroid && typeof SB.setBackgroundColor === 'function') {
-        try { SB.setBackgroundColor({ color: '#145584' }); } catch (e) {}
+        try { SB.setBackgroundColor({ color: '#1e6b9a' }); } catch (e) {}
       }
     } catch (e) {}
   }
