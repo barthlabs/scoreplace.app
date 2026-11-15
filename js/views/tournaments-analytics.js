@@ -656,9 +656,10 @@ window._showPlayerStats = function(playerName, currentTournamentId, playerUid) {
             var isP1 = left.uids.indexOf(_viewedUid) !== -1;
             var isP2 = right.uids.indexOf(_viewedUid) !== -1;
             if (isP1 === isP2) return;
-            var winnerSide = ownHistoricalClaim && (!left.complete || !right.complete) &&
-                typeof window._matchWinnerSide === 'function'
-                ? window._matchWinnerSide(m) : _statsWinnerSide(m, left, right);
+            var winnerSide = ownHistoricalClaim && (!left.complete || !right.complete)
+                ? (typeof window._spVerifiedHistoricalWinnerSide === 'function'
+                    ? window._spVerifiedHistoricalWinnerSide(m) : null)
+                : _statsWinnerSide(m, left, right);
             if (winnerSide === null) return;
             stats.totalMatches++;
             if (winnerSide === 0) stats.totalDraws++;

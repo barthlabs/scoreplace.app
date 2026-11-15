@@ -48,6 +48,15 @@ const historical = window._spTournamentHistoryRecord({ ...game, team1Uids: ['ana
 assert.deepEqual(Array.from(historical.players, p => [p.uid, p.team]), [['ana', 1]],
   'vínculo confirmado atribui somente a atleta identificada, sem inventar adversários');
 assert.equal(historical.winnerTeam, 1);
+const historicalLoss = window._spTournamentHistoryRecord({ ...game, team1Uids: ['ana', null],
+  team2Uids: [null, null], winnerUids: null, scoreP1: 2, scoreP2: 6,
+  sets: [{ gamesP1: 2, gamesP2: 6 }], historicalClaimUids: ['ana'] });
+assert.equal(historicalLoss.winnerTeam, 2, 'derrota contra adversária anônima continua no histórico');
+assert.deepEqual(Array.from(historicalLoss.players, p => [p.uid, p.team]), [['ana', 1]]);
+assert.equal(window._spTournamentHistoryRecord({ ...game, team1Uids: ['ana', null],
+  team2Uids: [null, null], winnerUids: ['ana'], scoreP1: 2, scoreP2: 6,
+  sets: [{ gamesP1: 2, gamesP2: 6 }], historicalClaimUids: ['ana'] }), null,
+  'vencedor legado incompatível com o placar não gera estatística pessoal');
 
 (async () => {
   const filters = [];

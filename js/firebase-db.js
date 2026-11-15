@@ -54,6 +54,29 @@ window._perfilDeLista = function (raw) {
   return out;
 };
 
+// Uma vaga histórica confirmada pode ser o único UID de uma partida. Nesse
+// caso, o vencedor textual legado só vale quando concorda com o placar físico.
+// O histórico e a ficha usam a mesma verificação antes de contar V/D.
+window._spVerifiedHistoricalWinnerSide = function (game) {
+  if (!game || typeof window._matchWinnerSide !== 'function') return null;
+  var winner = window._matchWinnerSide(game);
+  var sets = Array.isArray(game.sets) ? game.sets : [];
+  var wins1 = 0, wins2 = 0;
+  for (var i = 0; i < sets.length; i++) {
+    var x = sets[i] && (sets[i].gamesP1 != null ? sets[i].gamesP1 : sets[i].p1);
+    var y = sets[i] && (sets[i].gamesP2 != null ? sets[i].gamesP2 : sets[i].p2);
+    if (x == null || y == null || x === '' || y === '' || !isFinite(Number(x)) || !isFinite(Number(y))) return null;
+    if (Number(x) > Number(y)) wins1++;
+    if (Number(y) > Number(x)) wins2++;
+  }
+  var a = game.scoreP1, b = game.scoreP2;
+  var hasScore = a != null && b != null && a !== '' && b !== '' &&
+    isFinite(Number(a)) && isFinite(Number(b));
+  var scoreSide = sets.length && wins1 !== wins2 ? (wins1 > wins2 ? 1 : 2)
+    : hasScore && Number(a) !== Number(b) ? (Number(a) > Number(b) ? 1 : 2) : null;
+  return winner === scoreSide ? winner : null;
+};
+
 // Projeção de apresentação, sem persistência. O jogo físico é a fonte do
 // placar; a ficha, o histórico e os contadores recebem o mesmo contrato.
 window._spTournamentHistoryRecord = function (game) {
@@ -87,6 +110,8 @@ window._spTournamentHistoryRecord = function (game) {
     return { gamesP1: x, gamesP2: y, tiebreak: set && set.tiebreak || null };
   }) : [];
   if (!hasScore && !sets.length) return null;
+  if (partialClaim && (!one.length || !two.length) &&
+      window._spVerifiedHistoricalWinnerSide(game) === null) return null;
   var summary = sets.length ? sets.map(function (set) {
     var text = set.gamesP1 + '-' + set.gamesP2;
     var tb = set.tiebreak;
