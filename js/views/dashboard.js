@@ -4316,7 +4316,7 @@ function renderDashboard(container) {
   window._dashCanonLast = { sort: curSort, gender: curGender, sport: _dashBarSport, search: window._dashSearch || '' };
   const _dashFilterBar = (typeof window._inscritosFilterBar === 'function')
     ? window._inscritosFilterBar({
-        stateKey: 'dashTourn', mode: 'tournaments', sticky: true,
+        stateKey: 'dashTourn', mode: 'tournaments', sticky: true, fullBleed: true,
         sportList: _dashSportList, sort: 'order-desc',
         searchId: 'dash-search-input', sortId: 'dash-sort', genderId: 'dash-gender', sportId: 'dash-sport',
         onChange: 'window._dashApplyCanonical()'
@@ -4636,6 +4636,7 @@ function renderDashboard(container) {
     })()}
   `;
   container.innerHTML = html;
+  if (_dashFilterBar && window._fitInscritosBarToViewport) window._fitInscritosBarToViewport();
   // v1.9.64: a prévia das seções fechadas preenche a LINHA — mede quantas colunas a grade
   // abriu e reabre os cards que couberem. Roda no MESMO task do innerHTML: assim o usuário
   // nunca chega a ver o estado de 1 coluna que sai do builder.

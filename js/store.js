@@ -9068,15 +9068,15 @@ window._inscritosFilterBar = function (opts) {
 // A ficha está dentro de um card com padding. Mede o espaço real até as bordas
 // do documento para a barra alcançar toda a largura, inclusive sob o zoom do body.
 window._fitInscritosBarToViewport = function () {
-    var bar = document.querySelector('#fbwrap-inscritos[data-full-bleed="1"]');
-    if (!bar) return;
-    bar.style.width = '100%';
-    bar.style.marginLeft = '0';
-    var rect = bar.getBoundingClientRect();
-    var root = document.documentElement.getBoundingClientRect();
-    var zoom = parseFloat(window.getComputedStyle(document.body).zoom) || 1;
-    bar.style.marginLeft = ((root.left - rect.left) / zoom) + 'px';
-    bar.style.width = (root.width / zoom) + 'px';
+    document.querySelectorAll('#fbwrap-inscritos[data-full-bleed="1"], #fbwrap-dashTourn[data-full-bleed="1"]').forEach(function (bar) {
+        bar.style.width = '100%';
+        bar.style.marginLeft = '0';
+        var rect = bar.getBoundingClientRect();
+        var root = document.documentElement.getBoundingClientRect();
+        var zoom = parseFloat(window.getComputedStyle(document.body).zoom) || 1;
+        bar.style.marginLeft = ((root.left - rect.left) / zoom) + 'px';
+        bar.style.width = (root.width / zoom) + 'px';
+    });
 };
 window.addEventListener('resize', function () { window._fitInscritosBarToViewport(); });
 // v3.1.47 CANÔNICO: a barra de filtro/busca dos CARDS DE INSCRITO viaja JUNTO com os

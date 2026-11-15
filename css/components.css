@@ -307,6 +307,7 @@ input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
 .sticky-back-header.sp-tournament-detail-header {
   padding-top: 5px;
   padding-bottom: 5px;
+  padding-left: 10px;
 }
 .sticky-back-header.sp-tournament-detail-header + * {
   margin-top: 40px;
@@ -3622,9 +3623,13 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 .sp-date-card--cross-month .sp-date-join { align-self:center; }
 .sp-date-card--same-month .sp-date-month { font-size:calc(40px * var(--sp-date-month-scale, 1)); }
 .sp-date-time { color:var(--sp-date-time); font-size:calc(12px * var(--sp-date-time-scale, 1)); font-weight:var(--sp-date-time-weight, 700); line-height:1.2; margin-top:5px; }
-.sp-tournament-date-actions { display:flex; align-items:flex-end; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:.5rem; }
-.sp-tournament-date-actions .sp-tournament-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.sp-tournament-date-actions { position:relative; display:flex; align-items:flex-end; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:.5rem; }
+.sp-tournament-date-actions:has(.sp-date-card) { padding-right:calc(250px + 24px); }
+.sp-tournament-date-actions:has(.sp-date-card--cross-month) { padding-right:calc(250px + 64px + 24px); }
+.sp-tournament-date-actions .sp-tournament-actions { display:flex; align-items:stretch; gap:6px; flex-wrap:wrap; }
+.sp-tournament-date-actions .sp-tournament-actions > button { height:58px !important; min-height:58px; box-sizing:border-box; padding-top:4px !important; padding-bottom:4px !important; }
 .sp-tournament-date-stack { margin-left:auto; display:flex; align-items:center; gap:12px; }
+.sp-tournament-date-actions:has(.sp-date-card) .sp-tournament-date-stack { position:absolute; right:0; bottom:0; }
 .sp-date-card-trigger { display:inline-flex; border-radius:12px; cursor:pointer; min-height:44px; }
 .sp-date-card-trigger:focus-visible { outline:3px solid #fff; outline-offset:0; box-shadow:0 0 0 6px #000; }
 .sp-dashboard-identity { display:flex; align-items:stretch; gap:14px; margin:1.4rem 0 1.2rem; min-width:0; }
@@ -3636,7 +3641,8 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 .sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-month { font-size:calc(clamp(20px,3.1vw,40px) * var(--sp-date-month-scale, 1)); }
 .sp-dashboard-identity .sp-tournament-title-slot { display:flex; flex-direction:column; justify-content:space-between; flex:1; min-width:0; }
 @media (max-width:767px) {
-  .sp-tournament-date-actions:has(.sp-date-card) { flex-wrap:nowrap; align-items:flex-end; }
+  .sp-tournament-date-actions:has(.sp-date-card) { flex-wrap:nowrap; align-items:flex-end; padding-right:0; }
+  .sp-tournament-date-actions:has(.sp-date-card) .sp-tournament-date-stack { position:static; }
   .sp-tournament-date-actions:has(.sp-date-card) .sp-tournament-actions { flex:1 1 0; min-width:0; flex-direction:row; flex-wrap:wrap; align-items:center; }
   .sp-tournament-date-actions:has(.sp-date-card) .sp-tournament-actions > * { max-width:100%; box-sizing:border-box; white-space:normal; }
   .sp-tournament-date-actions:has(.sp-date-card) .sp-tournament-actions .btn { font-size:clamp(.67rem,2.7vw,.82rem); }
