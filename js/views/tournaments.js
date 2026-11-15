@@ -3565,6 +3565,7 @@ function renderTournaments(container, tournamentId = null) {
               + `<span style="justify-self:center;opacity:0.8;font-weight:700;">${_dateToLbl}</span><span style="white-space:nowrap;">${_eDT.d}</span><span style="white-space:nowrap;">${_eDT.t}</span>`
             + `</span>`
           : `<span style="display:inline-flex;align-items:center;gap:8px;"><span style="font-size:1.1rem;">🗓️</span><span style="font-variant-numeric:tabular-nums;">${dates}</span></span>`;
+        const dateCardHtml = tournamentId && window.ScorePlaceDateCard ? window.ScorePlaceDateCard.render(_tdr.start, _tdr.end, t.dateCardColors) : '';
         const regLimit = formatDateBr(t.registrationLimit);
         const _configuredCats = typeof window._getTournamentCategories === 'function' ? window._getTournamentCategories(t) : (t.combinedCategories || []);
         const cats = _configuredCats.length ? window._sortCategoriesBySkillOrder(_configuredCats, t.skillCategories).join(', ') : _t('tourn.singleCat');
@@ -4466,7 +4467,7 @@ function renderTournaments(container, tournamentId = null) {
             ${/* Encerrado por INATIVIDADE não fecha classificação → não tem pódio (ordem do
                   dono). Pódio de torneio que parou no meio seria uma mentira campeã. */ ''}
             ${tournamentId ? podiumHtml : ''}
-            ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
+            ${tournamentId ? `<div class="sp-tournament-date-actions"><div class="sp-tournament-actions">
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               ${/* Grupo do torneio no WhatsApp — BOTÃO ÚNICO (1.8.31). Ele mora à esquerda de
                     "Desinscrever-se" quando esse bloco existe (inscrito + inscrições abertas);
@@ -4478,15 +4479,17 @@ function renderTournaments(container, tournamentId = null) {
                     Confra). Criar/trocar/abrir agora vivem no painel que este botão abre. */ ''}
               ${(!_waChipJuntoDoEnroll && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
               ${(!isFinished && t.startDate) ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tournamentAddToCalendar('${t.id}');">📅 Adicionar à agenda</button>` : ''}
-            </div>` : ''}
+            </div>${dateCardHtml ? `<div class="sp-tournament-date-stack">${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}${dateCardHtml}</div>` : ''}</div>` : ''}
 
             <!-- Datas e logo do local formam um único bloco: o brasão fica ao lado
                  do período, nunca perdido junto ao título do torneio. -->
-            <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+            <div style="display:${dateCardHtml ? 'none' : 'flex'};align-items:center;gap:12px;min-width:0;">
+              ${dateCardHtml ? '' : `
               <div style="display: inline-block; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.7;'}">
                  ${datesGridHtml}
               </div>
-              ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
+              `}
+              ${!dateCardHtml && t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
             </div>
             ${(() => {
               // v0.16.90: linha "Atualizado em..." + toggle Liga "Ativado/
@@ -4868,8 +4871,8 @@ function renderTournaments(container, tournamentId = null) {
     let detailParticipantsHtml = '';
     var _organizersHtml = '';
     var _refereesHtml = '';
-    // Barra canônica dos inscritos: nasce uma vez, no fluxo logo abaixo do
-    // back-header da ficha, e permanece sticky enquanto se percorre o elenco.
+    // Barra canônica dos inscritos: nasce uma vez, logo abaixo do título da
+    // seção, e só gruda no cabeçalho depois que a rolagem chega até ela.
     var _inscritosFilterBarHtml = '';
     var _detailCompetitorCount = 0;
 
@@ -5523,6 +5526,9 @@ function renderTournaments(container, tournamentId = null) {
             // lista tem operações (presença, W.O. e exclusão) e pertence exclusivamente
             // à CHAMADA em #participants/:id. Não duplicar os cards no detalhe.
             if (!drawDone) {
+            if (typeof window._inscritosBar === 'function') {
+              _inscritosFilterBarHtml = window._inscritosBar(t, _detailCompetitorCount > 1, { fullBleed: true });
+            }
             var _dsec = (typeof window._buildDoublesInscritosSection === 'function')
               ? window._buildDoublesInscritosSection(t, {
                   isOrg: isOrg, drawDone: drawDone,
@@ -5535,6 +5541,7 @@ function renderTournaments(container, tournamentId = null) {
               detailParticipantsHtml = `
                 <div class="mt-5 mb-4" data-detail-participants="1">
                   <h3 style="margin-bottom:1.2rem;font-size:1.1rem;color:var(--text-bright);border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">👥 Inscritos <span style="font-size:0.8rem;background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:3px 10px;border-radius:12px;font-weight:600;margin-left:5px;color:var(--text-muted);">${individualCountParts}</span></h3>
+                  ${_inscritosFilterBarHtml}
                   ${_dsec.html}
                 </div>`;
             } else {
@@ -5550,6 +5557,7 @@ function renderTournaments(container, tournamentId = null) {
                    <h3 style="margin-bottom: 1.5rem; font-size: 1.3rem; color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; flex-wrap:wrap;">
                       👥 Inscritos Confirmados <span style="font-size: 0.8rem; background: var(--sp-g-255-255-255-01,rgba(255,255,255,0.1)); padding: 3px 10px; border-radius: 12px; font-weight: 600; margin-left: 5px; color: var(--text-muted);">${individualCountParts}</span>
                    </h3>
+                   ${_inscritosFilterBarHtml}
                    ${isOrg && drawDone ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.6;margin-bottom:8px;font-style:italic;">💡 Segure e arraste um nome sobre outro para mesclar participantes duplicados</div>' : ''}
                    ${(window.AppStore.isCreator(t) && drawDone) ? '<div style="font-size:0.72rem;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.22);border-radius:8px;padding:6px 10px;">👑 <b>Compartilhar a organização:</b> arraste um inscrito até a <b>estrela do organizador</b> (no card da ORGANIZAÇÃO) — ela brilha quando você começa a arrastar. No celular, <b>toque na estrela do organizador</b> e escolha quem promover. Funciona durante o torneio também.</div>' : ''}
                    <div data-merge-container="${t.id}" class="sp-dnd-host" style="${window._INSCRITO_GRID_SOLO}">
@@ -5621,9 +5629,6 @@ function renderTournaments(container, tournamentId = null) {
       (Array.isArray(visible[0].rounds) && visible[0].rounds.length > 0) ||
       (Array.isArray(visible[0].groups) && visible[0].groups.length > 0)
     );
-    if (detailParticipantsHtml && !hasDrawn && typeof window._inscritosBar === 'function') {
-      _inscritosFilterBarHtml = window._inscritosBar(visible[0], _detailCompetitorCount > 1);
-    }
 
     // Poll banner for tournament detail view
     var pollBannerHtml = '';
@@ -5667,7 +5672,6 @@ function renderTournaments(container, tournamentId = null) {
           pai segue sendo o #view-container, não o container do chaveamento. */''}
     ${hasDrawn && typeof window._bracketBar === 'function' ? window._bracketBar(visible[0], true) : ''}
     ${filterBarHtml}
-    ${_inscritosFilterBarHtml}
     ${pollBannerHtml}
 
     <div class="tournaments-grid" id="tourn-grid-container" style="display: grid; grid-template-columns: ${tournamentId ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))'}; gap: 1.5rem;">
@@ -5724,6 +5728,7 @@ function renderTournaments(container, tournamentId = null) {
     // Aplica a barra canônica após o render — ordem de inscrição se o elenco tem
     // sequência densa, A-Z nos demais; respeita escolhas manuais persistidas.
     if (_inscritosFilterBarHtml) {
+        if (window._fitInscritosBarToViewport) window._fitInscritosBarToViewport();
         setTimeout(function () { try { if (window._partApplyFilter) window._partApplyFilter(); } catch (e) {} }, 0);
     }
 

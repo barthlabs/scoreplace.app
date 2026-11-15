@@ -1,3 +1,11 @@
+// 2.7.8 — Inscritos ganham filtro no lugar certo, em largura total. O ensaio
+// permite corrigir configurações sem liberar o torneio ou notificações.
+// A grade mostra chamada e aquecimento; prazos por rodada somem com jogos
+// agendados. Classificação e desempate ficam mais claros na edição.
+// Torneios futuros mostram o tempo previsto para o local e a hora do evento;
+// antes do horizonte de cinco dias, exibem a data sem inventar uma previsão.
+// Datas de torneio com horário ganham bloco de leitura rápida, com cores escolhidas
+// pela organização para fundo, dias, meses, texto e horários.
 // 2.7.7 — O nome ScorePlace.app cresce e se aproxima do pódio; a versão
 // menor fica alinhada à direita, sob ".app". Ícones de instalação usam
 // pódio maior e camadas adaptativas sem quadrado encolhido no Android.

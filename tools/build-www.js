@@ -36,7 +36,9 @@ if (!fs.existsSync(viteBin)) {
   console.error('[build-www] ERRO: Vite não está instalado. Rode npm ci.');
   process.exit(1);
 }
-const vite = spawnSync(process.execPath, [viteBin, 'build', '--config', 'vite.config.mjs'], {
+// Native loader evita escrever o bundle temporário dentro de node_modules,
+// que pode ser um link somente de leitura em um worktree isolado.
+const vite = spawnSync(process.execPath, [viteBin, 'build', '--config', 'vite.config.mjs', '--configLoader', 'native'], {
   cwd: ROOT,
   stdio: 'inherit'
 });

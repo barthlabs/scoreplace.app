@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.7';
+window.SCOREPLACE_VERSION = '2.7.8';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -9056,11 +9056,29 @@ window._inscritosFilterBar = function (opts) {
         // vazando o fundo entre o cabeçalho e a barra. -1px sobrepõe; como a topbar tem
         // z-index maior e mesma cor, o overlap é invisível. `padding-top:2px` extra de
         // folga: a barra cobre qualquer rounding antialiased acima dos controles.
-        wrapStyle = ' style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:30;background:var(--bg-darker,#111114);margin-left:0;margin-right:0;margin-bottom:6px;padding:9px 10px 7px;box-sizing:border-box;"';
+        wrapStyle = ' style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:30;background:var(--bg-darker,#111114);' +
+            'margin-left:0;margin-right:0;' +
+            'margin-bottom:6px;padding:9px 10px 7px;box-sizing:border-box;"';
     }
     var instanceAttrs = opts.instanceId ? ' data-bracket-bar-tid="' + (window._safeHtml || String)(opts.tournamentId || '') + '" data-bracket-bar-instance="' + (window._safeHtml || String)(opts.instanceId) + '"' : '';
+    if (opts.fullBleed) instanceAttrs += ' data-full-bleed="1"';
     return '<div id="fbwrap-' + key + '"' + instanceAttrs + wrapStyle + '>' + window._fbInner(key) + '</div>';
 };
+
+// A ficha está dentro de um card com padding. Mede o espaço real até as bordas
+// do documento para a barra alcançar toda a largura, inclusive sob o zoom do body.
+window._fitInscritosBarToViewport = function () {
+    var bar = document.querySelector('#fbwrap-inscritos[data-full-bleed="1"]');
+    if (!bar) return;
+    bar.style.width = '100%';
+    bar.style.marginLeft = '0';
+    var rect = bar.getBoundingClientRect();
+    var root = document.documentElement.getBoundingClientRect();
+    var zoom = parseFloat(window.getComputedStyle(document.body).zoom) || 1;
+    bar.style.marginLeft = ((root.left - rect.left) / zoom) + 'px';
+    bar.style.width = (root.width / zoom) + 'px';
+};
+window.addEventListener('resize', function () { window._fitInscritosBarToViewport(); });
 // v3.1.47 CANÔNICO: a barra de filtro/busca dos CARDS DE INSCRITO viaja JUNTO com os
 // cards. REGRA (dono): "onde há card de participante numa seção, essa barra deve estar
 // lá." Em vez de cada render site copiar o bloco de opções (drift → fácil esquecer um),
@@ -9174,7 +9192,7 @@ window._bracketRefreshIndex = function (cards) {
         window._fbSearchInput('chaves', input);
     };
 };
-window._inscritosBar = function (t, show) {
+window._inscritosBar = function (t, show, layout) {
     if (!show || typeof window._inscritosFilterBar !== 'function') return '';
     // O estado da barra é compartilhado entre torneios. A ficha com sequência
     // canônica (importação das fotos) começa pela ordem de inscrição, não pelo
@@ -9192,6 +9210,7 @@ window._inscritosBar = function (t, show) {
     }
     var bar = window._inscritosFilterBar({
         stateKey: 'inscritos', sort: _denseSeq ? 'order-asc' : 'name-asc', sticky: true,
+        fullBleed: !!(layout && layout.fullBleed),
         searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
         onChange: 'window._partApplyFilter()',
         skillCategories: ((t && t.skillCategories) || []),

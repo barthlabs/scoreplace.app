@@ -13,8 +13,8 @@ cmp.originalOrder = { A: 0, B: 1, C: 2, D: 3 };
 const published = { fmt2: { tieResolution: 'singles_then_draw' },
   tiebreakers: ['sorteio', 'saldo_games', 'vitorias'], tiebreakersExcluded: ['sorteio'] };
 tie.canonicalizeTieFallback(published);
-assert.deepStrictEqual(published.tiebreakers, ['saldo_games', 'vitorias', 'sorteio']);
-assert.deepStrictEqual(published.tiebreakersExcluded, []);
+assert.deepStrictEqual(published.tiebreakers, [], 'simples dispensa os critérios estatísticos');
+assert.deepStrictEqual(published.tiebreakersExcluded, ['sorteio', 'saldo_games', 'vitorias']);
 const noExtras = { fmt2: { tieResolution: 'singles_then_draw' },
   rankingPrimary: 'games_diff', tiebreakers: [], tiebreakersExcluded: ['sorteio', 'saldo_games'] };
 tie.canonicalizeTieFallback(noExtras);

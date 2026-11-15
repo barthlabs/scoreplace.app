@@ -197,11 +197,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
   function _tieSinglesControls(cfg) {
-    return '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px;">' +
-      '<label>Pontos para vencer <input type="number" min="1" max="99" step="1" value="' + _safe(cfg.tieSinglesPoints || 5) +
-      '" onchange="window._f2TieSinglesPoints(this.value)" style="width:74px;margin-left:6px;"></label>' +
+    return '<div class="sp-tie-singles-options">' +
+      '<label class="sp-tie-points-label" for="sp-tie-points">Pontos para vencer' +
+      '<span class="sp-tie-points-field"><input id="sp-tie-points" type="number" min="1" max="99" step="1" inputmode="numeric" value="' + _safe(cfg.tieSinglesPoints || 5) +
+      '" onchange="window._f2TieSinglesPoints(this.value)"><span>pontos</span></span></label>' +
+      '<div class="sp-tie-margin-choice" role="group" aria-label="Regra para vencer a simples">' +
       _pill(cfg.tieSinglesMargin !== 2, 'window._f2TieSinglesMargin(1)', 'Quem chega primeiro') +
-      _pill(cfg.tieSinglesMargin === 2, 'window._f2TieSinglesMargin(2)', 'Vantagem de 2 pontos') + '</div>';
+      _pill(cfg.tieSinglesMargin === 2, 'window._f2TieSinglesMargin(2)', 'Vantagem de 2 pontos') + '</div></div>';
   }
 
   function _renderTieResolution() {
@@ -214,11 +216,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return;
     }
     var singles = cfg.tieResolution === 'singles_then_draw';
+    var criteria = document.getElementById('tiebreaker-criteria-section');
+    if (criteria) criteria.style.display = singles ? 'none' : '';
     el.innerHTML = '<section style="padding:12px;margin:8px 0 14px;border:1px solid var(--sp-b-255-255-255-016,rgba(255,255,255,.16));border-radius:10px;background:var(--sp-g-255-255-255-005,rgba(255,255,255,.05));">' +
       '<h4 style="margin:0 0 5px;color:var(--text-main);">Empate na classificação</h4>' +
-      '<p style="margin:0 0 10px;font-size:.8rem;color:var(--text-muted);">Quando a classificação empata, dois atletas podem disputar uma simples; três disputam um triangular. Os critérios adicionais abaixo podem ficar todos desativados.</p>' +
+      '<p style="margin:0 0 10px;font-size:.8rem;color:var(--text-muted);">Escolha como resolver um empate que afete a classificação.</p>' +
       _pill(singles, "window._f2TieResolution('singles_then_draw')", '🎾 Simples de desempate') +
-      _pill(!singles, "window._f2TieResolution('draw_order')", '🎲 Ordem do sorteio original') +
+      _pill(!singles, "window._f2TieResolution('draw_order')", '📋 Critérios de desempate') +
       (singles ? '<p style="margin:6px 0 2px;font-size:.76rem;color:var(--text-muted);">Se não houver tempo, a organização pode dispensar as partidas e usar a ordem original do sorteio.</p>' + _tieSinglesControls(cfg) : '') +
       '</section>';
   }

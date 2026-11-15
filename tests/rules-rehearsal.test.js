@@ -11,8 +11,17 @@ async function req(method,p,uid,body){const r=await fetch(base+p,{method,headers
 (async()=>{const p='tournaments/tour_1790000000000_0123456789abcdef0123456789abcdef',uid='dev';const out={};
 await req('PATCH',p,'root',{fields:{creatorUid:S(uid),name:S('Antes'),status:S('open'),isPublic:B(false),organizerOnly:B(true),notificationsMuted:B(true),rehearsal:M({state:S('active'),epoch:S('e'),hash:S('h')})}});
 out.name=await req('PATCH',p+'?updateMask.fieldPaths=name',uid,{fields:{name:S('Durante')}});
+out.capacity=await req('PATCH',p+'?updateMask.fieldPaths=maxParticipantsByCategory',uid,{fields:{maxParticipantsByCategory:M({A:{integerValue:'16'}})}});
+out.registrationSettings=await req('PATCH',p+'?updateMask.fieldPaths=registrationSettings',uid,{fields:{registrationSettings:M({mode:S('open')})}});
+out.placeholderReservations=await req('PATCH',p+'?updateMask.fieldPaths=placeholderReservations',uid,{fields:{placeholderReservations:M({A:{integerValue:'2'}})}});
+out.canonicalReceipt=await req('PATCH',p+'?updateMask.fieldPaths=canonicalRegistrationMigration',uid,{fields:{canonicalRegistrationMigration:M({fingerprint:S('invalid')})}});
+out.categoryDefinitions=await req('PATCH',p+'?updateMask.fieldPaths=categoryDefinitions',uid,{fields:{categoryDefinitions:{arrayValue:{values:[M({id:S('A')})]}}}});
+out.enrollmentRigor=await req('PATCH',p+'?updateMask.fieldPaths=enrollmentRigor',uid,{fields:{enrollmentRigor:S('any')}});
+out.roster=await req('PATCH',p+'?updateMask.fieldPaths=participants',uid,{fields:{participants:{arrayValue:{values:[M({name:S('Não permitido')})]}}}});
+out.canonicalRegistration=await req('PATCH',p+'/registrations/r1',uid,{fields:{name:S('Não permitido')}});
 out.unmute=await req('PATCH',p+'?updateMask.fieldPaths=notificationsMuted',uid,{fields:{notificationsMuted:B(false)}});
 out.public=await req('PATCH',p+'?updateMask.fieldPaths=isPublic',uid,{fields:{isPublic:B(true)}});
+out.membersOnly=await req('PATCH',p+'?updateMask.fieldPaths=membersOnly',uid,{fields:{membersOnly:B(true)}});
 out.marker=await req('PATCH',p+'?updateMask.fieldPaths=rehearsal',uid,{fields:{rehearsal:M({state:S('')})}});
 await req('PATCH',p+'?updateMask.fieldPaths=rehearsal','root',{fields:{rehearsal:M({state:S('resetting'),epoch:S('e'),hash:S('h')})}});
 out.resetting=await req('PATCH',p+'?updateMask.fieldPaths=name',uid,{fields:{name:S('Atrasado')}});
@@ -32,6 +41,6 @@ const output=rodarNoEmulador(['emulators:exec','--only','firestore','--config',c
 fs.rmSync(dir,{recursive:true,force:true});
 const match=/__JSON__(\{.*\})/.exec(output);if(!match)throw new Error('driver sem resultado: '+output.slice(-1200));
 const got=JSON.parse(match[1]);
-const expected={name:200,unmute:403,public:403,marker:403,resetting:403,capturing:403,restored:200,baseline:403};
+const expected={name:200,capacity:200,registrationSettings:200,placeholderReservations:200,canonicalReceipt:403,categoryDefinitions:403,enrollmentRigor:403,roster:403,canonicalRegistration:403,unmute:403,public:403,membersOnly:403,marker:403,resetting:403,capturing:403,restored:200,baseline:403};
 for(const [key,value] of Object.entries(expected)) if(got[key]!==value) throw new Error(key+': esperado '+value+', veio '+got[key]);
-console.log('✓ ensaio: jogo normal permitido; privacidade, silêncio, marcador e restauração protegidos');
+console.log('✓ ensaio: configuração editável; privacidade, silêncio, marcador e restauração protegidos');

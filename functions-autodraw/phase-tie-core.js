@@ -9,6 +9,13 @@ function key(row) {
 
 function canonicalizeTieFallback(config) {
   if (!config || !config.fmt2 || !['draw_order', 'singles_then_draw'].includes(config.fmt2.tieResolution)) return config;
+  if (config.fmt2.tieResolution === 'singles_then_draw') {
+    const extra = Array.isArray(config.tiebreakers) ? config.tiebreakers : [];
+    const excluded = Array.isArray(config.tiebreakersExcluded) ? config.tiebreakersExcluded : [];
+    config.tiebreakers = [];
+    config.tiebreakersExcluded = [...new Set(excluded.concat(extra))];
+    return config;
+  }
   if (Array.isArray(config.tiebreakers) && config.tiebreakers.length) {
     config.tiebreakers = config.tiebreakers.filter(item => item !== 'sorteio').concat('sorteio');
   }

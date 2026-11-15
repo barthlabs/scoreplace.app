@@ -287,12 +287,11 @@ console.log('\n──── a UI some quando não se aplica ────');
   t('diálogo do sorteio esconde a caixa', /ratioApplies/.test(draw6) &&
      /mode === 'equilibrado' && window\._gdCtx\.ratioApplies/.test(draw6));
   t('e não grava proporção quando não se aplica', /_ratioAppliesTo\(t\)\)\) \{/.test(draw6));
-  // ⭐ 2.1: quem decide o sumiço é o NÚCLEO (_ratioVisivel), não uma regra escrita na tela —
-  // a lista de espera precisa da mesma resposta. E some AVISANDO por quê (_ratioMotivoAusencia):
-  // controle que some calado manda a pessoa procurar, e foi assim que este caso apareceu.
+  // O núcleo decide a visibilidade; sem disputa mista, o formulário não exibe
+  // nem o controle nem um cartão de aviso substituto.
   t('formulário esconde a caixa com categoria de gênero',
      /tourn-gender-categories/.test(form6) && /_ratioVisivel\(/.test(form6)
-     && /visivel: false/.test(form6) && /_ratioMotivoAusencia/.test(form6));
+     && /mount\.innerHTML = ''/.test(form6));
   t('caixa da espera esconde o toggle sem proporção', /\(!_wlOrg \|\| !_wlRatio\) \? ''/.test(brk6));
 }
 
@@ -507,26 +506,29 @@ console.log('\n──── duplas: modo equilibrado sem proporção não separa
 
   console.log('\n  ── o controle rodando ──');
   const criando = palco('', null);
-  t('criação (ninguém inscrito): o slider APARECE', /id="grct-slider"/.test(criando.html));
-  t('e o vazio vira 50/50 GRAVADO, não fica em branco', criando.gravado === '50/50');
-  t('e a leitura mostra a composição E o percentual', /2H \/ 2M/.test(criando.html) && /grct-pct/.test(criando.html));
-  t('com a trava ligada por padrão', /id="grct-lock" checked/.test(criando.html));
+  t('criação (ninguém inscrito): a seção não aparece', criando.html === '');
+  t('sem dois gêneros, não grava proporção', criando.gravado === '');
 
   const misto = palco('', ['masculino', 'feminino', 'feminino']);
   t('torneio misto: o slider aparece', /id="grct-slider"/.test(misto.html));
+  t('e a leitura mostra a composição E o percentual', /2H \/ 2M/.test(misto.html) && /grct-pct/.test(misto.html));
+  t('com a trava ligada por padrão', /id="grct-lock" checked/.test(misto.html));
 
   const soElas = palco('', ['feminino', 'feminino', 'feminino']);
   t('só mulheres: a seção some', !/id="grct-slider"/.test(soElas.html));
-  t('e diz POR QUÊ (não some calada)', /só há mulheres/.test(soElas.html));
+  t('e não deixa aviso substituto', soElas.html === '');
   t('e não deixa proporção gravada', soElas.gravado === '');
 
   const semGenero = palco('', ['feminino', '', 'feminino']);
-  t('com alguém SEM gênero declarado, a seção fica (ainda pode virar misto)',
-     /id="grct-slider"/.test(semGenero.html));
+  t('um gênero e alguém SEM gênero declarado: a seção não aparece', semGenero.html === '');
 
   const porCategoria = palco('fem', ['masculino', 'feminino']);
   t('com categoria de gênero: a seção some', !/id="grct-slider"/.test(porCategoria.html));
-  t('e o motivo é a categoria, não o pool', /categorias já separam/.test(porCategoria.html));
+  t('e não deixa aviso substituto', porCategoria.html === '');
+  const porCategoriasCompostas = palco('fem,mista', ['masculino', 'feminino']);
+  t('categorias de gênero compostas continuam sem proporção', porCategoriasCompostas.html === '');
+  const habilidadesCompostas = palco('A,B', ['masculino', 'feminino']);
+  t('categorias de habilidade compostas mantêm proporção na disputa mista', /id="grct-slider"/.test(habilidadesCompostas.html));
 
   // o slider mexe: 3 paradas, e o valor que sai é o que o motor entende
   const w = criando.win;

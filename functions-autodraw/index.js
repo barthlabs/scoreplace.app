@@ -1328,12 +1328,14 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   if (rehearsalState === 'capturing' || rehearsalState === 'resetting') {
     throw new HttpsError('failed-precondition', 'Ensaio em captura ou restauração; operação temporariamente bloqueada.');
   }
-  if (rehearsalState === 'active' && [
-    'categoryDefinitions', 'canonicalRegistrationMigration', 'registrationSettings',
-    'placeholderReservations', 'maxParticipantsByCategory', 'enrollmentRigor',
-    'isPublic', 'organizerOnly'
-  ].some(key => _rehearsal.fingerprint(tDepois && tDepois[key]) !== _rehearsal.fingerprint(tAntes && tAntes[key]))) {
-    throw new HttpsError('failed-precondition', 'Configuração e inscrições congeladas durante o ensaio.');
+  if (rehearsalState === 'active' && ['isPublic', 'membersOnly', 'organizerOnly', 'notificationsMuted']
+    .some(key => (tDepois && tDepois[key] === true) !== (tAntes && tAntes[key] === true))) {
+    throw new HttpsError('failed-precondition', 'A privacidade e o silêncio de notificações do ensaio devem ser mantidos até a restauração.');
+  }
+  if (rehearsalState === 'active' &&
+      _rehearsal.fingerprint(tDepois && tDepois.canonicalRegistrationMigration) !==
+      _rehearsal.fingerprint(tAntes && tAntes.canonicalRegistrationMigration)) {
+    throw new HttpsError('failed-precondition', 'O recibo canônico de inscrições não pode ser alterado durante o ensaio.');
   }
   // Toda rota de W.O., substituição, placar e edição passa por esta escrita.
   // Uma fase já avançada não pode ter seus jogos dispensados alterados.
@@ -5660,7 +5662,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'maxParticipants','maxParticipantsPerCategory','maxParticipantsByCategory','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
   'resultEntry','woScope','lateEnrollment','newMatchups','venue','venueAccess','venueLat',
   'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
-  'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','coverGradientBalance','coverGradientBlend','titleColor','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
+  'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','coverGradientBalance','coverGradientBlend','titleColor','dateCardColors','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
   'courtNames','courtOrder','callTime','warmupTime','gameDuration','scoring','swissRounds',
   'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','temporada','equilibrado',
   'clusterSize','balanceBy','genderRatio','genderRatioDisabled','wlGroupBalance','ligaNewPlayerScore',
@@ -5864,6 +5866,10 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
   });
   if ('titleColor' in patch && (typeof patch.titleColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(patch.titleColor))) {
     throw new HttpsError('invalid-argument', 'Cor do título inválida.');
+  }
+  if ('dateCardColors' in patch) {
+    try { require('./date-card-colors-core').validate(patch.dateCardColors); }
+    catch (error) { throw new HttpsError('invalid-argument', error.message); }
   }
   if ('coverGradientBlend' in patch && patch.coverGradientBlend !== null &&
       (typeof patch.coverGradientBlend !== 'number' || !Number.isFinite(patch.coverGradientBlend) || patch.coverGradientBlend < 0 || patch.coverGradientBlend > 100)) {

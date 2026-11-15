@@ -1,3 +1,14 @@
+## 2.7.8 — 15/nov/2026 (ficha, agenda e configuração do torneio)
+
+- A barra de filtros dos inscritos fica sob o título da seção, ocupa a largura da janela e gruda abaixo de Voltar só após a rolagem alcançá-la.
+- O símbolo e a versão ficam centralizados verticalmente no cabeçalho; a versão se alinha ao fim visível de `.app`.
+- O ensaio ativo aceita ajustes de configuração. A captura e restauração continuam protegidas; visibilidade e notificações permanecem privadas até encerrar o ensaio.
+- A proposta de grade mostra chamada e aquecimento e usa os mesmos valores da ficha. Prazos por rodada aparecem apenas quando participantes combinam os jogos.
+- A proporção de gênero só aparece com homens e mulheres confirmados na mesma disputa sem categorias que os separem.
+- A classificação nova usa saldo de games por padrão, seguido de vitórias e pontos. Simples de desempate e critérios adicionais são alternativas; o campo de 5 pontos fica legível em desktop e celular.
+- A previsão do tempo de torneios futuros mostra o local, a data e a hora de início do evento. Fora do horizonte de cinco dias, informa quando haverá previsão em vez de exibir o tempo de hoje como se fosse o do evento.
+- As datas com horário passam a ter quatro apresentações compactas para dia único, intervalo no mesmo mês, intervalo entre meses e apenas início. Na ficha ficam à direita, alinhadas ao botão de agenda; na dashboard ficam sob o logo do evento. A organização pode escolher as cores de fundo, texto, dia, mês e horário, inclusive após o sorteio.
+
 ## 2.7.7 — 15/nov/2026 (ajuste fino da marca no cabeçalho)
 
 - O nome ScorePlace.app fica discretamente maior e mais próximo do pódio.

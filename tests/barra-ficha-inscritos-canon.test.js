@@ -42,8 +42,13 @@ assert.strictEqual(count(html, 'id="fbwrap-inscritos"'), 1, 'uma barra na ficha 
 assert(html.includes('id="part-sort" value="order-asc"'), 'ordem de inscrição no elenco canônico');
 const orders = [...html.matchAll(/data-part-order="(\d+)"/g)].map(x => Number(x[1]));
 assert.deepStrictEqual(orders, Array.from({ length: 64 }, (_, i) => 2 * i + 1), '64 duplas em ordem das fotos');
-assert(html.indexOf('id="fbwrap-inscritos"') < html.indexOf('data-detail-participants="1"'),
-  'barra fica logo abaixo do cabeçalho, acima da ficha');
+assert(html.indexOf('id="fbwrap-inscritos"') > html.indexOf('data-detail-participants="1"'),
+  'barra fica dentro da seção de inscritos, depois da ficha');
+assert(html.indexOf('id="fbwrap-inscritos"') < html.indexOf('data-part-order='),
+  'barra precede os cards');
+assert(html.includes('data-full-bleed="1"') && typeof W._fitInscritosBarToViewport === 'function' &&
+  W.renderTournaments.toString().includes('window._fitInscritosBarToViewport();'),
+  'barra mede a viewport inteira após o render, inclusive sob o zoom');
 
 W._filterBarState.inscritos.sort = 'name-asc'; // escolha manual
 html = render(photo);

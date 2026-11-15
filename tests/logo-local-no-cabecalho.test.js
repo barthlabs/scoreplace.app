@@ -28,7 +28,7 @@ ok(/el\.style\.display\s*=\s*'block'/.test(loader), 'hidratador revela o slot ao
 ok(!/data-vlogo-pid/.test(hero), 'título do torneio não disputa espaço com o logo do local');
 ok(/display:flex;flex-direction:column;align-self:stretch/.test(hero), 'coluna do título preserva o contrato responsivo do nome');
 ok(/data-vlogo-pid/.test(dates), 'bloco de datas contém o slot do logo do local');
-ok(/display:flex;align-items:center;gap:12px;min-width:0/.test(dates), 'datas e logo do local compartilham o mesmo bloco visual');
+ok(/sp-tournament-date-stack/.test(tournaments) && /display:\$\{dateCardHtml \? 'none' : 'flex'\};align-items:center;gap:12px;min-width:0/.test(dates), 'logo do local acompanha a data nova e o bloco antigo fica oculto');
 ok(/width:clamp\(42px,11vw,64px\)/.test(dates), 'logo do local tem dimensão responsiva ao lado do período');
 ok(/position:relative;width:33%;min-width:100px;flex-shrink:0;aspect-ratio:/.test(hero), 'logo do evento mantém exatamente a largura original de 33%');
 ok(/class="tournament-card-title"/.test(hero), 'o título tem classe própria para a regra responsiva');

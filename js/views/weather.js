@@ -162,6 +162,52 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     };
   };
 
+  function _eventDate(start) {
+    var m = String(start || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+    if (!m) return null;
+    return { year: +m[1], month: +m[2], day: +m[3], hour: +(m[4] || 0), minute: +(m[5] || 0),
+      label: m[3] + '/' + m[2] + '/' + m[1] + (m[4] ? ' às ' + m[4] + ':' + m[5] : '') };
+  }
+
+  // Sem o fuso da cidade, só pulamos a consulta quando há folga de um dia
+  // além do horizonte de cinco dias. Na borda, buscamos e usamos o offset real.
+  window._weatherEventBeyondHorizon = function (start, nowMs) {
+    var event = _eventDate(start);
+    if (!event) return false;
+    var naiveUtc = Date.UTC(event.year, event.month - 1, event.day, event.hour, event.minute);
+    return naiveUtc - (nowMs == null ? Date.now() : nowMs) > 6 * 24 * 60 * 60 * 1000;
+  };
+
+  // A data gravada no torneio é uma hora local sem fuso. O offset da cidade, quando
+  // disponível na resposta, transforma essa hora no instante UTC da previsão.
+  window._weatherEventForecast = function (data, start, nowMs) {
+    var event = _eventDate(start);
+    if (!event) return { status: 'invalid' };
+    if (!data && window._weatherEventBeyondHorizon(start, nowMs)) return { status: 'future', label: event.label };
+    var offset = data && data.city && data.city.timezone;
+    // O fuso do aparelho não informa a hora local da quadra em outra cidade.
+    // Sem o offset do local, não associar um ponto de previsão à hora errada.
+    if (!Number.isFinite(offset)) return { status: 'unavailable', label: event.label };
+    var target = Date.UTC(event.year, event.month - 1, event.day, event.hour, event.minute) - offset * 1000;
+    var now = nowMs == null ? Date.now() : nowMs;
+    if (target <= now) return { status: 'past', label: event.label };
+    if (!data || !Array.isArray(data.list) || !data.list.length) {
+      return { status: target - now > 5 * 24 * 60 * 60 * 1000 ? 'future' : 'unavailable', label: event.label };
+    }
+    var closest = null, diff = Infinity, last = 0;
+    data.list.forEach(function (entry) {
+      if (!entry || !Number.isFinite(entry.dt)) return;
+      var ts = entry.dt * 1000;
+      if (ts > last) last = ts;
+      if (Math.abs(ts - target) < diff) { closest = entry; diff = Math.abs(ts - target); }
+    });
+    // O endpoint tem passos de 3h. Nunca apresentar um ponto de outro dia como
+    // previsão para a hora do evento quando ela ainda não entrou no horizonte.
+    if (!closest || diff > 90 * 60 * 1000) return { status: target > last ? 'future' : 'unavailable', label: event.label };
+    return { status: 'available', label: event.label, entry: closest,
+      interval: 'Previsão em intervalos de 3 horas' };
+  };
+
   // ── desenho ────────────────────────────────────────────────────────────────
   function _img(icon, px) {
     return '<img src="https://openweathermap.org/img/wn/' + icon + '@2x.png" alt="" ' +
@@ -172,6 +218,34 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var cor = p >= 60 ? '#60a5fa' : '#94a3b8';
     return '<span style="font-size:0.62rem;font-weight:700;color:' + window._spCor(cor, 'color') + ';white-space:nowrap;">💧' + p + '%</span>';
   }
+
+  window._weatherEventHtml = function (forecast, size, local) {
+    if (!forecast || forecast.status === 'invalid' || forecast.status === 'past') return '';
+    var sf = window._safeHtml || String;
+    var lg = size !== 'sm';
+    var h = '<div class="weather-box" style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.22);' +
+      'border-radius:12px;padding:' + (lg ? '12px 14px' : '10px 12px') + ';margin-top:10px;">' +
+      '<div style="font-size:0.65rem;font-weight:800;color:var(--sp-c-60a5fa,#60a5fa);text-transform:uppercase;letter-spacing:0.06em;">🌤️ Previsão do tempo no evento</div>' +
+      (local ? '<div style="font-size:0.7rem;font-weight:600;color:var(--sp-c-cbd5e1,#cbd5e1);margin-top:2px;overflow-wrap:anywhere;">📍 ' + sf(local) + '</div>' : '') +
+      '<div style="font-size:0.78rem;font-weight:700;color:var(--text-bright);margin-top:8px;">📅 ' + sf(forecast.label) + '</div>';
+    if (forecast.status !== 'available') {
+      return h + '<div style="font-size:0.73rem;color:var(--sp-c-cbd5e1,#cbd5e1);margin-top:5px;">' +
+        (forecast.status === 'future'
+          ? 'A previsão para o horário do evento aparecerá quando a data entrar nos próximos 5 dias.'
+          : 'A previsão para esse horário está temporariamente indisponível.') + '</div></div>';
+    }
+    var e = forecast.entry, main = e.main || {};
+    h += '<div style="display:flex;align-items:center;gap:10px;margin-top:6px;">' + _img(_icone(e), lg ? 52 : 44) +
+      '<div><div style="font-size:' + (lg ? '1.6rem' : '1.35rem') + ';font-weight:800;color:var(--text-bright);line-height:1;">' +
+        (Number.isFinite(main.temp) ? Math.round(main.temp) + '°' : '—') + '</div>' +
+      '<div style="font-size:0.76rem;color:var(--sp-c-cbd5e1,#cbd5e1);text-transform:capitalize;margin-top:3px;">' + sf(_desc(e)) + '</div>' +
+      '<div style="font-size:0.68rem;color:var(--sp-c-94a3b8,#94a3b8);margin-top:3px;">' +
+        (Number.isFinite(e.pop) ? '🌧️ ' + Math.round(e.pop * 100) + '% de chuva' : '') +
+        (e.wind && Number.isFinite(e.wind.speed) ? ' · 💨 ' + Math.round(e.wind.speed * 3.6) + ' km/h' : '') +
+      '</div></div></div>' +
+      '<div style="font-size:0.63rem;color:var(--text-muted);margin-top:6px;">' + sf(forecast.interval) + '</div></div>';
+    return h;
+  };
 
   window._weatherWidgetHtml = function (r, size, local) {
     if (!r) return '';
@@ -267,10 +341,29 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var lat = el.getAttribute('data-lat'), lon = el.getAttribute('data-lon');
       if (!lat || !lon) return;
       el.setAttribute('data-w-done', '1');   // antes do await: re-render não re-dispara
+      var eventStart = el.getAttribute('data-event-start');
+      var size = el.getAttribute('data-size') || 'lg';
+      var local = el.getAttribute('data-venue') || '';
+      // Fora dos cinco dias não há previsão no endpoint. Mostra a data correta
+      // sem consumir uma chamada que não poderia respondê-la.
+      if (eventStart && window._weatherEventBeyondHorizon(eventStart)) {
+        el.innerHTML = window._weatherEventHtml(window._weatherEventForecast(null, eventStart), size, local);
+        return;
+      }
       window._weatherFetch(lat, lon).then(function (d) {
         if (!document.body.contains(el)) return;   // saiu da tela no meio do caminho
-        var r = window._weatherResumo(d, Date.now());
-        el.innerHTML = r ? window._weatherWidgetHtml(r, el.getAttribute('data-size') || 'lg', el.getAttribute('data-venue') || '') : '';
+        if (eventStart) {
+          var forecast = window._weatherEventForecast(d, eventStart);
+          if (forecast.status === 'past') {
+            var current = window._weatherResumo(d, Date.now());
+            el.innerHTML = current ? window._weatherWidgetHtml(current, size, local) : '';
+          } else {
+            el.innerHTML = window._weatherEventHtml(forecast, size, local);
+          }
+        } else {
+          var r = window._weatherResumo(d, Date.now());
+          el.innerHTML = r ? window._weatherWidgetHtml(r, size, local) : '';
+        }
       });
     });
   };
@@ -304,8 +397,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   /** O slot que o render do torneio insere. Vazio até a rede responder — nunca "carregando". */
   window._weatherSlotHtml = function (t, size) {
     if (!t || !t.venueLat || !t.venueLon) return '';
+    // A decisão passado/futuro usa o fuso do local após a busca da previsão.
+    var eventStart = t.startDate || '';
     return '<div data-weather-slot="1" data-venue="' + window._safeHtml(String(t.venue || '')) + '" data-lat="' + window._safeHtml(String(t.venueLat)) +
       '" data-lon="' + window._safeHtml(String(t.venueLon)) +
+      '" data-event-start="' + window._safeHtml(String(eventStart)) +
       '" data-size="' + (size === 'sm' ? 'sm' : 'lg') + '"></div>';
   };
 })();

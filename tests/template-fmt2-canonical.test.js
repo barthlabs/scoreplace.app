@@ -188,12 +188,14 @@ async function integration() {
 
   let formSaved;
   formWindow._f2GetConfig = () => savedByOldForm;
+  formWindow._readTournamentDateColors = () => ({ background:'#216b96', text:'#ffffff', day:'#ffffff', month:'#ffc400', time:'#e5f4fc' });
   formWindow._allowSelfDeactEl = () => null;
   formWindow._saveTemplate = async tpl => { formSaved = tpl; return 'ok'; };
   formContext.showInputDialog = (label, name, cb) => cb('Modelo novo');
   formWindow._saveCurrentFormAsTemplate();
   await new Promise(resolve => setImmediate(resolve));
   assert(formSaved && formSaved.fmt2, 'formulário salva configuração canônica');
+  assert.strictEqual(formSaved.dateCardColors.month, '#ffc400', 'modelo preserva as cores da data');
   assert.strictEqual(formSaved.fmt2.rodadas.drawFirstDate, '');
   assert.strictEqual(formSaved.fmt2.eliminatoria.endDate, '');
 }

@@ -501,18 +501,19 @@ service cloud.firestore {
     }
 
     match /tournaments/{tournamentId} {
-      // A captura e a restauração travam o cliente; durante o ensaio os
-      // controles normais de jogos continuam no mesmo caminho de produção.
-      // O marcador é imutável para o cliente e o elenco continua protegido
-      // por elencoIntacto e pelas portas canônicas do servidor.
+      // A captura e a restauração travam o cliente. Durante o ensaio ativo,
+      // a organização pode editar a configuração; o marcador continua imutável
+      // e o elenco segue protegido por elencoIntacto e pelas portas do servidor.
       function rehearsalClientUnlocked() {
         return !(resource.data.get('rehearsal', {}).get('state', '') in ['capturing', 'resetting']);
       }
-      function rehearsalClientConfigIntact() {
+      function rehearsalPrivacyIntact() {
         return resource.data.get('rehearsal', {}).get('state', '') != 'active'
-          || (igual('notificationsMuted') && igual('isPublic')
-              && igual('registrationSettings') && igual('maxParticipantsByCategory')
-              && igual('placeholderReservations') && igual('canonicalRegistrationMigration'));
+          || (d1().get('notificationsMuted', false) == d0().get('notificationsMuted', false)
+              && d1().get('isPublic', false) == d0().get('isPublic', false)
+              && d1().get('membersOnly', false) == d0().get('membersOnly', false)
+              && d1().get('organizerOnly', false) == d0().get('organizerOnly', false)
+              && igual('canonicalRegistrationMigration'));
       }
       match /billingReceipts/{receiptId} {
         allow read: if request.auth != null && (
@@ -865,7 +866,7 @@ service cloud.firestore {
       // `ehResetOk()` — o reset para inscrições, exigido inteiro.
       allow update: if request.auth != null
         && rehearsalClientUnlocked()
-        && rehearsalClientConfigIntact()
+        && rehearsalPrivacyIntact()
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rehearsal'])
         && (
           isTournamentAdmin(resource.data)

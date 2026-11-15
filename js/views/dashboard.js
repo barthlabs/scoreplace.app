@@ -851,6 +851,7 @@ function renderDashboard(container) {
           + `<span style="justify-self:center;opacity:0.8;font-weight:700;">${_dateToLbl}</span><span style="white-space:nowrap;">${_eDT.d}</span><span style="white-space:nowrap;">${_eDT.t}</span>`
         + `</span>`
       : `<span style="display:inline-flex;align-items:center;gap:8px;"><span style="font-size:1.1rem;">🗓️</span><span style="font-variant-numeric:tabular-nums;">${dates}</span></span>`;
+    const dateCardHtml = window.ScorePlaceDateCard ? window.ScorePlaceDateCard.render(_tdr.start, _tdr.end, t.dateCardColors) : '';
     const regLimit = formatDateBr(t.registrationLimit);
     const cats = (t.categories && t.categories.length) ? t.categories.join(', ') : _t('tourn.singleCat');
 
@@ -1058,9 +1059,9 @@ function renderDashboard(container) {
             </div>` : ''}
 
             <!-- Middle: Logo 1/3 + conteúdo 2/3 -->
-            <div class="sp-tournament-identity-row" style="display:flex;align-items:flex-start;gap:14px;margin:1.4rem 0 1.2rem 0;">
-              ${window._tourLogoSrc(t) ? `<div style="width:33%;min-width:80px;flex-shrink:0;aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};"><img src="${window._tourLogoSrc(t)}" alt="Logo" style="width:100%;height:100%;border-radius:${window._tournamentLogoRadius(t)};object-fit:contain;display:block;"></div>` : ''}
-              <div class="sp-tournament-title-slot" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0;">
+            <div class="sp-tournament-identity-row ${dateCardHtml ? 'sp-dashboard-identity' : ''}" style="display:flex;align-items:${dateCardHtml ? 'stretch' : 'flex-start'};gap:14px;margin:1.4rem 0 1.2rem 0;">
+              ${dateCardHtml ? `<div class="sp-dashboard-logo-date">${window._tourLogoSrc(t) ? `<img src="${window._tourLogoSrc(t)}" alt="Logo" style="aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};border-radius:${window._tournamentLogoRadius(t)};">` : ''}${dateCardHtml}</div>` : (window._tourLogoSrc(t) ? `<div style="width:33%;min-width:80px;flex-shrink:0;aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};"><img src="${window._tourLogoSrc(t)}" alt="Logo" style="width:100%;height:100%;border-radius:${window._tournamentLogoRadius(t)};object-fit:contain;display:block;"></div>` : '')}
+              <div class="sp-tournament-title-slot" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0;${dateCardHtml ? 'justify-content:flex-end;' : ''}">
                 <div style="display:flex;align-items:flex-start;gap:6px;">
                   ${/* v1.8.85: o nome era CORTADO quando trazia um token que não quebra —
                         no relato, um torneio nomeado com o e-mail do organizador
@@ -1094,10 +1095,12 @@ function renderDashboard(container) {
 
             <!-- Datas e logo do local. A regressiva logo abaixo é a fonte única
                  para "começa em"; o card não mantém uma segunda contagem. -->
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+            <div style="display:${dateCardHtml ? (t.venuePlaceId ? 'flex' : 'none') : 'flex'};align-items:center;justify-content:space-between;gap:10px;">
+            ${dateCardHtml ? '' : `
             <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.8;'} flex-wrap: wrap;">
                ${datesGridHtml}
             </div>
+            `}
             ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" style="flex-shrink:0;width:clamp(40px,13vw,58px);aspect-ratio:1/1;display:none;"></span>' : ''}
             </div>
 

@@ -1,6 +1,31 @@
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
+window._readTournamentDateColors = function () {
+  var defaults = window.ScorePlaceDateCard && window.ScorePlaceDateCard.DEFAULTS || {
+    background: '#216b96', text: '#ffffff', day: '#ffffff', month: '#ffc400', time: '#e5f4fc'
+  }, result = {};
+  Object.keys(defaults).forEach(function (key) {
+    var input = document.getElementById('tourn-date-color-' + key);
+    result[key] = input && /^#[0-9a-f]{6}$/i.test(input.value) ? input.value : defaults[key];
+  });
+  return result;
+};
+window._refreshTournamentDateColorPreview = function () {
+  var target = document.getElementById('tourn-date-color-preview');
+  if (target && window.ScorePlaceDateCard) target.innerHTML = window.ScorePlaceDateCard.render('2026-11-29T08:00', '2026-11-29T16:00', window._readTournamentDateColors());
+};
+window._setTournamentDateColors = function (value) {
+  if (!window.ScorePlaceDateCard) return;
+  var colors = window.ScorePlaceDateCard.colors(value);
+  Object.keys(colors).forEach(function (key) {
+    var input = document.getElementById('tourn-date-color-' + key);
+    if (input) input.value = colors[key];
+  });
+  window._refreshTournamentDateColorPreview();
+};
+window._resetTournamentDateColors = function () { window._setTournamentDateColors(null); };
+
 
 // ── Controle canônico: inscrições durante a fase ────────────────────────────
 // Uma única estrutura visual para criação/edição, fase eliminatória e atalho da
@@ -132,9 +157,14 @@ window._renderEstimatedGameHours = function (datesChanged) {
   if (state.mode === 'participants') {
     mount.innerHTML = modeHtml;
     if (typeof window._renderPhaseCallOrder === 'function') window._renderPhaseCallOrder();
+    if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh();
     return;
   }
-  if (!days.length) { mount.innerHTML = modeHtml + '<p>Informe as datas de início e fim da fase.</p>'; return; }
+  if (!days.length) {
+    mount.innerHTML = modeHtml + '<p>Informe as datas de início e fim da fase.</p>';
+    if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh();
+    return;
+  }
   var startDate = (document.getElementById('tourn-start-date') || {}).value || '';
   var endDate = (document.getElementById('tourn-end-date') || {}).value || '';
   var multipleDays = endDate > startDate;
@@ -175,6 +205,7 @@ window._renderEstimatedGameHours = function (datesChanged) {
   }
   if (state.locked) mount.insertAdjacentHTML('beforeend', '<div style="color:var(--text-muted);font-size:.75rem;margin-top:8px">Agenda já sorteada: estes horários são exibidos sem alterar os jogos publicados.</div>');
   if (typeof window._renderPhaseCallOrder === 'function') window._renderPhaseCallOrder();
+  if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh();
 };
 
 window._setCategoryGameWindow = function (input) {
@@ -595,6 +626,15 @@ function setupCreateTournamentModal() {
                 <input type="file" id="cover-file-input" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="window._handleCoverUpload(event)">
                 <input type="hidden" id="tourn-cover-data" value="">
               </div>
+              <details class="sp-date-color-editor" style="margin:0 0 1rem;padding:12px;border:1px solid rgba(96,165,250,.35);border-radius:12px;background:rgba(96,165,250,.07);">
+                <summary style="font-weight:800;cursor:pointer;">🎨 Cores da data do torneio</summary>
+                <p style="font-size:.78rem;color:var(--text-muted);margin:9px 0;">As cores escolhidas aparecem na ficha e na dashboard. Você pode alterá-las depois de publicar o sorteio.</p>
+                <div class="sp-date-color-inputs" style="display:flex;gap:10px;flex-wrap:wrap;">
+                  ${[['background','Fundo','#216b96'],['text','Texto (a)','#ffffff'],['day','Dia','#ffffff'],['month','Mês','#ffc400'],['time','Horário','#e5f4fc']].map(function (entry) { return `<label style="display:flex;align-items:center;gap:6px;font-size:.78rem;font-weight:700;">${entry[1]} <input type="color" id="tourn-date-color-${entry[0]}" value="${entry[2]}" aria-label="Cor ${entry[1]} da data" oninput="window._refreshTournamentDateColorPreview()" style="width:34px;height:32px;padding:1px;border:1px solid var(--border-color);border-radius:6px;background:transparent;cursor:pointer;"></label>`; }).join('')}
+                </div>
+                <div id="tourn-date-color-preview" style="margin-top:10px;">${window.ScorePlaceDateCard ? window.ScorePlaceDateCard.render('2026-11-29T08:00', '2026-11-29T16:00') : ''}</div>
+                <button type="button" onclick="window._resetTournamentDateColors()" style="margin-top:8px;background:none;border:0;color:var(--text-main);text-decoration:underline;cursor:pointer;">Restaurar cores padrão</button>
+              </details>
               <div id="tv-layout-editor"></div>
               </details>
 
@@ -730,7 +770,7 @@ function setupCreateTournamentModal() {
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseStart')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
                       <input type="date" class="form-control" id="tourn-start-date" aria-label="Data de início da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._checkWeather(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow(); window._renderEstimatedGameHours(true)">
-                      <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow(); window._renderEstimatedGameHours(true)">
+                      <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._checkWeather(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow(); window._renderEstimatedGameHours(true)">
                     </div>
                   </div>
                   <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:10px; padding:8px 6px;">
@@ -1401,15 +1441,16 @@ function setupCreateTournamentModal() {
               <!-- Critérios de Desempate -->
               <div id="tiebreaker-section" style="background: rgba(88,166,255,0.06); border: 1px solid rgba(88,166,255,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <h3 style="margin:0 0 .65rem;color:var(--text-main);font-size:1rem;">${_t('create.rankingPrimaryLabel')}</h3>
-                <input type="hidden" id="ranking-primary" value="points">
+                <input type="hidden" id="ranking-primary" value="games_diff">
                 <div role="group" aria-label="${_t('create.rankingPrimaryLabel')}" id="ranking-primary-buttons" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:.55rem;">
-                  <button type="button" data-ranking-primary="points" aria-pressed="true" onclick="window._setRankingPrimary('points')" class="btn btn-secondary btn-sm">${_t('create.rankingPrimaryPoints')}</button>
+                  <button type="button" data-ranking-primary="games_diff" aria-pressed="true" onclick="window._setRankingPrimary('games_diff')" class="btn btn-secondary btn-sm">${_t('create.rankingPrimaryGamesDiff')}</button>
                   <button type="button" data-ranking-primary="wins" aria-pressed="false" onclick="window._setRankingPrimary('wins')" class="btn btn-secondary btn-sm">${_t('create.tbWins')}</button>
-                  <button type="button" data-ranking-primary="games_diff" aria-pressed="false" onclick="window._setRankingPrimary('games_diff')" class="btn btn-secondary btn-sm">${_t('create.rankingPrimaryGamesDiff')}</button>
+                  <button type="button" data-ranking-primary="points" aria-pressed="false" onclick="window._setRankingPrimary('points')" class="btn btn-secondary btn-sm">${_t('create.rankingPrimaryPoints')}</button>
                 </div>
                 <small class="text-muted" style="display:block;margin-bottom:0.65rem;">${_t('create.rankingPrimaryDesc')}</small>
                 <small id="ranking-started-warning" style="display:none;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:.65rem;">${_t('create.rankingPrimaryStartedWarning')}</small>
                 <div id="tie-resolution-section"></div>
+                <div id="tiebreaker-criteria-section">
                 <p style="margin: .85rem 0 0.5rem; font-size: 0.8rem; color: var(--sp-c-58a6ff,#58a6ff); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.tiebreakerSection')}</p>
                 <small class="text-muted" style="display:block;margin-bottom:0.5rem;">${_t('create.tiebreakerDesc')}</small>
                 <div style="display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-bottom:0.6rem;"><button type="button" class="btn btn-secondary btn-sm" onclick="window._tbExcludeAll()">${_t('create.tbExcludeAll')}</button><button type="button" onclick="window._resetTiebreakers()" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(88,166,255,0.35);background:rgba(88,166,255,0.1);color:var(--sp-c-58a6ff,#58a6ff);font-size:0.74rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">↺ ${_t('create.tbResetBtn')}</button></div>
@@ -1430,6 +1471,7 @@ function setupCreateTournamentModal() {
                   <li draggable="true" data-tb="saldo_games" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:.4;">⠿</span><span style="flex:1;">🎾 ${_t('create.tbGamesDiff')}</span><button type="button" data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="background:none;border:0;color:var(--sp-c-34d399,#34d399);cursor:pointer;" title="${_t('create.tbRestoreBtn')}">↩</button></li>
                   <li draggable="true" data-tb="games_vencidos" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:.4;">⠿</span><span style="flex:1;">🎾 ${_t('create.tbGamesWon')}</span><button type="button" data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="background:none;border:0;color:var(--sp-c-34d399,#34d399);cursor:pointer;" title="${_t('create.tbRestoreBtn')}">↩</button></li>
                 </ul>
+                </div>
               </div>
 
             </form>
@@ -1517,7 +1559,7 @@ function setupCreateTournamentModal() {
         button.classList.toggle('ranking-primary-active', active);
       });
     };
-    window._setRankingPrimary('points');
+    window._setRankingPrimary('games_diff');
     const tbList = document.getElementById('tiebreaker-list');
     const tbExcluded = document.getElementById('tiebreaker-excluded-list');
     if (tbList) {
@@ -4478,6 +4520,8 @@ function setupCreateTournamentModal() {
       const lat = document.getElementById('tourn-venue-lat').value;
       const lon = document.getElementById('tourn-venue-lon').value;
       const startDate = document.getElementById('tourn-start-date').value;
+      const startTime = document.getElementById('tourn-start-time').value;
+      const eventStart = startDate + (startTime ? 'T' + startTime : '');
       const weatherDiv = document.getElementById('weather-forecast');
       const weatherContent = document.getElementById('weather-content');
 
@@ -4492,65 +4536,21 @@ function setupCreateTournamentModal() {
         return;
       }
 
+      if (window._weatherEventBeyondHorizon && window._weatherEventBeyondHorizon(eventStart)) {
+        weatherDiv.style.display = 'block';
+        weatherContent.innerHTML = window._weatherEventHtml(window._weatherEventForecast(null, eventStart), 'sm', '');
+        return;
+      }
+
       // v1.8.78: a busca saiu daqui e virou `window._weatherFetch` (js/views/weather.js) —
       // UMA chave, UM caminho de rede e cache de 30 min compartilhado com o widget do
       // detalhe do torneio. Sem isso seriam duas requisições pro mesmo local, e o
       // formulário dispara a cada tecla do campo de data (é debounced, mas ainda assim).
       (window._weatherFetch ? window._weatherFetch(lat, lon) : Promise.resolve(null))
         .then(data => {
-          if (!data || !data.list || !Array.isArray(data.list)) {
-            weatherDiv.style.display = 'none';
-            return;
-          }
-
-          // Parse start date
-          const startTs = new Date(startDate).getTime();
-          const now = new Date().getTime();
-
-          // Check if date is within 5 days
-          if (startTs - now > 5 * 24 * 60 * 60 * 1000) {
-            weatherDiv.style.display = 'block';
-            weatherContent.innerHTML = '<div style="font-size:0.8rem; color:var(--sp-c-cbd5e1,#cbd5e1);">' + _t('create.weatherFuture') + '</div>';
-            return;
-          }
-
-          // Find closest forecast entry
-          let closest = null;
-          let minDiff = Infinity;
-          for (const entry of data.list) {
-            const entryTs = entry.dt * 1000;
-            const diff = Math.abs(entryTs - startTs);
-            if (diff < minDiff) {
-              minDiff = diff;
-              closest = entry;
-            }
-          }
-
-          if (!closest) {
-            weatherDiv.style.display = 'none';
-            return;
-          }
-
-          const weather = closest.main || {};
-          const weatherInfo = (closest.weather && closest.weather[0]) || {};
-          const temp = Math.round(weather.temp || 0);
-          const tempMin = Math.round(weather.temp_min || 0);
-          const tempMax = Math.round(weather.temp_max || 0);
-          const humidity = weather.humidity || 0;
-          const description = weatherInfo.description || '';
-          const icon = weatherInfo.icon || '01d';
-
-          const iconUrl = 'https://openweathermap.org/img/wn/' + icon + '@2x.png';
-          const tempDisplay = tempMin + '°C - ' + tempMax + '°C';
-
+          const forecast = window._weatherEventForecast(data, eventStart);
           weatherDiv.style.display = 'block';
-          weatherContent.innerHTML = '<div style="display:flex; gap:10px; align-items:flex-start;">' +
-            '<img src="' + iconUrl + '" alt="weather" style="width:40px; height:40px;">' +
-            '<div style="flex:1;">' +
-            '<div style="font-size:0.85rem; font-weight:600; color:var(--sp-c-a5b4fc,#a5b4fc);">' + tempDisplay + '</div>' +
-            '<div style="font-size:0.75rem; color:var(--sp-c-cbd5e1,#cbd5e1); text-transform:capitalize; margin-top:2px;">' + description + '</div>' +
-            '<div style="font-size:0.75rem; color:var(--sp-c-94a3b8,#94a3b8); margin-top:4px;">' + _t('create.humidity') + ': ' + humidity + '%</div>' +
-            '</div></div>';
+          weatherContent.innerHTML = window._weatherEventHtml(forecast, 'sm', '');
         })
         .catch(() => {
           weatherDiv.style.display = 'none';
@@ -5035,6 +5035,7 @@ function setupCreateTournamentModal() {
     catch (e) { return []; }
   }
   function _rbDoFormulario() {
+    if (window._estimatedGameHoursState && window._estimatedGameHoursState.mode === 'organizer') return [];
     // Desligar a opção remove os prazos intermediários no próximo save. Não deixamos um
     // arrasto antigo continuar operando invisivelmente depois que o organizador a desativou.
     if (!((document.getElementById('round-bounds-enabled') || {}).checked)) return [];
@@ -5050,8 +5051,12 @@ function setupCreateTournamentModal() {
   };
   window._rbFormRefresh = function (forcarRepintura) {
     try {
+      var organizerSchedules = !!(window._estimatedGameHoursState && window._estimatedGameHoursState.mode === 'organizer');
+      var row = document.getElementById('round-bounds-toggle-row');
+      if (row) row.style.display = organizerSchedules ? 'none' : 'flex';
       var box = document.getElementById('round-bounds-box');
       var mount = document.getElementById('round-bounds-mount');
+      if (organizerSchedules) { if (box) box.style.display = 'none'; return; }
       if (!box || !mount || typeof window._rbMount !== 'function') return;
       var ini = _rbCampoMs('tourn-start-date', 'tourn-start-time', '19:00');
       var fim = _rbCampoMs('tourn-end-date', 'tourn-end-time', '23:59');
@@ -5077,6 +5082,7 @@ function setupCreateTournamentModal() {
   };
 
   window._recalcDuration = function () {
+    if (typeof window._syncPhaseGridTimingInputs === 'function') window._syncPhaseGridTimingInputs();
     if (window._renderGruposSuggestions) { try { window._renderGruposSuggestions(); } catch (e) {} }
     if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
     /* mudou data ou hora da fase → a régua muda de tamanho; o arranjo do organizador é
@@ -5859,6 +5865,7 @@ function setupCreateTournamentModal() {
         if (!hasCoverPhoto && typeof window._setCoverMode === 'function') window._setCoverMode('color');
       }, 50);
     }
+    if (typeof window._setTournamentDateColors === 'function') window._setTournamentDateColors(t.dateCardColors);
     // Show venue map if lat/lon available
     if (t.venueLat && t.venueLon) {
       setTimeout(function() { window._initVenueCreateMap(parseFloat(t.venueLat), parseFloat(t.venueLon), t.venue || ''); }, 300);
@@ -6061,7 +6068,7 @@ function setupCreateTournamentModal() {
     var _p1NameInput = document.getElementById('phase1-name');
     if (_p1NameInput) _p1NameInput.value = window._phase1Name || '';
     var _rankingPrimaryEl = document.getElementById('ranking-primary');
-    if (_rankingPrimaryEl) window._setRankingPrimary(['games_diff', 'wins'].indexOf(t.rankingPrimary) >= 0 ? t.rankingPrimary : 'points');
+    if (_rankingPrimaryEl) window._setRankingPrimary(['games_diff', 'wins', 'points'].indexOf(t.rankingPrimary) >= 0 ? t.rankingPrimary : 'points');
     var _rankingStartedWarning = document.getElementById('ranking-started-warning');
     if (_rankingStartedWarning) _rankingStartedWarning.style.display = Array.isArray(t.matches) && t.matches.length ? 'block' : 'none';
 
@@ -6483,15 +6490,15 @@ window._ctSetRatioEnabled = function (enabled) {
   var c = document.getElementById('gender-ratio-enabled');
   if (c) c.checked = !!enabled;
 };
-// Guarda os gêneros de quem JÁ está inscrito (só existe no editar). `null` = criação, ainda
-// não dá pra saber — e não saber não faz a seção sumir.
+// Guarda os gêneros de quem JÁ está inscrito (só existe no editar). `null` = criação;
+// a seção só aparece quando a configuração confirma uma disputa mista.
 window._ctRatioGeneros = null;
 window._ctPaintRatio = function () {
   var mount = document.getElementById('gender-ratio-mount');
   if (!mount) return;
   // A regra de VISIBILIDADE é do núcleo, não daqui: a tela de sorteio precisa da mesma.
   var _gcEl = document.getElementById('tourn-gender-categories');
-  var _fake = { genderCategories: String((_gcEl && _gcEl.value) || '').trim() ? [String(_gcEl.value).trim()] : [] };
+  var _fake = { genderCategories: String((_gcEl && _gcEl.value) || '').split(',').map(function (v) { return v.trim(); }).filter(Boolean) };
   var _gen = window._ctRatioGeneros;
   var _ver = (typeof window._ratioVisivel === 'function') ? window._ratioVisivel(_fake, null, _gen) : true;
 
@@ -6500,10 +6507,7 @@ window._ctPaintRatio = function () {
     // Categoria de gênero (ou pool de um gênero só) → o sorteio já roda homogêneo: não há
     // proporção a fazer, e gravar uma seria promessa que ninguém cumpre.
     if (h) h.value = '';
-    mount.innerHTML = (typeof window._ratioSliderHtml === 'function')
-      ? window._ratioSliderHtml({ idp: 'grct', visivel: false,
-          motivo: (typeof window._ratioMotivoAusencia === 'function') ? window._ratioMotivoAusencia(_fake, null, _gen) : '' })
-      : '';
+    mount.innerHTML = '';
     return;
   }
   // ⭐ Sem "Sem regra": o dono fechou que o default do app é 50/50 e o slider tem 3 paradas.
@@ -6774,6 +6778,7 @@ window._saveTournamentClickHandler = async function() {
           ? {} : { coverPhotoData: coverPhotoDataVal, ...(editId && !coverPhotoDataVal && window._coverRemovalRequested ? { _coverRemovalRequested:true } : {}) };
         const coverColorVal = (document.getElementById('tourn-cover-color') || {}).value || '#1f2937';
         const titleColorVal = (document.getElementById('tourn-title-color') || {}).value || '#ffffff';
+        const dateCardColorsVal = window._readTournamentDateColors();
         const coverGradientColorVal = (document.getElementById('tourn-cover-gradient-color') || {}).value || '#0f172a';
         const coverGradientEnabledVal = !!((document.getElementById('tourn-cover-gradient-enabled') || {}).checked);
         const coverAngleInput = Number((document.getElementById('tourn-cover-gradient-angle') || {}).value);
@@ -6853,7 +6858,8 @@ window._saveTournamentClickHandler = async function() {
               var bounds = _rbDoFormulario();
               return {
                 roundBounds: bounds,
-                roundBoundsEditorEnabled: !!((document.getElementById('round-bounds-enabled') || {}).checked)
+                roundBoundsEditorEnabled: window._estimatedGameHoursState && window._estimatedGameHoursState.mode === 'organizer'
+                  ? false : !!((document.getElementById('round-bounds-enabled') || {}).checked)
               };
             } catch (e) { return {}; }
           })(),
@@ -6902,6 +6908,7 @@ window._saveTournamentClickHandler = async function() {
           coverMode: coverModeVal,
           coverColor: /^#[0-9a-f]{6}$/i.test(coverColorVal) ? coverColorVal : '#1f2937',
           titleColor: /^#[0-9a-f]{6}$/i.test(titleColorVal) ? titleColorVal : '#ffffff',
+          dateCardColors: dateCardColorsVal,
           coverGradientColor: /^#[0-9a-f]{6}$/i.test(coverGradientColorVal) ? coverGradientColorVal : '#0f172a',
           coverGradientEnabled: coverGradientEnabledVal,
           coverGradientAngle: coverGradientAngleVal,
@@ -7121,7 +7128,7 @@ window._saveTournamentClickHandler = async function() {
 
         // Tiebreakers (ordem configurada pelo organizador)
         var rankingPrimaryEl = document.getElementById('ranking-primary');
-        tourData.rankingPrimary = rankingPrimaryEl && ['games_diff', 'wins'].indexOf(rankingPrimaryEl.value) >= 0 ? rankingPrimaryEl.value : 'points';
+        tourData.rankingPrimary = rankingPrimaryEl && ['games_diff', 'wins', 'points'].indexOf(rankingPrimaryEl.value) >= 0 ? rankingPrimaryEl.value : 'games_diff';
         const tbList = document.getElementById('tiebreaker-list');
         if (tbList) {
           tourData.tiebreakers = Array.from(tbList.querySelectorAll('li')).map(li => li.dataset.tb).filter(Boolean);
@@ -7130,6 +7137,10 @@ window._saveTournamentClickHandler = async function() {
         const tbExcl = document.getElementById('tiebreaker-excluded-list');
         if (tbExcl) {
           tourData.tiebreakersExcluded = Array.from(tbExcl.querySelectorAll('li')).map(li => li.dataset.tb).filter(Boolean);
+        }
+        if (_f2cfg && _f2cfg.tieResolution === 'singles_then_draw') {
+          tourData.tiebreakersExcluded = Array.from(new Set((tourData.tiebreakers || []).concat(tourData.tiebreakersExcluded || [])));
+          tourData.tiebreakers = [];
         }
         // A lista vazia é uma escolha explícita: só o critério principal decide
         // a tabela; uma simples pode resolver a fronteira entre destinos.
@@ -8669,6 +8680,7 @@ window._prefillFromTemplate = function(tpl) {
   if (typeof window._applyCoverPhoto === 'function') {
     _setV('tourn-cover-color', tpl.coverColor || '#1f2937');
     _setV('tourn-title-color', /^#[0-9a-f]{6}$/i.test(tpl.titleColor || '') ? tpl.titleColor : '#ffffff');
+    if (typeof window._setTournamentDateColors === 'function') window._setTournamentDateColors(tpl.dateCardColors);
     _setV('tourn-cover-gradient-color', tpl.coverGradientColor || '#0f172a');
     _setC('tourn-cover-gradient-enabled', !!tpl.coverGradientEnabled);
     if (typeof window._syncCoverColorFromPicker === 'function') window._syncCoverColorFromPicker();
@@ -9204,7 +9216,8 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       woScope: 'individual',
       lateEnrollment: get('late-enrollment') || 'closed',
       newMatchups: get('late-enrollment') !== 'closed' && get('new-matchups') === 'true',
-      roundBoundsEditorEnabled: getChecked('round-bounds-enabled'),
+      roundBoundsEditorEnabled: !(window._estimatedGameHoursState && window._estimatedGameHoursState.mode === 'organizer')
+        && getChecked('round-bounds-enabled'),
       courtCount: parseInt(get('tourn-court-count')) || '',
       courtNames: (get('tourn-court-names') || '').trim(),
       callTime: parseInt(get('tourn-call-time')) || 0,
@@ -9228,6 +9241,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       coverMode: (get('tourn-cover-mode') === 'photo' && get('tourn-cover-data')) ? 'photo' : 'color',
       coverColor: get('tourn-cover-color') || '#1f2937',
       titleColor: /^#[0-9a-f]{6}$/i.test(get('tourn-title-color')) ? get('tourn-title-color') : '#ffffff',
+      dateCardColors: window._readTournamentDateColors(),
       coverGradientColor: get('tourn-cover-gradient-color') || '#0f172a',
       coverGradientEnabled: getChecked('tourn-cover-gradient-enabled'),
       coverGradientAngle: Number.isFinite(Number(get('tourn-cover-gradient-angle'))) ? Math.max(0, Math.min(360, Number(get('tourn-cover-gradient-angle')))) : 135,

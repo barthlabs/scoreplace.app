@@ -62,20 +62,34 @@ test('saldo principal, simples e nenhum desempate adicional podem coexistir sem 
     window._f2ClassifAtiva(true);
   });
   await expect(page.locator('#tie-resolution-section')).toContainText('Simples de desempate');
-  await page.locator('[data-ranking-primary="games_diff"]').click();
   expect(await selVal(page, 'ranking-primary')).toBe('games_diff');
+  expect(await page.locator('#ranking-primary-buttons [data-ranking-primary]').evaluateAll(items => items.map(item => item.dataset.rankingPrimary))).toEqual(['games_diff', 'wins', 'points']);
   await expect(page.locator('#ranking-primary-buttons .ranking-primary-active')).toHaveCount(1);
   await expect(page.locator('[data-ranking-primary="games_diff"]')).toHaveCSS('background-color', 'rgb(37, 99, 235)');
   await page.getByRole('button', { name: 'Simples de desempate' }).click();
   await expect(page.locator('#tie-resolution-section')).toContainText('Pontos para vencer');
-  await page.getByRole('button', { name: 'Desativar todos' }).click();
-  await expect(page.locator('#tiebreaker-list li')).toHaveCount(0);
-  await expect(page.locator('#tiebreaker-list')).toHaveCSS('display', 'flex');
-  const order = await page.evaluate(() => {
-    const parent = document.getElementById('tiebreaker-section');
-    return Array.from(parent.children).map(el => el.id || el.textContent.trim().slice(0, 24));
+  await expect(page.locator('#sp-tie-points')).toHaveValue('5');
+  await expect(page.locator('#tiebreaker-criteria-section')).toBeHidden();
+  await page.getByRole('button', { name: 'Critérios de desempate' }).click();
+  await expect(page.locator('#tiebreaker-criteria-section')).toBeVisible();
+});
+
+test('grade usa chamada e aquecimento da ficha e oculta prazos por rodada', async ({ page }) => {
+  await openCreateModal(page);
+  await page.evaluate(() => {
+    document.getElementById('tourn-start-date').value = '2026-11-29';
+    document.getElementById('tourn-end-date').value = '2026-11-29';
+    window._estimatedGameHoursState.mode = 'organizer';
+    window._renderEstimatedGameHours();
   });
-  expect(order.indexOf('tie-resolution-section')).toBeLessThan(order.indexOf('tiebreaker-list'));
+  await expect(page.locator('#round-bounds-toggle-row')).toBeHidden();
+  await expect(page.locator('#phase-grid-call-time')).toBeVisible();
+  await page.locator('#phase-grid-call-time').fill('7');
+  await page.locator('#phase-grid-warmup-time').fill('3');
+  expect(await selVal(page, 'tourn-call-time')).toBe('7');
+  expect(await selVal(page, 'tourn-warmup-time')).toBe('3');
+  await page.evaluate(() => window._setEstimatedScheduleMode('participants'));
+  await expect(page.locator('#round-bounds-toggle-row')).toBeVisible();
 });
 
 test('cor do título aparece na prévia da personalização', async ({ page }) => {

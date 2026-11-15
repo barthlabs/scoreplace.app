@@ -73,6 +73,10 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       catch (error) { fail('invalid-argument', error.message); }
     });
     checkNested(config, fail);
+    if ('dateCardColors' in config) {
+      try { require('./date-card-colors-core').validate(config.dateCardColors); }
+      catch (error) { fail('invalid-argument', error.message); }
+    }
     if ('coverGradientBlend' in config && config.coverGradientBlend !== null &&
         (typeof config.coverGradientBlend !== 'number' || !Number.isFinite(config.coverGradientBlend) || config.coverGradientBlend < 0 || config.coverGradientBlend > 100)) {
       fail('invalid-argument', 'Largura da mistura inválida.');

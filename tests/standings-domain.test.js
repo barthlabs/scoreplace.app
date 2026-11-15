@@ -45,7 +45,11 @@ ok(live._computeMonarchStandings(group,{tiebreakers:['vitorias']})[0].name === '
   'motor real escolhe pontos ou saldo de games conforme configuração persistida');
 const editor = fs.readFileSync(path.join(ROOT,'js/views/create-tournament.js'),'utf8');
 const server = fs.readFileSync(path.join(ROOT,'functions-autodraw/index.js'),'utf8');
-ok(editor.includes("tourData.rankingPrimary = rankingPrimaryEl") && editor.includes("window._setRankingPrimary(['games_diff', 'wins']") &&
+ok(editor.includes("tourData.rankingPrimary = rankingPrimaryEl") &&
+  editor.indexOf('data-ranking-primary="games_diff"') < editor.indexOf('data-ranking-primary="wins"') &&
+  editor.indexOf('data-ranking-primary="wins"') < editor.indexOf('data-ranking-primary="points"') &&
+  editor.includes("window._setRankingPrimary('games_diff');") &&
+  editor.includes("window._setRankingPrimary(['games_diff', 'wins', 'points']") &&
   server.includes("'phase1Name','rankingPrimary','tiebreakers'"),
   'editor carrega e salva a escolha e o servidor aceita o campo declarativo');
 

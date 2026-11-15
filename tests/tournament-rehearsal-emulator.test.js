@@ -21,6 +21,8 @@ const service = makeService({ db, HttpsError });
   const root = {
     id, creatorUid: OWNER_UID, isPublic: false, organizerOnly: true, status: 'open',
     canonicalRegistrationMigration: { fingerprint: 'native:test', registrationCount: 144 },
+    registrationSettings: { mode: 'open' }, placeholderReservations: { diamante: 2 },
+    maxParticipantsByCategory: { diamante: 32 },
     categoryDefinitions: [{ id: 'diamante' }, { id: 'ouro' }, { id: 'prata' }],
     participants: [], matches: [], rounds: [], groups: [], updatedAt: 'before-rehearsal'
   };
@@ -46,7 +48,10 @@ const service = makeService({ db, HttpsError });
   assert.equal(activated.count, 144);
   const baseline = (await db.collection('tournamentRehearsalBaselines').doc(id).get()).data();
   assert.equal(baseline.hash, fingerprint({ root, tree: baseline.tree, summary: { tournamentId: id, label: 'pré ensaio' } }));
-  await ref.update({ matches: [{ id: 'm1', score: '6x4', wo: true }], status: 'running' });
+  await ref.update({ matches: [{ id: 'm1', score: '6x4', wo: true }], status: 'running',
+    registrationSettings: { mode: 'closed' }, placeholderReservations: { diamante: 4 },
+    maxParticipantsByCategory: { diamante: 16 },
+    canonicalRegistrationMigration: { fingerprint: 'temporary', registrationCount: 144 } });
   await ref.collection('history').doc('score').set({ action: 'score', score: '6x4' });
   await ref.collection('matches').doc('m1').set({ winner: 'a', wo: true });
   await ref.collection('inscritos').doc('mirror').set({ score: '6x4', wo: true });
@@ -58,7 +63,7 @@ const service = makeService({ db, HttpsError });
   const reset = await service.restore(request());
   assert.equal(reset.ok, true);
   assert.equal(reset.count, 144);
-  assert.deepEqual((await ref.get()).data(), root);
+  assert.deepEqual((await ref.get()).data(), root, 'configuração e recibo canônico voltam à fotografia anterior ao ensaio');
   assert.deepEqual((await summary.get()).data(), { tournamentId: id, label: 'pré ensaio' });
   assert.equal((await ref.collection('registrations').get()).size, 144);
   assert.deepEqual((await ref.collection('history').get()).docs.map(doc => doc.id), ['preexisting']);

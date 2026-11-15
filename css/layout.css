@@ -196,11 +196,12 @@ html.sp-native .modal-overlay.active .modal-header {
 .sp-header-copy { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
 .sp-header-copy h1 { margin: 0; line-height: 1; }
 .sp-header-wordmark { display: block; width: clamp(150px, 48vw, 280px); height: auto; }
-.sp-header-version { display: block; align-self: flex-end; margin-top: 2px; color: var(--text-muted); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.3px; line-height: 1.15; white-space: nowrap; }
+.sp-header-version { display: block; align-self: flex-end; margin-top: 2px; margin-right: calc(clamp(150px, 48vw, 280px) * 0.064); color: var(--text-muted); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.3px; line-height: 1.15; white-space: nowrap; }
 @media (max-width: 319px) {
   .sp-header-brand { gap: 4px; }
   .sp-header-symbol { width: 40px; }
   .sp-header-wordmark { width: clamp(118px, 44vw, 136px); }
+  .sp-header-version { margin-right: calc(clamp(118px, 44vw, 136px) * 0.064); }
 }
 
 .view-container {

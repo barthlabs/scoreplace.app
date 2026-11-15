@@ -20,6 +20,23 @@
   function section() { return document.getElementById('phase-grid-predraw-mount') || document.getElementById('phase-call-order-editor'); }
   function overlay() { return document.getElementById('phase-grid-overlay'); }
   function gridRoot() { return overlayOpen ? overlay() : section(); }
+  function timingValue(id, fallback) {
+    var field = document.getElementById(id);
+    return field && field.value !== '' ? field.value : String(fallback);
+  }
+  window._phaseGridTimingChanged = function (kind, input) {
+    if (kind !== 'call' && kind !== 'warmup') return;
+    var canonical = document.getElementById(kind === 'call' ? 'tourn-call-time' : 'tourn-warmup-time');
+    if (!canonical || !input) return;
+    canonical.value = input.value;
+    canonical.dispatchEvent(new Event('input', { bubbles:true }));
+  };
+  window._syncPhaseGridTimingInputs = function () {
+    [['phase-grid-call-time', 'tourn-call-time'], ['phase-grid-warmup-time', 'tourn-warmup-time']].forEach(function (ids) {
+      var proxy = document.getElementById(ids[0]), canonical = document.getElementById(ids[1]);
+      if (proxy && canonical && proxy.value !== canonical.value) proxy.value = canonical.value;
+    });
+  };
   function showError(message) {
     var el = document.getElementById('phase-grid-message');
     if (el) { el.textContent = message || ''; el.hidden = !message; }
@@ -66,7 +83,9 @@
     if (!state || !state.plan || !model || !state.tiles.length) {
       mount.innerHTML = '<div class="phase-grid-editor"><h3>Grade de fases e quadras</h3>' +
         '<p>Gere uma proposta com as vagas, quadras e durações configuradas. Depois ajuste os blocos na tela ampla.</p>' +
-        '<div class="phase-grid-proposal"><label>Jogo eliminatório <input id="phase-grid-elimination-play" type="number" min="1" max="180" value="25" inputmode="numeric"> min</label>' +
+        '<div class="phase-grid-proposal"><label>Chamada <input id="phase-grid-call-time" type="number" min="0" max="60" value="' + esc(timingValue('tourn-call-time', 5)) + '" inputmode="numeric" oninput="window._phaseGridTimingChanged(\'call\', this)"> min</label>' +
+        '<label>Aquecimento <input id="phase-grid-warmup-time" type="number" min="0" max="60" value="' + esc(timingValue('tourn-warmup-time', 5)) + '" inputmode="numeric" oninput="window._phaseGridTimingChanged(\'warmup\', this)"> min</label>' +
+        '<label>Jogo eliminatório <input id="phase-grid-elimination-play" type="number" min="1" max="180" value="25" inputmode="numeric"> min</label>' +
         '<button type="button" class="btn btn-secondary" onclick="window._phaseGridSuggest()">Gerar proposta de grade</button></div>' +
         '<p id="phase-grid-proposal-message" role="alert" hidden></p></div>';
       return;

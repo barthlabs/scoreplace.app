@@ -110,23 +110,19 @@
    * tem "dois gêneros", tem um e três incógnitas.
    */
   window._ratioTemOsDoisGeneros = function (generos) {
-    // ⚠️ NÃO SABER não é o mesmo que ser de um gênero só — e essa diferença decide se a seção
-    // some. Dois casos de "não sabe": a CRIAÇÃO do torneio (ninguém inscrito ainda, quem chama
-    // passa `null`) e o inscrito SEM gênero declarado (é justamente quem o diálogo de sorteio
-    // está prestes a definir). Nos dois a seção FICA. Ela só sai quando todo mundo tem gênero
-    // e é o mesmo pra todo mundo — aí não há o que proporcionar.
-    if (generos == null) return true;
+    // A seção só aparece com ambos os gêneros confirmados na mesma disputa.
+    // Indefinidos não contam como segundo gênero; uma regra de proporção
+    // exibida antes disso prometeria um sorteio que talvez não possa ocorrer.
+    if (generos == null) return false;
     if (!Array.isArray(generos)) return false;
-    var m = false, f = false, desconhecido = false;
+    var m = false, f = false;
     for (var i = 0; i < generos.length; i++) {
       var g = String(generos[i] || '').toLowerCase();
       if (g === 'masculino') m = true;
       else if (g === 'feminino') f = true;
-      else desconhecido = true;
       if (m && f) return true;
     }
-    if (!m && !f) return true;      // ninguém declarou nada — ainda pode virar misto
-    return desconhecido;            // um gênero só, mas há indefinidos: ainda pode virar misto
+    return false;
   };
 
   window._ratioVisivel = function (t, category, generos) {
@@ -181,14 +177,7 @@
     o = o || {};
     var idp = o.idp || 'gr';
     // ── SEÇÃO INTEIRA SOME quando não há os dois gêneros pra proporcionar ──────────────
-    // O dono pediu que sumisse — e pediu também que diga por quê: foi justamente ele
-    // procurando "por que a proporção funcionava" que abriu este caso. Controle que some
-    // calado manda a pessoa procurar.
-    if (o.visivel === false) {
-      return '<div id="' + idp + '-box" style="font-size:0.74rem;color:var(--text-muted,#94a3b8);' +
-        'line-height:1.45;padding:10px 12px;border-radius:10px;border:1px dashed rgba(255,255,255,0.14);margin-bottom:1rem;">' +
-        '<span style="margin-right:5px;">⚖️</span><b>Sem proporção de gênero</b> — ' + (o.motivo || 'não há os dois gêneros para proporcionar') + '.</div>';
-    }
+    if (o.visivel === false) return '';
     var r = window._isValidRatio(o.ratio) ? String(o.ratio) : window._GENDER_RATIO_DEFAULT;
     var i = ORDEM.indexOf(r); if (i < 0) i = 1;
     var cfg = RATIOS[r];

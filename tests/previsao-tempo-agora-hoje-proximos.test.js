@@ -165,6 +165,38 @@ ok(W._weatherSlotHtml({ id: 't1' }, 'lg') === '', 'G9. torneio sem coordenadas n
 ok(W._weatherSlotHtml({ venueLat: -23.5, venueLon: -46.6 }, 'lg').indexOf('data-weather-slot') !== -1,
   'G10. com coordenadas, o slot nasce com lat/lon embutidos');
 
+// Torneio futuro usa o local e a hora do evento, nunca a leitura de agora.
+const EVENT_DATA = { city: { timezone: -3 * 3600 }, list: [
+  passo('2026-08-18T06:00:00-03:00', 17, 16, 18, '02d', 'nuvens', 0.1),
+  passo('2026-08-18T09:00:00-03:00', 23, 22, 24, '01d', 'céu limpo', 0.2),
+  passo('2026-08-18T12:00:00-03:00', 28, 27, 29, '01d', 'céu limpo', 0.1)
+] };
+const event = W._weatherEventForecast(EVENT_DATA, '2026-08-18T08:00', AGORA);
+ok(event.status === 'available' && event.entry.main.temp === 23,
+  'H1. evento às 08h usa a previsão das 09h no fuso do local');
+const eventHtml = W._weatherEventHtml(event, 'lg', 'Quadra A');
+ok(eventHtml.includes('18/08/2026 às 08:00') && eventHtml.includes('23°') &&
+  !eventHtml.includes('agora') && !eventHtml.includes('próximos dias'),
+  'H2. card mostra a data e a temperatura do evento, sem tempo atual');
+const distant = W._weatherEventForecast(EVENT_DATA, '2026-08-29T08:00', AGORA);
+ok(distant.status === 'future' && W._weatherEventHtml(distant, 'lg', '').includes('próximos 5 dias'),
+  'H3. fora do horizonte informa disponibilidade, sem reutilizar previsão de hoje');
+ok(W._weatherEventForecast(EVENT_DATA, '2026-08-18T18:00', AGORA).status === 'future',
+  'H4. fim da grade de previsão não reutiliza o último horário');
+ok(W._weatherEventForecast(EVENT_DATA, '2026-08-15T08:00', AGORA).status === 'past',
+  'H5. evento passado não recebe previsão atual como se fosse do evento');
+ok(W._weatherEventForecast(null, '2026-08-18T08:00', AGORA).status === 'unavailable',
+  'H6. falha da API dentro dos cinco dias não diz que a data ainda está longe');
+ok(W._weatherEventForecast({ list: EVENT_DATA.list, city: {} }, '2026-08-18T08:00', AGORA).status === 'unavailable',
+  'H7. sem fuso do local não usa o fuso do dispositivo para casar horário e previsão');
+ok(W._weatherEventBeyondHorizon('2026-08-21T08:00', AGORA) === false &&
+  W._weatherEventBeyondHorizon('2026-08-22T08:00', AGORA) === true,
+  'H8. a janela sem fuso deixa um dia de folga e consulta a borda do horizonte');
+ok(W._weatherEventForecast(null, '2026-08-29T08:00', AGORA).status === 'future',
+  'H9. evento distante informa quando a previsão ficará disponível sem fazer a busca');
+ok(W._weatherSlotHtml({ venueLat: -23.5, venueLon: -46.6, startDate: '2026-08-15T18:00' }, 'lg').includes('data-event-start="2026-08-15T18:00"'),
+  'H10. o slot preserva a data para decidir passado/futuro no fuso do local');
+
 console.log('\n🌤️ PREVISÃO — agora / hoje / próximos dias');
 console.log('   ' + pass + ' ok, ' + fail + ' falhas');
 if (fail) { fails.forEach(f => console.log('   ✗ ' + f)); process.exit(1); }
