@@ -30,6 +30,7 @@ function cloneForAccount(item, tournamentId, accountUid, fixedPairId) {
     fixedPairId: fixedPairId || null,
   });
   delete next.manualDisplayName;
+  delete next.manualNameKey;
   delete next.replacedParticipantUid;
   return next;
 }

@@ -39,6 +39,8 @@ const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única:
 const _phaseCert = require('./vendor/phase-index-certificate-core.js');
 const _phaseReadProofs = new WeakMap();
 const _registrationRoster = require('./vendor/registration-roster.js');
+const _manualRegistrationNameKey = (value) => String(value || '').normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
 const _tournamentBilling = require('./vendor/tournament-billing-core.js');
 const _billingSnapshots = new WeakMap();
 const _tournamentFeeStripeKey = defineSecret('STRIPE_SECRET_KEY');
@@ -615,7 +617,9 @@ function _writeCategoryRemoval(tx, ref, t, removal, reservations) {
     tx.update(ref.collection('registrations').doc(item.registrationId), update);
   });
   removal.creates.forEach(item => tx.create(ref.collection('registrations').doc(item.registrationId), {
-    ...item, createdAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp(),
+    ...item,
+    ...(item.participantKind === 'manual' ? { manualNameKey: _manualRegistrationNameKey(item.manualDisplayName) } : {}),
+    createdAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp(),
   }));
   t.canonicalRegistrationMigration = {
     ...t.canonicalRegistrationMigration,
@@ -5898,6 +5902,13 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     }
     if (t.rulesContractVersion >= 2 && t.status === 'finished') {
       throw new HttpsError('failed-precondition', 'O torneio já foi encerrado; a configuração publicada não pode ser alterada.');
+    }
+    // Clientes antigos enviam só cinco cores e substituem o objeto inteiro.
+    // Preserve a tipografia já publicada sem reescrever as cores escolhidas.
+    if (patch.dateCardColors && !Object.prototype.hasOwnProperty.call(patch.dateCardColors, 'typography')) {
+      try { patch.dateCardColors = require('./date-card-colors-core').mergeLegacyTypography(
+        patch.dateCardColors, t.dateCardColors); }
+      catch (error) { throw new HttpsError('invalid-argument', error.message); }
     }
     if ('membersOnly' in patch || 'organizerOnly' in patch) {
       const effective = {

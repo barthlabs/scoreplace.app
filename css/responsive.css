@@ -1094,6 +1094,13 @@ body.hamburger-open #header-notif-bell { display: none !important; }
   align-items: center !important;
   padding: clamp(0.4rem, 1vw, 0.5rem) clamp(0.75rem, 2vw, 2rem) !important;
 }
+/* Na web desktop, a marca já foi reduzida a 80%; a barra acompanha essa altura. */
+@media (min-width: 1200px) {
+  html:not(.sp-native) .topbar {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+}
 @media (min-width: 768px) {
   .topbar { flex-wrap: nowrap !important; }
 }

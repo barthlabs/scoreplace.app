@@ -13,6 +13,8 @@
     else if (name === 'createTournamentClaimLink') request = window._callCF('createTournamentClaimLink', data, 'Entre para reconhecer sua vaga.');
     else if (name === 'previewTournamentClaimLink') request = window._callCF('previewTournamentClaimLink', data, 'Entre para reconhecer sua vaga.');
     else if (name === 'acceptTournamentClaimLink') request = window._callCF('acceptTournamentClaimLink', data, 'Entre para reconhecer sua vaga.');
+    else if (name === 'listMyHistoricalAthleteClaims') request = window._callCF('listMyHistoricalAthleteClaims', data, 'Entre para reconhecer seu histórico.');
+    else if (name === 'acceptHistoricalAthleteClaim') request = window._callCF('acceptHistoricalAthleteClaim', data, 'Entre para reconhecer seu histórico.');
     else return Promise.reject(new Error('Operação de convite desconhecida'));
     return request.then(function (response) { return response.data; });
   }
@@ -242,5 +244,67 @@
       });
       result.appendChild(field); result.appendChild(copy);
     }).catch(function (error) { if (dialog.isConnected) dialog.querySelector('[data-result]').textContent = error.message || 'Não foi possível gerar o link.'; });
+  };
+
+  function showHistoricalClaims(candidates) {
+    var old = document.getElementById('sp-historical-claim-dialog'); if (old) old.remove();
+    var dialog = document.createElement('div'); dialog.id = 'sp-historical-claim-dialog'; dialog.className = 'sp-manual-invites-dialog';
+    dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-label', 'Reconhecer participação em torneios');
+    dialog.innerHTML = '<div class="sp-manual-invites-panel"><header><h2>Seu nome aparece em um torneio</h2>' +
+      '<button type="button" data-close aria-label="Fechar">×</button></header>' +
+      '<p>Confira cada participação. Vincule somente se você jogou nessa vaga. Os placares originais não mudam; ' +
+      'os jogos confirmados passam a contar no seu histórico.</p><div data-claim-list></div></div>';
+    document.body.appendChild(dialog);
+    dialog.querySelector('[data-close]').addEventListener('click', function () { dialog.remove(); });
+    dialog.addEventListener('click', function (event) { if (event.target === dialog) dialog.remove(); });
+    var list = dialog.querySelector('[data-claim-list]');
+    candidates.forEach(function (candidate) {
+      var row = document.createElement('div'); row.className = 'sp-manual-invite-row';
+      row.innerHTML = '<div><strong>' + esc(candidate.athleteName) + '</strong><small>' +
+        esc(candidate.tournamentName) + '</small></div><button type="button" class="btn btn-primary">Sou esta pessoa — vincular</button>' +
+        '<div class="sp-manual-invite-result" role="status"></div>';
+      list.appendChild(row);
+      row.querySelector('button').addEventListener('click', function (event) {
+        var button = event.currentTarget, result = row.querySelector('[role="status"]');
+        button.disabled = true; result.textContent = 'Conferindo sua vaga e os jogos…';
+        call('acceptHistoricalAthleteClaim', { tournamentId: candidate.tournamentId,
+          manualParticipantId: candidate.manualParticipantId }).then(function (reply) {
+          if (!dialog.isConnected) return;
+          result.textContent = 'Participação vinculada. ' + (reply.linkedMatches || 0) + ' jogos associados à sua conta.';
+          button.remove();
+          if (window.AppStore && typeof window.AppStore.loadFromFirestore === 'function') {
+            window.AppStore.loadFromFirestore().catch(function () {});
+          }
+        }).catch(function (error) {
+          if (!dialog.isConnected) return;
+          button.disabled = false; result.textContent = error.message || 'Não foi possível vincular a vaga.';
+        });
+      });
+    });
+  }
+
+  window._openHistoricalAthleteClaims = function (tournamentId) {
+    if (!auth()) return Promise.resolve();
+    return call('listMyHistoricalAthleteClaims', {}).then(function (reply) {
+      var candidates = Array.isArray(reply.candidates) ? reply.candidates : [];
+      if (tournamentId) candidates = candidates.filter(function (item) { return item.tournamentId === tournamentId; });
+      if (candidates.length) showHistoricalClaims(candidates);
+      else if (tournamentId && typeof window.showNotification === 'function') {
+        window.showNotification('Nenhuma vaga encontrada', 'Não há uma vaga manual com o nome completo do seu perfil neste torneio.', 'info');
+      }
+      return candidates.length;
+    });
+  };
+
+  window._checkHistoricalAthleteClaims = function () {
+    if (!auth() || !window.AppStore.currentUser.uid) return;
+    var uid = window.AppStore.currentUser.uid;
+    var key = 'scoreplace_historical_claim_prompt_' + uid;
+    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch (_) {}
+    window._openHistoricalAthleteClaims().catch(function (error) {
+      try { sessionStorage.removeItem(key); } catch (_) {}
+      if (window._warn) window._warn('[historical-claim] busca indisponível:', error);
+    });
   };
 })();

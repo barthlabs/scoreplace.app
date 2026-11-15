@@ -358,5 +358,20 @@ console.log('   colunas geradas: ' + tc.rounds.length + ' · jogadores sorteados
   assert(!validateTeamWO(match, ['ana','clara']).ok, 'W.O. parcial/ambíguo entre duplas é recusado');
 }
 
+// O mesmo validador protege criação e edição da aparência da data.
+{
+  const dateColors = require('./date-card-colors-core');
+  const colors = { background:'#216b96', text:'#ffffff', day:'#ffffff', month:'#ffc400', time:'#e5f4fc' };
+  const typography = { daySize:110, dayWeight:700, monthSize:105, monthWeight:800, timeSize:95, timeWeight:500 };
+  assert(dateColors.validate(colors) === colors, 'configuração de data legada com cinco cores continua válida');
+  assert(dateColors.validate({ ...colors, typography }).typography.daySize === 110,
+    'criação/edição aceita as seis opções de tipografia');
+  assert(dateColors.mergeLegacyTypography(colors, { ...colors, typography }).typography.daySize === 110,
+    'edição por cliente antigo preserva a tipografia publicada');
+  try { dateColors.validate({ ...colors, typography: { ...typography, monthWeight:900 } });
+    assert(false, 'peso fora do limite deve ser recusado'); }
+  catch (error) { assert(/tipografia/.test(error.message), 'peso fora do limite é recusado'); }
+}
+
 console.log('\n' + (failures === 0 ? '✅ TODOS OS TESTES PASSARAM' : '❌ ' + failures + ' FALHA(S)'));
 process.exit(failures === 0 ? 0 : 1);

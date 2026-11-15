@@ -8,7 +8,9 @@ const vm = require('node:vm');
 const src = fs.readFileSync(path.join(__dirname, '../js/firebase-db.js'), 'utf8');
 const window = {
   _slotUids: (game, side) => side === 'p1' ? game.team1Uids : game.team2Uids,
-  _matchWinnerSide: game => game.draw ? 0 : game.winnerUids[0] === game.team1Uids[0] ? 1 : 2,
+  _matchWinnerSide: game => game.draw ? 0 : game.winnerUids
+    ? (game.winnerUids[0] === game.team1Uids[0] ? 1 : 2)
+    : (game.scoreP1 > game.scoreP2 ? 1 : 2),
   _isPartidaEmRajada: () => false,
   _error: () => {}, _warn: () => {}
 };
@@ -41,6 +43,11 @@ assert.equal(window._spTournamentHistoryRecord({ ...game, scoreP1: null, scoreP2
 assert.equal(window._spTournamentHistoryRecord({ ...game, wo: true }), null);
 assert.equal(window._spTournamentHistoryRecord({ ...game, team2Uids: [] }), null,
   'sem os dois lados UID, o placar fica no torneio e não vira V/D pessoal');
+const historical = window._spTournamentHistoryRecord({ ...game, team1Uids: ['ana', null],
+  team2Uids: [null, null], winnerUids: null, historicalClaimUids: ['ana'] });
+assert.deepEqual(Array.from(historical.players, p => [p.uid, p.team]), [['ana', 1]],
+  'vínculo confirmado atribui somente a atleta identificada, sem inventar adversários');
+assert.equal(historical.winnerTeam, 1);
 
 (async () => {
   const filters = [];

@@ -3575,6 +3575,13 @@ function renderTournaments(container, tournamentId = null) {
         // Inscrições fecham após sorteio (status 'active'), exceto Liga/Ranking com inscrições abertas na temporada
         const isFinished = t.status === 'finished' || t._finished === true ||
             !!(window._tournamentResultsComplete && window._tournamentResultsComplete(t));
+        const calendarDateHtml = (content) => {
+            if (!content || !tournamentId || isFinished || !t.startDate) return content;
+            return `<div class="sp-date-card-trigger" role="button" tabindex="0" data-tournament-id="${window._safeHtml(t.id)}"
+              aria-label="Adicionar ${window._safeHtml(t.name)} à agenda"
+              onclick="event.stopPropagation();window._tournamentAddToCalendar(this.dataset.tournamentId)"
+              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();window._tournamentAddToCalendar(this.dataset.tournamentId)}">${content}</div>`;
+        };
         const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
         // v2.1.6: torneio encerrado (campeão definido) SEMPRE fecha inscrição,
         // inclusive Liga — ligaAberta nunca vale com status 'finished'.
@@ -4458,9 +4465,6 @@ function renderTournaments(container, tournamentId = null) {
             </div>
             ${/* v2.8.67: enquete ativa → botão brilhante logo abaixo do nome */ ''}
             ${(tournamentId && typeof window._opButtonHtml === 'function') ? window._opButtonHtml(t) : ''}
-            ${/* v2.3.85: linha direta com o desenvolvedor — logo abaixo do nome,
-                  só pro organizador na página de detalhe do torneio. */ ''}
-            ${(tournamentId && isOrg && typeof window._devWhatsAppBtnHtml === 'function') ? '<div style="margin:2px 0 12px;">' + window._devWhatsAppBtnHtml({ extra: 'height:38px;padding:0 16px;font-size:0.82rem;' }) + '</div>' : ''}
             ${/* v2.3.96: rede de segurança — sorteio em revisão (só organizador) */ ''}
             ${(typeof window._renderPendingDrawBanner === 'function') ? window._renderPendingDrawBanner(t) : ''}
             ${/* v2.1.16: pódio do torneio encerrado logo abaixo do nome/logo */ ''}
@@ -4468,6 +4472,7 @@ function renderTournaments(container, tournamentId = null) {
                   dono). Pódio de torneio que parou no meio seria uma mentira campeã. */ ''}
             ${tournamentId ? podiumHtml : ''}
             ${tournamentId ? `<div class="sp-tournament-date-actions"><div class="sp-tournament-actions">
+              ${(tournamentId && isOrg && typeof window._devWhatsAppBtnHtml === 'function') ? window._devWhatsAppBtnHtml({ twoLine: true, extra: 'min-height:44px;padding:4px 10px;font-size:0.75rem;' }) : ''}
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               ${/* Grupo do torneio no WhatsApp — BOTÃO ÚNICO (1.8.31). Ele mora à esquerda de
                     "Desinscrever-se" quando esse bloco existe (inscrito + inscrições abertas);
@@ -4478,77 +4483,17 @@ function renderTournaments(container, tournamentId = null) {
                     saiu na 1.8.30, ele ficava sem NENHUM acesso ao grupo (era o estado do
                     Confra). Criar/trocar/abrir agora vivem no painel que este botão abre. */ ''}
               ${(!_waChipJuntoDoEnroll && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
-              ${(!isFinished && t.startDate) ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tournamentAddToCalendar('${t.id}');">📅 Adicionar à agenda</button>` : ''}
-            </div>${dateCardHtml ? `<div class="sp-tournament-date-stack">${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}${dateCardHtml}</div>` : ''}</div>` : ''}
+            </div>${dateCardHtml ? `<div class="sp-tournament-date-stack">${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}${calendarDateHtml(dateCardHtml)}</div>` : ''}</div>` : ''}
 
             <!-- Datas e logo do local formam um único bloco: o brasão fica ao lado
                  do período, nunca perdido junto ao título do torneio. -->
             <div style="display:${dateCardHtml ? 'none' : 'flex'};align-items:center;gap:12px;min-width:0;">
               ${dateCardHtml ? '' : `
-              <div style="display: inline-block; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.7;'}">
-                 ${datesGridHtml}
-              </div>
+              ${calendarDateHtml(`<div style="display:inline-block;font-size:0.9rem;font-weight:500;${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity:0.7;'}">${datesGridHtml}</div>`)}
               `}
               ${!dateCardHtml && t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
             </div>
-            ${(() => {
-              // v0.16.90: linha "Atualizado em..." + toggle Liga "Ativado/
-              // Desativado" alinhados nas pontas (left/right). Se não há
-              // updatedAt, left fica vazio e o toggle ocupa a direita; se
-              // não há toggle (não-Liga ou user não inscrito), só "Atualizado".
-              // Um `updatedAt` vindo de documento legado, cache parcial ou um Timestamp
-              // ainda não serializado não é motivo para exibir "Invalid Date". A linha é
-              // puramente informativa: sem instante válido, ela simplesmente não existe.
-              // `_spTsData` interpreta strings ISO como data civil e descarta a hora.
-              // Este carimbo é um INSTANTE, então só aceita timestamp completo.
-              var _updatedAtMs = 0;
-              if (tournamentId && t.updatedAt != null) {
-                try {
-                  if (typeof t.updatedAt === 'object' && typeof t.updatedAt.toMillis === 'function') {
-                    _updatedAtMs = Number(t.updatedAt.toMillis()) || 0;
-                  } else if (typeof t.updatedAt === 'object' && t.updatedAt.seconds != null) {
-                    _updatedAtMs = Number(t.updatedAt.seconds) * 1000;
-                  } else if (t.updatedAt instanceof Date) {
-                    _updatedAtMs = t.updatedAt.getTime();
-                  } else if (typeof t.updatedAt === 'number') {
-                    _updatedAtMs = t.updatedAt;
-                  } else {
-                    var _updatedRaw = String(t.updatedAt);
-                    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/.test(_updatedRaw)) {
-                      _updatedAtMs = Date.parse(_updatedRaw) || 0;
-                    }
-                  }
-                } catch (_updatedAtErr) { _updatedAtMs = 0; }
-              }
-              var _hasUpdated = Number.isFinite(_updatedAtMs) && _updatedAtMs > 0;
-              if (!_hasUpdated && !ligaActiveToggleHtml) return '';
-              var _updatedLabel = '';
-              if (_hasUpdated) {
-                try {
-                  var _viewerProfile = (window.AppStore && window.AppStore.currentUser) || {};
-                  var _zoneResult = window._venueGeo && window._venueGeo.resolverFuso
-                    ? window._venueGeo.resolverFuso(t, _viewerProfile) : null;
-                  var _zone = _zoneResult && _zoneResult.tz;
-                  var _formatOptions = _zone ? { timeZone: _zone } : {};
-                  var _when = new Date(_updatedAtMs);
-                  _updatedLabel = _when.toLocaleDateString('pt-BR', _formatOptions) + ' às ' +
-                    _when.toLocaleTimeString('pt-BR', Object.assign({}, _formatOptions, { hour:'2-digit', minute:'2-digit' })) +
-                    (_zone ? '' : ' (horário deste dispositivo)');
-                } catch (_zoneErr) { _updatedLabel = ''; }
-              }
-              var _updatedHtml = _updatedLabel
-                ? `<div style="display:inline-flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:400;${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:6px 10px;' : 'opacity:0.5;'}">
-                     <span>🔄</span>
-                     <span>Atualizado em ${_updatedLabel}</span>
-                   </div>`
-                : '<div></div>';
-              // v2.6.21: o toggle agora é pílula sólida verde/vermelha (cor própria)
-              // — não envolver em tarja escura (_pReadBg).
-              // v2.7.41: toggle SEMPRE à direita (margin-left:auto) — mesmo quando
-              // quebra pra linha de baixo (antes ia pra esquerda com space-between).
-              var _toggleWrapped = ligaActiveToggleHtml ? '<div style="margin-left:auto;">' + ligaActiveToggleHtml + '</div>' : '';
-              return `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;" onclick="event.stopPropagation();">${_updatedHtml}${_toggleWrapped}</div>`;
-            })()}
+            ${ligaActiveToggleHtml ? `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;" onclick="event.stopPropagation();"><div style="margin-left:auto;">${ligaActiveToggleHtml}</div></div>` : ''}
             ${/* v1.3.15 (dono): tabela "DURAÇÃO ESTIMADA" (8/16/32/64 simulações) REMOVIDA do detalhe —
                  ela é planejamento e vive só na tela de EDIÇÃO (_buildPhaseEstimate por fase). Aqui no
                  detalhe fica só a "Estimativa de duração" REAL (_buildDurationForecast, abaixo da regressiva).
@@ -4567,7 +4512,7 @@ function renderTournaments(container, tournamentId = null) {
                 // tela desenhava a sua cópia do markup a partir do _ligaCountdownEvent, e as
                 // cópias divergiram no tratamento do evento vazio ('round-in-progress' sem
                 // linha de decorrido pra mostrar): aqui sumia o box, no card saía "null null 0s".
-                // O toggle Liga NÃO vive aqui (v0.16.90) — está na linha "Atualizado em…".
+                // O toggle de Pontos Corridos tem linha própria junto às ações da data.
                 // v1.8.78: a previsão do tempo do LOCAL entra logo abaixo do box (pedido do
                 // dono: "abaixo de rodada em andamento"). O slot nasce vazio e é preenchido
                 // pela rede — ver `_hydrateWeatherSlots` (uma requisição por local, cacheada).
@@ -4827,6 +4772,7 @@ function renderTournaments(container, tournamentId = null) {
             ${/* v2.1.13: ações gerais (Regras/Inscritos/Imprimir/CSV + pódio
                   quando encerrado) movidas pra DEPOIS das Ferramentas do Organizador,
                   ficando no pé do card. */ ''}
+            ${tournamentId && isFinished && window.AppStore.currentUser && !t.isSandbox ? `<div style="margin-top:10px;"><button class="btn btn-outline hover-lift" onclick="event.stopPropagation();window._openHistoricalAthleteClaims('${_escAttr(t.id)}')">Reconhecer minha participação</button></div>` : ''}
             ${actionsHtml}
 
           </div>

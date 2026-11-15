@@ -1,3 +1,10 @@
+// 2.7.9 — Atletas com conta anterior ao torneio podem reconhecer, após entrar,
+// participações antigas digitadas pela organização. A confirmação associa os
+// jogos ao histórico e às estatísticas sem alterar placares. A marca no
+// cabeçalho fica cerca de 20% menor e reduz mais quando a janela estreita.
+// Na ficha do torneio, toque na data para abrir a agenda. Convite, contato e
+// grupo oficial ficam juntos; a previsão só aparece quando estiver disponível.
+// Dia, mês e horário da data podem ter tamanho e peso ajustados com prévia.
 // 2.7.8 — Inscritos ganham filtro no lugar certo, em largura total. O ensaio
 // permite corrigir configurações sem liberar o torneio ou notificações.
 // A grade mostra chamada e aquecimento; prazos por rodada somem com jogos

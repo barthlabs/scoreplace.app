@@ -11,6 +11,7 @@ async function req(method,p,uid,body){const h={'Content-Type':'application/json'
 out.setupParent=await req('PATCH','tournamentImports/i1','owner',body);
 out.setupBlock=await req('PATCH','tournamentImports/i1/blocks/0','owner',body);
 out.setupInvite=await req('PATCH','tournaments/t1/manualClaimInvites/invite1','owner',body);
+out.setupHistoricalClaim=await req('PATCH','tournaments/t1/historicalAthleteClaims/m1','owner',body);
 out.create=await req('PATCH','tournamentImports/i2','org',body);
 out.read=await req('GET','tournamentImports/i1','org');
 out.update=await req('PATCH','tournamentImports/i1','org',body);
@@ -20,6 +21,11 @@ out.blockWrite=await req('PATCH','tournamentImports/i1/blocks/1','org',body);
 out.inviteRead=await req('GET','tournaments/t1/manualClaimInvites/invite1','org');
 out.inviteWrite=await req('PATCH','tournaments/t1/manualClaimInvites/invite1','org',body);
 out.inviteAnon=await req('GET','tournaments/t1/manualClaimInvites/invite1',null);
+out.historicalClaimReadOrg=await req('GET','tournaments/t1/historicalAthleteClaims/m1','org');
+out.historicalClaimWriteOrg=await req('PATCH','tournaments/t1/historicalAthleteClaims/m1','org',body);
+out.historicalClaimReadAthlete=await req('GET','tournaments/t1/historicalAthleteClaims/m1','athlete');
+out.historicalClaimWriteAthlete=await req('PATCH','tournaments/t1/historicalAthleteClaims/m1','athlete',body);
+out.historicalClaimAnon=await req('GET','tournaments/t1/historicalAthleteClaims/m1',null);
 out.ocrQuotaRead=await req('GET','tournamentImports/ocrUsage/days/2026-10-15_org','org');
 out.ocrQuotaWrite=await req('PATCH','tournamentImports/ocrUsage/days/2026-10-15_org','org',body);
 out.searchQuotaRead=await req('GET','tournamentImports/searchUsage/days/2026-10-15_org','org');
@@ -33,5 +39,8 @@ fs.writeFileSync(driver,DRIVER);
 const output=rodarNoEmulador(['emulators:exec','--only','firestore','--config',config,'--project',PROJECT,'node '+JSON.stringify(driver)],{cwd:ROOT,encoding:'utf8',stdio:['ignore','pipe','pipe'],env:Object.assign({},process.env,{PATH:'/opt/homebrew/opt/openjdk/bin:'+process.env.PATH})});
 const match=/__JSON__(\{.*\})/.exec(output);if(!match)throw new Error('driver sem resultado: '+output.slice(-800));
 const out=JSON.parse(match[1]);
-if (out.setupParent!==200 || out.setupBlock!==200 || Object.keys(out).some((key)=>!key.startsWith('setup') && out[key]!==403)) throw new Error('import receipts não são server-only: '+JSON.stringify(out));
-console.log('✓ recibos e cotas de importação: cliente organizador e anônimo negados; Admin SDK permitido');
+if (out.setupParent!==200 || out.setupBlock!==200 || out.setupHistoricalClaim!==200 ||
+    Object.keys(out).some((key)=>!key.startsWith('setup') && out[key]!==403)) {
+  throw new Error('recibos de importação/vínculo não são server-only: '+JSON.stringify(out));
+}
+console.log('✓ recibos de importação/vínculo e cotas: organização, atleta e anônimo negados; Admin SDK permitido');

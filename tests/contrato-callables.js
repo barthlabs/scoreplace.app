@@ -211,6 +211,8 @@ const TABELA = [
   { nome: "createTournamentClaimLink", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "previewTournamentClaimLink", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "acceptTournamentClaimLink", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
+  { nome: "listMyHistoricalAthleteClaims", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
+  { nome: "acceptHistoricalAthleteClaim", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "resolveParticipantMerge", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "resolvePendingDraw", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "getPendingInitialDraw", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },

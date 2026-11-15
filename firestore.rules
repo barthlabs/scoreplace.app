@@ -1161,6 +1161,11 @@ service cloud.firestore {
       match /manualClaimInvites/{inviteId} {
         allow read, write: if false;
       }
+      // O recibo do vínculo histórico é prova da transação da Function.
+      // Clientes, inclusive a organização, não podem forjar um retry concluído.
+      match /historicalAthleteClaims/{manualParticipantId} {
+        allow read, write: if false;
+      }
       match /outbox/{itemId} {
         allow read, write: if false;
       }

@@ -649,11 +649,16 @@ window._showPlayerStats = function(playerName, currentTournamentId, playerUid) {
     var _countStructuralMatches = function(t) {
         _getAllMatches(t).forEach(function(m) {
             var left = _statsMatchSide(m, 'p1', t), right = _statsMatchSide(m, 'p2', t);
-            if (!left.complete || !right.complete || !_viewedUid) return;
+            if (!_viewedUid) return;
+            var ownHistoricalClaim = Array.isArray(m.historicalClaimUids) &&
+                m.historicalClaimUids.indexOf(_viewedUid) !== -1;
+            if ((!left.complete || !right.complete) && !ownHistoricalClaim) return;
             var isP1 = left.uids.indexOf(_viewedUid) !== -1;
             var isP2 = right.uids.indexOf(_viewedUid) !== -1;
             if (isP1 === isP2) return;
-            var winnerSide = _statsWinnerSide(m, left, right);
+            var winnerSide = ownHistoricalClaim && (!left.complete || !right.complete) &&
+                typeof window._matchWinnerSide === 'function'
+                ? window._matchWinnerSide(m) : _statsWinnerSide(m, left, right);
             if (winnerSide === null) return;
             stats.totalMatches++;
             if (winnerSide === 0) stats.totalDraws++;
@@ -744,8 +749,11 @@ window._showPlayerStats = function(playerName, currentTournamentId, playerUid) {
                 if (finalMatch && _viewedUid) {
                     var finalLeft = _statsMatchSide(finalMatch, 'p1', t);
                     var finalRight = _statsMatchSide(finalMatch, 'p2', t);
-                    var finalWinner = _statsWinnerSide(finalMatch, finalLeft, finalRight);
-                    if (finalWinner && finalLeft.complete && finalRight.complete) {
+                    var ownFinalClaim = Array.isArray(finalMatch.historicalClaimUids) &&
+                        finalMatch.historicalClaimUids.indexOf(_viewedUid) !== -1;
+                    var finalWinner = ownFinalClaim && typeof window._matchWinnerSide === 'function'
+                        ? window._matchWinnerSide(finalMatch) : _statsWinnerSide(finalMatch, finalLeft, finalRight);
+                    if (finalWinner && ((finalLeft.complete && finalRight.complete) || ownFinalClaim)) {
                         var mySide = finalLeft.uids.indexOf(_viewedUid) !== -1 ? 1
                           : finalRight.uids.indexOf(_viewedUid) !== -1 ? 2 : null;
                         if (mySide === finalWinner) { stats.titles++; stats.podiums++; }

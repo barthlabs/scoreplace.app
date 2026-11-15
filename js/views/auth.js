@@ -5556,6 +5556,11 @@ async function simulateLoginSuccess(user) {
 
   // Initialize router to load appropriate views
   if (typeof initRouter === 'function') initRouter();
+  // Sugestões de vagas históricas são somente leitura até a pessoa confirmar.
+  // A busca ocorre depois do login, fora do caminho crítico de abertura.
+  if (typeof window._checkHistoricalAthleteClaims === 'function') {
+    setTimeout(function () { window._checkHistoricalAthleteClaims(); }, 1500);
+  }
 
   } catch (loginErr) {
     // v0.17.85: catch + finally garantem que o guard nunca fica stuck.

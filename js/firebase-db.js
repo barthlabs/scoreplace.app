@@ -65,9 +65,12 @@ window._spTournamentHistoryRecord = function (game) {
   if (typeof window._slotUids !== 'function') throw new Error('Leitor de identidade do jogo indisponível');
   var one = window._slotUids(game, 'p1').filter(Boolean).map(String);
   var two = window._slotUids(game, 'p2').filter(Boolean).map(String);
-  if (!one.length || !two.length || one.some(function (uid) { return two.indexOf(uid) >= 0; })) {
-    // Sem atribuição comprovada dos dois lados não há V/D pessoal honesto.
-    // O confronto e o placar continuam no jogo físico do torneio.
+  var historical = Array.isArray(game.historicalClaimUids) ? game.historicalClaimUids.filter(Boolean).map(String) : [];
+  var partialClaim = historical.length && one.concat(two).some(function (uid) { return historical.indexOf(uid) >= 0; });
+  if ((!one.length && !two.length) || ((!one.length || !two.length) && !partialClaim) ||
+      one.some(function (uid) { return two.indexOf(uid) >= 0; })) {
+    // Vínculo histórico confirmado permite atribuir apenas o slot reivindicado;
+    // adversários sem UID continuam anônimos no registro pessoal.
     return null;
   }
   var players = one.map(function (uid) { return { uid: uid, team: 1 }; })

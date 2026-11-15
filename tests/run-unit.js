@@ -1939,6 +1939,7 @@ const SUITES = [
   'tests/encerrar-torneio-cf-only.test.js',
   'tests/inscricoes-e-sorteio-vagas-cf-only.test.js', // L7: encerramento manual só passa pela Function
   'tests/atualizado-em-nunca-data-invalida.test.js', // ficha omite carimbo legado sem instante válido
+  'tests/tournament-date-action.test.js',
   'tests/tournament-card-date-and-countdown-contract.test.js', // datas+logo e uma única regressiva
   'tests/tournament-invite-actions-contract.test.js', // voltar e compartilhar no convite
   // Joga o torneio INTEIRO lançando só pelo servidor: 8 jogos (escada + 3º lugar), campeão,
@@ -1993,6 +1994,9 @@ const SUITES = [
   'tests/canonical-participant-claim.test.js',
   'tests/canonical-participant-claim-ui.test.js',
   'tests/manual-claim-link-core.test.js',
+  'tests/historical-athlete-claim-core.test.js',
+  'tests/historical-athlete-claim-handler.test.js',
+  'tests/firestore-backup-codec.test.js',
   'tests/manual-claim-link-emulator.test.js',
   'tests/canonical-registration-reclassify.test.js',
   'tests/canonical-sandbox-reclassify-isolation.test.js',

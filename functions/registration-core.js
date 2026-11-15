@@ -196,6 +196,7 @@ function dryRunLegacyRoster(tournamentId, entries) {
 
 module.exports = {
   UNCATEGORIZED_CATEGORY_ID,
+  legacySlots,
   participantKey,
   categoryIds,
   registrationId,

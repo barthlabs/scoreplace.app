@@ -118,6 +118,7 @@ const _registrationClaim = require("./registration-claim-core");
 const _editCanonicalSlot = require("./edit-canonical-slot-core");
 const _publishedSlotEdit = require("./published-slot-edit-core");
 const _manualClaimLink = require("./manual-claim-link-core");
+const _historicalAthleteClaim = require("./historical-athlete-claim-core");
 const _publishedClaim = require("./published-claim-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
 const _registrationRosterProjection = require("./vendor/registration-roster.js");
@@ -4993,6 +4994,7 @@ function _writeCanonicalRosterCreates(tx, tournamentRef, tournament, registratio
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
   (creates || []).forEach((item) => {
     tx.create(tournamentRef.collection("registrations").doc(item.registrationId), Object.assign({}, item, {
+      ...(item.participantKind === 'manual' ? { manualNameKey: _historicalAthleteClaim.nameKey(item.manualDisplayName) } : {}),
       createdAt: _FV.serverTimestamp(),
       updatedAt: _FV.serverTimestamp(),
     }));
@@ -5040,6 +5042,7 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
     }
     if (item.participantKind === "manual" && Object.prototype.hasOwnProperty.call(item, "manualDisplayName")) {
       patch.manualDisplayName = item.manualDisplayName;
+      patch.manualNameKey = _historicalAthleteClaim.nameKey(item.manualDisplayName);
     }
     if (Object.prototype.hasOwnProperty.call(item, "gender")) {
       patch.gender = item.gender || null;
@@ -5049,6 +5052,7 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
   });
   creates.forEach((item) => {
     tx.create(tournamentRef.collection("registrations").doc(item.registrationId), Object.assign({}, item, {
+      ...(item.participantKind === 'manual' ? { manualNameKey: _historicalAthleteClaim.nameKey(item.manualDisplayName) } : {}),
       createdAt: _FV.serverTimestamp(),
       updatedAt: _FV.serverTimestamp(),
     }));
@@ -6258,6 +6262,182 @@ exports.acceptTournamentClaimLink = onCall(
   }
 );
 
+// Torneios encerrados podem ter vagas digitadas sem conta. A sugestão vem do
+// índice de nome, mas só a própria conta autenticada pode confirmar. Nem a
+// consulta nem o login alteram resultados ou atribuem UID automaticamente.
+exports.listMyHistoricalAthleteClaims = onCall(
+  { region: 'us-central1', memory: '256MiB', timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'login necessário');
+    const db = admin.firestore();
+    const profileSnap = await db.collection('users').doc(uid).get();
+    const profile = profileSnap.exists ? profileSnap.data() || {} : {};
+    if (profile.mergedInto) return { candidates: [] };
+    const key = _historicalAthleteClaim.nameKey(profile.displayName);
+    if (!key) return { candidates: [] };
+    const authUser = await admin.auth().getUser(uid);
+    const creationTimeMs = Date.parse(authUser.metadata && authUser.metadata.creationTime || '');
+    if (!Number.isFinite(creationTimeMs)) return { candidates: [] };
+    const found = await db.collectionGroup('registrations').where('manualNameKey', '==', key).limit(100).get();
+    if (found.size === 100) throw new HttpsError('resource-exhausted', 'muitas vagas com o mesmo nome; peça conferência à organização');
+    const byTournament = new Map();
+    for (const doc of found.docs) {
+      const parts = doc.ref.path.split('/');
+      if (parts.length !== 4 || parts[0] !== 'tournaments' || parts[2] !== 'registrations') continue;
+      const item = doc.data() || {};
+      if (item.participantKind !== 'manual' ||
+          _historicalAthleteClaim.nameKey(item.manualDisplayName) !== key) continue;
+      const group = byTournament.get(parts[1]) || [];
+      group.push(item);
+      byTournament.set(parts[1], group);
+    }
+    const candidates = [];
+    await Promise.all([...byTournament].map(async ([tournamentId, entries]) => {
+      // Duas vagas do mesmo nome exigem revisão humana. Nunca escolher a primeira.
+      if (entries.length !== 1 || !_historicalAthleteClaim.activeManual(entries[0])) return;
+      const root = await db.collection('tournaments').doc(tournamentId).get();
+      const t = root.exists ? root.data() || {} : {};
+      if (t.isSandbox === true || !(t.status === 'finished' || t._finished === true) ||
+          !_historicalAthleteClaim.accountPredatesTournament(creationTimeMs, t)) return;
+      candidates.push({ tournamentId, tournamentName: String(t.name || 'Torneio'),
+        manualParticipantId: entries[0].manualParticipantId,
+        athleteName: String(entries[0].manualDisplayName || '').trim(),
+        categoryId: entries[0].categoryId });
+    }));
+    candidates.sort((a, b) => a.tournamentName.localeCompare(b.tournamentName) ||
+      a.athleteName.localeCompare(b.athleteName));
+    return { candidates };
+  }
+);
+
+exports.acceptHistoricalAthleteClaim = onCall(
+  { region: 'us-central1', memory: '512MiB', timeoutSeconds: 120, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'login necessário');
+    if (!_CANONICAL_REGISTRATION_MUTATIONS_READY) {
+      throw new HttpsError('failed-precondition', 'inscrições canônicas indisponíveis');
+    }
+    const authUser = await admin.auth().getUser(uid);
+    const creationTimeMs = Date.parse(authUser.metadata && authUser.metadata.creationTime || '');
+    if (!Number.isFinite(creationTimeMs)) {
+      throw new HttpsError('failed-precondition', 'data de criação da conta indisponível');
+    }
+    const tournamentId = String(request.data && request.data.tournamentId || '').trim();
+    const manualId = String(request.data && request.data.manualParticipantId || '').trim();
+    if (!tournamentId || tournamentId.length > 180 || tournamentId.includes('/') ||
+        !manualId || manualId.length > 240 || manualId.includes('/')) {
+      throw new HttpsError('invalid-argument', 'vaga inválida');
+    }
+    const db = admin.firestore();
+    const ref = db.collection('tournaments').doc(tournamentId);
+    const auditRef = ref.collection('historicalAthleteClaims').doc(manualId);
+    return db.runTransaction(async (tx) => {
+      const [rootSnap, profileSnap, auditSnap] = await Promise.all([
+        tx.get(ref), tx.get(db.collection('users').doc(uid)), tx.get(auditRef),
+      ]);
+      if (!rootSnap.exists) throw new HttpsError('not-found', 'torneio indisponível');
+      const t = rootSnap.data() || {};
+      if (t.isSandbox === true || !(t.status === 'finished' || t._finished === true)) {
+        throw new HttpsError('failed-precondition', 'vínculo histórico exige torneio encerrado');
+      }
+      if (auditSnap.exists) {
+        if (auditSnap.data().claimedByUid === uid) return { ok: true, alreadyClaimed: true };
+        throw new HttpsError('already-exists', 'esta vaga já foi vinculada');
+      }
+      const profile = profileSnap.exists ? profileSnap.data() || {} : {};
+      if (profile.mergedInto || !_historicalAthleteClaim.nameKey(profile.displayName)) {
+        throw new HttpsError('failed-precondition', 'complete seu nome de perfil antes de vincular a vaga');
+      }
+      if (!_historicalAthleteClaim.accountPredatesTournament(creationTimeMs, t)) {
+        throw new HttpsError('failed-precondition', 'vínculo automático disponível para contas anteriores ao torneio');
+      }
+      const claimRef = _nameUnique.displayNameClaimRef(db, profile.displayName);
+      const claimSnap = claimRef ? await tx.get(claimRef) : null;
+      if (claimSnap && claimSnap.exists &&
+          (claimSnap.data().state === 'conflict' || claimSnap.data().uid !== uid)) {
+        throw new HttpsError('failed-precondition', 'nome do perfil exige conferência');
+      }
+      const [checked, matchSnap, participantSnap] = await Promise.all([
+        _loadCanonicalRosterForMutation(tx, ref, t),
+        tx.get(ref.collection(_tSplitFn.colecaoDaParte('matches'))),
+        tx.get(ref.collection(_tSplitFn.colecaoDaParte('participants'))),
+      ]);
+      const otherUids = [...new Set(checked.registrations
+        .filter((item) => item.participantKind === 'account' && item.participantUid && item.participantUid !== uid)
+        .map((item) => item.participantUid))];
+      const accountSnaps = await Promise.all(otherUids.map((otherUid) => tx.get(db.collection('users').doc(otherUid))));
+      const accountProfiles = Object.fromEntries(otherUids.map((otherUid, index) =>
+        [otherUid, accountSnaps[index].exists ? accountSnaps[index].data() || {} : null]));
+      const participantSlots = participantSnap.docs.flatMap((doc) =>
+        _registrationCore.legacySlots(Object.prototype.hasOwnProperty.call(doc.data() || {}, 'item')
+          ? doc.data().item : doc.data()));
+      let manual, changes, matchPatches, mirrorPlan;
+      try {
+        manual = _historicalAthleteClaim.uniqueManual(checked.registrations, profile.displayName, manualId);
+        _historicalAthleteClaim.assertNoAccountHomonym(
+          checked.registrations, participantSlots, accountProfiles, profile.displayName, uid);
+        if (manual.manualNameKey !== _historicalAthleteClaim.nameKey(profile.displayName)) {
+          throw new Error('vaga sem índice histórico validado');
+        }
+        changes = _registrationClaim.claimManualParticipant(tournamentId, checked.registrations, manualId, uid);
+        if (participantSnap.empty === true) {
+          if (!Array.isArray(t.participants) || t.participants.length !== 0) {
+            throw new Error('espelho da vaga ausente com elenco inline divergente');
+          }
+          mirrorPlan = null;
+        } else {
+          mirrorPlan = _historicalAthleteClaim.planParticipantMirror(
+            participantSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() })),
+            tournamentId, manualId, manual.manualDisplayName, uid);
+        }
+        matchPatches = _historicalAthleteClaim.planMatches(
+          matchSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() })), manual.manualDisplayName, uid);
+      } catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      const mirrorCollection = ref.collection(_tSplitFn.colecaoDaParte('participants'));
+      if (mirrorPlan) {
+        if (mirrorPlan.newId !== mirrorPlan.oldId) {
+          tx.create(mirrorCollection.doc(mirrorPlan.newId), mirrorPlan.after);
+          tx.delete(mirrorCollection.doc(mirrorPlan.oldId));
+        } else if (mirrorPlan.wrapped) {
+          tx.update(mirrorCollection.doc(mirrorPlan.oldId), { item: mirrorPlan.after.item });
+        } else {
+          tx.set(mirrorCollection.doc(mirrorPlan.oldId), mirrorPlan.after);
+        }
+      }
+      matchPatches.forEach((item) => tx.update(
+        ref.collection(_tSplitFn.colecaoDaParte('matches')).doc(item.id), item.patch));
+      _writeCanonicalRosterChanges(tx, ref, t, checked.registrations, changes,
+        { _phaseReadCertificate: _FV.delete() });
+      const beforeUidSlots = {};
+      matchSnap.docs.forEach((doc) => {
+        if (!matchPatches.some((item) => item.id === doc.id)) return;
+        const data = doc.data() || {}, game = data.jogo || {};
+        beforeUidSlots[doc.id] = {
+          playerUids: data.playerUids || null,
+          team1Uids: game.team1Uids || null,
+          team2Uids: game.team2Uids || null,
+          team1Obj: game.team1Obj || null,
+          team2Obj: game.team2Obj || null,
+          p1Uid: game.p1Uid || null,
+          p2Uid: game.p2Uid || null,
+          historicalClaimUids: game.historicalClaimUids || null,
+        };
+      });
+      tx.create(auditRef, { manualParticipantId: manualId, manualRegistrationId: manual.registrationId,
+        claimedByUid: uid, claimedName: manual.manualDisplayName,
+        mirrorAbsent: !mirrorPlan,
+        participantMirrorBeforeId: mirrorPlan ? mirrorPlan.oldId : null,
+        participantMirrorAfterId: mirrorPlan ? mirrorPlan.newId : null,
+        participantMirrorBefore: mirrorPlan ? mirrorPlan.before : null,
+        matchIds: matchPatches.map((item) => item.id), beforeUidSlots,
+        claimedAt: _FV.serverTimestamp() });
+      return { ok: true, linkedMatches: matchPatches.length };
+    });
+  }
+);
+
 // Lê sempre a fotografia atual, dentro da mesma transação que consulta o
 // espelho dividido e os documentos canônicos já existentes. Esta é a única
 // fonte de prévias unitárias e em lote: não aceita elenco do navegador e nunca
@@ -6440,6 +6620,7 @@ async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, t
     }
     decision.creates.forEach((document) => {
       tx.create(ref.collection("registrations").doc(document.registrationId), Object.assign({}, document, {
+        ...(document.participantKind === 'manual' ? { manualNameKey: _historicalAthleteClaim.nameKey(document.manualDisplayName) } : {}),
         createdAt: _FV.serverTimestamp(),
         updatedAt: _FV.serverTimestamp(),
       }));
@@ -6830,6 +7011,7 @@ exports.requestCanonicalRegistration = onCall(
       } catch (error) { throw new HttpsError("failed-precondition", error.message); }
       enrollment.creates.forEach((registration) => {
         tx.create(tournamentRef.collection("registrations").doc(registration.registrationId), Object.assign({}, registration, {
+          ...(registration.participantKind === 'manual' ? { manualNameKey: _historicalAthleteClaim.nameKey(registration.manualDisplayName) } : {}),
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }));
@@ -7804,7 +7986,7 @@ exports.renameTournamentParticipant = onCall(
         } catch (err) { throw new HttpsError('failed-precondition', err.message); }
         if (!planned.changed) return { ok: true, changed: false };
         tx.update(registrationSnap.docs.find((doc) => doc.id === planned.target.registrationId).ref,
-          { manualDisplayName: newName, updatedAt: _FV.serverTimestamp() });
+          { manualDisplayName: newName, manualNameKey: _historicalAthleteClaim.nameKey(newName), updatedAt: _FV.serverTimestamp() });
         planned.documents.forEach((item) => tx.set(item.ref, item.data));
         tx.update(ref, Object.assign({ updatedAt: _FV.serverTimestamp(),
           _phaseReadCertificate: _FV.delete() }, planned.rootPatch));
@@ -7857,10 +8039,12 @@ exports.editCamisManualParticipant = onCall(
       tx.set(ref,{ ...planned.nextRoot,updatedAt:now });
       tx.set(baselineRef,planned.nextBaseline);
       if (action === 'rename') {
-        tx.update(targetRef,{ manualDisplayName:newName,updatedAt:now });
+        tx.update(targetRef,{ manualDisplayName:newName,manualNameKey:_historicalAthleteClaim.nameKey(newName),updatedAt:now });
       } else {
         tx.update(targetRef,{ status:'withdrawn',withdrawnReason:'replaced',updatedAt:now });
-        tx.create(ref.collection('registrations').doc(planned.nextReg.registrationId),planned.nextReg);
+        tx.create(ref.collection('registrations').doc(planned.nextReg.registrationId),{
+          ...planned.nextReg,manualNameKey:_historicalAthleteClaim.nameKey(planned.nextReg.manualDisplayName),
+        });
       }
       planned.liveMatches.forEach(item => tx.set(ref.collection('matches').doc(item.id),item.data));
       return { ok:true,action,oldName,newName,category:planned.category,group:planned.group,

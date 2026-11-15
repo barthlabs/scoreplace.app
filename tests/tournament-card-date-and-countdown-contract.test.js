@@ -35,10 +35,31 @@ ok(!DateCard.render('2026-11-29', '2026-11-29') && !DateCard.render('2026-12-30T
 const custom = { background:'#123456', text:'#abcdef', day:'#112233', month:'#fedcba', time:'#010203' };
 const customHtml = DateCard.render('2026-11-06T08:00', '2026-11-08T18:00', custom);
 ok(Object.entries(custom).every(([key, color]) => customHtml.includes('--sp-date-' + (key === 'background' ? 'bg' : key) + ':' + color)), 'as cinco cores personalizadas aparecem no bloco');
-ok(dateColors.validate(custom) === custom, 'servidor aceita as cinco cores');
+ok(dateColors.validate(custom) === custom, 'servidor aceita as cinco cores legadas');
+const typography = { daySize:115, dayWeight:600, monthSize:105, monthWeight:800, timeSize:90, timeWeight:500 };
+const withTypography = { ...custom, typography };
+ok(dateColors.validate(withTypography) === withTypography, 'servidor aceita cores e seis ajustes tipográficos');
+ok(DateCard.validate(withTypography) === withTypography, 'cliente aceita o mesmo contrato do servidor');
+const customTypeHtml = DateCard.render('2026-11-29T08:00', '2026-11-29T16:00', withTypography);
+ok(customTypeHtml.includes('--sp-date-day-scale:1.15') && customTypeHtml.includes('--sp-date-month-weight:800') &&
+  customTypeHtml.includes('sp-date-card--custom-typography'), 'cartão aplica tamanho e peso escolhidos');
+ok(!DateCard.render('2026-11-29T08:00', '2026-11-29T16:00', custom).includes('--sp-date-day-scale'),
+  'cartão legado conserva as regras CSS existentes');
+ok(dateColors.mergeLegacyTypography(custom, withTypography).typography.monthSize === 105,
+  'cliente antigo muda cores sem apagar tipografia do documento');
+ok(dateColors.mergeLegacyTypography(withTypography, custom).typography.daySize === 115,
+  'cliente novo grava a tipografia enviada');
+try { dateColors.validate({ ...custom, typography: { ...typography, daySize:135 } }); ok(false, 'servidor recusa tamanho fora do limite'); }
+catch (error) { ok(/tipografia/.test(error.message), 'servidor recusa tamanho fora do limite'); }
+try { dateColors.mergeLegacyTypography({ ...custom, typography: { ...typography, monthWeight:900 } }, withTypography); ok(false, 'servidor recusa peso inválido mesmo com valor salvo'); }
+catch (error) { ok(/tipografia/.test(error.message), 'servidor não preserva peso salvo para mascarar patch inválido'); }
 try { dateColors.validate({ ...custom, month:'red' }); ok(false, 'servidor recusa cor inválida'); }
-catch (error) { ok(/cores válidas/.test(error.message), 'servidor recusa cor inválida'); }
+catch (error) { ok(/cores e tipografia válidas/.test(error.message), 'servidor recusa cor inválida'); }
 const noDateScript = { window: {}, document: { getElementById: () => null } };
 vm.runInNewContext(editor.slice(0, editor.indexOf('// ── Controle canônico')), noDateScript);
 ok(noDateScript.window._readTournamentDateColors().month === '#ffc400', 'falha ao carregar módulo de datas não impede salvar o formulário');
+ok(noDateScript.window._readTournamentDateColors().typography.daySize === 100,
+  'editor sem módulo carregado ainda salva a tipografia padrão');
+ok(['daySize','dayWeight','monthSize','monthWeight','timeSize','timeWeight'].every(key => editor.includes('tourn-date-typo-${entry[0]}') && editor.includes(key.endsWith('Size') ? "'create.dateCardSize'" : "'create.dateCardWeight'")),
+  'editor contém controles de tamanho e peso para os três grupos');
 process.exit(failed ? 1 : 0);

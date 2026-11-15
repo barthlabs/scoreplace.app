@@ -9,18 +9,37 @@ window._readTournamentDateColors = function () {
     var input = document.getElementById('tourn-date-color-' + key);
     result[key] = input && /^#[0-9a-f]{6}$/i.test(input.value) ? input.value : defaults[key];
   });
+  var typographyDefaults = window.ScorePlaceDateCard && window.ScorePlaceDateCard.TYPOGRAPHY_DEFAULTS ||
+    { daySize:100, dayWeight:800, monthSize:100, monthWeight:800, timeSize:100, timeWeight:700 };
+  var typography = {};
+  Object.keys(typographyDefaults).forEach(function (key) {
+    var input = document.getElementById('tourn-date-typo-' + key);
+    typography[key] = input ? Number(input.value) : typographyDefaults[key];
+  });
+  result.typography = window.ScorePlaceDateCard && window.ScorePlaceDateCard.validTypography(typography)
+    ? typography : Object.assign({}, typographyDefaults);
   return result;
 };
 window._refreshTournamentDateColorPreview = function () {
   var target = document.getElementById('tourn-date-color-preview');
   if (target && window.ScorePlaceDateCard) target.innerHTML = window.ScorePlaceDateCard.render('2026-11-29T08:00', '2026-11-29T16:00', window._readTournamentDateColors());
+  ['daySize','dayWeight','monthSize','monthWeight','timeSize','timeWeight'].forEach(function (key) {
+    var input = document.getElementById('tourn-date-typo-' + key);
+    var output = document.getElementById('tourn-date-typo-' + key + '-value');
+    if (input && output) output.textContent = input.value + (key.endsWith('Size') ? '%' : '');
+  });
 };
 window._setTournamentDateColors = function (value) {
   if (!window.ScorePlaceDateCard) return;
   var colors = window.ScorePlaceDateCard.colors(value);
-  Object.keys(colors).forEach(function (key) {
+  Object.keys(window.ScorePlaceDateCard.DEFAULTS).forEach(function (key) {
     var input = document.getElementById('tourn-date-color-' + key);
     if (input) input.value = colors[key];
+  });
+  var typography = colors.typography || window.ScorePlaceDateCard.TYPOGRAPHY_DEFAULTS;
+  Object.keys(typography).forEach(function (key) {
+    var input = document.getElementById('tourn-date-typo-' + key);
+    if (input) input.value = typography[key];
   });
   window._refreshTournamentDateColorPreview();
 };
@@ -627,13 +646,16 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="tourn-cover-data" value="">
               </div>
               <details class="sp-date-color-editor" style="margin:0 0 1rem;padding:12px;border:1px solid rgba(96,165,250,.35);border-radius:12px;background:rgba(96,165,250,.07);">
-                <summary style="font-weight:800;cursor:pointer;">🎨 Cores da data do torneio</summary>
-                <p style="font-size:.78rem;color:var(--text-muted);margin:9px 0;">As cores escolhidas aparecem na ficha e na dashboard. Você pode alterá-las depois de publicar o sorteio.</p>
+                <summary style="font-weight:800;cursor:pointer;">🎨 ${_t('create.dateCardAppearance')}</summary>
+                <p style="font-size:.78rem;color:var(--text-muted);margin:9px 0;">${_t('create.dateCardAppearanceHint')}</p>
                 <div class="sp-date-color-inputs" style="display:flex;gap:10px;flex-wrap:wrap;">
                   ${[['background','Fundo','#216b96'],['text','Texto (a)','#ffffff'],['day','Dia','#ffffff'],['month','Mês','#ffc400'],['time','Horário','#e5f4fc']].map(function (entry) { return `<label style="display:flex;align-items:center;gap:6px;font-size:.78rem;font-weight:700;">${entry[1]} <input type="color" id="tourn-date-color-${entry[0]}" value="${entry[2]}" aria-label="Cor ${entry[1]} da data" oninput="window._refreshTournamentDateColorPreview()" style="width:34px;height:32px;padding:1px;border:1px solid var(--border-color);border-radius:6px;background:transparent;cursor:pointer;"></label>`; }).join('')}
                 </div>
+                <div class="sp-date-typography-inputs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:12px;">
+                  ${[['day','create.dateCardDay',100,800],['month','create.dateCardMonth',100,800],['time','create.dateCardTime',100,700]].map(function (entry) { return `<div style="border:1px solid var(--border-color);border-radius:9px;padding:8px;min-width:0;"><strong style="font-size:.78rem;color:var(--text-main);">${_t(entry[1])}</strong><label style="display:grid;gap:3px;font-size:.75rem;color:var(--text-main);margin-top:5px;">${_t('create.dateCardSize')} <output id="tourn-date-typo-${entry[0]}Size-value">100%</output><input type="range" id="tourn-date-typo-${entry[0]}Size" min="70" max="130" step="5" value="${entry[2]}" aria-label="${_t(entry[1])}: ${_t('create.dateCardSize')}" oninput="window._refreshTournamentDateColorPreview()" style="width:100%;accent-color:var(--primary-color);"></label><label style="display:grid;gap:3px;font-size:.75rem;color:var(--text-main);margin-top:5px;">${_t('create.dateCardWeight')} <output id="tourn-date-typo-${entry[0]}Weight-value">${entry[3]}</output><input type="range" id="tourn-date-typo-${entry[0]}Weight" min="300" max="800" step="100" value="${entry[3]}" aria-label="${_t(entry[1])}: ${_t('create.dateCardWeight')}" oninput="window._refreshTournamentDateColorPreview()" style="width:100%;accent-color:var(--primary-color);"></label></div>`; }).join('')}
+                </div>
                 <div id="tourn-date-color-preview" style="margin-top:10px;">${window.ScorePlaceDateCard ? window.ScorePlaceDateCard.render('2026-11-29T08:00', '2026-11-29T16:00') : ''}</div>
-                <button type="button" onclick="window._resetTournamentDateColors()" style="margin-top:8px;background:none;border:0;color:var(--text-main);text-decoration:underline;cursor:pointer;">Restaurar cores padrão</button>
+                <button type="button" onclick="window._resetTournamentDateColors()" style="margin-top:8px;background:none;border:0;color:var(--text-main);text-decoration:underline;cursor:pointer;">${_t('create.dateCardReset')}</button>
               </details>
               <div id="tv-layout-editor"></div>
               </details>

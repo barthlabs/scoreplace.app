@@ -344,10 +344,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var eventStart = el.getAttribute('data-event-start');
       var size = el.getAttribute('data-size') || 'lg';
       var local = el.getAttribute('data-venue') || '';
-      // Fora dos cinco dias não há previsão no endpoint. Mostra a data correta
-      // sem consumir uma chamada que não poderia respondê-la.
+      // Fora dos cinco dias não há previsão no endpoint. O detalhe fica sem
+      // este bloco e não consome uma chamada que não poderia respondê-la.
       if (eventStart && window._weatherEventBeyondHorizon(eventStart)) {
-        el.innerHTML = window._weatherEventHtml(window._weatherEventForecast(null, eventStart), size, local);
+        el.innerHTML = '';
         return;
       }
       window._weatherFetch(lat, lon).then(function (d) {
@@ -358,7 +358,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             var current = window._weatherResumo(d, Date.now());
             el.innerHTML = current ? window._weatherWidgetHtml(current, size, local) : '';
           } else {
-            el.innerHTML = window._weatherEventHtml(forecast, size, local);
+            el.innerHTML = forecast.status === 'future' ? '' : window._weatherEventHtml(forecast, size, local);
           }
         } else {
           var r = window._weatherResumo(d, Date.now());

@@ -36,6 +36,7 @@ function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
 // Carrega o módulo REAL (IIFE que só precisa de `window`).
 const SRC = fs.readFileSync(path.join(ROOT, 'js', 'views', 'weather.js'), 'utf8');
 const W = { _safeHtml: (s) => String(s == null ? '' : s) };
+const weatherDocument = { querySelectorAll: () => [], body: { contains: () => true } };
 // ⚠️ dobra-core ANTES do weather: a seção "próximos dias" virou dobrável (2.1.25) e chama
 // window._spDobra. Sem este load a suíte morre com "_spDobra is not a function" — foi o que
 // aconteceu no dia em que o helper nasceu. Mesma ordem do index.html.
@@ -43,7 +44,7 @@ new Function('window', 'localStorage', 'document',
   fs.readFileSync(path.join(ROOT, 'js', 'views', 'dobra-core.js'), 'utf8'))(
   W, { getItem: () => null, setItem: () => {} }, { querySelectorAll: () => [] });
 new Function('window', 'document', 'sessionStorage', 'fetch', SRC)(
-  W, { querySelectorAll: () => [], body: { contains: () => false } },
+  W, weatherDocument,
   { getItem: () => null, setItem: () => {} }, () => Promise.resolve({ json: () => ({}) })
 );
 
@@ -197,7 +198,29 @@ ok(W._weatherEventForecast(null, '2026-08-29T08:00', AGORA).status === 'future',
 ok(W._weatherSlotHtml({ venueLat: -23.5, venueLon: -46.6, startDate: '2026-08-15T18:00' }, 'lg').includes('data-event-start="2026-08-15T18:00"'),
   'H10. o slot preserva a data para decidir passado/futuro no fuso do local');
 
-console.log('\n🌤️ PREVISÃO — agora / hoje / próximos dias');
-console.log('   ' + pass + ' ok, ' + fail + ' falhas');
-if (fail) { fails.forEach(f => console.log('   ✗ ' + f)); process.exit(1); }
-console.log('   ✅ tudo verde');
+function slot(eventStart) {
+  const attributes = { 'data-lat': '-23.5', 'data-lon': '-46.6',
+    'data-event-start': eventStart, 'data-size': 'lg', 'data-venue': 'Quadra A' };
+  return { innerHTML: 'antes', getAttribute: (key) => attributes[key] || '',
+    setAttribute: (key, value) => { attributes[key] = value; } };
+}
+const farDate = new Date(Date.now() + 12 * 86400000).toISOString().slice(0, 16);
+const farSlot = slot(farDate);
+weatherDocument.querySelectorAll = () => [farSlot];
+W._hydrateWeatherSlots();
+ok(farSlot.innerHTML === '', 'H11. detalhe fora do horizonte fica sem caixa de previsão');
+const nearDate = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16);
+const nearSlot = slot(nearDate);
+weatherDocument.querySelectorAll = () => [nearSlot];
+W._weatherFetch = () => Promise.resolve(EVENT_DATA);
+const forecastOriginal = W._weatherEventForecast;
+W._weatherEventForecast = () => ({ status: 'future', label: nearDate });
+W._hydrateWeatherSlots();
+Promise.resolve().then(() => Promise.resolve()).then(() => {
+  ok(nearSlot.innerHTML === '', 'H12. grade sem o horário do evento também não deixa caixa');
+  W._weatherEventForecast = forecastOriginal;
+  console.log('\n🌤️ PREVISÃO — agora / hoje / próximos dias');
+  console.log('   ' + pass + ' ok, ' + fail + ' falhas');
+  if (fail) { fails.forEach(f => console.log('   ✗ ' + f)); process.exitCode = 1; }
+  else console.log('   ✅ tudo verde');
+});

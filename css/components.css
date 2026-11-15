@@ -3610,39 +3610,43 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
   font-family: inherit; font-variant-numeric: tabular-nums; line-height: 1;
   white-space: nowrap; flex-shrink: 0;
 }
-.sp-date-days { display:flex; align-items:baseline; justify-content:center; gap:4px; color:var(--sp-date-day); font-size:56px; font-weight:900; line-height:.94; letter-spacing:-.05em; }
+.sp-date-card--custom-typography { font-family:Outfit,Arial,sans-serif; }
+.sp-date-days { display:flex; align-items:baseline; justify-content:center; gap:4px; color:var(--sp-date-day); font-size:calc(56px * var(--sp-date-day-scale, 1)); font-weight:var(--sp-date-day-weight, 900); line-height:.94; letter-spacing:-.05em; }
 .sp-date-join { color:var(--sp-date-text); font-size:16px; font-weight:800; letter-spacing:0; }
 .sp-date-month-line { display:flex; justify-content:center; width:100%; margin-top:3px; }
-.sp-date-month { color:var(--sp-date-month); font-size:40px; font-weight:900; line-height:1; letter-spacing:.02em; }
+.sp-date-month { color:var(--sp-date-month); font-size:calc(40px * var(--sp-date-month-scale, 1)); font-weight:var(--sp-date-month-weight, 900); line-height:1; letter-spacing:.02em; }
+.sp-tournament-date-stack .sp-date-card:not(.sp-date-card--custom-typography) .sp-date-month { font-family:'Arial Black',Arial,sans-serif; }
 .sp-date-months { width:100%; display:flex; justify-content:space-between; gap:12px; }
 .sp-date-card--cross-month { min-width:250px; }
 .sp-date-card--cross-month .sp-date-days { width:100%; justify-content:space-between; }
 .sp-date-card--cross-month .sp-date-join { align-self:center; }
-.sp-date-card--same-month .sp-date-month { font-size:40px; }
-.sp-date-time { color:var(--sp-date-time); font-size:12px; font-weight:700; line-height:1.2; margin-top:5px; }
-.sp-tournament-date-actions { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:1rem; }
-.sp-tournament-date-actions .sp-tournament-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.sp-date-card--same-month .sp-date-month { font-size:calc(40px * var(--sp-date-month-scale, 1)); }
+.sp-date-time { color:var(--sp-date-time); font-size:calc(12px * var(--sp-date-time-scale, 1)); font-weight:var(--sp-date-time-weight, 700); line-height:1.2; margin-top:5px; }
+.sp-tournament-date-actions { display:flex; align-items:flex-end; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:.5rem; }
+.sp-tournament-date-actions .sp-tournament-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .sp-tournament-date-stack { margin-left:auto; display:flex; align-items:center; gap:12px; }
+.sp-date-card-trigger { display:inline-flex; border-radius:12px; cursor:pointer; min-height:44px; }
+.sp-date-card-trigger:focus-visible { outline:3px solid #fff; outline-offset:0; box-shadow:0 0 0 6px #000; }
 .sp-dashboard-identity { display:flex; align-items:stretch; gap:14px; margin:1.4rem 0 1.2rem; min-width:0; }
 .sp-dashboard-logo-date { width:33%; min-width:80px; flex-shrink:0; display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
 .sp-dashboard-logo-date img { width:100%; border-radius:var(--sp-logo-radius,14px); object-fit:contain; display:block; }
 .sp-dashboard-logo-date .sp-date-card { max-width:100%; min-width:0; width:100%; }
 .sp-dashboard-logo-date:has(.sp-date-card--cross-month) { width:min(250px,43%); }
-.sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-days { font-size:clamp(28px,5vw,56px); }
-.sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-month { font-size:clamp(20px,3.1vw,40px); }
+.sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-days { font-size:calc(clamp(28px,5vw,56px) * var(--sp-date-day-scale, 1)); }
+.sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-month { font-size:calc(clamp(20px,3.1vw,40px) * var(--sp-date-month-scale, 1)); }
 .sp-dashboard-identity .sp-tournament-title-slot { display:flex; flex-direction:column; justify-content:space-between; flex:1; min-width:0; }
 @media (max-width:767px) {
   .sp-tournament-date-actions:has(.sp-date-card) { flex-wrap:nowrap; align-items:flex-end; }
-  .sp-tournament-date-actions:has(.sp-date-card) .sp-tournament-actions { flex:1 1 0; min-width:0; flex-direction:column; align-items:flex-start; }
+  .sp-tournament-date-actions:has(.sp-date-card) .sp-tournament-actions { flex:1 1 0; min-width:0; flex-direction:row; flex-wrap:wrap; align-items:center; }
   .sp-tournament-date-actions:has(.sp-date-card) .sp-tournament-actions > * { max-width:100%; box-sizing:border-box; white-space:normal; }
   .sp-tournament-date-actions:has(.sp-date-card) .sp-tournament-actions .btn { font-size:clamp(.67rem,2.7vw,.82rem); }
   .sp-date-card { min-width:130px; min-height:108px; padding:7px 8px; }
-  .sp-date-days { font-size:42px; }
-  .sp-date-month { font-size:28px; }
-  .sp-date-card--same-month .sp-date-month { font-size:30px; }
+  .sp-date-days { font-size:calc(42px * var(--sp-date-day-scale, 1)); }
+  .sp-date-month { font-size:calc(28px * var(--sp-date-month-scale, 1)); }
+  .sp-date-card--same-month .sp-date-month { font-size:calc(30px * var(--sp-date-month-scale, 1)); }
   .sp-date-card--cross-month { min-width:180px; }
-  .sp-date-time { font-size:10px; }
+  .sp-date-time { font-size:calc(10px * var(--sp-date-time-scale, 1)); }
   .sp-dashboard-logo-date:has(.sp-date-card--cross-month) { width:43%; }
-  .sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-days { font-size:clamp(26px,7vw,42px); }
-  .sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-month { font-size:clamp(18px,4.7vw,28px); }
+  .sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-days { font-size:calc(clamp(26px,7vw,42px) * min(var(--sp-date-day-scale, 1), 1)); }
+  .sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-month { font-size:calc(clamp(18px,4.7vw,28px) * min(var(--sp-date-month-scale, 1), 1)); }
 }

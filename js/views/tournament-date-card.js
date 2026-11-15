@@ -4,17 +4,30 @@
   'use strict';
   var DEFAULTS = Object.freeze({ background:'#216b96', text:'#ffffff', day:'#ffffff', month:'#ffc400', time:'#e5f4fc' });
   var KEYS = Object.keys(DEFAULTS);
+  var TYPOGRAPHY_DEFAULTS = Object.freeze({ daySize:100, dayWeight:800, monthSize:100, monthWeight:800, timeSize:100, timeWeight:700 });
+  var TYPOGRAPHY_KEYS = Object.keys(TYPOGRAPHY_DEFAULTS);
+  function validTypography(value) {
+    return !!value && typeof value === 'object' && !Array.isArray(value) &&
+      Object.keys(value).length === TYPOGRAPHY_KEYS.length && TYPOGRAPHY_KEYS.every(function (key) {
+        var n = value[key];
+        return Number.isInteger(n) && (key.endsWith('Size') ? n >= 70 && n <= 130 && n % 5 === 0 :
+          n >= 300 && n <= 800 && n % 100 === 0);
+      });
+  }
   function colors(value) {
     var input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     var out = {};
     KEYS.forEach(function (key) { out[key] = /^#[0-9a-f]{6}$/i.test(input[key] || '') ? input[key] : DEFAULTS[key]; });
+    if (validTypography(input.typography)) out.typography = Object.assign({}, input.typography);
     return out;
   }
   function validate(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value) ||
-        Object.keys(value).length !== KEYS.length ||
-        Object.keys(value).some(function (key) { return KEYS.indexOf(key) < 0 || typeof value[key] !== 'string' || !/^#[0-9a-f]{6}$/i.test(value[key]); })) {
-      throw new Error('Escolha cinco cores válidas para a data.');
+        (Object.keys(value).length !== KEYS.length && Object.keys(value).length !== KEYS.length + 1) ||
+        KEYS.some(function (key) { return typeof value[key] !== 'string' || !/^#[0-9a-f]{6}$/i.test(value[key]); }) ||
+        Object.keys(value).some(function (key) { return KEYS.indexOf(key) < 0 && key !== 'typography'; }) ||
+        (Object.prototype.hasOwnProperty.call(value, 'typography') && !validTypography(value.typography))) {
+      throw new Error('Escolha cores e tipografia válidas para a data.');
     }
     return value;
   }
@@ -47,6 +60,12 @@
     if (!m) return '';
     var c = colors(customColors);
     var css = '--sp-date-bg:' + c.background + ';--sp-date-text:' + c.text + ';--sp-date-day:' + c.day + ';--sp-date-month:' + c.month + ';--sp-date-time:' + c.time + ';';
+    if (c.typography) {
+      var typo = c.typography;
+      css += '--sp-date-day-scale:' + (typo.daySize / 100) + ';--sp-date-day-weight:' + typo.dayWeight + ';' +
+        '--sp-date-month-scale:' + (typo.monthSize / 100) + ';--sp-date-month-weight:' + typo.monthWeight + ';' +
+        '--sp-date-time-scale:' + (typo.timeSize / 100) + ';--sp-date-time-weight:' + typo.timeWeight + ';';
+    }
     var dateLine = '', monthLine = '';
     if (m.kind === 'one-day' || m.kind === 'start-only') {
       dateLine = '<span class="sp-date-day">' + m.start.day + '</span>';
@@ -59,9 +78,9 @@
     }
     var time = m.start.time + (m.end ? ' — ' + m.end.time : '');
     var spoken = m.start.day + ' de ' + MONTHS[m.start.month - 1] + (m.end ? ' a ' + m.end.day + ' de ' + MONTHS[m.end.month - 1] : '') + ', ' + time;
-    return '<div class="sp-date-card sp-date-card--' + m.kind + '" style="' + css + '" aria-label="' + escapeAttribute(spoken) + '"><div class="sp-date-days">' + dateLine + '</div><div class="sp-date-month-line">' + monthLine + '</div><div class="sp-date-time">' + time + '</div></div>';
+    return '<div class="sp-date-card sp-date-card--' + m.kind + (c.typography ? ' sp-date-card--custom-typography' : '') + '" style="' + css + '" aria-label="' + escapeAttribute(spoken) + '"><div class="sp-date-days">' + dateLine + '</div><div class="sp-date-month-line">' + monthLine + '</div><div class="sp-date-time">' + time + '</div></div>';
   }
-  var api = { DEFAULTS:DEFAULTS, colors:colors, validate:validate, model:model, render:render };
+  var api = { DEFAULTS:DEFAULTS, TYPOGRAPHY_DEFAULTS:TYPOGRAPHY_DEFAULTS, validTypography:validTypography, colors:colors, validate:validate, model:model, render:render };
   root.ScorePlaceDateCard = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -49,6 +49,7 @@ function fixture(root, records) {
     _assertNoRehearsalEnrollment() {},
     _canonicalRegistrationBoundary: require('../functions/canonical-registration-boundary-core'),
     _renameCanonicalParticipant: core,
+    _historicalAthleteClaim: require('../functions/historical-athlete-claim-core'),
     _tSplitFn: { colecaoDaParte: (name) => name },
     _FV: { serverTimestamp: () => 'server-time', delete: () => 'delete-marker' },
     _splitParts: { async hidratar(_tx, _ref, data) { return { ...data, hydrated: true }; },
