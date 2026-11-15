@@ -39,8 +39,7 @@ const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única:
 const _phaseCert = require('./vendor/phase-index-certificate-core.js');
 const _phaseReadProofs = new WeakMap();
 const _registrationRoster = require('./vendor/registration-roster.js');
-const _manualRegistrationNameKey = (value) => String(value || '').normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+const _manualRegistrationNameKey = require('./vendor/manual-name-key-core.js').nameKey;
 const _tournamentBilling = require('./vendor/tournament-billing-core.js');
 const _billingSnapshots = new WeakMap();
 const _tournamentFeeStripeKey = defineSecret('STRIPE_SECRET_KEY');

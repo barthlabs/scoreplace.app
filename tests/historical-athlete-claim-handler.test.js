@@ -157,7 +157,7 @@ function fixture(options = {}) {
     data: { tournamentId: 't1', manualParticipantId: 'm1' } })).ok, true);
   const conflictingGame = fixture({ secondConflict: true });
   await assert.rejects(conflictingGame.handler({ auth: { uid: 'maria' },
-    data: { tournamentId: 't1', manualParticipantId: 'm1' } }), /outra conta/);
+    data: { tournamentId: 't1', manualParticipantId: 'm1' } }), /UID legado/);
   assert.equal(conflictingGame.writes.length, 0, 'conflito no segundo jogo aborta a transação inteira');
   const missingMirror = fixture({ missingMirror:true });
   assert.equal((await missingMirror.handler({ auth:{ uid:'maria' },

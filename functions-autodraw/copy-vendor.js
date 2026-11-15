@@ -164,7 +164,8 @@ const CORE_TO_AUTODRAW = [
   'category-eligibility-core.js',
   'category-removal-core.js',
   'registration-category-bridge-core.js',
-  'billing-terms-core.js'
+  'billing-terms-core.js',
+  'manual-name-key-core.js'
 ];
 for (const f of CORE_TO_AUTODRAW) {
   const src = path.resolve(__dirname, '..', 'functions', f);

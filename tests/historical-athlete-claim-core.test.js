@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const C = require('../functions/historical-athlete-claim-core');
+const autoNameKey = require('../functions-autodraw/vendor/manual-name-key-core').nameKey;
 const { claimManualParticipant } = require('../functions/registration-claim-core');
 const { registrationId } = require('../functions/registration-core');
 const { canonicalPairId } = require('../functions/registration-mutations-core');
@@ -9,6 +10,9 @@ const { canonicalPairId } = require('../functions/registration-mutations-core');
 const manual = (id, name) => ({ registrationId: id, manualParticipantId: id,
   manualDisplayName: name, participantKind: 'manual', status: 'confirmed' });
 assert.equal(C.nameKey('  Andréa   Carril '), 'andrea carril');
+for (const name of ['  Andréa   Carril ', 'Maria-Paula  Silveira', 'Ana', 'Luísa D\'Ávila']) {
+  assert.equal(autoNameKey(name), C.nameKey(name), 'autoDraw e vínculo histórico usam o mesmo índice de nome');
+}
 assert.equal(C.nameKey('Ana'), '', 'nome incompleto não sugere vínculo');
 assert.equal(C.accountPredatesTournament(Date.parse('2026-11-01T12:00:00Z'),
   { startDate: '2026-11-13T08:00:00Z' }), true);
@@ -62,12 +66,15 @@ assert.throws(() => C.planParticipantMirror([], 'tour-old', 'old', 'Maria Souza'
   /espelho da vaga ausente/, 'espelho ausente bloqueia vínculo');
 const structuredGame = { _chave:'j2', jogo:{ id:'j2',
   team1:['Maria Souza','Bia Lima'], team2:['Ana Paula','Carla Dias'],
+  team1Uids:[null,'partner'], historicalClaimUids:['partner'],
   team1Obj:{ p1Name:'Maria Souza', p1ManualId:'old', p2Name:'Bia Lima', p2Uid:'partner' },
-  score1:6, score2:4 } };
+  score1:6, score2:4 }, playerUids:['partner'] };
 const structuredBefore = JSON.stringify(structuredGame);
 const structuredPatch = C.planMatches([{ id:'j2', data:structuredGame }], 'Maria Souza', 'new-uid')[0].patch;
 assert.equal(structuredPatch['jogo.team1Obj.p1Uid'], 'new-uid');
 assert.equal(structuredPatch['jogo.team1Obj.p1ManualId'], null);
+assert.deepEqual(structuredPatch.playerUids,['new-uid','partner'],
+  'vínculo anterior confirmado permanece no índice, sem UID legado desconhecido');
 assert.equal(structuredPatch['jogo.score1'], undefined);
 assert.equal(JSON.stringify(structuredGame), structuredBefore, 'objeto e resultado não mudam ao planejar');
 assert.throws(() => C.planMatches([{ id:'j2', data:{ ...structuredGame,
@@ -91,7 +98,15 @@ assert.equal(claimed.updates.find((item) => item.registrationId === partnerId).f
   claimed.creates[0].fixedPairId);
 assert.throws(() => C.planMatches([{ id: 'j1', data: { ...original,
   jogo: { ...original.jogo, team1Uids: ['outro-uid', null] } } }], 'Andrea Carril', 'uid-a'),
-  /outra conta/, 'não sobrescreve identidade existente');
+  /UID legado/, 'não anexa identidade legada sem vínculo confirmado');
+assert.throws(() => C.planMatches([{ id: 'j1', data: { ...original,
+  jogo: { ...original.jogo, team2Uids: ['outro-uid', null] } } }], 'Andrea Carril', 'uid-a'),
+  /UID legado/, 'UID desconhecido do adversário não contamina o índice pessoal');
+assert.equal(C.planMatches([{ id:'unrelated', data:{ _chave:'unrelated', jogo:{
+  id:'unrelated', team1:['Outra Pessoa'], team1Uids:['uid-legado'],
+  team2:['Mais Uma'], team2Uids:[null] } } },
+{ id:'j1', data:original }], 'Andrea Carril', 'uid-a').length, 1,
+'UID de jogo alheio não impede a reivindicação da atleta');
 assert.throws(() => C.planMatches([{ id: 'j1', data: { ...original,
   jogo: { ...original.jogo, team2: ['Andréa Carril', 'Camila Giannella'] } } }], 'Andrea Carril', 'uid-a'),
   /mais de um slot/, 'não escolhe um dos lados de um jogo ambíguo');

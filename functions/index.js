@@ -8041,6 +8041,11 @@ exports.editCamisManualParticipant = onCall(
       if (action === 'rename') {
         tx.update(targetRef,{ manualDisplayName:newName,manualNameKey:_historicalAthleteClaim.nameKey(newName),updatedAt:now });
       } else {
+        if (planned.nextReg.participantKind !== 'manual' ||
+            !_historicalAthleteClaim.nameKey(planned.nextReg.manualDisplayName) ||
+            planned.nextReg.manualDisplayName !== newName) {
+          throw new HttpsError('failed-precondition', 'inscrição substituta sem identidade manual válida');
+        }
         tx.update(targetRef,{ status:'withdrawn',withdrawnReason:'replaced',updatedAt:now });
         tx.create(ref.collection('registrations').doc(planned.nextReg.registrationId),{
           ...planned.nextReg,manualNameKey:_historicalAthleteClaim.nameKey(planned.nextReg.manualDisplayName),

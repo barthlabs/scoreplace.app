@@ -1,13 +1,8 @@
 'use strict';
 
-const { normalizeName } = require('./manual-claim-link-core');
+const { nameKey } = require('./manual-name-key-core');
 const { legacySlots, derivedManualParticipantId } = require('./registration-core');
 const split = require('./vendor/tournament-split-core');
-
-function nameKey(value) {
-  const key = normalizeName(value);
-  return key.split(' ').filter(Boolean).length >= 2 ? key : '';
-}
 
 function activeManual(registration) {
   return registration && registration.participantKind === 'manual' &&
@@ -111,6 +106,42 @@ function patchMatch(physical, name, uid) {
   const game = physical && physical.jogo;
   if (!game || typeof game !== 'object' || !uid || !nameKey(name)) throw new Error('jogo ou identidade inválida');
   const wanted = nameKey(name);
+  if (![1, 2].some((n) => Array.isArray(game['team' + n]) &&
+      game['team' + n].some((member) => nameKey(member) === wanted))) return null;
+  // Só reaproveitamos UIDs de vínculos históricos já confirmados. Uma partida
+  // legada com outro UID não verificável exige conferência, em vez de anexar esse
+  // UID a playerUids e às estatísticas pessoais durante esta confirmação.
+  if (game.historicalClaimUids != null && !Array.isArray(game.historicalClaimUids)) {
+    throw new Error('histórico de vínculos do jogo inválido');
+  }
+  const priorClaims = new Set((game.historicalClaimUids || []).filter(Boolean));
+  const priorUids = [];
+  if (physical.playerUids != null) {
+    if (!Array.isArray(physical.playerUids)) throw new Error('índice de UIDs do jogo inválido');
+    priorUids.push(...physical.playerUids.filter(Boolean));
+  }
+  for (const n of [1, 2]) {
+    const team = game['team' + n];
+    const uids = game['team' + n + 'Uids'];
+    if (uids != null) {
+      if (!Array.isArray(team) || !Array.isArray(uids) || uids.length !== team.length) {
+        throw new Error('slots de UID desalinhados');
+      }
+      priorUids.push(...uids.filter(Boolean));
+    }
+    if (game['p' + n + 'Uid']) priorUids.push(game['p' + n + 'Uid']);
+    const object = game['team' + n + 'Obj'];
+    if (object && typeof object === 'object' && !Array.isArray(object)) {
+      if (object.p1Uid) priorUids.push(object.p1Uid);
+      if (object.p2Uid) priorUids.push(object.p2Uid);
+    }
+  }
+  if (priorUids.some((other) => other !== uid && !priorClaims.has(other))) {
+    throw new Error('jogo contém outro UID legado sem vínculo histórico confirmado; peça conferência à organização');
+  }
+  if ([...priorClaims].some((other) => !priorUids.includes(other))) {
+    throw new Error('vínculo histórico anterior diverge dos slots do jogo');
+  }
   const patch = {};
   let hits = 0;
   for (const n of [1, 2]) {
@@ -149,14 +180,10 @@ function patchMatch(physical, name, uid) {
   }
   if (!hits) return null;
   if (hits !== 1) throw new Error('nome aparece em mais de um slot do jogo');
-  const claimed = new Set(Array.isArray(game.historicalClaimUids) ? game.historicalClaimUids.filter(Boolean) : []);
+  const claimed = new Set(priorClaims);
   claimed.add(uid);
   patch['jogo.historicalClaimUids'] = Array.from(claimed).sort();
-  const roster = new Set(Array.isArray(physical.playerUids) ? physical.playerUids.filter(Boolean) : []);
-  [patch['jogo.team1Uids'] || game.team1Uids, patch['jogo.team2Uids'] || game.team2Uids].forEach((values) => {
-    if (Array.isArray(values)) values.forEach((value) => { if (value) roster.add(value); });
-  });
-  patch.playerUids = Array.from(roster).sort();
+  patch.playerUids = Array.from(claimed).sort();
   return patch;
 }
 

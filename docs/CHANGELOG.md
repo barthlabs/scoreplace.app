@@ -1,7 +1,7 @@
 ## 2.7.9 — 15/nov/2026 (vínculo histórico de atleta e cabeçalho)
 
 - Contas criadas antes de um torneio encerrado recebem uma sugestão quando o nome completo coincide com uma única inscrição manual. O atleta confirma a vaga; a transação associa seu UID à inscrição e aos jogos canônicos, com auditoria e sem reescrever placares.
-- Histórico e estatísticas pessoais passam a reconhecer jogos antigos mesmo quando os demais atletas ainda não vincularam suas contas. Um índice de nome permite buscar as inscrições existentes; o backfill altera apenas esse índice, sem resultados ou identidades.
+- Histórico e estatísticas pessoais passam a reconhecer jogos antigos mesmo quando os demais atletas ainda não vincularam suas contas. O índice de nome permite buscar inscrições já indexadas. O backfill do Camis conferiu 145 documentos (144 confirmados e 1 retirado) e alterou apenas esse índice, sem resultados ou identidades; outros torneios anteriores a 2.7.9 precisam de migração específica antes de oferecer sugestões.
 - A marca do cabeçalho fica cerca de 20% menor em janelas largas. Em janelas estreitas, símbolo, nome ScorePlace.app e versão diminuem juntos para permanecer dentro da barra superior.
 - Na ficha do torneio, a data abre a agenda por clique ou teclado; o botão separado sai. Contato com o desenvolvedor, convite e grupo oficial ficam juntos e mais compactos. O mês ganha peso visual, a marca “Atualizado em” sai e a previsão do tempo só aparece quando há previsão disponível para o evento.
 - O editor da data permite ajustar separadamente tamanho e peso de dia, mês e horário, com prévia imediata. A ficha e o painel respeitam a configuração; clientes antigos que editarem só as cores preservam a tipografia já salva.
