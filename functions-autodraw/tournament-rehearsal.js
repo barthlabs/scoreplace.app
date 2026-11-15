@@ -123,6 +123,8 @@ function makeService({ db, HttpsError }) {
   async function activate(request) {
     const uid = request.auth && request.auth.uid;
     const id = String(request.data && request.data.tournamentId || '').trim();
+    const mode = request.data && request.data.mode;
+    if (mode !== undefined && mode !== 'preDraw') fail('invalid-argument', 'Modo de ensaio inválido.');
     const ref = rootRef(id), baseline = baseRef(id);
     let epoch = randomUUID();
     await db.runTransaction(async tx => {
@@ -146,6 +148,7 @@ function makeService({ db, HttpsError }) {
       const regs = await tx.get(ref.collection('registrations'));
       preflight(t, regs.docs.map(doc => ({ path: doc.ref.path.slice(ref.path.length + 1), data: doc.data() })));
       const starting = { state: 'capturing', step: 'locked', epoch, root: t, createdAt: new Date().toISOString() };
+      if (mode === 'preDraw') starting.mode = mode;
       if (oldBase.exists) tx.set(baseline, starting);
       else tx.create(baseline, starting);
       tx.update(ref, { rehearsal: { state: 'capturing', epoch, hash: '' }, notificationsMuted: true });
@@ -188,7 +191,7 @@ function makeService({ db, HttpsError }) {
           fail('aborted', 'Fotografia divergiu antes da ativação.');
         }
         tx.update(baseline, { state: 'active', step: 'captured', hash, tree, summary: external.summary });
-        tx.update(ref, { rehearsal: { state: 'active', epoch, hash } });
+        tx.update(ref, { rehearsal: { state: 'active', ...(base.mode === 'preDraw' ? { mode: 'preDraw' } : {}), epoch, hash } });
       });
       const after = await readTree(ref);
       if (fingerprint(after) !== fingerprint(tree)) {
@@ -235,6 +238,8 @@ function makeService({ db, HttpsError }) {
   async function restore(request) {
     const uid = request.auth && request.auth.uid;
     const id = String(request.data && request.data.tournamentId || '').trim();
+    const finalize = request.data && request.data.finalize;
+    if (finalize !== undefined && typeof finalize !== 'boolean') fail('invalid-argument', 'Finalização inválida.');
     const ref = rootRef(id), baseline = baseRef(id);
     await db.runTransaction(async tx => {
       const [live, saved] = await Promise.all([tx.get(ref), tx.get(baseline)]);
@@ -257,14 +262,17 @@ function makeService({ db, HttpsError }) {
       // attempt, including an intentional removal of a field.
       tx.update(baseline, b.state === 'resetting'
         ? { state: 'resetting', step: 'deleting' }
-        : { state: 'resetting', step: 'deleting', liveTv: televisionFields(t) });
+        : { state: 'resetting', step: 'deleting', liveTv: televisionFields(t), finalize: finalize === true });
     });
     const base = (await baseline.get()).data();
     const expected = { root: base.root, tree: base.tree, summary: base.summary || null };
     if (fingerprint(expected) !== base.hash) fail('data-loss', 'Fotografia não confere; reset interrompido sem excluir dados.');
     const restoredRoot = withTelevision(base.root, base.liveTv || televisionFields(base.root));
-    const postDraw = base.mode === 'postDraw';
-    if (postDraw) restoredRoot.rehearsal = { state:'active', mode:'postDraw', epoch:base.epoch, hash:base.hash };
+    const repeatable = (base.mode === 'postDraw' || base.mode === 'preDraw') && base.finalize !== true;
+    if (repeatable) {
+      restoredRoot.rehearsal = { state:'active', mode:base.mode, epoch:base.epoch, hash:base.hash };
+      restoredRoot.notificationsMuted = true;
+    }
     // Restore the photograph before deleting rehearsal-only documents. An
     // interruption cannot leave the tournament without its original roster.
     // Both phases are repeatable while the root stays locked in `resetting`.
@@ -290,7 +298,7 @@ function makeService({ db, HttpsError }) {
         fail('aborted', 'Estado do reset mudou.');
       }
       tx.set(ref, restoredRoot); // Preserve the TV layout last saved before reset.
-      tx.update(baseline, { state: postDraw ? 'active' : 'restored', step: 'verified', restoredAt: new Date().toISOString() });
+      tx.update(baseline, { state: repeatable ? 'active' : 'restored', step: 'verified', restoredAt: new Date().toISOString() });
     });
     const [finalRoot, finalTree, external] = await Promise.all([ref.get(), readTree(ref), readExternal(id)]);
     if (!finalRoot.exists || external.feedExists || fingerprint({ root: finalRoot.data(), tree: finalTree, summary: external.summary }) !==
@@ -299,7 +307,7 @@ function makeService({ db, HttpsError }) {
       await baseline.update({ state: 'resetting', step: 'verify-failed' });
       fail('data-loss', 'Verificação final falhou; reset travado para repetição.');
     }
-    return { ok: true, state: postDraw ? 'active' : 'restored', count: base.tree.filter(item => item.path.startsWith('registrations/') && item.path.split('/').length === 2).length, hash: base.hash, tournament: restoredRoot };
+    return { ok: true, state: repeatable ? 'active' : 'restored', count: base.tree.filter(item => item.path.startsWith('registrations/') && item.path.split('/').length === 2).length, hash: base.hash, tournament: restoredRoot };
   }
 
   return { activate, restore };

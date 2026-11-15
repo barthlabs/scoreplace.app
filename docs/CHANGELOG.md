@@ -1,3 +1,8 @@
+## 2.7.2 — 14/nov/2026 (ensaio pré-sorteio repetível)
+
+- O reset de um ensaio pré-sorteio configurado como repetível devolve a fotografia integral do torneio e mantém o ponto de retorno ativo para novos testes. Inscrições continuam congeladas e notificações silenciadas entre os testes. A ação “Encerrar ensaio” restaura a fotografia e libera ambos os controles administrativos.
+- O diálogo de restauração pós-sorteio descreve os grupos do próprio torneio, sem quantidade fixa de outro evento.
+
 ## 2.7.1 — 14/nov/2026 (Encerramento e teste seguro)
 
 - Torneios concluídos mostram a classificação final para todas as pessoas e ocultam a operação, o avanço de fase e controles de ensaio. O reset de teste some quando o torneio é público e o servidor recusa sua restauração após a publicação.

@@ -174,6 +174,26 @@ const service = makeService({ db, HttpsError });
     delete afterTvReset[key];
   }
   assert.deepEqual(afterTvReset, root);
+  const preDrawRequest = { auth:{ uid:OWNER_UID }, data:{ tournamentId:id, mode:'preDraw' } };
+  await service.activate(preDrawRequest);
+  const preDrawBaseline = (await db.collection('tournamentRehearsalBaselines').doc(id).get()).data();
+  assert.equal(preDrawBaseline.mode, 'preDraw');
+  await ref.update({ matches:[{ id:'test-draw', winner:'A' }], status:'running' });
+  const firstPreDrawReset = await service.restore(request());
+  assert.equal(firstPreDrawReset.state, 'active');
+  assert.equal((await ref.get()).data().rehearsal.mode, 'preDraw');
+  assert.equal((await ref.get()).data().notificationsMuted, true);
+  assert.deepEqual((await ref.get()).data().matches, []);
+  assert.equal((await db.collection('tournamentRehearsalBaselines').doc(id).get()).data().state, 'active');
+  await ref.update({ matches:[{ id:'another-test-draw', winner:'B' }], status:'running' });
+  assert.equal((await service.restore(request())).state, 'active', 'reset pré-sorteio pode ser repetido');
+  assert.deepEqual((await ref.get()).data().matches, []);
+  const finishedPreDraw = await service.restore({ auth:{ uid:OWNER_UID }, data:{ tournamentId:id, finalize:true } });
+  assert.equal(finishedPreDraw.state, 'restored', 'encerrar ensaio restaura antes de liberar');
+  assert.equal((await ref.get()).data().rehearsal, undefined);
+  assert.equal((await ref.get()).data().notificationsMuted, undefined);
+  assert.equal((await db.collection('tournamentRehearsalBaselines').doc(id).get()).data().state, 'restored');
+  await service.activate(preDrawRequest);
   const priorBaseline = (await db.collection('tournamentRehearsalBaselines').doc(id).get()).data();
   const checkpointRoot = { ...root, matches:[{ id:'post-draw', p1:'A', p2:'B' }], status:'running' };
   const checkpoint = { root:checkpointRoot, tree:priorBaseline.tree,
