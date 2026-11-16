@@ -26,6 +26,11 @@ async function abrirFormDeTorneio(page) {
 test.describe('Formato da partida por FASE (create/edit)', () => {
   test('um dia usa o início da fase e decisões condicionais seguem a ordem', async ({ page }) => {
     await abrirFormDeTorneio(page);
+    const missingDates = await page.evaluate(() => {
+      window._setEstimatedScheduleMode('organizer');
+      return window._readEstimatedGameHours();
+    });
+    expect(missingDates.error).toContain('datas de início e fim');
     const state = await page.evaluate(() => {
       document.getElementById('tourn-start-date').value = '2026-11-21';
       document.getElementById('tourn-start-time').value = '08:00';

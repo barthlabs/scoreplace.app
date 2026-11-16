@@ -276,7 +276,7 @@ window._readEstimatedGameHours = function () {
   if (oldWindows.some(function (item) { return item && currentCats.indexOf(item.category) < 0; })) state.touched = true;
   if (!state.touched) return null;
   var days = _estimatedGameDays();
-  if (!days.length) return null; // A validação das datas da fase já aponta o campo que falta.
+  if (!days.length) return { error:'Informe as datas de início e fim da fase antes de definir os jogos.' };
   var saved = (state.saved && Array.isArray(state.saved.days)) ? state.saved.days : [];
   var defaultStart = (document.getElementById('tourn-start-time') || {}).value || '09:00';
   var defaultEnd = (document.getElementById('tourn-end-time') || {}).value || '22:00';
@@ -6787,7 +6787,12 @@ window._saveTournamentClickHandler = async function() {
         const startDateVal = startTimeRaw ? startDateRaw + 'T' + startTimeRaw : startDateRaw;
         const endDateRaw = document.getElementById('tourn-end-date').value || '';
         const endTimeRaw = document.getElementById('tourn-end-time').value || '';
-        const endDateVal = endTimeRaw ? endDateRaw + 'T' + endTimeRaw : endDateRaw;
+        // Sem hora de término explícita, o último dia vale até o fim do dia.
+        // Assim um evento que começa às 08:00 e termina na mesma data não
+        // ganha um fim implícito à meia-noite, antes do primeiro jogo.
+        const endDateVal = endTimeRaw ? endDateRaw + 'T' + endTimeRaw
+          : (endDateRaw && window._estimatedGameHoursState && window._estimatedGameHoursState.mode === 'organizer'
+            ? endDateRaw + 'T23:59' : endDateRaw);
         const estimatedGameHours = window._readEstimatedGameHours();
         const phaseCallOrder = window._readPhaseCallOrder();
         const phaseGridPlan = typeof window._readPhaseGridPlan === 'function' ? window._readPhaseGridPlan() : null;
