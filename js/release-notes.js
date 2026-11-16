@@ -1,3 +1,8 @@
+// 2.7.11 — No celular, o cabeçalho web mantém o símbolo, o nome e os ícones
+// nítidos. No atalho instalado, a margem lateral acompanha a do navegador;
+// a versão volta a alinhar sua base com a do pódio.
+// Na ficha, o bloco de data de um único dia ganha mais área e uma hierarquia
+// mais forte para dia, mês e horário. A personalização continua disponível.
 // 2.7.10 — A versão do cabeçalho alinha pela base do pódio. No detalhe do torneio,
 // Voltar alinha com A–Z; contato, convite e grupo oficial têm a mesma altura,
 // sobem para junto do logo, e o card de data alinha pela base desses botões.

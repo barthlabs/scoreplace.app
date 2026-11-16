@@ -1,3 +1,9 @@
+## 2.7.11 — 15/nov/2026 (cabeçalho web móvel)
+
+- Marca e ações do cabeçalho passam a ser renderizadas em camadas separadas no celular para evitar o desfoque observado no atalho web instalado no iPhone.
+- O atalho web usa o espaçamento lateral móvel, e a versão se alinha à base do símbolo sem o deslocamento aplicado em telas maiores.
+- Na ficha do torneio, o padrão de data de um único dia (com ou sem horário final) ocupa cerca de metade da área do logo, com dia e mês mais fortes e horários maiores. A prévia em Personalizar acompanha o padrão, mantendo os ajustes tipográficos e de cor do organizador.
+
 ## 2.7.9 — 15/nov/2026 (vínculo histórico de atleta e cabeçalho)
 
 - Contas criadas antes de um torneio encerrado recebem uma sugestão quando o nome completo coincide com uma única inscrição manual. O atleta confirma a vaga; a transação associa seu UID à inscrição e aos jogos canônicos, com auditoria e sem reescrever placares.
@@ -3241,4 +3247,3 @@ processo.
 - O Camis Day usa a ordem oficial dos grupos na chave Ouro: G1×G2, G3×G4, G5×G6, G7×G8, G9×G10, G11×G12, G13×G14 e G15×G16. A dupla do G4 segue a planilha oficial. A materialização final preserva os jogos das oitavas já chamados e seus placares.
 - A fila da operação aceita confrontos Ouro já definidos antes do fechamento dos outros grupos e não espera a classificatória Ouro para chamar jogos Diamante prontos. Os seletores da chave acompanham a liberação de quadras em tempo real.
 - A TV e a operação identificam os confrontos Ouro publicados como oitavas de final e incluem os próximos jogos já definidos. A grade intercalada aceita a publicação gradual da rodada oficial.
-
