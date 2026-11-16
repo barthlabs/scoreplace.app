@@ -6311,6 +6311,13 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         t[key] = patch[key];
       }
     });
+    // O seletor geral da ficha controla a classificatória atual. Depois do
+    // sorteio, a mescla de phases preserva sua estrutura; sem sincronizar esta
+    // permissão, o topo dizia "jogadores" enquanto o servidor ainda exigia
+    // "organização" na fase 0 e recusava o placar dos atletas.
+    if (Object.prototype.hasOwnProperty.call(patch, 'resultEntry') && Array.isArray(t.phases) && t.phases[0]) {
+      t.phases[0].resultEntry = patch.resultEntry;
+    }
     if (camisNameRebase) t.rehearsal = { ...t.rehearsal, hash:camisNameRebase.hash };
     _writeCategoryRemoval(tx, ref, t, categoryChange && categoryChange.removal,
       categoryChange && categoryChange.reservations);

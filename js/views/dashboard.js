@@ -2572,6 +2572,8 @@ function renderDashboard(container) {
 
       // Fase label + cor da barra (igual às colunas do bracket)
       var tRef = participacoes.find(function(tt) { return tt.id === item.tId; });
+      var _showMonarchCrown = !!(item.m.isMonarch && !(tRef && (tRef.superEight === true ||
+        (Array.isArray(tRef.phases) && tRef.phases.some(function(phase) { return phase && phase.superEight === true; })))));
       var _cardTab = _bracketTabForMatch(item.m);
       var faseStr = tRef ? _elabFaseLabel(tRef, item.m) : (item.subLine || '');
       // Cor baseada na fase — Semi=ciano, Quartas=verde, Oitavas/Rodada/Grupo=índigo,
@@ -2837,7 +2839,7 @@ function renderDashboard(container) {
           '</div>') +
         '<div id="card-' + mId + '" class="sp-match-card" style="background:' + window._spCor(cardBgStr, 'background') + ';border:2px solid ' + window._spCor(cardBorderStr, 'borda') + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
           '<div class="btn-row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:8px;gap:8px;flex-wrap:wrap;">' +
-            '<span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;">' + (item.m.isMonarch ? '<span style="font-size:1.05rem;line-height:1;margin-right:5px;">👑</span>' : '') + _sf(_monarchBoxLabel || opts.boxLabelOverride || matchLabel) +
+            '<span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;">' + (_showMonarchCrown ? '<span style="font-size:1.05rem;line-height:1;margin-right:5px;">👑</span>' : '') + _sf(_monarchBoxLabel || opts.boxLabelOverride || matchLabel) +
               (opts.timelineHtml ? '<span data-match-time-status data-match-time-tournament-id="' + tId + '" data-match-time-match-id="' + mId + '" style="text-transform:none;color:var(--text-muted);font-weight:600;">' + opts.timelineHtml + '</span>' : '') + '</span>' +
             '<div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;min-width:0;margin-left:auto;">' +
               '<div id="header-btns-' + mId + '" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">' + finalHeaderBtns + '</div>' +

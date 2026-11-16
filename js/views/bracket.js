@@ -10461,9 +10461,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     // A agenda pode apontar uma quadra já ocupada enquanto outra está livre.
     // A sugestão é apenas visual; a callable ainda valida a ocupação no clique.
     var _preferredCourt = opts && opts.preferredCourt && _freeCourts.includes(opts.preferredCourt) ? opts.preferredCourt : '';
-    var _displayCourt = _preferredCourt || (opts && opts.preferFirstFreeCourt && !m.courtCalledAt ? _freeCourts[0] : '') ||
-      (_suggestedCourt && _freeCourts.includes(_suggestedCourt) ? _suggestedCourt : '') ||
-      (!_persistedBusy && _freeCourts.includes(_persistedCourt) ? _persistedCourt : '') || _freeCourts[0] || '';
+    var _gameOrder = Number(matchNum);
+    var _orderedCourt = Number.isInteger(_gameOrder) && _gameOrder > 0 && _cardCourts.length
+      ? _cardCourts[(_gameOrder - 1) % _cardCourts.length] : '';
+    var _displayCourt = _preferredCourt ||
+      (!_persistedBusy && _freeCourts.includes(_persistedCourt) ? _persistedCourt : '') ||
+      (_orderedCourt && _freeCourts.includes(_orderedCourt) ? _orderedCourt : '') ||
+      (opts && opts.preferFirstFreeCourt && !m.courtCalledAt ? _freeCourts[0] : '') ||
+      (_suggestedCourt && _freeCourts.includes(_suggestedCourt) ? _suggestedCourt : '') || _freeCourts[0] || '';
     var _busyPlaceholder = !_freeCourts.length;
     var _emptyCourtLabel = _busyPlaceholder ? 'Todas as quadras ocupadas' : 'Sem quadra';
     var _emptyCourtDisabled = _busyPlaceholder || !!m.courtCalledAt || !!_persistedCourt;
@@ -11265,6 +11270,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     _monarchCategories.every(Boolean) &&
     _monarchCategories.some(function (category) { return category !== _monarchCategories[0]; });
   var _useSetsMonarch = !!(t.scoring && t.scoring.type === 'gsm');
+  var _isSuperEightMon = t.superEight === true || (t.phases || []).some(function(phase) { return phase && phase.superEight === true; });
   var _gamesPrimaryMonarch = t.rankingPrimary === 'games_diff';
   subgroups.forEach(function(sg, gi) {
     // A confirmação de um placar precisa apenas da classificação do seu
@@ -11465,7 +11471,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // de depender de existir um jogo pendente dele. Aqui (Rei/Rainha) o grupo do usuário já ia
     // pro topo da lista, mas não se ANUNCIAVA: sem badge, sem borda e sem marca pro scroll.
     var _isMineMon = _sgHasMe(sg);
-    var _mineBadgeMon = _isMineMon
+    var _mineBadgeMon = _isMineMon && !_isSuperEightMon
       ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>'
       : '';
     var _groupCodeMatch = String(window._bracketMonarchGroupLabel(t, sg)).toUpperCase().match(/\b([A-Z]{1,3}\d+)\b/);
@@ -11483,10 +11489,10 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
        * altos — a tabela começava longe demais do que a explica. 0.45rem encosta a
        * classificação no cabeçalho sem colar. */
       '<div class="btn-row" style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:0.45rem;">' +
-        '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;flex:1;">' +
+        (_isSuperEightMon ? '' : '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;flex:1;">' +
           '<h3 style="margin:0;font-size:1.1rem;line-height:1.15;white-space:nowrap;color:' + window._spCor((_isMineMon ? '#22d3ee' : 'var(--text-bright)'), 'color') + ';">' + window._safeHtml(window._grpRotuloCurto(window._bracketMonarchGroupLabel(t, sg), true)) + '</h3>' +
           ((_mineBadgeMon || statusBadge) ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;white-space:nowrap;">' + _mineBadgeMon + (statusBadge || '') + '</div>' : '') +
-        '</div>' +
+        '</div>') +
         _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
       '</div>' +
       // v4.3.12 (pedido do dono): a tabela de classificação do grupo fica SEMPRE ACIMA das
