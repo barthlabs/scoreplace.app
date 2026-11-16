@@ -1,3 +1,4 @@
+// 2.7.16 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.15 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.14 — O Super 8 de oito atletas oferece um sorteio único para sete rodadas
 // ou sorteios sucessivos que preservam as 28 parcerias diferentes. O modo manual
