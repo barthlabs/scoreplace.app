@@ -148,8 +148,8 @@ html.sp-android .topbar {
 @media (display-mode: standalone) {
   html:not(.sp-native) .topbar {
     padding-top: max(0.5rem, env(safe-area-inset-top, 0px)) !important;
-    padding-left: calc(2rem + env(safe-area-inset-left, 0px)) !important;
-    padding-right: calc(2rem + env(safe-area-inset-right, 0px)) !important;
+    padding-left: calc(clamp(0.75rem, 2vw, 2rem) + env(safe-area-inset-left, 0px)) !important;
+    padding-right: calc(clamp(0.75rem, 2vw, 2rem) + env(safe-area-inset-right, 0px)) !important;
   }
   html:not(.sp-native) .main-content {
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -203,6 +203,13 @@ html.sp-native .modal-overlay.active .modal-header {
   .sp-header-symbol { width: clamp(38px, 5vw, 48px); }
   .sp-header-wordmark { width: clamp(136px, 25vw, 210px); }
   .sp-header-version { margin-right: calc(clamp(136px, 25vw, 210px) * 0.064); }
+}
+@media (max-width: 767px) {
+  /* No PWA do iPhone a versão (já transformada) aparece nítida, mas os SVGs
+     da barra fixa ficam borrados. Isolar marca e ações em camadas pequenas. */
+  .sp-header-brand, .topbar-right-icons { transform: translateZ(0); }
+  /* Sem deslocamento, a base da versão já coincide com a do símbolo no celular. */
+  .sp-header-version { transform: translateZ(0); }
 }
 @media (max-width: 319px) {
   .sp-header-brand { gap: 4px; }
