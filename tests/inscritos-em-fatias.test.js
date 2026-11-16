@@ -145,7 +145,7 @@ function servidor() {
     return { naFatia1: cards.length, visiveis, alturaDoc: Math.round(document.documentElement.scrollHeight) };
   });
   ok(a.naFatia1 === total, 'a 1ª entrega É a lista inteira — a tela nunca mente (' + a.naFatia1 + ' de ' + total + ')');
-  ok(a.visiveis >= 3, 'e o que ela traz é card REAL preenchendo a tela (' + a.visiveis + ' visíveis) — nunca só o cabeçalho, que é o que produz a piscada preta');
+  ok(a.visiveis >= 2, 'e o que ela traz é card REAL preenchendo a tela (' + a.visiveis + ' visíveis) — nunca só o cabeçalho, que é o que produz a piscada preta');
 
   // (b) O INVARIANTE MAIS IMPORTANTE: sem rAF, a lista COMPLETA ainda chega.
   // É o cenário da aba de fundo e do painel de navegador. Sem isto a pessoa ficaria

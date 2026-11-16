@@ -7214,7 +7214,7 @@ window._saveTournamentClickHandler = async function() {
             null, { type:'warning' });
           return;
         }
-        if (_f2cfg.rodadas.modo === 'fixo' && _f2cfg.rodadas.n > 1 &&
+        if (_f2cfg.rodadas && _f2cfg.rodadas.modo === 'fixo' && _f2cfg.rodadas.n > 1 &&
             !_f2cfg.rodadas.drawManual &&
             !(_f2cfg.parceria === 'super_eight' && _f2cfg.superEightDrawMode === 'single') &&
             !(parseInt(_f2cfg.rodadas.drawIntervalDays, 10) >= 1)) {
