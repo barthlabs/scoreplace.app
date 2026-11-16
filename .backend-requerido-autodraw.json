@@ -1,11 +1,15 @@
 {
   "schema": 1,
-  "backendCommit": "4ebd29eb0056fa9ee43f997a9b8b2394f0aaebc2",
-  "scopeNote": "Configuração de torneio e cores da data, edição durante ensaio e regra de desempate antes do sorteio; drawRound usa o vendor atualizado.",
+  "backendCommit": "2a2e382d3741f5de5695f5bd7a41c2b58d187087",
+  "scopeNote": "Super 8: sorteio único ou por rodada, sete combinações únicas, agendamento manual e configuração validada no servidor.",
   "functions": [
     "createTournament",
     "updateTournamentConfiguration",
     "applyTournamentFormat",
-    "drawRound"
+    "drawRound",
+    "closeRound",
+    "generateExtraTournamentRound",
+    "autoDraw",
+    "autoDrawReconcile"
   ]
 }
