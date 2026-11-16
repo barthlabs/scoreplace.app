@@ -511,6 +511,10 @@ window._buildDoublesInscritosSection = function (t, ctx) {
       if (_isPairEntry(entry)) return Math.min(Number(entry.p1Seq), Number(entry.p2Seq));
       return Number(entry.enrollSeq);
     }
+    if (entry && typeof entry === 'object' && entry.manualParticipantId && window._enrollNumber) {
+      var manualRank = Number(window._enrollNumber(_enrollOrderMapD, entry));
+      if (manualRank > 0) return manualRank;
+    }
     var names = [];
     if (entry && typeof entry === 'object' && (entry.p1Name || entry.p2Name || entry.p1Uid || entry.p2Uid)) {
       names = [entry.p1Name, entry.p2Name].filter(Boolean);
@@ -821,7 +825,7 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
     var _allM = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
     (_allM || []).forEach(function (m) { if (m) { _addName(m.p1); _addName(m.p2); } });
     var made = [];
-    var k = maxNum;
+    var k = Math.max(maxNum, (typeof window._enrollQueue === 'function' ? window._enrollQueue(t).length : t.participants.length));
     for (var i = 0; i < qtd; i++) {
         var numStr, nm;
         do { k++; numStr = String(k).padStart(2, '0'); nm = 'Jogador ' + numStr; } while (existingNames[nm]);
@@ -4043,7 +4047,7 @@ function renderTournaments(container, tournamentId = null) {
         const _regPaid = _registration && (_registration.passServiceFeeToParticipant === true || _regPricing && (_regPricing.mode === 'single'
           ? Number(_regPricing.cents) > 0
           : Object.keys(_regPricing.centsByCategory || {}).some(k => Number(_regPricing.centsByCategory[k]) > 0)));
-        let toggleRegBtn = (!isFinished && (!hasDraw || (lateEnrollManaged && !_r2Started)) && !isLigaOpenEnroll && isOrg && !(_registration && _registration.source === 'external')) ? `<button class="btn ${_regIsClosed ? 'btn-success' : 'btn-danger'} hover-lift" title="${_regIsClosed ? 'Reabrir inscrições' : 'Encerrar inscrições'}" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${_regIsClosed ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${_regLabel}</button>` : '';
+        let toggleRegBtn = (!isFinished && (!hasDraw || (lateEnrollManaged && !_r2Started)) && (!isLigaOpenEnroll || t.superEight === true) && isOrg && !(_registration && _registration.source === 'external')) ? `<button class="btn ${_regIsClosed ? 'btn-success' : 'btn-danger'} hover-lift" title="${_regIsClosed ? 'Reabrir inscrições' : 'Encerrar inscrições'}" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${_regIsClosed ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${_regLabel}</button>` : '';
         // v4.1.18: Reabrir/Encerrar EM ANDAMENTO deste torneio → botão cinza "Reabrindo…"/
         // "Encerrando…" (mesma UX do Sortear) mesmo se o detalhe re-renderizar antes de
         // concluir. Limpo em _regBtnDone (dialog/painel/refresh/backstop).
@@ -4474,6 +4478,7 @@ function renderTournaments(container, tournamentId = null) {
             <!-- Middle Left: Nome + Logo + Favorito -->
             <!-- Logo: na tela de detalhe ocupa 1/3 da largura do card (max 160px), cap responsivo via CSS min() -->
             <div class="sp-tournament-identity-row" style="display: flex; align-items: ${window._tourLogoSrc(t) && tournamentId ? 'flex-start' : 'center'}; gap: ${window._tourLogoSrc(t) && tournamentId ? '18px' : '14px'}; margin: 1.8rem 0 0.5rem 0;">
+              ${tournamentId && dateCardHtml && !window._tourLogoSrc(t) ? `<div class="sp-tournament-date-stack sp-tournament-identity-date">${calendarDateHtml(dateCardHtml)}</div>` : ''}
               ${window._tourLogoSrc(t) ? `
                 <div class="sp-tournament-logo" style="position:relative;width:33%;min-width:100px;flex-shrink:0;aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};">
                   <img src="${window._tourLogoSrc(t)}" alt="Logo do torneio"
@@ -4510,7 +4515,7 @@ function renderTournaments(container, tournamentId = null) {
                     saiu na 1.8.30, ele ficava sem NENHUM acesso ao grupo (era o estado do
                     Confra). Criar/trocar/abrir agora vivem no painel que este botão abre. */ ''}
               ${(!_waChipJuntoDoEnroll && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
-            </div>${dateCardHtml ? `<div class="sp-tournament-date-stack">${calendarDateHtml(dateCardHtml)}</div>` : ''}</div>` : ''}
+            </div>${dateCardHtml && window._tourLogoSrc(t) ? `<div class="sp-tournament-date-stack">${calendarDateHtml(dateCardHtml)}</div>` : ''}</div>` : ''}
 
             <!-- Sem card visual de data, a data textual permanece sob a identidade. -->
             <div style="display:${dateCardHtml ? 'none' : 'flex'};align-items:center;gap:12px;min-width:0;">

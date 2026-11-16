@@ -9,6 +9,9 @@ assert.equal(compiled.topLevel.superEight, true);
 assert.equal(compiled.phases[0].superEight, true);
 assert.equal(compiled.phases[0].rounds, 7);
 assert.equal(compiled.phases.length, 1);
+assert.equal(draw._window._requiresMonarchPreDrawReview({ superEight:true, phases:compiled.phases,
+  scheduleWindow:{ mode:'organizer', days:[] } }), false,
+  'Super 8 não exige grade de horários nem categorias para abrir o sorteio');
 cfg.superEightDrawMode = 'single';
 const single = format.compileToPhases(cfg, { sport: 'beach_tennis' });
 assert.equal(single.topLevel.superEightDrawMode, 'single');
@@ -39,6 +42,16 @@ for (let round = 1; round <= 7; round++) {
 }
 assert.equal(pairs.size, 28);
 assert.equal(t.superEightOrders._default_.length, 8);
+const placeholders = { ...t, id:'eight-with-placeholders', rounds:[], standings:[], superEightOrders:null,
+  participants:[{ uid:'kelly', displayName:'Kelly', ligaActive:true }, ...Array.from({ length:7 }, (_, i) => ({
+    manualParticipantId:'manual-' + (i + 1), name:'Jogador ' + String(i + 1).padStart(2, '0'),
+    displayName:'Jogador ' + String(i + 1).padStart(2, '0'), isPlaceholder:true, ligaActive:true
+  }))] };
+assert.equal(draw.generateLigaRound(placeholders, new Date('2026-11-21T09:00:00Z')).ok, true);
+const namedPlayers = placeholders.rounds[0].matches.flatMap(m => m.team1.concat(m.team2)).sort();
+assert.deepEqual(namedPlayers, ['Kelly', ...Array.from({ length:7 }, (_, i) =>
+  'Jogador ' + String(i + 2).padStart(2, '0'))].sort(),
+  'confrontos usam a sequência real das inscrições, inclusive reservas já existentes');
 const shuffled = { ...t, id:'eight-seeded', superEightDrawMode:'single',
   rounds:[], standings:[], superEightOrders:null };
 draw._window._generateReiRainhaRoundForPlayers(shuffled, null, 1, { rnd: () => 0 });

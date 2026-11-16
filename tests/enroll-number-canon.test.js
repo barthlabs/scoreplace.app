@@ -65,6 +65,8 @@ console.log('\nPlaceholder — o número visível vem do próprio rótulo:');
   ok('Jogador 01 mantém 01 mesmo dentro da dupla', W._enrollNumber(m, { uid: 'legacy-1', displayName: 'Jogador 01' }) === 1, String(W._enrollNumber(m, { uid: 'legacy-1', displayName: 'Jogador 01' })));
   ok('Jogador 02 mantém 02 mesmo dentro da dupla', W._enrollNumber(m, { uid: 'legacy-2', displayName: 'Jogador 02' }) === 2, String(W._enrollNumber(m, { uid: 'legacy-2', displayName: 'Jogador 02' })));
   ok('placeholder funciona mesmo sem mapa carregado', W._enrollNumber({}, { displayName: 'Jogador 124' }) === 124, String(W._enrollNumber({}, { displayName: 'Jogador 124' })));
+  ok('reserva manual após inscrição real usa a posição da fila, não o número do nome',
+    W._enrollNumber({ 'm:manual-jogador-01': 2 }, { manualParticipantId:'manual-jogador-01', displayName:'Jogador 01', isPlaceholder:true }) === 2);
 }
 
 // ── formar dupla: o seq de cada um entra na dupla (p1Seq/p2Seq) ───────────────

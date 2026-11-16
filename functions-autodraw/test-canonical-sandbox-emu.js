@@ -64,6 +64,13 @@ const categories = [{ id: 'light', label: 'Light' }];
   assert.equal(configResult.status, 200, JSON.stringify(configResult.body));
   assert.deepEqual((await routed.get()).data().courtOrder, ['Quadra 1']);
   assert.equal(JSON.stringify((await real.get()).data()), realBefore, 'configuração do sandbox não altera original');
+  const visibility = await callFn('updateTournamentConfiguration', { tournamentId:routedId,
+    sandbox:true, patch:{ isPublic:false, membersOnly:true, organizerOnly:false, endTimeEstimated:true } }, owner);
+  assert.equal(visibility.status, 200, JSON.stringify(visibility.body));
+  assert.equal((await routed.get()).data().membersOnly, true,
+    'organizador muda visibilidade mesmo com horário final estimado no formulário');
+  assert.equal((await routed.get()).data().endTimeEstimated, true);
+  assert.equal(JSON.stringify((await real.get()).data()), realBefore);
   const legacyConfig = await callFn('updateTournamentConfiguration', { tournamentId:routedId,
     patch:{ courtOrder:['Quadra 2'] } }, owner);
   assert.equal(legacyConfig.status, 200, 'cliente sem flag usa o prefixo privado do ID');

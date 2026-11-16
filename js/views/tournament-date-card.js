@@ -96,7 +96,8 @@
         ? '<span class="sp-date-month">' + MONTHS[m.start.month - 1] + '</span>'
         : '<span class="sp-date-months"><span class="sp-date-month">' + MONTHS[m.start.month - 1] + '</span><span class="sp-date-month">' + MONTHS[m.end.month - 1] + '</span></span>';
     }
-    var time = m.start.time + (m.end ? ' — ' + m.end.time : '') + (options && options.estimatedEnd ? ' (estimado)' : '');
+    var estimatedEnd = !!(options && options.estimatedEnd && m.end);
+    var time = m.start.time + (m.end ? ' — ' + m.end.time + (estimatedEnd ? '*' : '') : '');
     var daysApart = m.end ? (Date.UTC(Number(m.end.year), m.end.month - 1, m.end.day) -
       Date.UTC(Number(m.start.year), m.start.month - 1, m.start.day)) / 86400000 : 0;
     // Acima de uma semana, os horários de abertura/fechamento não são uma grade
@@ -105,8 +106,8 @@
     var dateMarkup = m.kind === 'cross-month'
       ? '<div class="sp-date-cross-grid"><span class="sp-date-cross-item"><span class="sp-date-day">' + m.start.day + '</span><span class="sp-date-month">' + MONTHS[m.start.month - 1] + '</span></span><span class="sp-date-join">a</span><span class="sp-date-cross-item"><span class="sp-date-day">' + m.end.day + '</span><span class="sp-date-month">' + MONTHS[m.end.month - 1] + '</span></span></div>'
       : '<div class="sp-date-days">' + dateLine + '</div><div class="sp-date-month-line">' + monthLine + '</div>';
-    var spoken = m.start.day + ' de ' + MONTHS[m.start.month - 1] + (m.end ? ' a ' + m.end.day + ' de ' + MONTHS[m.end.month - 1] : '') + (extendedRange ? '' : ', ' + time);
-    return '<div class="sp-date-card sp-date-card--' + m.kind + (extendedRange ? ' sp-date-card--extended-range' : '') + (c.typography ? ' sp-date-card--custom-typography' : '') + '" style="' + css + '" aria-label="' + escapeAttribute(spoken) + '">' + dateMarkup + (extendedRange ? '' : '<div class="sp-date-time">' + time + '</div>') + '</div>';
+    var spoken = m.start.day + ' de ' + MONTHS[m.start.month - 1] + (m.end ? ' a ' + m.end.day + ' de ' + MONTHS[m.end.month - 1] : '') + (extendedRange ? '' : ', ' + time + (estimatedEnd ? ', término estimado' : ''));
+    return '<div class="sp-date-card sp-date-card--' + m.kind + (extendedRange ? ' sp-date-card--extended-range' : '') + (c.typography ? ' sp-date-card--custom-typography' : '') + '" style="' + css + '" aria-label="' + escapeAttribute(spoken) + '">' + dateMarkup + (extendedRange ? '' : '<div class="sp-date-time">' + time + '</div>' + (estimatedEnd ? '<div class="sp-date-estimate-note">(* estimado)</div>' : '')) + '</div>';
   }
   var api = { DEFAULTS:DEFAULTS, TYPOGRAPHY_DEFAULTS:TYPOGRAPHY_DEFAULTS, validTypography:validTypography, colors:colors, validate:validate, model:model, displayRange:displayRange, render:render };
   root.ScorePlaceDateCard = api;

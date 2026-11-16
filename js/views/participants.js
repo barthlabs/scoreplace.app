@@ -1992,6 +1992,10 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       try { _pUid = window._memberUidByName(t, pName) || ''; } catch (_eU) { _pUid = ''; }
     }
     var _pShown = _pUid ? window._displayName(_pUid, pName) : pName;
+    if (!_pUid && p && p.isPlaceholder === true && p.manualParticipantId && typeof window._enrollNumber === 'function') {
+      var _placeholderRank = window._enrollNumber(_enrollOrderMap, p);
+      if (_placeholderRank > 0) _pShown = 'Jogador ' + String(_placeholderRank).padStart(2, '0');
+    }
     var _pDisp = window._safeHtml(_pShown);
     var _pUidAttr = _pUid ? ' data-uid-name="' + window._safeHtml(_pUid) + '"' : '';
     var _pContact = (typeof window._contactPersonIconHtml === 'function')
@@ -2100,6 +2104,10 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   // Ambos são RE-HIDRATADOS por uid em _hydrateUidNames (+ re-sort) quando o perfil chega.
   var _dragName = isTeam ? pName : (function () {
     var _u = (typeof p === 'object' && p && p.uid) ? p.uid : '';
+    if (!_u && p && p.isPlaceholder === true && p.manualParticipantId && typeof window._enrollNumber === 'function') {
+      var rank = window._enrollNumber(_enrollOrderMap, p);
+      if (rank > 0) return 'Jogador ' + String(rank).padStart(2, '0');
+    }
     return (_u && typeof window._displayName === 'function') ? window._displayName(_u, pName) : pName;
   })();
   var _fNameAttr = (_dragName || pName || '').toLowerCase().replace(/"/g, '&quot;');

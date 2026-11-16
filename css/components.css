@@ -3685,6 +3685,7 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 .sp-date-cross-grid .sp-date-join { align-self:center; }
 .sp-date-card--same-month .sp-date-month { font-size:calc(40px * var(--sp-date-month-scale, 1)); }
 .sp-date-time { color:var(--sp-date-time); font-size:calc(12px * var(--sp-date-time-scale, 1)); font-weight:var(--sp-date-time-weight, 700); line-height:1.2; margin-top:5px; }
+.sp-date-estimate-note { color:var(--sp-date-time); font-size:calc(11px * var(--sp-date-time-scale, 1)); font-weight:600; line-height:1.2; margin-top:2px; }
 /* Dia único na ficha: o padrão tem cerca de metade da área do logo do evento.
    A prévia em Personalizar mostra a mesma hierarquia; variáveis preservam os ajustes do organizador. */
 :root { --sp-date-one-day-width:clamp(230px,22.9vw,330px); }
@@ -3704,6 +3705,7 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 :is(.sp-tournament-date-stack, #tourn-date-color-preview) :is(.sp-date-card--one-day, .sp-date-card--start-only) .sp-date-time {
   font-size:calc(clamp(15px,1.5vw,21px) * var(--sp-date-time-scale, 1)); margin-top:10px;
 }
+:is(.sp-tournament-date-stack, #tourn-date-color-preview) :is(.sp-date-card--one-day, .sp-date-card--start-only) .sp-date-estimate-note { font-size:calc(13px * var(--sp-date-time-scale, 1)); }
 .sp-tournament-date-actions { position:relative; display:flex; align-items:flex-end; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:.5rem; }
 .sp-tournament-date-actions:has(.sp-date-card) { padding-right:calc(250px + 24px); }
 .sp-tournament-date-actions:has(.sp-date-card--cross-month) { padding-right:calc(270px + 24px); }
@@ -3713,10 +3715,9 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 .sp-overview-stats { margin:1rem 0 1.25rem; }
 .sp-tournament-date-stack { margin-left:auto; display:flex; align-items:center; gap:12px; }
 .sp-tournament-date-actions:has(.sp-date-card) .sp-tournament-date-stack { position:absolute; right:0; bottom:0; }
-/* Sem logo do torneio não há altura de identidade para a data projetar-se acima
-   dos botões; nesse caso ela participa do fluxo para não cobrir nome/status. */
-.card-body:not(:has(.sp-tournament-identity-row .sp-tournament-logo)) .sp-tournament-date-actions:has(.sp-date-card) { padding-right:0; }
-.card-body:not(:has(.sp-tournament-identity-row .sp-tournament-logo)) .sp-tournament-date-actions:has(.sp-date-card) .sp-tournament-date-stack { position:static; }
+.sp-tournament-identity-row .sp-tournament-identity-date { flex:0 0 auto; align-self:flex-start; margin-left:0; }
+.sp-tournament-identity-row:has(.sp-tournament-identity-date) { align-items:flex-start !important; }
+.sp-tournament-identity-row:has(.sp-tournament-identity-date) .sp-tournament-title-slot { align-self:flex-start !important; }
 .sp-date-card-trigger { display:inline-flex; border-radius:12px; cursor:pointer; min-height:44px; }
 .sp-date-card-trigger:focus-visible { outline:3px solid #fff; outline-offset:0; box-shadow:0 0 0 6px #000; }
 .sp-dashboard-identity { display:flex; align-items:stretch; gap:14px; margin:1.4rem 0 1.2rem; min-width:0; }
@@ -3727,6 +3728,9 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 .sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-cross-item .sp-date-day { font-size:calc(clamp(28px,5vw,56px) * var(--sp-date-day-scale, 1)); }
 .sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-cross-item .sp-date-month { font-size:calc(clamp(20px,3.1vw,40px) * var(--sp-date-month-scale, 1)); }
 .sp-dashboard-identity .sp-tournament-title-slot { display:flex; flex-direction:column; justify-content:space-between; flex:1; min-width:0; }
+.sp-dashboard-identity--date-first .sp-tournament-title-slot { align-self:flex-start; justify-content:flex-start; }
+.sp-dashboard-identity--date-first .sp-date-time { font-size:calc(clamp(13px,1.5vw,17px) * var(--sp-date-time-scale, 1)); }
+.sp-dashboard-identity--date-first .sp-date-estimate-note { font-size:calc(13px * var(--sp-date-time-scale, 1)); }
 @media (max-width:767px) {
   :root { --sp-date-one-day-width:clamp(155px,43vw,195px); }
   .sp-tournament-date-actions:has(.sp-date-card) { flex-wrap:nowrap; align-items:flex-end; padding-right:0; }
@@ -3752,9 +3756,14 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
     font-size:calc(clamp(36px,10vw,48px) * var(--sp-date-month-scale, 1));
   }
   :is(.sp-tournament-date-stack, #tourn-date-color-preview) :is(.sp-date-card--one-day, .sp-date-card--start-only) .sp-date-time {
-    font-size:calc(clamp(11px,3vw,14px) * var(--sp-date-time-scale, 1)); margin-top:6px;
+    font-size:calc(clamp(12px,3.4vw,16px) * var(--sp-date-time-scale, 1)); margin-top:6px;
   }
+  :is(.sp-tournament-date-stack, #tourn-date-color-preview) :is(.sp-date-card--one-day, .sp-date-card--start-only) .sp-date-estimate-note { font-size:calc(12px * var(--sp-date-time-scale, 1)); }
   .sp-dashboard-logo-date:has(.sp-date-card--cross-month) { width:43%; }
   .sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-cross-item .sp-date-day { font-size:calc(clamp(26px,7vw,42px) * min(var(--sp-date-day-scale, 1), 1)); }
   .sp-dashboard-logo-date .sp-date-card--cross-month .sp-date-cross-item .sp-date-month { font-size:calc(clamp(18px,4.7vw,28px) * min(var(--sp-date-month-scale, 1), 1)); }
+}
+@media (max-width:480px) {
+  .sp-tournament-identity-row:has(.sp-tournament-identity-date) { gap:10px !important; }
+  .sp-tournament-identity-date :is(.sp-date-card--one-day, .sp-date-card--start-only) { min-width:clamp(112px,38vw,150px); padding:10px; }
 }

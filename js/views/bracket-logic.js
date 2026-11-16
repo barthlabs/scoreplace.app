@@ -6372,6 +6372,22 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   if (t.superEight === true) {
     var core = window.ScoreplaceSuperEight;
     if (!core || typeof core.build !== 'function') throw new Error('Motor de oito atletas indisponível.');
+    // As reservas manuais podem ter sido criadas depois da inscrição de uma
+    // pessoa real. O nome antigo "Jogador 01" não é a posição dela na fila.
+    // Use a mesma ordem canônica exibida nos cards também nos confrontos.
+    if (typeof window._enrollQueue === 'function') {
+      var eightQueue = window._enrollQueue(t);
+      var eightRank = {};
+      eightQueue.forEach(function (person, index) { eightRank[String(person.key)] = index + 1; });
+      var eightNames = {};
+      (Array.isArray(t.participants) ? t.participants : []).forEach(function (person) {
+        if (!person || person.isPlaceholder !== true || !person.manualParticipantId) return;
+        var rank = eightRank[String(person.manualParticipantId)];
+        if (!rank) return;
+        eightNames[String(person.displayName || person.name)] = 'Jogador ' + String(rank).padStart(2, '0');
+      });
+      players = players.map(function (name) { return eightNames[name] || name; });
+    }
     if (players.length !== 8 || new Set(players).size !== 8) {
       throw new Error('Esta configuração exige exatamente oito atletas ativos e identificáveis por nome.');
     }

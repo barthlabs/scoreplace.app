@@ -5657,7 +5657,7 @@ exports.setTournamentFlyerPrefs = onCall({ invoker: 'public' }, async (request) 
 // detalhe de identidade, elenco, fila, jogos, resultados, fases materializadas ou
 // ciclo de vida fica fora desta lista e só possui comandos próprios no servidor.
 const _CAMPOS_CONFIG_TORNEIO = new Set([
-  'name','isPublic','membersOnly','organizerOnly','format','sport','startDate','endDate','roundBounds','roundBoundsEditorEnabled','registrationOpenAt','registrationLimit',
+  'name','isPublic','membersOnly','organizerOnly','format','sport','startDate','endDate','endTimeEstimated','roundBounds','roundBoundsEditorEnabled','registrationOpenAt','registrationLimit',
   'enrollmentMode','registrationSettings','mixedPairingSeparated','manualPairing','teamSize','gameTypes',
   // A capacidade por categoria é declarativa; o total que a tela calcula continua
   // em maxParticipants para os fluxos legados de inscrição. Os dois precisam passar
@@ -5869,6 +5869,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
   });
   if ('titleColor' in patch && (typeof patch.titleColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(patch.titleColor))) {
     throw new HttpsError('invalid-argument', 'Cor do título inválida.');
+  }
+  if ('endTimeEstimated' in patch && typeof patch.endTimeEstimated !== 'boolean') {
+    throw new HttpsError('invalid-argument', 'Indicação do horário final inválida.');
   }
   if ('dateCardColors' in patch) {
     try { require('./date-card-colors-core').validate(patch.dateCardColors); }

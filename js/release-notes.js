@@ -1,3 +1,8 @@
+// 2.7.20 — A ficha do torneio permite salvar mudanças de visibilidade junto
+// do horário estimado. No Super 8, o sorteio não exige grade de jogos;
+// inscrições podem ser fechadas pelo organizador. Cards sem logo alinham
+// título e data, mostram a estimativa abaixo do horário e ocultam rótulos
+// de categoria inexistente. Vagas manuais seguem a ordem das inscrições.
 // 2.7.19 — Inscrição casual sem categoria funciona sem exigir nem enviar um ID
 // de categoria inexistente; no moderado, segue para análise.
 // O histórico de Kelly inclui a eliminatória. A configuração destaca escolhas ativas,

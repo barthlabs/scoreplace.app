@@ -28,8 +28,9 @@ ok(datesAt > detailSlotAt && overviewAt > datesAt && podiumAt > overviewAt && po
   'data e contagem de inscritos por categoria vêm antes do pódio e da classificação');
 ok(detail.includes('var _detailOverviewAtTop = !!tournamentId;'), 'ordem da ficha vale para todo torneio');
 ok(detail.includes('class="sp-tournament-logo"') &&
-  componentsCss.includes('.sp-tournament-identity-row .sp-tournament-logo'),
-  'layout identifica o logo por classe estável');
+  detail.includes('sp-tournament-date-stack sp-tournament-identity-date') &&
+  componentsCss.includes('.sp-tournament-identity-row .sp-tournament-identity-date'),
+  'sem logo, a data ocupa a linha de identidade ao lado do título');
 ok(componentsCss.includes('min-width:var(--sp-date-one-day-width)') &&
   componentsCss.includes('padding-right:calc(var(--sp-date-one-day-width) + 24px)'),
   'largura do cartão e reserva para ações usam a mesma medida');
@@ -37,6 +38,8 @@ const dashboardDatesAt = dashboard.indexOf('Datas e logo do local. A regressiva 
 const dashboardCountdownAt = dashboard.indexOf('if (isFinished) return \'\';', dashboardDatesAt);
 const dashboardDateBlock = dashboard.slice(dashboardDatesAt, dashboardCountdownAt);
 ok(!/tournament\\.starts(In|Today|Tomorrow)/.test(dashboardDateBlock), 'dashboard não duplica a regressiva com “Começa em”');
+ok(dashboard.includes('sp-dashboard-identity--date-first') && componentsCss.includes('.sp-dashboard-identity--date-first .sp-tournament-title-slot'),
+  'sem logo, título do card inicial alinha ao topo da data');
 const cases = [
   ['2026-11-29T08:00', '2026-11-29T16:00', 'one-day', ['29', 'NOV', '08:00 — 16:00']],
   ['2026-11-06T08:00', '2026-11-08T18:00', 'same-month', ['6', '>a<', '8', 'NOV', '08:00 — 18:00']],
@@ -54,6 +57,9 @@ ok(longRangeHtml.includes('sp-date-card--extended-range') && longRangeHtml.inclu
   'período de meses centraliza cada dia sobre seu mês e não sugere horário diário');
 ok(DateCard.render('2026-10-30T09:00', '2026-11-02T18:00').includes('09:00 — 18:00'),
   'intervalo curto entre meses conserva os horários aprovados');
+const estimatedHtml = DateCard.render('2026-11-21T09:00', '2026-11-21T13:40', null, { estimatedEnd:true });
+ok(estimatedHtml.includes('09:00 — 13:40*</div><div class="sp-date-estimate-note">(* estimado)</div>') &&
+  !estimatedHtml.includes('13:40 (estimado)'), 'previsão fica em nota abaixo do horário');
 ok(DateCard.model('2026-11-29T08:00', '2026-11-29').kind === 'start-only', 'sem hora final não inventa término');
 ok(!DateCard.render('2026-11-29', '2026-11-29') && !DateCard.render('2026-12-30T08:00', '2027-01-02T18:00'), 'sem hora e entre anos mantêm exibição anterior');
 const custom = { background:'#123456', text:'#abcdef', day:'#112233', month:'#fedcba', time:'#010203' };

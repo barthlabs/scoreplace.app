@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.19';
+window.SCOREPLACE_VERSION = '2.7.20';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -10387,8 +10387,12 @@ window._meuCardNoTopo = function (t, opts) {
   // categoria e número de inscrição, quando existirem — é o que ela confere depois de
   // saber que está inscrita
   var cats = [];
-  if (Array.isArray(eu.categories) && eu.categories.length) cats = eu.categories.slice();
-  else if (eu.category) cats = [eu.category];
+  var configuredCats = (typeof window._getTournamentCategories === 'function') ? window._getTournamentCategories(t) : (t.combinedCategories || []);
+  if (configuredCats && configuredCats.length) {
+    if (Array.isArray(eu.categories) && eu.categories.length) cats = eu.categories.slice();
+    else if (eu.category) cats = [eu.category];
+    cats = cats.filter(function (c) { return c && c !== '__uncategorized__' && c !== 'Sem categoria'; });
+  }
   var chips = cats.map(function (c) {
     return '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;' +
       'background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.35);color:var(--sp-c-a5b4fc,#a5b4fc);">' +
@@ -10615,6 +10619,8 @@ var _attrEscMeta = function(s) { return String(s == null ? '' : s).replace(/&/g,
 // (gênero · nível · idade) são informação pública da chave. O parâmetro isOrg é
 // mantido por compat de assinatura, mas não gateia mais a visibilidade.
 window._profileMetaSlots = function(p, pName, isTeam, t, isOrg, opts) {
+  var configured = t && ((typeof window._getTournamentCategories === 'function') ? window._getTournamentCategories(t) : (t.combinedCategories || []));
+  if (t && (!configured || !configured.length)) return '';
   // v2.7.43: opts.inline → margin-top:0 (pra alinhar os badges com algo ao lado, ex.:
   // botão VIP na mesma linha). Sem opts → margem padrão (badges empilhados sob o nome).
   var _inline = !!(opts && opts.inline);
@@ -15315,7 +15321,13 @@ window._buildEnrollOrderMap = function(t) {
 // nº de inscrição de UMA pessoa (1-based) — uid primeiro, nome como fallback.
 window._enrollNumber = function(orderMap, p) {
   if (!p) return '';
-  /* Placeholder names are the public registration labels.  Never let a legacy UID,
+  // Reservas manuais atuais têm identidade própria e entram na mesma fila que
+  // uma inscrição real. O número do nome é só um rótulo legado; pode colidir
+  // quando alguém se inscreveu antes de o organizador criar as vagas.
+  if (orderMap && typeof p === 'object' && p.manualParticipantId && orderMap['m:' + p.manualParticipantId] != null) {
+    return orderMap['m:' + p.manualParticipantId];
+  }
+  /* Placeholder names are the fallback registration labels. Never let a legacy UID,
    * a re-formed pair, or an old queue position replace the number printed in
    * "Jogador N".  The previous resolver did exactly that (Jogador 97 became 193).
    * This check intentionally runs before the map and also works while the roster is

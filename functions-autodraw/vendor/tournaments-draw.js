@@ -2189,6 +2189,9 @@ window._linhaDoHistorico = function (log) {
 // O CAMIS real tem essa estrutura, mas não tem `scheduleWindow.mode`; exigir o
 // campo deixava Sortear cair no painel verde antigo e pulava a revisão da grade.
 window._requiresMonarchPreDrawReview = function (t) {
+    // O Super 8 já define os 14 confrontos pelo ciclo de parcerias. A grade
+    // opcional de horários de Rei/Rainha não é pré-requisito para esse sorteio.
+    if (t && (t.superEight === true || (Array.isArray(t.phases) && t.phases.some(function (p) { return p && p.superEight === true; })))) return false;
     var schedule = t && t.scheduleWindow;
     if (!schedule || schedule.mode === 'participants') return false;
     var plan = schedule.interleavedPlan;
