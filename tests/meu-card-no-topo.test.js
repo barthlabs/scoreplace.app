@@ -31,20 +31,26 @@ vm.runInContext(src.slice(i, j), ctx);
 const pin = ctx.window._meuCardNoTopo;
 
 const EU = 'uid-eu';
-function comUsuario(u, parts) {
+function comUsuario(u, parts, categories) {
   ctx.window.AppStore = { currentUser: u };
   ctx.window._getCompetitors = () => parts;
-  return pin({ id: 't1', participants: parts, checkedIn: [], absent: [] });
+  return pin({ id: 't1', participants: parts, combinedCategories: categories || [], checkedIn: [], absent: [] });
 }
 
 console.log('\n── inscrito: responde antes de a pessoa procurar ──');
 {
   const h = comUsuario({ uid: EU, displayName: 'Fabio' },
-    [{ uid: 'outro', displayName: 'Kelly' }, { uid: EU, displayName: 'Fabio', category: 'Masc C', enrollSeq: 12 }]);
+    [{ uid: 'outro', displayName: 'Kelly' }, { uid: EU, displayName: 'Fabio', category: 'Masc C', enrollSeq: 12 }], ['Masc C']);
   ok(/você está inscrito/.test(h), 'diz que está inscrito');
   ok(/Fabio/.test(h), 'com o nome');
   ok(/Masc C/.test(h), 'a categoria');
   ok(/nº 12/.test(h), 'e o número de inscrição');
+}
+
+{
+  const h = comUsuario({ uid: EU, displayName: 'Fabio' },
+    [{ uid: EU, displayName: 'Fabio', category: '__uncategorized__', enrollSeq: 1 }]);
+  ok(!/__uncategorized__|Sem categoria/.test(h), 'sem categorias configuradas não mostra etiqueta de categoria');
 }
 
 console.log('\n── NÃO inscrito também é resposta ──');
