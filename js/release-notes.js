@@ -1,3 +1,4 @@
+// 2.7.13 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.12 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.11 — No celular, o cabeçalho web renderiza símbolo, nome e ícones em
 // camadas próprias para tentar melhorar a nitidez; o resultado no iPhone ainda
