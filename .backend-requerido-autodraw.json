@@ -1,14 +1,8 @@
 {
   "schema": 1,
-  "backendCommit": "dc2bc3a00419522112b53ec029a58e9e2bf96918",
-  "scopeNote": "Modo de teste, critérios fixos após sorteio e ajuste de rodadas futuras.",
+  "backendCommit": "36a6b3ddae6427ee884ddbf9b7468986913872d3",
+  "scopeNote": "Participantes podem iniciar o controle regional antes de lançar o primeiro placar.",
   "functions": [
-    "drawRound",
-    "closeRound",
-    "generateExtraTournamentRound",
-    "autoDraw",
-    "resetTournamentToEnrollment",
-    "createTournament",
-    "updateTournamentConfiguration"
+    "tournamentOperationControl"
   ]
 }
