@@ -77,7 +77,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // própria eliminatória, quando é eliminação direta). O slot #f2-classif-extra já muda de
   // lugar conforme a fase inicial, então o bloco acompanha sozinho. A fase eliminatória
   // POSTERIOR tem a sua própria seção (_gsmElimBlock), gravada em cfg.eliminatoria.scoring.
-  var _EXT_IDS = ['gsm-section', 'phase-dates-box', 'estimated-games-window-section',
+  var _EXT_IDS = ['gsm-section', 'adv-scoring-section', 'tiebreaker-section',
+    'phase-dates-box', 'estimated-games-window-section',
     'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box',
     'late-enroll-box', 'gender-ratio-box'];
   function _stashExt() {
@@ -221,7 +222,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!el || !S || S.mode !== 'form') return;
     var cfg = S.cfg;
     var individual = cfg._scoreBy === 'individual' && !(cfg.teamCompetition && cfg.teamCompetition.enabled);
-    if (!(cfg.classifAtiva && individual) && !(cfg.eliminatoria && cfg.eliminatoria.openReiRainha && !cfg.classifAtiva)) {
+    var directReiRainha = !!(cfg.eliminatoria && cfg.eliminatoria.openReiRainha && !cfg.classifAtiva);
+    var section = document.getElementById('tiebreaker-section');
+    if (section) section.style.display = (cfg.classifAtiva || directReiRainha) ? '' : 'none';
+    var primary = document.getElementById('ranking-primary-choice');
+    if (primary) primary.style.display = cfg.classifAtiva ? '' : 'none';
+    if (!(cfg.classifAtiva && individual) && !directReiRainha) {
       el.innerHTML = '';
       return;
     }
@@ -1084,7 +1090,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     classifSchedule += _sec('Rodadas', rInner);
     var isRankingRounds = cfg.classifAtiva && cfg.grupos === 1 && cfg.rodadas.modo === 'fixo' && !(tc && tc.enabled);
-    if (isRankingRounds) {
+    if (isRankingRounds && cfg.parceria !== 'super_eight') {
       var so = cfg.rankingSitOutScoring || { mode: 'average' };
       var scoringLocked = !!(S.t && (((S.t.currentPhaseIndex || 0) > 0) || S.t.status === 'finished'));
       var sitOutControls =

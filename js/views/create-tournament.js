@@ -1461,8 +1461,9 @@ function setupCreateTournamentModal() {
 
               <!-- (Classificação movido para o box FASE 1) -->
 
-              <!-- Critérios de Desempate -->
+              <!-- Critério principal e desempates da fase classificatória -->
               <div id="tiebreaker-section" style="background: rgba(88,166,255,0.06); border: 1px solid rgba(88,166,255,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <div id="ranking-primary-choice">
                 <h3 style="margin:0 0 .65rem;color:var(--text-main);font-size:1rem;">${_t('create.rankingPrimaryLabel')}</h3>
                 <input type="hidden" id="ranking-primary" value="games_diff">
                 <div role="group" aria-label="${_t('create.rankingPrimaryLabel')}" id="ranking-primary-buttons" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:.55rem;">
@@ -1470,8 +1471,9 @@ function setupCreateTournamentModal() {
                   <button type="button" data-ranking-primary="wins" aria-pressed="false" onclick="window._setRankingPrimary('wins')" class="btn btn-secondary btn-sm">${_t('create.tbWins')}</button>
                   <button type="button" data-ranking-primary="points" aria-pressed="false" onclick="window._setRankingPrimary('points')" class="btn btn-secondary btn-sm">${_t('create.rankingPrimaryPoints')}</button>
                 </div>
-                <small class="text-muted" style="display:block;margin-bottom:0.65rem;">${_t('create.rankingPrimaryDesc')}</small>
+                <small class="text-muted" id="ranking-primary-desc" style="display:block;margin-bottom:0.65rem;">${_t('create.rankingPrimaryDesc')}</small>
                 <small id="ranking-started-warning" style="display:none;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:.65rem;">${_t('create.rankingPrimaryStartedWarning')}</small>
+                </div>
                 <div id="tie-resolution-section"></div>
                 <div id="tiebreaker-criteria-section">
                 <p style="margin: .85rem 0 0.5rem; font-size: 0.8rem; color: var(--sp-c-58a6ff,#58a6ff); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.tiebreakerSection')}</p>
@@ -1514,10 +1516,8 @@ function setupCreateTournamentModal() {
       });
     }
 
-    // v2.6.86: ordem do form — primeiro o que é de TODO o torneio (inscrição, desempate),
-    // depois o que é particular das FASES. Move o box da Fase 1 + o construtor de fases
-    // pra DEPOIS do critério de desempate (que é a última seção geral). Reorder único no
-    // setup (a seção sobrevive ao move do .modal entre modal e #novo-torneio).
+    // Mantém as seções irmãs no template; o format2 desloca pontuação e desempate
+    // para dentro da classificatória junto com os demais controles da fase.
     (function () {
       var tb = document.getElementById('tiebreaker-section');
       var f1 = document.getElementById('fase1-box');
@@ -1526,8 +1526,6 @@ function setupCreateTournamentModal() {
         tb.parentNode.insertBefore(f1, tb.nextSibling);
         f1.parentNode.insertBefore(ps, f1.nextSibling);
       }
-      // v4.4.15: CRITÉRIOS DE DESEMPATE = a ÚLTIMA coisa da edição (pedido do dono).
-      if (tb && tb.parentNode) tb.parentNode.appendChild(tb);
     })();
 
     // Render the centralized back header with action buttons (Voltar + Carregar + Salvar Template + Descartar + Salvar)
@@ -1581,8 +1579,23 @@ function setupCreateTournamentModal() {
         button.setAttribute('aria-pressed', active ? 'true' : 'false');
         button.classList.toggle('ranking-primary-active', active);
       });
+      if (typeof window._updateRankingPrimaryModeLabel === 'function') window._updateRankingPrimaryModeLabel();
+    };
+    window._updateRankingPrimaryModeLabel = function() {
+      var advancedToggle = document.getElementById('adv-scoring-enabled');
+      var enabled = !!(advancedToggle && advancedToggle.checked);
+      var input = document.getElementById('ranking-primary');
+      var value = input ? input.value : 'games_diff';
+      var points = document.querySelector('#ranking-primary-buttons [data-ranking-primary="points"]');
+      if (points) points.textContent = _t(enabled ? 'create.rankingPrimaryAdvancedPoints' : 'create.rankingPrimaryPoints');
+      var desc = document.getElementById('ranking-primary-desc');
+      var detailKey = value === 'games_diff' ? 'create.rankingPrimaryGamesDiffDesc'
+        : value === 'wins' ? 'create.rankingPrimaryWinsDesc'
+        : enabled ? 'create.rankingPrimaryAdvancedDesc' : 'create.rankingPrimaryPointsDesc';
+      if (desc) desc.textContent = _t(detailKey);
     };
     window._setRankingPrimary('games_diff');
+    window._updateRankingPrimaryModeLabel();
     const tbList = document.getElementById('tiebreaker-list');
     const tbExcluded = document.getElementById('tiebreaker-excluded-list');
     if (tbList) {
@@ -2159,15 +2172,12 @@ function setupCreateTournamentModal() {
     // v4.4.x (Camada 2): torneio NOVO a partir de template — inicia da config do template.
     if (!initCfg && window._f2PendingTemplateCfg) { initCfg = window._f2PendingTemplateCfg; window._f2PendingTemplateCfg = null; }
     window._f2MountInForm(mount, sport, initCfg, tourn);
-    // v4.4.59: "Sistema de Pontos Avançado" disponível na classificatória de QUALQUER formato.
-    // Reposiciona logo abaixo do configurador (área da classificatória) e mostra quando há
-    // classificatória (Fase de Grupos / Pontos Corridos); esconde na eliminação direta.
+    // O format2 posiciona a pontuação avançada antes do critério principal na fase.
     try {
       var _advSec = document.getElementById('adv-scoring-section');
       if (_advSec) {
         var _f2adv = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null;
         var _hasClassif = !!(_f2adv && _f2adv.classifAtiva === true);
-        if (mount && mount.parentNode === box) { box.insertBefore(_advSec, mount.nextSibling); }
         _advSec.style.display = _hasClassif ? 'block' : 'none';
       }
     } catch (e) {}
@@ -3568,6 +3578,7 @@ function setupCreateTournamentModal() {
     var body = document.getElementById('adv-scoring-body' + s);
     if (body) body.style.display = on ? 'block' : 'none';
     if (typeof window._onAdvApplyLiveToggle === 'function') window._onAdvApplyLiveToggle(idx);
+    if (idx === 0 && typeof window._updateRankingPrimaryModeLabel === 'function') window._updateRankingPrimaryModeLabel();
   };
 
   // v2.3.13: o toggle mestre "Aplicar pontos de placar ao vivo" controla os 2

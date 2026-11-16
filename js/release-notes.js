@@ -1,3 +1,7 @@
+// 2.7.17 — Na fase classificatória, a pontuação avançada, o critério principal
+// e os desempates aparecem juntos, nessa ordem. Saldo, vitórias e pontos explicam
+// como ordenam a tabela; com a pontuação avançada ligada, a opção de pontos usa
+// seus valores configurados. O Super 8 não mostra pontuação por folga.
 // 2.7.16 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.15 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.14 — O Super 8 de oito atletas oferece um sorteio único para sete rodadas

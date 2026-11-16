@@ -24,6 +24,39 @@ async function abrirFormDeTorneio(page) {
 }
 
 test.describe('Formato da partida por FASE (create/edit)', () => {
+  test('pontuação principal e desempate ficam juntos na classificatória', async ({ page }) => {
+    await abrirFormDeTorneio(page);
+    const slot = page.locator('#f2-classif-extra');
+    await expect(slot.locator('#adv-scoring-section')).toHaveCount(1);
+    await expect(slot.locator('#tiebreaker-section')).toHaveCount(1);
+    const order = await page.evaluate(() => {
+      const adv = document.getElementById('adv-scoring-section');
+      const ranking = document.getElementById('ranking-primary-choice');
+      const tie = document.getElementById('tie-resolution-section');
+      const elim = [...document.querySelectorAll('#f2-config-mount *')]
+        .find(el => el.textContent?.trim() === '3. 🏆 Fase Eliminatória');
+      return !!(adv && ranking && tie && elim &&
+        (adv.compareDocumentPosition(ranking) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+        (ranking.compareDocumentPosition(tie) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+        (tie.compareDocumentPosition(elim) & Node.DOCUMENT_POSITION_FOLLOWING));
+    });
+    expect(order).toBe(true);
+    await expect(page.locator('[data-ranking-primary="points"]')).toContainText('Pontos da classificação');
+    await page.locator('[data-ranking-primary="points"]').click();
+    await expect(page.locator('#ranking-primary-desc')).toContainText('3 pontos por vitória, 1 por empate');
+    await expect(page.locator('#ranking-primary')).toHaveValue('points');
+    await page.locator('label:has(#adv-scoring-enabled)').click();
+    await expect(page.locator('[data-ranking-primary="points"]')).toContainText('Pontos avançados');
+    await expect(page.locator('#ranking-primary-desc')).toContainText('Soma dos valores');
+    await page.evaluate(() => window._f2TeamForm('super_eight'));
+    await expect(slot.locator('#tiebreaker-section')).toHaveCount(1);
+    await expect(page.locator('#ranking-primary')).toHaveValue('points');
+    await expect(page.locator('[data-ranking-primary="points"]')).toContainText('Pontos avançados');
+    await expect(page.locator('#f2-config-mount')).not.toContainText('Pontos de quem folga');
+    await page.locator('label:has(#adv-scoring-enabled)').click();
+    await expect(page.locator('[data-ranking-primary="points"]')).toContainText('Pontos da classificação');
+  });
+
   test('o bloco do form vive DENTRO da fase inicial, não solto no torneio', async ({ page }) => {
     await abrirFormDeTorneio(page);
     // O slot #f2-classif-extra é o pedaço do box da Fase Classificatória que recebe as
