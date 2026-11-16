@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "2a2e382d3741f5de5695f5bd7a41c2b58d187087",
-  "scopeNote": "Super 8: sorteio único ou por rodada, sete combinações únicas, agendamento manual e configuração validada no servidor.",
+  "backendCommit": "30eeba37887076fb2c95e848e52da290eec48990",
+  "scopeNote": "Super 8 e classificatória: sorteio único ou por rodada, agenda manual, lista de espera limitada e ordem de inscrição.",
   "functions": [
     "createTournament",
     "updateTournamentConfiguration",
