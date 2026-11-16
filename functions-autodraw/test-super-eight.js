@@ -4,6 +4,7 @@ const draw = require('./draw-core.js');
 const format = draw._window.FORMAT2;
 const cfg = format.defaultConfig('beach_tennis');
 cfg.parceria = 'super_eight'; cfg.eliminatoria.ativa = false;
+cfg.superEightDrawMode = 'single'; // o formulário seleciona sorteio único ao escolher Super 8
 const compiled = format.compileToPhases(cfg, { sport: 'beach_tennis' });
 assert.equal(compiled.topLevel.superEight, true);
 assert.equal(compiled.phases[0].superEight, true);
