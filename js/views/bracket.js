@@ -11329,7 +11329,9 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // ⭐ Como foi achado: a MESMA função, com o MESMO dado, devolvia a ordem certa em Node
     // (onde passei o grupo REAL) e a errada no navegador. A diferença não estava na função —
     // estava no que chegava nela. [[project_classificacao_publicada_congela]]
-    var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({ players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), playersSlotIds: _stRoster.map(function (r) { return r.slotId || null; }), matches: sg.matches, classifCongelada: sg.classifCongelada }, t, sg.category || null) : [];
+    var _standingsMatches = _isSuperEightMon && t.superEightDrawMode === 'single' && Array.isArray(t.matches)
+      ? t.matches.filter(function(m) { return m && m.isMonarch && (m.phaseIndex == null || m.phaseIndex === 0); }) : sg.matches;
+    var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({ players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), playersSlotIds: _stRoster.map(function (r) { return r.slotId || null; }), matches: _standingsMatches, classifCongelada: sg.classifCongelada }, t, sg.category || null) : [];
     // Cards: só os jogos de verdade (o marcador W.O. vira pílula no cabeçalho).
     var matches = (sg.matches || []).filter(function(m) { return !(m.isSitOut && m.sitOutReason === 'wo'); });
     var groupDone = matches.length > 0 && matches.every(function(m) { return !!m.winner || m.isBye || m.isSitOut; });
@@ -12736,8 +12738,10 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             var _stPlayers = _stRoster.map(function (r) { return r.name; });
             // ⛔ `classifCongelada` viaja junto — ver a nota no outro chamador: sem ela o
             // retrato congelado é gravado e nunca lido, e a tela recalcula pelos critérios.
+            var _groupStandingsMatches = t.superEight === true && t.superEightDrawMode === 'single' && Array.isArray(t.matches)
+              ? t.matches.filter(function(m) { return m && m.isMonarch && (m.phaseIndex == null || m.phaseIndex === 0); }) : g.matches;
             var _gst = window._computeMonarchStandings(
-              { players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), playersSlotIds: _stRoster.map(function (r) { return r.slotId || null; }), matches: g.matches, classifCongelada: g.classifCongelada },
+              { players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), playersSlotIds: _stRoster.map(function (r) { return r.slotId || null; }), matches: _groupStandingsMatches, classifCongelada: g.classifCongelada },
               t, g.category || null) || [];
             // Estado de W.O. na CLASSIFICAÇÃO DO GRUPO (pedido do dono):
             //  • falta APONTADA (claim pending/disputed, ainda não confirmada) → nome ÂMBAR + tag W.O.;

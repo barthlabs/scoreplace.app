@@ -3,6 +3,28 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 // ── Bracket UI Handlers ──
 var _t = window._t || function(k) { return k; };
 
+// O UID do slot do jogo é a identidade de presença, inclusive quando a
+// inscrição canônica contém só UID e o nome veio do perfil no sorteio.
+window._checkInScoredMatch = function(t, m, at) {
+  if (!t.checkedIn) t.checkedIn = {};
+  if (!t.absent) t.absent = {};
+  var sides = [
+    { names: m.team1, uids: m.team1Uids, label: m.p1, uid: m.p1Uid },
+    { names: m.team2, uids: m.team2Uids, label: m.p2, uid: m.p2Uid }
+  ];
+  sides.forEach(function(side) {
+    var names = Array.isArray(side.names) && side.names.length ? side.names
+      : (side.label && side.label !== 'TBD' && side.label !== 'BYE'
+        ? String(side.label).split(' / ').map(function(n) { return n.trim(); }).filter(Boolean) : []);
+    names.forEach(function(name, i) {
+      var uid = (Array.isArray(side.uids) && side.uids[i]) || (names.length === 1 && side.uid) || null;
+      var who = uid ? { uid: uid, name: name } : name;
+      if (!window._idMapHas(t, t.checkedIn, who)) window._idMapSet(t, t.checkedIn, who, at);
+      window._idMapDel(t, t.absent, who);
+    });
+  });
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // SAFE AREA: medida no aparelho, nunca estimada (v1.7.67)
 // Nasceu de dois relatos do dono com print do iPhone: "espaço morto no tom do
@@ -2398,19 +2420,7 @@ window._applyResultToTournament = function (t, matchId, payload) {
   // recomputado no render; o fechamento de rodada é do _closeRound (deferido).
 
   // Auto check-in: marca presença dos jogadores deste jogo (e limpa ausência).
-  if (!t.checkedIn) t.checkedIn = {};
-  if (!t.absent) t.absent = {};
-  [m.p1, m.p2].forEach(function (side) {
-    if (!side || side === 'TBD' || side === 'BYE') return;
-    var _names = side.indexOf(' / ') !== -1 ? side.split(' / ').map(function (n) { return n.trim(); }).filter(Boolean) : [side];
-    _names.forEach(function (nm) {
-      // Lançar resultado MARCA presença (quem jogou está presente) — CORRETO (dono
-      // reafirmou 1-jul). O que NÃO pode é o SORTEIO marcar presença: o sorteio LIMPA
-      // checkedIn/absent (ver _commitInitialDraw / _clearDrawRuntimeFlags).
-      if (!window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, Date.now());
-      window._idMapDel(t, t.absent, nm);
-    });
-  });
+  window._checkInScoredMatch(t, m, m.resultAt);
   if (!t.tournamentStarted) t.tournamentStarted = Date.now();
 
   // GRUPO QUE FECHOU TEM A CLASSIFICAÇÃO CONGELADA NA HORA (ver _congelaGruposEncerrados,
@@ -2769,20 +2779,7 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   }
 
   // Auto check-in: marcar presença de todos os participantes deste jogo (e limpar ausência se existia)
-  if (!t.checkedIn) t.checkedIn = {};
-  if (!t.absent) t.absent = {};
-  [m.p1, m.p2].forEach(side => {
-    if (!side || side === 'TBD' || side === 'BYE') return;
-    const _names = side.includes(' / ') ? side.split(' / ').map(n => n.trim()).filter(Boolean) : [side];
-    _names.forEach(nm => {
-      // uid-first: resolve o nome do membro pro uid; nome só fallback.
-      // Lançar resultado MARCA presença (quem jogou está presente) — CORRETO (dono
-      // reafirmou 1-jul). O que NÃO pode é o SORTEIO marcar presença: o sorteio LIMPA
-      // checkedIn/absent (ver _commitInitialDraw / _clearDrawRuntimeFlags).
-      if (!window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, Date.now());
-      window._idMapDel(t, t.absent, nm);
-    });
-  });
+  window._checkInScoredMatch(t, m, m.resultAt);
   if (!t.tournamentStarted) t.tournamentStarted = Date.now();
 
   // v0.16.87: CAUSA-RAIZ do "resultado em monarch Liga não persiste". Após
@@ -2968,19 +2965,7 @@ window._applyApprovedResult = function(t, matchId, pr) {
   m.resultAt = Date.now(); if (!m.startedAt) m.startedAt = m.resultAt;
   delete m.pendingResult;
   // Auto check-in pros participantes do match
-  if (!t.checkedIn) t.checkedIn = {};
-  if (!t.absent) t.absent = {};
-  [m.p1, m.p2].forEach(function(side) {
-    if (!side || side === 'TBD' || side === 'BYE') return;
-    var _names = side.indexOf(' / ') !== -1 ? side.split(' / ').map(function(n){ return n.trim(); }).filter(Boolean) : [side];
-    _names.forEach(function(nm) {
-      // Lançar resultado MARCA presença (quem jogou está presente) — CORRETO (dono
-      // reafirmou 1-jul). O que NÃO pode é o SORTEIO marcar presença: o sorteio LIMPA
-      // checkedIn/absent (ver _commitInitialDraw / _clearDrawRuntimeFlags).
-      if (!window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, Date.now());
-      window._idMapDel(t, t.absent, nm);
-    });
-  });
+  window._checkInScoredMatch(t, m, m.resultAt);
   if (!t.tournamentStarted) t.tournamentStarted = Date.now();
   var isGroupMatch = m.group !== undefined;
   var isRoundMatch = m.roundIndex !== undefined || (t.rounds && t.rounds.some(function(r) {

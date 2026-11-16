@@ -133,6 +133,7 @@ const SUITES = [
   'tests/test-mode-tournament.test.js',
   'tests/tournament-titles.test.js',
   'tests/super-eight-core.test.js',
+  'tests/super-eight-standings-presence.test.js',
   'tests/dupla-final-option.test.js',
   'tests/final-series.test.js',
   'tests/line-rank-ranges.test.js',

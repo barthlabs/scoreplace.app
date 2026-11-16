@@ -920,6 +920,11 @@ window._publishTitlesIfReady = _publishTitlesIfReady;
 
 function _computeStandings(t, category) {
   const scoreMap = {};
+  // O Super 8 de sorteio único guarda as sete rodadas em matches; rounds é vazio.
+  // A classificação deve ler os mesmos confrontos que a tela e o placar editam.
+  var _standingsRounds = (t.superEight === true && Array.isArray(t.matches) && t.matches.length)
+    ? [{ matches: t.matches.filter(function (m) { return m && (m.phaseIndex == null || m.phaseIndex === 0) && m.isMonarch; }) }]
+    : (t.rounds || []);
 
   // v2.4.30: "Jogador X" (convidado preenchendo vaga de W.O. num grupo de Liga)
   // nunca pontua e nunca entra na classificação. Os nomes ghost ficam em
@@ -941,7 +946,7 @@ function _computeStandings(t, category) {
   // no Cloud Function autoDraw (vendor de bracket-logic.js).
   var _n2u = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
   var _matchN2u = {};
-  (t.rounds || []).forEach(function (r) {
+  _standingsRounds.forEach(function (r) {
     (r.matches || []).forEach(function (m) {
       if (!m) return;
       if (m.p1 && m.p1Uid && !_matchN2u[m.p1]) _matchN2u[m.p1] = m.p1Uid;
@@ -957,7 +962,14 @@ function _computeStandings(t, category) {
   }
   function _uidOfKey(k) { return (typeof k === 'string' && k.indexOf('uid:') === 0) ? k.slice(4) : null; }
 
-  const allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  // Em torneio com vagas de teste, a ordem do sorteio é o elenco de fato.
+  // O cadastro legado pode conter rótulo/numeração anterior sem jogo correspondente.
+  const allP = (t.superEight === true && t.superEightDrawMode === 'single' &&
+      (!Array.isArray(t.rounds) || !t.rounds.length) &&
+      Array.isArray(t.matches) && t.matches.length >= 14 && t.superEightOrders &&
+      Array.isArray(t.superEightOrders._default_) && t.superEightOrders._default_.length)
+    ? t.superEightOrders._default_
+    : (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}));
   allP.forEach(p => {
     // v4.0.76: nome de EXIBIÇÃO canônico (_entryDisplayName, derivado da estrutura) — a
     // dupla pré-formada vira a label "p1 / p2", mas a IDENTIDADE é uid (resolvida na borda
@@ -987,7 +999,7 @@ function _computeStandings(t, category) {
     if (name && !scoreMap[_pk]) scoreMap[_pk] = { key: _pk, uid: (_pUid || _uidOfKey(_pk)), name: name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, category: category || '', setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0 };
   });
 
-  (t.rounds || []).forEach(round => {
+  _standingsRounds.forEach(round => {
     (round.matches || []).forEach(m => {
       // If filtering by category, only count matches in that category
       if (category && m.category !== category) return;
@@ -1159,7 +1171,7 @@ function _computeStandings(t, category) {
   const standings = Object.values(scoreMap);
 
   // Build Buchholz scores (sum of opponents' points)
-  var allRoundMatches = (t.rounds || []).flatMap(r => r.matches || []);
+  var allRoundMatches = _standingsRounds.flatMap(r => r.matches || []);
   if (category) allRoundMatches = allRoundMatches.filter(m => m.category === category);
   // v4.4.122: Buchholz/Sonneborn-Berger comparam por CHAVE (uid) — não mais por nome. mk1/mk2 são
   // as chaves resolvidas dos dois lados do jogo; s.key é a chave da linha atual.
@@ -1209,7 +1221,7 @@ function _computeStandings(t, category) {
     // as fases seguintes (eliminatória vive em t.matches) e a classificação da fase
     // anterior MUDAVA depois de avançar. Congela a fase: nada da fase seguinte a altera.
     var _phaseMatches = [];
-    (t.rounds || []).forEach(function(r){ (r.matches || []).forEach(function(m){ if (m) _phaseMatches.push(m); }); });
+    _standingsRounds.forEach(function(r){ (r.matches || []).forEach(function(m){ if (m) _phaseMatches.push(m); }); });
     standings.forEach(function(s) {
       s.advancedPoints = _calcAdvancedPoints(t, s.name, category, _phaseMatches).total;
     });
