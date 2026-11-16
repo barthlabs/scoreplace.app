@@ -1,8 +1,11 @@
 // 2.7.24 — O Super 8 gera um grupo com sete rodadas e 14 jogos no sorteio único.
-// O organizador pode resetar o sorteio antes de qualquer placar, mantendo os
-// inscritos e as inscrições fechadas. O indicador de sorteio termina ao receber
-// a confirmação do servidor. O filtro Jogos pendentes mostra sua contagem no botão.
-// O sorteio único fica limitado a sete rodadas e cada placar fecha apenas sua própria rodada.
+// O sorteio único fixa as rodadas; no sorteio por rodada, a organização pode
+// ajustar apenas o total futuro, preservando jogos já sorteados. Pontuação e
+// desempates ficam definidos no primeiro sorteio. O desenvolvedor pode ativar
+// o modo de teste na edição para resetar o sorteio e simular resultados.
+// O controle de quem lança os placares aparece junto da classificação.
+// O indicador de sorteio termina após a confirmação do servidor, e Jogos
+// pendentes mostra sua contagem no botão.
 // 2.7.23 — O cabeçalho mantém logo, nome, versão, notificações e menu na mesma
 // linha em janelas estreitas, com a marca mais próxima do símbolo.
 // 2.7.22 — O sorteio carrega o nome da inscrição canônica na mesma transação,
