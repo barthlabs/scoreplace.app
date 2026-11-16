@@ -7,6 +7,22 @@ ok('sentinela canônica de categoria está exportada e é estável', R.UNCATEGOR
 const base = { id: 't1', status: 'open', categoryDefinitions: [{ id: 'fem-a', label: 'Fem A', dimension: 'skill', exclusivityGroup: 'skill', criteria: {} }], enrollmentRigor: 'casual' };
 const input = { tournament: base, registrations: [], participant: { uid: 'u1', categoryIds: ['fem-a'] }, nowMs: Date.UTC(2026, 0, 1) };
 let result = C.decide(input);
+const uncategorized = Object.assign({}, input, { tournament: { ...base, categoryDefinitions:[], enrollmentRigor:undefined, rigor:'casual' }, participant:{ uid:'u1' } });
+let noCategory = C.decide(uncategorized);
+ok('casual sem categoria inscreve na vaga canônica sem categoria', noCategory.outcome === 'enrolled' &&
+  noCategory.enrollment.creates[0].categoryId === R.UNCATEGORIZED_CATEGORY_ID);
+noCategory = C.decide({ ...input, participant:{ uid:'u2' } });
+ok('casual com categorias disponíveis não exige escolher uma', noCategory.outcome === 'enrolled' &&
+  noCategory.enrollment.creates[0].categoryId === R.UNCATEGORIZED_CATEGORY_ID);
+noCategory = C.decide({ ...input, participant:{ uid:'u2', categoryIds:[R.UNCATEGORIZED_CATEGORY_ID] } });
+ok('casual aceita a inscrição sem categoria enviada pela tela', noCategory.outcome === 'enrolled');
+noCategory = C.decide({ ...uncategorized, tournament:{ ...uncategorized.tournament, rigor:'moderado' } });
+ok('moderado sem categoria aceita sujeito à análise', noCategory.outcome === 'enrolled' && noCategory.validationState === 'pending_review');
+noCategory = C.decide({ ...input, tournament:{ ...base, enrollmentRigor:'moderate' }, participant:{ uid:'u2' } });
+ok('moderado com categorias disponíveis admite inscrição para revisão', noCategory.outcome === 'enrolled' && noCategory.validationState === 'pending_review');
+try { C.decide({ ...uncategorized, tournament:{ ...uncategorized.tournament, rigor:'oficial' } });
+  ok('oficial sem categoria bloqueia', false); }
+catch (_) { ok('oficial sem categoria bloqueia', true); }
 ok('aceita inscrição tipada e cria registro confirmado', result.outcome === 'enrolled' && result.enrollment.creates.length === 1 && result.enrollment.creates[0].participantUid === 'u1');
 const confirmed = result.enrollment.creates[0];
 result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base, { matches: [{ id: 'm1' }], format: 'liga', ligaOpenEnrollment: true }) }));
@@ -98,13 +114,15 @@ result = C.decide(Object.assign({}, input, {
 }));
 ok('organizador inclui sem categoria para atribuir na Análise', result.outcome === 'enrolled' &&
   result.enrollment.creates[0].categoryId === R.UNCATEGORIZED_CATEGORY_ID);
-try { C.decide(Object.assign({}, input, { participant: { uid: 'u2' } })); ok('inscrição comum ainda exige categoria', false); }
-catch (_) { ok('inscrição comum ainda exige categoria', true); }
+try { C.decide(Object.assign({}, input, { tournament:{ ...base, enrollmentRigor:'official' }, participant: { uid: 'u2' } })); ok('oficial exige categoria mesmo se existem escolhas', false); }
+catch (_) { ok('oficial exige categoria mesmo se existem escolhas', true); }
 result = C.decide(Object.assign({}, input, {
   tournament: Object.assign({}, base, { status: 'finished' }), participant: { uid: 'u2', categoryIds: ['fem-a'] }, organizerManual: true
 }));
 ok('inclusão manual não reabre torneio encerrado', result.outcome === 'closed');
-try { C.decide(Object.assign({}, input, { participant: { uid: 'u1', categories: ['Fem A'] } })); ok('nunca usa rótulo legado na porta canônica', false); } catch (_) { ok('nunca usa rótulo legado na porta canônica', true); }
+result = C.decide(Object.assign({}, input, { participant: { uid: 'u1', categories: ['Fem A'] } }));
+ok('rótulo legado nunca é usado como categoria tipada', result.outcome === 'enrolled' &&
+  result.enrollment.creates[0].categoryId === R.UNCATEGORIZED_CATEGORY_ID);
 try { C.decide(Object.assign({}, input, { participant: { uid: 'u1', p2Uid: 'u2', categoryIds: ['fem-a'] } })); ok('dupla não entra pela porta solo', false); } catch (_) { ok('dupla não entra pela porta solo', true); }
 console.log((fail ? '❌' : '✅') + ' canonical-enrollment-core: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

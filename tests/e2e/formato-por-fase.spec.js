@@ -52,7 +52,13 @@ test.describe('Formato da partida por FASE (create/edit)', () => {
     expect(state.modeBeforeDates).toBe(true);
     expect(state.elimination).toBe(false);
     expect(state.rounds).toBe(7);
-    await expect(page.locator('#f2-config-mount')).toContainText('Sortear as 7 rodadas de uma vez');
+    await expect(page.locator('#f2-config-mount')).toContainText('Todas as rodadas de uma vez');
+    await expect(page.locator('#f2-config-mount')).toContainText('Não repetir parceiro');
+    await expect(page.locator('#estimated-games-mode-organizer')).toHaveClass(/is-active/);
+    await expect(page.locator('#estimated-games-mode-participants')).not.toHaveClass(/is-active/);
+    await page.locator('#estimated-games-mode-participants').click();
+    await expect(page.locator('#estimated-games-mode-participants')).toHaveClass(/is-active/);
+    await expect(page.locator('#estimated-games-mode-organizer')).not.toHaveClass(/is-active/);
     await expect(page.locator('#f2-config-mount')).not.toContainText('Pontos de quem folga');
     await page.locator('#waitlist-config-section > label').click();
     await expect(page.locator('#waitlist-config-fields')).toBeVisible();

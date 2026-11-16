@@ -178,8 +178,8 @@ assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title
 assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).slice().sort((a, b) => a - b),
   decisionTitles.map(title => uiBox.innerHTML.indexOf(title)), 'as seções seguem a ordem fixa');
 const flowIds = ['Estrutura — nº de grupos', 'Inscrição e formação de duplas',
-  'f2-phase-dates-slot', 'Sortear manualmente', 'Data do 1º sorteio',
-  'Repetir a cada (dias)', 'id="f2-sched-n"', 'f2-hours-slot'];
+  'f2-phase-dates-slot', 'id="f2-sched-n"', 'Sortear manualmente',
+  'Data do 1º sorteio', 'Repetir a cada (dias)', 'f2-hours-slot'];
 const flowPositions = flowIds.map(label => uiBox.innerHTML.indexOf(label));
 assert(flowPositions.every(position => position >= 0) &&
   flowPositions.every((position, index) => index === 0 || position > flowPositions[index - 1]),

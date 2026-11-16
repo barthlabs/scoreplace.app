@@ -77,6 +77,18 @@ assert.deepEqual(structuredPatch.playerUids,['new-uid','partner'],
   'vínculo anterior confirmado permanece no índice, sem UID legado desconhecido');
 assert.equal(structuredPatch['jogo.score1'], undefined);
 assert.equal(JSON.stringify(structuredGame), structuredBefore, 'objeto e resultado não mudam ao planejar');
+const eliminationGame = { _chave:'qf', jogo:{ id:'qf',
+  p1:'Maria Angelica Reck / Flavia Audi Delfino', p2:'Kelly Barth / Lucely Lustre',
+  team1Uids:[], team2Obj:{ p1Name:'Kelly Barth', p2Name:'Lucely Lustre',
+    participants:[{ name:'Kelly Barth', uid:null, wins:2 }, { name:'Lucely Lustre', uid:null, wins:2 }] },
+  winner:'Maria Angelica Reck / Flavia Audi Delfino', sets:[{ gamesP1:6, gamesP2:3 }] } };
+const eliminationBefore = JSON.stringify(eliminationGame);
+const eliminationPatch = C.planMatches([{ id:'qf', data:eliminationGame }], 'Kelly Barth', 'uid-k')[0].patch;
+assert.deepEqual(eliminationPatch['jogo.team2Uids'], ['uid-k', null]);
+assert.equal(eliminationPatch['jogo.team2Obj.p1Uid'], 'uid-k');
+assert.equal(eliminationPatch['jogo.team2Obj.participants'][0].uid, 'uid-k');
+assert.deepEqual(eliminationPatch.playerUids, ['uid-k']);
+assert.equal(JSON.stringify(eliminationGame), eliminationBefore, 'vínculo da eliminatória preserva placar e vencedor');
 assert.throws(() => C.planMatches([{ id:'j2', data:{ ...structuredGame,
   jogo:{ ...structuredGame.jogo, team1Obj:{ ...structuredGame.jogo.team1Obj, p1Name:'Outra Pessoa' } } } }],
   'Maria Souza', 'new-uid'), /diverge/, 'objeto estrutural divergente bloqueia vínculo');

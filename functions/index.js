@@ -3121,9 +3121,6 @@ exports.enrollParticipant = onCall(
         }
       }
       if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
-        if (!Array.isArray(rawTournament.categoryDefinitions) || !rawTournament.categoryDefinitions.length) {
-          throw new HttpsError('failed-precondition', 'Configure ao menos uma categoria antes de abrir inscrições.');
-        }
         if (extraUpdates) {
           throw new HttpsError("failed-precondition", "origem de dupla não faz parte da inscrição canônica");
         }

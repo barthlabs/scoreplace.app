@@ -106,8 +106,14 @@ function patchMatch(physical, name, uid) {
   const game = physical && physical.jogo;
   if (!game || typeof game !== 'object' || !uid || !nameKey(name)) throw new Error('jogo ou identidade inválida');
   const wanted = nameKey(name);
-  if (![1, 2].some((n) => Array.isArray(game['team' + n]) &&
-      game['team' + n].some((member) => nameKey(member) === wanted))) return null;
+  const namesOf = (n) => {
+    if (Array.isArray(game['team' + n])) return game['team' + n];
+    const object = game['team' + n + 'Obj'];
+    if (object && typeof object === 'object' && !Array.isArray(object) &&
+        object.p1Name && object.p2Name) return [object.p1Name, object.p2Name];
+    return [];
+  };
+  if (![1, 2].some((n) => namesOf(n).some((member) => nameKey(member) === wanted))) return null;
   // Só reaproveitamos UIDs de vínculos históricos já confirmados. Uma partida
   // legada com outro UID não verificável exige conferência, em vez de anexar esse
   // UID a playerUids e às estatísticas pessoais durante esta confirmação.
@@ -121,10 +127,10 @@ function patchMatch(physical, name, uid) {
     priorUids.push(...physical.playerUids.filter(Boolean));
   }
   for (const n of [1, 2]) {
-    const team = game['team' + n];
+    const team = namesOf(n);
     const uids = game['team' + n + 'Uids'];
     if (uids != null) {
-      if (!Array.isArray(team) || !Array.isArray(uids) || uids.length !== team.length) {
+      if (!Array.isArray(uids) || (uids.length !== team.length && uids.length !== 0)) {
         throw new Error('slots de UID desalinhados');
       }
       priorUids.push(...uids.filter(Boolean));
@@ -145,13 +151,13 @@ function patchMatch(physical, name, uid) {
   const patch = {};
   let hits = 0;
   for (const n of [1, 2]) {
-    const team = game['team' + n];
-    if (!Array.isArray(team)) continue;
+    const team = namesOf(n);
+    if (!team.length) continue;
     const matching = team.map((member, index) => nameKey(member) === wanted ? index : -1).filter((index) => index >= 0);
     if (!matching.length) continue;
     const raw = game['team' + n + 'Uids'];
-    if (raw != null && (!Array.isArray(raw) || raw.length !== team.length)) throw new Error('slots de UID desalinhados');
-    const uids = raw ? raw.slice() : team.map(() => null);
+    if (raw != null && (!Array.isArray(raw) || (raw.length !== team.length && raw.length !== 0))) throw new Error('slots de UID desalinhados');
+    const uids = raw && raw.length ? raw.slice() : team.map(() => null);
     for (const index of matching) {
       if (uids[index] && uids[index] !== uid) throw new Error('slot já pertence a outra conta');
       uids[index] = uid;
@@ -171,6 +177,13 @@ function patchMatch(physical, name, uid) {
         }
         patch['jogo.team' + n + 'Obj.' + member + 'Uid'] = uid;
         if (object[member + 'ManualId']) patch['jogo.team' + n + 'Obj.' + member + 'ManualId'] = null;
+        if (Array.isArray(object.participants)) {
+          const participant = object.participants[index];
+          if (!participant || nameKey(participant.name) !== wanted ||
+              (participant.uid && participant.uid !== uid)) throw new Error('participante estrutural divergente');
+          patch['jogo.team' + n + 'Obj.participants'] = object.participants.map((item, i) =>
+            i === index ? { ...item, uid } : item);
+        }
       }
     }
     if (team.length === 1) {

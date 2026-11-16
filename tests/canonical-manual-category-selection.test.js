@@ -16,9 +16,9 @@ const core = enrollment.slice(coreStart, coreEnd < 0 ? enrollment.length : coreE
 const pickerStart = enrollment.indexOf('window._addParticipantWithAutocomplete = function');
 const picker = enrollment.slice(pickerStart);
 
-ok(core.includes('if (!_ids.length && !_organizerManual)') &&
+ok(core.includes("if (!_ids.length && !_organizerManual && _enrollmentRigor(t) === 'oficial')") &&
   core.includes('if (_ids.length) participantObj.categoryIds = Array.from(new Set(_ids))'),
-  'organizador pode adiar categoria; inscrição comum continua exigindo IDs');
+  'organizador pode adiar categoria; inscrição oficial exige IDs');
 ok(!/participantObj\.categories\s*=/.test(core) && !/participantObj\.category\s*=/.test(core),
   'inclusão manual não envia rótulo legado como categoria');
 ok(!picker.includes('id="ap-category-ids"') && picker.includes('onConfirm(sel.name, sel.uid, sel.photo)'),

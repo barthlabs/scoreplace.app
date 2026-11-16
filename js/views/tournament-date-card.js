@@ -49,13 +49,33 @@
     var kind = !end ? 'start-only' : end.month === start.month && end.day === start.day ? 'one-day' : end.month === start.month ? 'same-month' : 'cross-month';
     return { kind:kind, start:start, end:end };
   }
+  function displayRange(t, range) {
+    var start = range && range.start || t && t.startDate || '';
+    var end = range && range.end || t && t.endDate || '';
+    var implicitEnd = t && (t.endTimeEstimated === true ||
+      (t.superEight === true && !Object.prototype.hasOwnProperty.call(t, 'endTimeEstimated') && /T23:59$/.test(end)));
+    if (!implicitEnd || !t || t.superEight !== true || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(start) ||
+        String(end).slice(0, 10) !== start.slice(0, 10)) return { start:start, end:end, estimated:false };
+    var courts = Math.max(1, Number.parseInt(t.courtCount, 10) || 1);
+    var phase = Array.isArray(t.phases) ? t.phases[0] : null;
+    var slot = typeof root._minutosDaPartida === 'function' ? root._minutosDaPartida(t, phase) :
+      (Number.parseInt(t.gameDuration, 10) || 30) + (Number.parseInt(t.callTime, 10) || 0) + (Number.parseInt(t.warmupTime, 10) || 0);
+    var startMs = new Date(start).getTime();
+    if (!Number.isFinite(startMs) || !(slot > 0)) return { start:start, end:end, estimated:false };
+    // Oito atletas ocupam duas quadras por rodada; cada um joga uma vez em cada uma das sete rodadas.
+    var projected = new Date(startMs + 7 * Math.ceil(2 / courts) * slot * 60000);
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    var value = projected.getFullYear() + '-' + pad(projected.getMonth() + 1) + '-' + pad(projected.getDate()) +
+      'T' + pad(projected.getHours()) + ':' + pad(projected.getMinutes());
+    return { start:start, end:value, estimated:true };
+  }
   var MONTHS = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
   function escapeAttribute(value) {
     return String(value).replace(/[&"'<>]/g, function (char) {
       return { '&':'&amp;', '"':'&quot;', "'":'&#39;', '<':'&lt;', '>':'&gt;' }[char];
     });
   }
-  function render(startRaw, endRaw, customColors) {
+  function render(startRaw, endRaw, customColors, options) {
     var m = model(startRaw, endRaw);
     if (!m) return '';
     var c = colors(customColors);
@@ -76,7 +96,7 @@
         ? '<span class="sp-date-month">' + MONTHS[m.start.month - 1] + '</span>'
         : '<span class="sp-date-months"><span class="sp-date-month">' + MONTHS[m.start.month - 1] + '</span><span class="sp-date-month">' + MONTHS[m.end.month - 1] + '</span></span>';
     }
-    var time = m.start.time + (m.end ? ' — ' + m.end.time : '');
+    var time = m.start.time + (m.end ? ' — ' + m.end.time : '') + (options && options.estimatedEnd ? ' (estimado)' : '');
     var daysApart = m.end ? (Date.UTC(Number(m.end.year), m.end.month - 1, m.end.day) -
       Date.UTC(Number(m.start.year), m.start.month - 1, m.start.day)) / 86400000 : 0;
     // Acima de uma semana, os horários de abertura/fechamento não são uma grade
@@ -88,7 +108,7 @@
     var spoken = m.start.day + ' de ' + MONTHS[m.start.month - 1] + (m.end ? ' a ' + m.end.day + ' de ' + MONTHS[m.end.month - 1] : '') + (extendedRange ? '' : ', ' + time);
     return '<div class="sp-date-card sp-date-card--' + m.kind + (extendedRange ? ' sp-date-card--extended-range' : '') + (c.typography ? ' sp-date-card--custom-typography' : '') + '" style="' + css + '" aria-label="' + escapeAttribute(spoken) + '">' + dateMarkup + (extendedRange ? '' : '<div class="sp-date-time">' + time + '</div>') + '</div>';
   }
-  var api = { DEFAULTS:DEFAULTS, TYPOGRAPHY_DEFAULTS:TYPOGRAPHY_DEFAULTS, validTypography:validTypography, colors:colors, validate:validate, model:model, render:render };
+  var api = { DEFAULTS:DEFAULTS, TYPOGRAPHY_DEFAULTS:TYPOGRAPHY_DEFAULTS, validTypography:validTypography, colors:colors, validate:validate, model:model, displayRange:displayRange, render:render };
   root.ScorePlaceDateCard = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

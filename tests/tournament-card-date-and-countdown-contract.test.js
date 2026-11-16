@@ -8,6 +8,10 @@ const componentsCss = fs.readFileSync('css/components.css', 'utf8');
 const dashboard = fs.readFileSync('js/views/dashboard.js', 'utf8');
 const editor = fs.readFileSync('js/views/create-tournament.js', 'utf8');
 const DateCard = require('../js/views/tournament-date-card.js');
+const superEightEstimate = DateCard.displayRange({ superEight:true, courtCount:9, gameDuration:30,
+  callTime:5, warmupTime:5, startDate:'2026-11-21T09:00', endDate:'2026-11-21T23:59' },
+  { start:'2026-11-21T09:00', end:'2026-11-21T23:59' });
+if (superEightEstimate.end !== '2026-11-21T13:40' || !superEightEstimate.estimated) throw new Error('Super 8 deve prever sete blocos de dois jogos nas quadras disponíveis');
 const dateColors = require('../functions-autodraw/date-card-colors-core.js');
 let failed = 0;
 function ok(value, label) { console.log((value ? '✓ ' : '✗ ') + label); if (!value) failed++; }

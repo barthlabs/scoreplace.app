@@ -3550,8 +3550,9 @@ function renderTournaments(container, tournamentId = null) {
         // v3.1.35: CANÔNICO — início da 1ª fase → fim da ÚLTIMA fase (nunca t.endDate cru,
         // que é só a Fase 1). Mesmo helper usado no card da dashboard.
         const _tdr = (typeof window._tournamentDateRange === 'function') ? window._tournamentDateRange(t) : { start: t.startDate, end: t.endDate };
-        const start = formatDateBr(_tdr.start);
-        const end = formatDateBr(_tdr.end);
+        const _shownTdr = window.ScorePlaceDateCard ? window.ScorePlaceDateCard.displayRange(t, _tdr) : _tdr;
+        const start = formatDateBr(_shownTdr.start);
+        const end = formatDateBr(_shownTdr.end);
         const dates = start ? (end ? `${start} ${_t('tourn.dateTo')} ${end}` : `${start}`) : _t('tourn.dateTbd');
         // v2.6.23/24: data em grid — [🗓️ | data | hora] / ["A" | data | hora].
         // Colunas separadas de data e hora + tabular-nums = data e hora
@@ -3565,7 +3566,7 @@ function renderTournaments(container, tournamentId = null) {
               + `<span style="justify-self:center;opacity:0.8;font-weight:700;">${_dateToLbl}</span><span style="white-space:nowrap;">${_eDT.d}</span><span style="white-space:nowrap;">${_eDT.t}</span>`
             + `</span>`
           : `<span style="display:inline-flex;align-items:center;gap:8px;"><span style="font-size:1.1rem;">🗓️</span><span style="font-variant-numeric:tabular-nums;">${dates}</span></span>`;
-        const dateCardHtml = tournamentId && window.ScorePlaceDateCard ? window.ScorePlaceDateCard.render(_tdr.start, _tdr.end, t.dateCardColors) : '';
+        const dateCardHtml = tournamentId && window.ScorePlaceDateCard ? window.ScorePlaceDateCard.render(_shownTdr.start, _shownTdr.end, t.dateCardColors, { estimatedEnd:_shownTdr.estimated }) : '';
         const regLimit = formatDateBr(t.registrationLimit);
         const _configuredCats = typeof window._getTournamentCategories === 'function' ? window._getTournamentCategories(t) : (t.combinedCategories || []);
         const cats = _configuredCats.length ? window._sortCategoriesBySkillOrder(_configuredCats, t.skillCategories).join(', ') : _t('tourn.singleCat');

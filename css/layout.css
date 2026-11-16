@@ -195,25 +195,22 @@ html.sp-native .modal-overlay.active .modal-header {
   height: 48px !important;
   flex-shrink: 0;
 }
-.sp-header-brand { gap: clamp(4px, 0.6vw, 6px); }
-.sp-header-symbol { display: block; flex: none; width: clamp(40px, 10.4vw, 52px); height: auto; }
-.sp-header-copy { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.sp-header-brand { gap: 6px; }
+.sp-header-symbol { display: block; flex: none; width: clamp(38px, 7vw, 52px); height: auto; }
+.sp-header-copy { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .sp-header-copy h1 { margin: 0; line-height: 1; }
-.sp-header-wordmark { display: block; width: clamp(120px, 38.4vw, 224px); height: auto; }
-.sp-header-version { display: block; align-self: flex-end; margin-top: 2px; margin-right: calc(clamp(120px, 38.4vw, 224px) * 0.064); color: var(--text-muted); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.3px; line-height: 1.15; white-space: nowrap; transform: translateY(-5px); }
+.sp-header-wordmark { display: block; width: clamp(130px, calc(100vw - 190px), 280px); height: auto; }
+.sp-header-version { display: block; color: var(--text-muted); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.3px; line-height: 1.15; white-space: nowrap; }
 /* Em janelas estreitas, símbolo e assinatura devem reduzir juntos: a barra de
    retorno fica logo abaixo do cabeçalho e cobria a versão e a base do símbolo. */
 @media (max-width: 1199px) {
   .sp-header-symbol { width: clamp(38px, 5vw, 48px); }
-  .sp-header-wordmark { width: clamp(136px, 25vw, 210px); }
-  .sp-header-version { margin-right: calc(clamp(136px, 25vw, 210px) * 0.064); }
 }
 @media (max-width: 767px) {
   /* Na captura do PWA do iPhone, a versão aparece nítida e os SVGs da barra
      fixa ficam borrados. Separar as camadas é uma tentativa: confirmar no aparelho. */
   .sp-header-brand, .topbar-right-icons { transform: translateZ(0); }
   /* Sem deslocamento, a base da versão já coincide com a do símbolo no celular. */
-  .sp-header-version { transform: translateZ(0); }
   /* No PWA iOS, a camada 3D da tentativa anterior pode rasterizar a marca.
      Voltar à composição normal mantém a geometria e não afeta Android. */
   html.sp-ios-pwa .sp-header-brand,
@@ -223,8 +220,7 @@ html.sp-native .modal-overlay.active .modal-header {
 @media (max-width: 319px) {
   .sp-header-brand { gap: 4px; }
   .sp-header-symbol { width: 40px; }
-  .sp-header-wordmark { width: clamp(118px, 44vw, 136px); }
-  .sp-header-version { margin-right: calc(clamp(118px, 44vw, 136px) * 0.064); }
+  .sp-header-wordmark { width: 118px; }
 }
 
 .view-container {

@@ -19,20 +19,26 @@ function decide(input) {
   const window = enrollCore.enrollmentOpen(tournament, value.nowMs);
   if (!window.open && !organizerManual) return { outcome: window.notOpenYet ? 'notOpenYet' : 'closed' };
   const definitions = eligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions);
+  const rigor = tournament.enrollmentRigor ||
+    ({ moderado:'moderate', oficial:'official' }[tournament.rigor] || tournament.rigor) || 'casual';
   // Inclusão manual da organização pode ficar sem categoria até a Análise.
   // A sentinela já é o contrato canônico usado pelas reservas migradas.
-  const categoryIds = organizerManual && (!Array.isArray(participant.categoryIds) || !participant.categoryIds.length)
+  const requestedCategoryIds = Array.isArray(participant.categoryIds) ? participant.categoryIds : [];
+  const categoryIds = rigor !== 'official' && (!requestedCategoryIds.length ||
+      (requestedCategoryIds.length === 1 && requestedCategoryIds[0] === registration.UNCATEGORIZED_CATEGORY_ID))
     ? [registration.UNCATEGORIZED_CATEGORY_ID]
-    : categoryBridge.categoryIdsFromTypedIds(definitions, participant.categoryIds);
+    : organizerManual && !requestedCategoryIds.length
+    ? [registration.UNCATEGORIZED_CATEGORY_ID]
+    : categoryBridge.categoryIdsFromTypedIds(definitions, requestedCategoryIds);
   const existingCategoryIds = registrations
     .filter((registration) => registration && registration.participantKey === (participant.uid ? 'uid:' + participant.uid : 'manual:' + participant.manualParticipantId))
     .filter((registration) => registration.status !== 'withdrawn')
     .map((registration) => String(registration.categoryId || ''));
-  const eligibilityDecision = categoryIds[0] === registration.UNCATEGORIZED_CATEGORY_ID && organizerManual
-    ? { outcome: 'accepted', validationState: 'approved', reasons: [] }
+  const eligibilityDecision = categoryIds[0] === registration.UNCATEGORIZED_CATEGORY_ID
+    ? { outcome: 'accepted', validationState: rigor === 'moderate' && !organizerManual ? 'pending_review' : 'approved', reasons: [] }
     : eligibility.decideEnrollment({
     definitions,
-    rigor: tournament.enrollmentRigor || 'casual',
+    rigor,
     categoryIds,
     existingCategoryIds,
     profile: value.profile || {},

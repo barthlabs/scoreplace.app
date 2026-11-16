@@ -175,8 +175,13 @@ window._renderEstimatedGameHours = function (datesChanged) {
   }
   var modeParticipants = document.getElementById('estimated-games-mode-participants');
   var modeOrganizer = document.getElementById('estimated-games-mode-organizer');
-  if (modeParticipants) modeParticipants.style.color = state.mode === 'participants' ? 'var(--sp-c-c7d2fe,#c7d2fe)' : 'var(--text-muted)';
-  if (modeOrganizer) modeOrganizer.style.color = state.mode === 'organizer' ? 'var(--sp-c-c7d2fe,#c7d2fe)' : 'var(--text-muted)';
+  [modeParticipants, modeOrganizer].forEach(function (option) {
+    if (!option) return;
+    var active = option === (state.mode === 'organizer' ? modeOrganizer : modeParticipants);
+    option.classList.toggle('is-active', active);
+    option.setAttribute('aria-pressed', active ? 'true' : 'false');
+    option.disabled = !!(state.locked || state.saved && state.saved.interleavedPlan);
+  });
   var gameHoursSection = document.getElementById('estimated-games-window-section');
   if (gameHoursSection) gameHoursSection.style.display = state.mode === 'organizer' ? '' : 'none';
   if (state.mode === 'participants') {
@@ -779,11 +784,11 @@ function setupCreateTournamentModal() {
 
               <div id="estimated-games-mode-section" style="margin-bottom:12px;padding:12px;border:1px solid rgba(96,165,250,.3);border-radius:10px">
                 <div style="font-weight:700;margin-bottom:8px">🕒 Quem define quando os jogos acontecem?</div>
-                <label style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;cursor:pointer;font-size:.85rem;font-weight:700">
-                  <span id="estimated-games-mode-participants">Participantes combinam entre si</span>
+                <div class="sp-binary-choice">
+                  <button type="button" class="sp-binary-option" id="estimated-games-mode-participants" onclick="window._setEstimatedScheduleMode('participants')">Participantes combinam</button>
                   <span class="toggle-switch"><input id="estimated-games-mode-toggle" type="checkbox" role="switch" aria-label="Participantes combinam entre si ou organizador determina quando cada jogo acontece" onchange="window._setEstimatedScheduleMode(this.checked ? 'organizer' : 'participants')"><span class="toggle-slider"></span></span>
-                  <span id="estimated-games-mode-organizer">Organizador determina quando cada jogo acontece</span>
-                </label>
+                  <button type="button" class="sp-binary-option" id="estimated-games-mode-organizer" onclick="window._setEstimatedScheduleMode('organizer')">Organizador define</button>
+                </div>
               </div>
               <!-- Datas da fase (logo abaixo da escolha de horários) -->
               <div id="phase-dates-box" style="background:rgba(99,102,241,0.04); border:1px solid rgba(129,140,248,0.18); border-radius:10px; padding:0.6rem 0.4rem; margin-bottom:1rem;">
@@ -1373,7 +1378,7 @@ function setupCreateTournamentModal() {
               <div class="d-flex gap-2 mb-3">
                 <div class="form-group full-width" id="cap-max-container">
                   <label class="form-label">${_t('create.maxParticipants')}</label>
-                  <input type="number" class="form-control" id="tourn-max-participants" min="2" placeholder="${_t('create.noLimit')}" oninput="window._updateAutoCloseVisibility(); window._recalcDuration()">
+                  <input type="number" class="form-control" id="tourn-max-participants" min="2" placeholder="${_t('create.noLimit')}" oninput="window._updateAutoCloseVisibility(); window._recalcDuration()" onchange="if(window._f2Rn && document.getElementById('f2-sched-n')) window._f2Rn(document.getElementById('f2-sched-n').value)">
                 </div>
                 <div class="form-group full-width">
                   <label class="form-label">${_t('create.gameType')}</label>
@@ -5758,7 +5763,8 @@ function setupCreateTournamentModal() {
     document.getElementById('tourn-start-date').value = startD;
     document.getElementById('tourn-start-time').value = startT;
     document.getElementById('tourn-end-date').value = endD;
-    document.getElementById('tourn-end-time').value = endT;
+    document.getElementById('tourn-end-time').value = (t.endTimeEstimated === true ||
+      (t.superEight === true && !Object.prototype.hasOwnProperty.call(t, 'endTimeEstimated') && endT === '23:59')) ? '' : endT;
     window._estimatedGameHoursState = {
       saved:t.scheduleWindow || null, valuesByDay:{}, categoryByKey:{}, touched:false,
       locked:typeof window._tournamentHasDraw === 'function' && window._tournamentHasDraw(t),
@@ -6787,6 +6793,7 @@ window._saveTournamentClickHandler = async function() {
         const startDateVal = startTimeRaw ? startDateRaw + 'T' + startTimeRaw : startDateRaw;
         const endDateRaw = document.getElementById('tourn-end-date').value || '';
         const endTimeRaw = document.getElementById('tourn-end-time').value || '';
+        const endTimeEstimated = !endTimeRaw;
         // Sem hora de término explícita, o último dia vale até o fim do dia.
         // Assim um evento que começa às 08:00 e termina na mesma data não
         // ganha um fim implícito à meia-noite, antes do primeiro jogo.
@@ -6940,6 +6947,7 @@ window._saveTournamentClickHandler = async function() {
           sport: sportClean,
           startDate: startDateVal,
           endDate: endDateVal,
+          endTimeEstimated,
           ...((estimatedGameHours || phaseCallOrder || phaseGridPlan) ? { scheduleWindow:Object.assign({},
             window._editingTournament && window._editingTournament.scheduleWindow || {}, estimatedGameHours || {},
             phaseCallOrder ? { phaseCallOrder:phaseCallOrder } : {},
@@ -7204,6 +7212,13 @@ window._saveTournamentClickHandler = async function() {
           showAlertDialog('Agenda do Super 8',
             'Informe a data do primeiro sorteio ou ative “Sortear manualmente”.',
             null, { type:'warning' });
+          return;
+        }
+        if (_f2cfg.rodadas.modo === 'fixo' && _f2cfg.rodadas.n > 1 &&
+            !_f2cfg.rodadas.drawManual &&
+            !(_f2cfg.parceria === 'super_eight' && _f2cfg.superEightDrawMode === 'single') &&
+            !(parseInt(_f2cfg.rodadas.drawIntervalDays, 10) >= 1)) {
+          showAlertDialog('Sorteio das rodadas', 'Informe o intervalo entre sorteios ou escolha sorteio manual.', null, { type:'warning' });
           return;
         }
         if (_f2cfg.parceria === 'super_eight' && _f2cfg.superEightDrawMode === 'rounds' &&

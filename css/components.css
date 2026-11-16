@@ -2604,6 +2604,37 @@ button[data-spinning="1"] {
 }
 
 /* ─── Toggle Switch ─────────────────────────────────────────────────────── */
+.sp-binary-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  cursor: pointer;
+}
+.sp-binary-option {
+  display: block;
+  min-width: 0;
+  padding: 8px 6px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 9px;
+  background: rgba(255,255,255,.04);
+  color: var(--text-muted);
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1.25;
+  font-family: inherit;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+button.sp-binary-option { cursor: pointer; }
+.sp-binary-option.is-active {
+  color: #fff;
+  border-color: #22c55e;
+  background: #166534;
+}
+.sp-binary-option:disabled { cursor: default; }
+.sp-binary-option:focus-visible { outline: 2px solid #22c55e; outline-offset: 2px; }
 .toggle-switch {
   position: relative;
   display: inline-block;

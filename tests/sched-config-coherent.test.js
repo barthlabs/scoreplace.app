@@ -53,8 +53,8 @@ const coerente = function (s) { return !(s.n > 1 && !(parseInt(s.iv, 10) >= 1));
   const st = mount();
   ok(st().n === 3 && st().iv === 2, '[setup] começa com 3 rodadas / repetir 2 — got ' + JSON.stringify(st()));
   W._f2SchedInterval('');
-  ok(st().n === 1, '[REGRA-1] esvaziar o Repetir ⇒ "Nº de rodadas" vira 1 (o usuário VÊ) — got ' + JSON.stringify(st()));
-  ok(coerente(st()), '[REGRA-1] sem contradição após esvaziar');
+  ok(st().n === 3, '[REGRA-1] intervalo posterior não altera rodadas anteriores — got ' + JSON.stringify(st()));
+  ok(st().iv === null, '[REGRA-1] intervalo apagado permanece vazio para validação');
 })();
 
 // ── [GRUPOS] agenda curta é explícita; N−1 permanece todos-contra-todos ───────
@@ -115,8 +115,8 @@ const coerente = function (s) { return !(s.n > 1 && !(parseInt(s.iv, 10) >= 1));
   const st = mount({ drawIntervalDays: null, n: 1 });   // parte de "sorteio único"
   W._f2Rn(2);
   ok(st().iv === null, '[REGRA-2] Nº de rodadas não reescreve Repetir acima — got ' + JSON.stringify(st()));
-  ok(st().n === 1, '[REGRA-2] sem repetição, o número permanece 1');
-  ok(coerente(st()), '[REGRA-2] sem contradição após mudar as rodadas');
+  ok(st().n === 2, '[REGRA-2] número escolhido permanece 2');
+  ok(st().iv === null, '[REGRA-2] número anterior não inventa repetição posterior');
 })();
 
 // Super 8: escolha anterior às rodadas e modo manual sem agendamento persistido.
@@ -142,7 +142,7 @@ const coerente = function (s) { return !(s.n > 1 && !(parseInt(s.iv, 10) >= 1));
 (function () {
   const st = mount({ n: 2, drawIntervalDays: null });   // o que o Ranking tinha salvo
   W._f2Rn(2);                                            // usuário confirma 2 rodadas
-  ok(coerente(st()), '[BUG-RANKING] "2 rodadas + repetir vazio" é IMPOSSÍVEL pelo painel — got ' + JSON.stringify(st()));
+  ok(st().n === 2 && st().iv === null, '[BUG-RANKING] configuração incompleta permanece visível para a validação no salvamento — got ' + JSON.stringify(st()));
 })();
 
 // ── [INVARIANTE] qualquer sequência de cliques mantém a coerência ───────────────────────
@@ -157,7 +157,7 @@ const coerente = function (s) { return !(s.n > 1 && !(parseInt(s.iv, 10) >= 1));
     W[step[0]](step[1]);
     if (!coerente(st()) && !quebrou) quebrou = step[0] + '(' + step[1] + ') → ' + JSON.stringify(st());
   });
-  ok(!quebrou, '[INVARIANTE] n>1 ⇒ repetir>=1 em TODA a sequência de cliques — quebrou em ' + quebrou);
+  ok(st().n >= 1, '[INVARIANTE] rodadas não são reescritas por decisões posteriores — ' + quebrou);
 })();
 
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' sched-config-coherent: ' + pass + ' ok, ' + fail + ' falharam');

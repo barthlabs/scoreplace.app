@@ -148,10 +148,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return '<button type="button" onclick="' + onclick + '" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap;margin:0 4px 4px 0;' + (active ? on : off) + '">' + label + '</button>';
   }
   function _binaryChoice(left, right, rightActive, onchange, ariaLabel) {
-    return '<label style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;font-size:.88rem;font-weight:700;color:var(--text-main);cursor:pointer;margin:8px 0;">' +
-      '<span style="color:' + (rightActive ? 'var(--text-muted)' : 'var(--sp-c-c7d2fe,#c7d2fe)') + '">' + left + '</span>' +
+    return '<label class="sp-binary-choice">' +
+      '<span class="sp-binary-option' + (rightActive ? '' : ' is-active') + '">' + left + '</span>' +
       '<span class="toggle-switch"><input type="checkbox" aria-label="' + ariaLabel + '"' + (rightActive ? ' checked' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></span>' +
-      '<span style="color:' + (rightActive ? 'var(--sp-c-c7d2fe,#c7d2fe)' : 'var(--text-muted)') + '">' + right + '</span></label>';
+      '<span class="sp-binary-option' + (rightActive ? ' is-active' : '') + '">' + right + '</span></label>';
   }
   function _sec(title, inner) {
     return '<div style="margin-bottom:16px;"><div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px;">' + title + '</div>' + inner + '</div>';
@@ -599,7 +599,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // Era um "✕ solto colorido", que o cânone proíbe explicitamente (components.css:555).
       '<button type="button" id="f2-sched-ivx" class="cancel-x-btn" title="Sem repetição" onclick="window._f2SchedInterval(\'\')" style="--cx-size:20px;' + (ivVal ? '' : 'display:none;') + '">✕</button>' +
     '</span>';
-    var rounds = fld('Nº de rodadas', '<input id="f2-sched-n" type="number" min="1" max="30" value="' + (r.n || '') + '" placeholder="—" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;"' + (S.cfg.parceria === 'super_eight' ? ' disabled' : '') + '>');
+    var rounds = fld('Nº de rodadas', '<input id="f2-sched-n" type="number" min="1" max="30" value="' + (r.n || '') + '" placeholder="—" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;">');
+    var maxPeople = Number((document.getElementById('tourn-max-participants') || {}).value) ||
+      (S.t ? _peopleCount(S.t) : 0);
+    var eligible = S.cfg.disputa === 'dupla' && S.cfg.grupos === 1 &&
+      (maxPeople === 8 || S.cfg.parceria === 'super_eight') &&
+      Number(r.n) === 7 && (S.cfg.parceria === 'sorteio_rodada' || S.cfg.parceria === 'super_eight');
+    var unique = eligible ? '<div style="margin-top:12px;">' +
+      _toggleRight('Não repetir parceiro', S.cfg.parceria === 'super_eight', 'window._f2UniquePartner(this.checked)') + '</div>' : '';
+    var drawMode = S.cfg.parceria === 'super_eight' ? _sec('Quando sortear',
+      _binaryChoice('A cada rodada', 'Todas as rodadas de uma vez', singleSuper8,
+        'window._f2SuperEightDrawMode(this.checked)', 'Modo de sorteio das rodadas')) : '';
     var tgl = _toggleRight('Sortear manualmente', manual, 'window._f2SchedManual(this.checked)');
     var automatic = manual ? '' : '<div style="margin-top:12px;">' + row1 +
       (singleSuper8 ? '' : fld('Repetir a cada (dias)', ivInput)) + '</div>';
@@ -627,10 +637,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     '</div>';
     var note = '<div id="f2-sched-note" style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">' + _f2SchedNote(r) + '</div>';
     return '<div style="margin-top:14px;padding:12px 13px;border-radius:10px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));">' +
-      '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:12px;">Sorteio das rodadas</div>' +
-      tgl + automatic + '<div style="margin-top:12px;">' + rounds + '</div>' +
+      '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:12px;">Rodadas e sorteio</div>' +
+      rounds + unique + drawMode + '<div style="margin-top:12px;">' + tgl + '</div>' + automatic +
       (S.cfg.parceria === 'super_eight'
-        ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:10px;">Os oito atletas permanecem ativos durante as sete rodadas.</div>'
+        ? ''
         : _adTgl) + note + '</div>';
   }
 
@@ -941,7 +951,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // jogadores montam) × Sorteio (sorteadas), ambas FIXAS. Rei/Rainha (rotativo) só com 1 grupo.
       var montadas = pr === 'fixa' && cfg.formacaoDupla === 'manual';
       // "Sorteio" cobre por-rodada (sorteio_rodada) E dupla fixa sorteada (fixa+sorteio).
-      var isSorteio = (pr === 'sorteio_rodada') || (pr === 'fixa' && cfg.formacaoDupla !== 'manual');
+      var isSorteio = (pr === 'sorteio_rodada' || pr === 'super_eight') || (pr === 'fixa' && cfg.formacaoDupla !== 'manual');
       var fBtns = _binaryChoice('Inscrição individual', 'Dupla formada', montadas,
         'window._f2EnrollmentTeam(this.checked)', 'Inscrição individual ou dupla formada');
       if (montadas) {
@@ -952,21 +962,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       } else {
         fBtns += _sec('Como serão formados os confrontos na classificatória',
           _pill(isSorteio, "window._f2TeamForm('sorteio')", 'Parceiros sorteados') +
-          (um ? _pill(pr === 'rei_rainha', "window._f2TeamForm('rei_rainha')", 'Rei/Rainha') +
-            _pill(pr === 'super_eight', "window._f2TeamForm('super_eight')", 'Cada atleta faz dupla com todos') : '') +
-          '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;">A dupla pode mudar em cada rodada. Uma dupla fixa para a eliminatória é definida naquela fase, se houver.</div>');
+          (um ? _pill(pr === 'rei_rainha', "window._f2TeamForm('rei_rainha')", 'Rodada Rei/Rainha') : ''));
       }
       // v4.4.30: Sorteio + 1 grupo → toggle "Novo parceiro a cada rodada" (ON por padrão).
       // ON = sorteio_rodada (rotativo, individual); OFF = dupla sorteada 1× e fixa até o fim.
       // 2+ grupos: só dupla fixa sorteada (rotativo exige 1 grupo) → sem toggle.
-      if (isSorteio && um) {
+      if (isSorteio && um && pr !== 'super_eight') {
         var porRodada = pr === 'sorteio_rodada';
-        fBtns += '<div style="margin-top:12px;">' + _toggleRight('Novo parceiro a cada rodada', porRodada, 'window._f2SorteioPorRodada(this.checked)') + '</div>' +
-          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (porRodada
-            ? 'A cada rodada, parceiro (e adversário) são sorteados de novo — pontuação individual.'
-            : 'A dupla é sorteada 1× e permanece fixa até o fim do torneio.') + '</div>';
+        fBtns += '<div style="margin-top:12px;">' + _toggleRight('Novo parceiro a cada rodada', porRodada, 'window._f2SorteioPorRodada(this.checked)') + '</div>';
       }
-      if (pr === 'super_eight') fBtns += '<div style="font-size:.72rem;color:var(--text-muted);margin-top:8px;">Com 8 atletas e 1 grupo, esta configuração forma um Super 8: 7 rodadas, um set com cada parceiro e sem eliminatória.</div>';
       formationControls += fBtns;
     }
     if (isDupla && !cfg.classifAtiva) {
@@ -1051,12 +1055,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (rotativo) {
       // Rei/Rainha (ou sorteio a cada rodada): SEMPRE nº de rodadas + agendamento (rotativo por
       // rodada). "Todos contra todos" não se aplica — mas o Nº de rodadas FICA (pedido do dono).
-      rInner = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px;">' +
-        (cfg.parceria === 'super_eight' ? 'Super 8 — 7 jogos por atleta, 14 confrontos no total; pontuação individual.' :
-          'Sorteio a cada rodada — ' + (cfg.parceria === 'rei_rainha' ? 'grupos de 4, parceiros rotativos' : 'parceiro e adversário sorteados') + '; pontuação individual.') +
-        '</div>' + (cfg.parceria === 'super_eight'
-          ? _sec('Quando definir os confrontos', _binaryChoice('Sortear a cada rodada', 'Sortear as 7 rodadas de uma vez', cfg.superEightDrawMode === 'single', 'window._f2SuperEightDrawMode(this.checked)', 'Modo de sorteio das rodadas'))
-          : '') + _schedBlock(cfg.rodadas);
+      rInner = _schedBlock(cfg.rodadas);
       if (cfg.parceria === 'rei_rainha' && cfg.rankingRemainderPolicy === 'lottery_average') {
         rInner += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Atletas ativos sem quarteto ficam de folga por sorteio; antes de repetir uma folga, são priorizados os que ainda não folgaram.</div>';
       }
@@ -1562,16 +1561,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (v === 'ida_volta' && window.FORMAT2.resolveTurnos(S.cfg).groups > 1) { _rerender(); return; }
     S.cfg.rodadas.turnos = v; _norm(); _rerender();
   };
-  // A quantidade de rodadas é a última decisão da agenda; não reescreve datas
-  // nem repetição situadas acima dela.
   window._f2Rn = function (v) {
     if (!S) return;
     var n = parseInt(v, 10);
     if (!(n >= 1)) { return; } // vazio → mantém tudo (repetir intacto), sem re-render
-    S.cfg.rodadas.n = n > 1 && !S.cfg.rodadas.drawManual &&
-      !(parseInt(S.cfg.rodadas.drawIntervalDays, 10) >= 1) &&
-      !(S.cfg.parceria === 'super_eight' && S.cfg.superEightDrawMode === 'single') ? 1 : n;
-    _norm(); _f2SchedRefresh(); // v4.4.71: atualiza no lugar (sem destruir o input em edição)
+    if (S.cfg.parceria === 'super_eight' && n !== 7) S.cfg.parceria = 'sorteio_rodada';
+    S.cfg.rodadas.n = n;
+    _norm(); _rerender();
+  };
+  window._f2UniquePartner = function (checked) {
+    if (!S) return;
+    S.cfg.parceria = checked ? 'super_eight' : 'sorteio_rodada';
+    if (checked) { S.cfg.formacaoDupla = 'sorteio'; S.cfg.superEightDrawMode = 'single'; }
+    _norm(); _rerender();
   };
   // O modo manual oculta a agenda automática e mantém a quantidade de rodadas.
   window._f2SchedManual = function (checked) { if (!S) return; S.cfg.rodadas.drawManual = !!checked; _norm(); _rerender(); };
@@ -1609,18 +1611,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (n != null) S.cfg.rodadas.n = Math.max(1, n);
   }
   // Exposto pros campos legados de Início/Término da fase (#tourn-start/end-date/time).
-  window._f2RecalcRoundsFromWindow = function () { if (!S || !S.cfg || S.cfg.rodadas.modo !== 'fixo') return; _recalcN(); _norm(); _f2SchedRefresh(); };
+  window._f2RecalcRoundsFromWindow = function () { if (!S || !S.cfg || S.cfg.rodadas.modo !== 'fixo') return; _f2SchedRefresh(); };
   // v4.4.71: texto da nota derivado do estado — compartilhado por _schedBlock (render) e
   // _f2SchedRefresh (update in-place). Fonte única do texto, sem divergir.
   function _f2SchedNote(r) {
     var canAuto = !!r.drawFirstDate;
     var manual = !!r.drawManual;
     var ivVal = (parseInt(r.drawIntervalDays, 10) >= 1) ? parseInt(r.drawIntervalDays, 10) : '';
-    if (manual) return 'Sem sorteio agendado. A organização inicia o sorteio quando decidir.';
-    if (!canAuto) return 'Informe a data do 1º sorteio para ativar o agendamento automático.';
-    if (S.cfg.parceria === 'super_eight' && S.cfg.superEightDrawMode === 'single') return 'Um sorteio agendado fixa a sequência das sete rodadas.';
-    if (ivVal) return 'Sorteia a cada ' + ivVal + ' dia(s) a partir do 1º sorteio, dentro das datas da fase.';
-    return 'Sem repetição: sorteia só o 1º; você libera as próximas rodadas manualmente.';
+    if (manual) return 'Sorteio manual';
+    if (!canAuto) return 'Informe a data do sorteio';
+    if (S.cfg.parceria === 'super_eight' && S.cfg.superEightDrawMode === 'single') return 'Sorteio único';
+    if (ivVal) return 'A cada ' + ivVal + ' dia(s)';
+    return Number(r.n) > 1 ? 'Informe o intervalo entre sorteios' : '';
   }
   // v4.4.71 FIX: atualiza os valores DERIVADOS do bloco de agendamento (Nº de rodadas,
   // Repetir, ✕, nota) SEM reconstruir os inputs — preserva a digitação nativa. O bug do
@@ -1648,10 +1650,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var nowSet = !!S.cfg.rodadas.drawFirstDate;
     // A data do sorteio vem depois das datas da fase e antes do número de
     // rodadas. Não modifica os controles já percorridos pelo organizador.
-    _recalcN(); _norm();
+    _norm();
     if (was !== nowSet) _rerender(); else _f2SchedRefresh();
   };
-  window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _recalcN(); _norm(); _f2SchedRefresh(); };
+  window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _norm(); _f2SchedRefresh(); };
   // CANON (v4.5.24): editar REPETIR (mantendo F) → recalcula as RODADAS pela janela.
   // CANON (dono, 17/jul): apagar o REPETIR = sorteio ÚNICO ⇒ o painel passa a mostrar
   // "Nº de rodadas = 1". Antes deixava vazio e NÃO mexia nas rodadas → dava pra salvar
@@ -1662,9 +1664,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2SchedInterval = function (v) {
     if (!S) return;
     var iv = parseInt(v, 10);
-    if (!(iv >= 1)) { S.cfg.rodadas.drawIntervalDays = null; if (S.cfg.parceria !== 'super_eight') S.cfg.rodadas.n = 1; _norm(); _f2SchedRefresh(); return; }
+    if (!(iv >= 1)) { S.cfg.rodadas.drawIntervalDays = null; _norm(); _f2SchedRefresh(); return; }
     S.cfg.rodadas.drawIntervalDays = iv;
-    var nextN = _strictNFromWindow(iv); if (nextN != null) S.cfg.rodadas.n = Math.max(1, nextN);
     _norm(); _f2SchedRefresh();
   };
   // Slider de classificados: número + resumo da eliminatória ao vivo no arraste; re-render ao soltar.

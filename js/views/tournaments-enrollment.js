@@ -173,6 +173,11 @@ window._pickHomonym = function (name, candidates, cb) {
 
 // ── Eligibility helpers ──────────────────────────────────────────────────────
 
+function _enrollmentRigor(t) {
+    var rigor = t.enrollmentRigor || t.rigor || 'casual';
+    return ({ moderate:'moderado', official:'oficial' })[rigor] || rigor;
+}
+
 // Parse "DD/MM/AAAA" birthDate → age in years (or null)
 function _calcAgeFromBirthDate(birthDate) {
     if (!birthDate) return null;
@@ -190,13 +195,14 @@ function _calcAgeFromBirthDate(birthDate) {
 
 // Returns { ok: true } or { ok: false, title, msg }
 function _checkEnrollmentEligibility(t, user) {
+    var rigor = _enrollmentRigor(t);
     var MISTO = ['Misto Obrig.', 'Misto Aleat.'];
     var genderCats = t.genderCategories || [];
 
     // ── Gender gate ──────────────────────────────────────────────────────────
     // Only applies when ALL defined gender categories are of a single gender
     // (no Misto, no opposite gender mixed in).
-    if (genderCats.length > 0) {
+    if (rigor === 'oficial' && genderCats.length > 0) {
         var hasMisto = genderCats.some(function(g) { return MISTO.indexOf(g) !== -1; });
         if (!hasMisto) {
             var hasFem  = genderCats.indexOf('Feminino') !== -1;
@@ -234,7 +240,7 @@ function _checkEnrollmentEligibility(t, user) {
     // The minimum requirement = lowest age bracket. Multiple brackets mean
     // the user only needs to reach the lowest one.
     var ageCats = t.ageCategories || [];
-    if (ageCats.length > 0) {
+    if (rigor === 'oficial' && ageCats.length > 0) {
         var minAge = Math.min.apply(null, ageCats.map(function(a) {
             return parseInt(String(a), 10) || 999;
         }));
@@ -262,7 +268,6 @@ function _checkEnrollmentEligibility(t, user) {
     // ── Rigor da inscrição: informações exigidas (v1.15.31) ────────────────────
     // Os toggles do organizador definem O QUE é exigido no perfil. No OFICIAL,
     // faltando algo → bloqueia. No MODERADO → deixa entrar mas AVISA (notice).
-    var rigor = t.rigor || 'casual';
     if (rigor !== 'casual') {
         var req = t.rigorRequire || {};
         var missing = [];
@@ -951,6 +956,7 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     var _canonicalMigration = t && t.canonicalRegistrationMigration;
     if (_canonicalMigration && _canonicalMigration.fingerprint) {
         var definitions = Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [];
+        var noCategories = definitions.length === 0;
         var byLabel = {};
         definitions.forEach(function(definition) {
             if (!definition || !definition.id || !definition.label) return;
@@ -966,8 +972,12 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
             if (!id || canonicalCategoryIds.indexOf(id) !== -1) return;
             canonicalCategoryIds.push(id);
         });
-        if (!canonicalCategoryIds.length || canonicalCategoryIds.length !== selected.length) {
-            if (typeof showNotification !== 'undefined') showNotification('Categoria necessária', 'Escolha uma categoria válida para concluir a inscrição.', 'warning');
+        if ((!canonicalCategoryIds.length || canonicalCategoryIds.length !== selected.length) && _enrollmentRigor(t) !== 'oficial') {
+            canonicalCategoryIds = ['__uncategorized__'];
+        }
+        if (!canonicalCategoryIds.length || (_enrollmentRigor(t) === 'oficial' && !noCategories && canonicalCategoryIds.length !== selected.length)) {
+            if (typeof showNotification !== 'undefined') showNotification(noCategories ? 'Categorias não configuradas' : 'Categoria necessária',
+              noCategories ? 'A organização precisa configurar as categorias deste torneio oficial.' : 'Escolha uma categoria válida para concluir a inscrição.', 'warning');
             return;
         }
     }
@@ -1423,7 +1433,7 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
             var _canonicalMigration = t.canonicalRegistrationMigration;
             if (_canonicalMigration && _canonicalMigration.fingerprint) {
                 var _ids = Array.isArray(categoryIds) ? categoryIds.map(function (id) { return String(id || '').trim(); }).filter(Boolean) : [];
-                if (!_ids.length && !_organizerManual) {
+                if (!_ids.length && !_organizerManual && _enrollmentRigor(t) === 'oficial') {
                     if (typeof showNotification !== 'undefined') showNotification('Categoria necessária', 'Selecione ao menos uma categoria para adicionar este participante.', 'warning');
                     return;
                 }
