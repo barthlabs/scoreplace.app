@@ -1,3 +1,5 @@
+// 2.7.23 — O cabeçalho mantém logo, nome, versão, notificações e menu na mesma
+// linha em janelas estreitas, com a marca mais próxima do símbolo.
 // 2.7.22 — O sorteio carrega o nome da inscrição canônica na mesma transação,
 // permitindo combinar uma conta só-UID com sete placeholders. A versão no
 // cabeçalho acompanha a base visível do nome.
