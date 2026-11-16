@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.24';
+window.SCOREPLACE_VERSION = '2.7.25';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *

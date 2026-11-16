@@ -1,3 +1,4 @@
+// 2.7.25 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.24 — O Super 8 gera um grupo com sete rodadas e 14 jogos no sorteio único.
 // O sorteio único fixa as rodadas; no sorteio por rodada, a organização pode
 // ajustar apenas o total futuro, preservando jogos já sorteados, inclusive os
