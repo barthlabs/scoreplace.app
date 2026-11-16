@@ -212,7 +212,8 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '2.2.70';
+const CF_VERSION = '2.2.71';
+const TEST_DEVELOPER_UID = 'B17n7JCXYOfqahlcLZ0fKxGGyUu1';
 
 initializeApp();
 const db = getFirestore();
@@ -2547,27 +2548,25 @@ exports.resetTournamentToEnrollment = onCall({ timeoutSeconds: 540, memory: '512
     if (!_isTournamentAdmin(t, uid)) {
       throw _drawFail('permission-denied', 'Só a organização reseta o torneio.', { tId, uid });
     }
-    // Não há reset genérico para torneio real. Cada intenção tem uma autorização
-    // própria e explícita: Sandbox ou o único torneio liberado para voltar ao
-    // estado imediatamente anterior à publicação.
+    // O modo de teste é uma configuração persistida e protegida no servidor.
+    // Qualquer formato pode voltar ao pré-sorteio, inclusive após placares.
     const isFinished = t.status === 'finished' || t._finished === true;
     const isSandboxRestore = restoreMode === 'sandbox' && sandbox && t.isSandbox === true && !isFinished;
     const isPrePublicationRestore = restoreMode === 'prePublication' && sandbox &&
       t.isSandbox === true && t.allowPrePublicationRestore === true;
     const mayRestorePrePublication = isPrePublicationRestore && !isFinished && !t.tournamentStarted &&
       typeof drawWindow._hasAnyMatchResult === 'function' && !drawWindow._hasAnyMatchResult(t);
-    const mayRestoreSuperEight = restoreMode === 'superEightPreDraw' && !sandbox &&
-      t.superEight === true && t.gruposCount === 1 && hasDrawnBracket(t) &&
-      !isFinished && !t.tournamentStarted && !t.pendingDraw &&
-      typeof drawWindow._hasAnyMatchResult === 'function' && !drawWindow._hasAnyMatchResult(t);
-    if (!isSandboxRestore && !mayRestorePrePublication && !mayRestoreSuperEight) {
+    const mayRestoreTestMode = restoreMode === 'testModePreDraw' && !sandbox &&
+      uid === TEST_DEVELOPER_UID && t.testModeEnabled === true &&
+      hasDrawnBracket(t) && !t.pendingDraw;
+    if (!isSandboxRestore && !mayRestorePrePublication && !mayRestoreTestMode) {
       throw _drawFail('permission-denied', 'Esta restauração não está habilitada para este torneio.', { tId, uid, restoreMode });
     }
     const before = _antesDoMotor(t), wasAuto = t.drawManual !== true && t.drawFirstDate;
     drawWindow._clearTournamentDraw(t);
     // Na cópia de teste, repetir o sorteio não autoriza inscrições novas.
     // Torneios reais conservam o comportamento anterior de reabertura.
-    t.status = (isSandboxRestore || mayRestoreSuperEight) ? 'closed' : 'open';
+    t.status = (isSandboxRestore || mayRestoreTestMode) ? 'closed' : 'open';
     // Preserva a configuração automática e impede que um horário já vencido redesenhe agora.
     if (isSandboxRestore && wasAuto) {
       const at = new Date(String(t.drawFirstDate) + 'T' + String(t.drawFirstTime || '19:00')).getTime();
@@ -5677,7 +5676,7 @@ exports.setTournamentFlyerPrefs = onCall({ invoker: 'public' }, async (request) 
 // detalhe de identidade, elenco, fila, jogos, resultados, fases materializadas ou
 // ciclo de vida fica fora desta lista e só possui comandos próprios no servidor.
 const _CAMPOS_CONFIG_TORNEIO = new Set([
-  'name','isPublic','membersOnly','organizerOnly','format','sport','startDate','endDate','endTimeEstimated','roundBounds','roundBoundsEditorEnabled','registrationOpenAt','registrationLimit',
+  'name','testModeEnabled','isPublic','membersOnly','organizerOnly','format','sport','startDate','endDate','endTimeEstimated','roundBounds','roundBoundsEditorEnabled','registrationOpenAt','registrationLimit',
   'enrollmentMode','registrationSettings','mixedPairingSeparated','manualPairing','teamSize','gameTypes',
   // A capacidade por categoria é declarativa; o total que a tela calcula continua
   // em maxParticipants para os fluxos legados de inscrição. Os dois precisam passar
@@ -5892,6 +5891,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
   }
   if ('endTimeEstimated' in patch && typeof patch.endTimeEstimated !== 'boolean') {
     throw new HttpsError('invalid-argument', 'Indicação do horário final inválida.');
+  }
+  if ('testModeEnabled' in patch && (uid !== TEST_DEVELOPER_UID || typeof patch.testModeEnabled !== 'boolean')) {
+    throw new HttpsError('permission-denied', 'Só o desenvolvedor altera o modo de teste.');
   }
   if ('dateCardColors' in patch) {
     try { require('./date-card-colors-core').validate(patch.dateCardColors); }

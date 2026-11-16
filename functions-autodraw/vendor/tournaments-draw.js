@@ -329,20 +329,16 @@ window._realTournamentRehearsalAction = function (tId, action) {
 // inscritos e duplas de origem manual; remove somente jogos, horários e resultados.
 window._restoreTournamentPrePublication = function (tId) {
   var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
-  var superEightTest = !!(t && t.superEight === true && t.gruposCount === 1 && t.isSandbox !== true);
-  if (!t || (!superEightTest && (t.isSandbox !== true || t.allowPrePublicationRestore !== true)) || t.status === 'finished' ||
-      t._finished === true || t.tournamentStarted ||
-      typeof window._hasAnyMatchResult !== 'function' || window._hasAnyMatchResult(t) ||
-      typeof showAlertDialog !== 'function') return;
+  var testMode = !!(t && t.testModeEnabled === true &&
+    typeof window._isDeveloperIdentity === 'function' && window._isDeveloperIdentity());
+  if (!t || !testMode || typeof showAlertDialog !== 'function') return;
   var n = (typeof window._countCompetitors === 'function') ? window._countCompetitors(t).people : (t.participants || []).length;
-  showAlertDialog(superEightTest ? '🔄 Resetar sorteio?' : '↩️ Restaurar pré-publicação?',
-    superEightTest
-      ? 'Apaga os jogos sorteados. Mantém os <strong>' + n + ' inscritos</strong> e a configuração. As inscrições continuam fechadas.'
-      : 'Isto apaga a chave publicada, os <strong>placares</strong>, resultados e horários do sorteio atual. ' +
-        'Preserva as configurações já ajustadas, os <strong>' + n + '</strong> inscritos e as <strong>duplas formadas manualmente</strong>. Não dá pra desfazer.',
+  showAlertDialog('🔄 Resetar sorteio?',
+    'Apaga todos os jogos, placares e resultados do teste. Mantém os <strong>' + n +
+    ' inscritos</strong> e a configuração. As inscrições continuam fechadas. Não dá para desfazer.',
     function () {
       if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
-      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId), restoreMode: superEightTest ? 'superEightPreDraw' : 'prePublication' })
+      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId), restoreMode: 'testModePreDraw' })
         .then(function (result) {
           /* A callable devolve a fotografia canônica JÁ sem partidas. Não esperar o
            * onSnapshot é essencial: redesenhar antes com o objeto velho do AppStore
@@ -382,8 +378,8 @@ window._restoreTournamentPrePublication = function (tId) {
               typeof window.renderTournaments === 'function') {
             window.renderTournaments(container, id);
           }
-          if (typeof showNotification === 'function') showNotification(superEightTest ? '🔄 Sorteio resetado' : '↩️ Pré-publicação restaurada',
-            superEightTest ? 'Os jogos foram apagados; inscrições e configuração foram mantidas.' : 'As configurações e duplas formadas manualmente foram preservadas; jogos e placares foram apagados.', 'success');
+          if (typeof showNotification === 'function') showNotification('🔄 Sorteio resetado',
+            'Os jogos e placares foram apagados; inscritos e configuração foram mantidos.', 'success');
         })
         .catch(function (err) {
           window._error && window._error('[restorePrePublication] server error:', err);
@@ -400,10 +396,9 @@ window._restoreTournamentPrePublication = function (tId) {
 // painel de tempo da rodada congela certo (DECORRIDO→DUROU, FINAL ESTIMADO→FINAL REAL).
 // Botão visível só pro dono, ao lado do "Resetar". Não toca em jogos já decididos.
 window._devSimulateCurrentPhase = function (tId) {
-  if (typeof window._isTestIdentity !== 'function' || !window._isTestIdentity()) return;
+  if (typeof window._isDeveloperIdentity !== 'function' || !window._isDeveloperIdentity()) return;
   var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
-  if (!t || t.status === 'finished' || t._finished === true ||
-      !(window._isSandboxTournament && window._isSandboxTournament(t))) return;
+  if (!t || t.testModeEnabled !== true || t.status === 'finished' || t._finished === true) return;
   function realTeam(s) { return s && s !== 'TBD' && s !== 'BYE' && s !== '—'; }
   function byeSlot(s) { return !s || s === 'BYE' || s === '—'; } // BYE/vazio (NÃO TBD — TBD = não pronto)
   // FONTE ÚNICA: os jogos a preencher vêm do MOTOR, não de uma varredura própria.
@@ -438,6 +433,49 @@ window._devSimulateCurrentPhase = function (tId) {
     return false;                             // TBD / ambos vazios → não simula
   });
   if (!todo.length) { if (typeof showNotification === 'function') showNotification('Simular', 'Nenhum jogo pendente na fase atual.', 'info'); return; }
+
+  // Em torneios reais, cada placar passa pela callable canônica. A simulação
+  // nunca grava o documento inteiro diretamente do navegador.
+  if (t.isSandbox !== true) {
+    window._devSimulationPending = window._devSimulationPending || {};
+    if (window._devSimulationPending[String(tId)]) return;
+    window._devSimulationPending[String(tId)] = true;
+    (async function () {
+      var done = 0;
+      try {
+        for (var i = 0; i < todo.length; i++) {
+          var fresh = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
+          if (!fresh || fresh.testModeEnabled !== true) break;
+          var m = typeof window._findMatch === 'function' && window._findMatch(fresh, String(todo[i].id));
+          if (!m || m.winner || m.isBye || m.isSitOut || !realTeam(m.p1) || !realTeam(m.p2)) continue;
+          var sc = typeof window._effectiveScoring === 'function' ? window._effectiveScoring(fresh, m) : fresh.scoring || {};
+          var sim = typeof window._simularPartida === 'function' ? window._simularPartida(sc, { sport: fresh.sport }) : null;
+          var payload;
+          if (sim) {
+            payload = { gsmFinal: true, s1: sim.scoreP1, s2: sim.scoreP2,
+              sets: sim.sets, setsWonP1: sim.setsWonP1, setsWonP2: sim.setsWonP2,
+              isFixedSet: !!sc.fixedSet };
+          } else {
+            var target = Math.max(1, Number(sc && sc.gamesPerSet) || 6);
+            var loser = Math.floor(Math.random() * Math.max(1, target - 1));
+            var firstWins = Math.random() < 0.5;
+            payload = { s1: firstWins ? target : loser, s2: firstWins ? loser : target,
+              useSets: !!(window._scoringUsesSets && window._scoringUsesSets(sc)),
+              isFixedSet: !!sc.fixedSet };
+          }
+          var saved = await window.AppStore.commitResultTx(String(tId), String(m.id), payload, 'Resultado simulado no modo de teste');
+          if (!saved) break;
+          done++;
+        }
+        if (typeof showNotification === 'function') showNotification('Simulação', done + ' placares gravados.', done === todo.length ? 'success' : 'warning');
+      } catch (err) {
+        if (typeof showNotification === 'function') showNotification('Simulação interrompida', (err && err.message) || 'Tente novamente.', 'error');
+      } finally {
+        delete window._devSimulationPending[String(tId)];
+      }
+    })();
+    return;
+  }
 
   var _run = function () {
     var now = Date.now();

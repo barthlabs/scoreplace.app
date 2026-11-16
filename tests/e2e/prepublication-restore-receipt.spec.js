@@ -12,8 +12,9 @@ test.describe('Restauração pré-publicação', () => {
     await page.setContent('<!doctype html><html><body><main id="view-container">Jogos sorteados</main></body></html>');
     await page.addScriptTag({ content: `
       window.location.hash = '#tournaments/super8';
+      window._isDeveloperIdentity = () => true;
       window.AppStore = { tournaments: [{ id:'super8', superEight:true, gruposCount:1,
-        isSandbox:false, status:'active', participants:[{uid:'kelly'}, {manualParticipantId:'vaga2'}],
+        isSandbox:false, testModeEnabled:true, status:'active', participants:[{uid:'kelly'}, {manualParticipantId:'vaga2'}],
         matches:[{id:'j1', round:1}], rounds:[] }] };
       window._countCompetitors = t => ({people:t.participants.length});
       window._hasAnyMatchResult = () => false;
@@ -39,7 +40,7 @@ test.describe('Restauração pré-publicação', () => {
       window.__confirmRestore();
     });
     await expect.poll(() => page.evaluate(() => window.__call)).toEqual({
-      name:'resetTournamentToEnrollment', payload:{tournamentId:'super8',restoreMode:'superEightPreDraw'}
+      name:'resetTournamentToEnrollment', payload:{tournamentId:'super8',restoreMode:'testModePreDraw'}
     });
     await expect(page.locator('#view-container')).toHaveText('Pronto para sortear');
     await expect.poll(() => page.evaluate(() => ({
@@ -53,8 +54,9 @@ test.describe('Restauração pré-publicação', () => {
     await page.setContent('<!doctype html><html><body><main id="view-container">Agenda antiga: jogo-antigo</main><div id="sp-pending-schedule-overlay">Revisão antiga</div></body></html>');
     await page.addScriptTag({ content: `
       window.location.hash = '#tournaments/neon?ref=convite';
+      window._isDeveloperIdentity = () => true;
       window.AppStore = { tournaments: [{
-        id: 'neon', isSandbox: true, allowPrePublicationRestore: true, status: 'ongoing',
+        id: 'neon', isSandbox: false, testModeEnabled: true, status: 'ongoing',
         matches: [{ id: 'jogo-antigo', scoreP1: 6, scoreP2: 4 }],
         rounds: [{ matches: [{ id: 'jogo-antigo' }] }]
       }] };
@@ -84,8 +86,8 @@ test.describe('Restauração pré-publicação', () => {
       window.FirestoreDB = { _callFn: function (name, payload) {
         window.__call = { name, payload };
         return Promise.resolve({ ok: true, tournament: {
-          status: 'open', participants: [{ uid: 'u1' }, { uid: 'u2' }],
-          matches: [], rounds: [], pendingDraw: null, isSandbox: true, allowPrePublicationRestore: true
+          status: 'closed', participants: [{ uid: 'u1' }, { uid: 'u2' }],
+          matches: [], rounds: [], pendingDraw: null, isSandbox: false, testModeEnabled: true
         }});
       }};
     ` });
@@ -103,14 +105,14 @@ test.describe('Restauração pré-publicação', () => {
     });
 
     await expect.poll(() => page.evaluate(() => window.__notice)).toMatchObject({
-      title: '↩️ Pré-publicação restaurada', kind: 'success', matchesAtNotice: 0
+      title: '🔄 Sorteio resetado', kind: 'success', matchesAtNotice: 0
     });
     await expect.poll(() => page.evaluate(() => window.__call)).toEqual({
       name: 'resetTournamentToEnrollment',
-      payload: { tournamentId: 'neon', restoreMode: 'prePublication' }
+      payload: { tournamentId: 'neon', restoreMode: 'testModePreDraw' }
     });
     await expect.poll(() => page.evaluate(() => window.AppStore.tournaments[0])).toMatchObject({
-      id: 'neon', status: 'open', matches: [], rounds: []
+      id: 'neon', status: 'closed', matches: [], rounds: []
     });
     await expect(page.locator('#view-container')).toHaveText('Sem jogos sorteados');
     await expect(page.locator('#sp-pending-schedule-overlay')).toHaveCount(0);
@@ -133,7 +135,8 @@ test.describe('Restauração pré-publicação', () => {
   test('não confirma sucesso sem recibo canônico da Function', async ({ page }) => {
     await page.setContent('<!doctype html><html><body></body></html>');
     await page.addScriptTag({ content: `
-      window.AppStore = { tournaments: [{ id: 'neon', isSandbox: true, allowPrePublicationRestore: true, matches: [{ id: 'antigo' }] }] };
+      window._isDeveloperIdentity = () => true;
+      window.AppStore = { tournaments: [{ id: 'neon', isSandbox: false, testModeEnabled: true, matches: [{ id: 'antigo' }] }] };
       window._hasAnyMatchResult = function () { return false; };
       window._error = function () {};
       window.showNotification = function (title, message, kind) { window.__notice = { title, message, kind }; };

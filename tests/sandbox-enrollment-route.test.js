@@ -78,7 +78,7 @@ const call = context.exports.setTournamentEnrollmentStatus;
   const resetStart = server.indexOf('exports.resetTournamentToEnrollment = onCall(');
   const resetEnd = server.indexOf('\nexports.generateExtraTournamentRound = onCall(', resetStart);
   const reset = server.slice(resetStart, resetEnd);
-  assert(reset.includes("t.status = (isSandboxRestore || mayRestoreSuperEight) ? 'closed' : 'open';"),
-    'reset de sandbox e do Super 8 mantém inscrições fechadas; o restante preserva a abertura anterior');
+  assert(reset.includes("t.status = (isSandboxRestore || mayRestoreTestMode) ? 'closed' : 'open';"),
+    'reset de sandbox e do modo de teste mantém inscrições fechadas; o restante preserva a abertura anterior');
   console.log('Roteamento das inscrições: sandbox isolado, produção isolada, reset fechado.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

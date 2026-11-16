@@ -3369,6 +3369,11 @@ window._isTestIdentity = function () {
   } catch (e) { return false; }
 };
 
+window._isDeveloperIdentity = function () {
+  var user = window.AppStore && window.AppStore.currentUser;
+  return !!(user && user.uid === 'B17n7JCXYOfqahlcLZ0fKxGGyUu1');
+};
+
 // ─── Sandbox (SB) do desenvolvedor ──────────────────────────────────────────
 // Torneio-espelho PRIVADO que roda EXATAMENTE o mesmo código do original (as mesmas
 // Cloud Functions: drawRound, integrateLateEntries, enroll/deenroll, autoDraw) — é o

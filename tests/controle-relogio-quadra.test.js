@@ -54,6 +54,6 @@ assert.equal(prePublicationAllowed('prePublication', false, { allowPrePublicatio
 assert.equal(prePublicationAllowed('prePublication', true, { isSandbox: true, allowPrePublicationRestore: true }), true,
   'o mesmo controle continua disponível no sandbox');
 const tournaments = fs.readFileSync('js/views/tournaments.js', 'utf8');
-assert.match(tournaments, /hasDraw && \(\(t\.isSandbox === true && t\.allowPrePublicationRestore === true\) \|\| \(t\.superEight === true && t\.gruposCount === 1 && t\.isSandbox !== true\)\)/,
-  'restauração visível só no sandbox habilitado ou no Super 8 real de um grupo');
+assert.match(tournaments, /hasDraw && t\.testModeEnabled === true && t\.isSandbox !== true && typeof window\._isDeveloperIdentity/,
+  'restauração visível somente no modo de teste do desenvolvedor');
 console.log('✓ FF e REW preservam a mesma fase/tempo na chave e NO AR; servidor valida e grava o relógio');

@@ -371,9 +371,9 @@ function setupCreateTournamentModal() {
     var val = window._phaseReVal(idx);
     function rowt(role, icon, labelKey, descKey) {
       var on = val.indexOf(role) !== -1;
-      return '<div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));">'
-        + '<div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">' + icon + '</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">' + T(labelKey) + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + T(descKey) + '</div></div></div>'
-        + '<label class="toggle-switch" style="--toggle-on-bg:#3b82f6;--toggle-on-glow:rgba(59,130,246,0.3);--toggle-on-border:#3b82f6;"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="window._togglePhaseResultEntry(' + idx + ',\'' + role + '\')"><span class="toggle-slider"></span></label>'
+      return '<div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid ' + (on ? 'rgba(34,197,94,.65)' : 'var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))') + ';background:' + (on ? 'rgba(34,197,94,.13)' : 'var(--sp-g-255-255-255-003,rgba(255,255,255,0.03))') + ';">'
+        + '<div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">' + icon + '</span><div><span style="font-weight:600;color:' + (on ? '#4ade80' : 'var(--text-muted)') + ';font-size:0.88rem;">' + T(labelKey) + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + T(descKey) + '</div></div></div>'
+        + '<label class="toggle-switch" style="--toggle-on-bg:#22c55e;--toggle-on-glow:rgba(34,197,94,0.3);--toggle-on-border:#22c55e;"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="window._togglePhaseResultEntry(' + idx + ',\'' + role + '\')"><span class="toggle-slider"></span></label>'
         + '</div>';
     }
     var h = '<div id="phase-re-buttons-' + idx + '" style="display:flex;flex-direction:column;gap:8px;">';
@@ -519,6 +519,10 @@ function setupCreateTournamentModal() {
                   <label class="form-label">${_t('create.nameLabel')}</label>
                   <input type="text" class="form-control" id="tourn-name" placeholder="Ex: Copa de Inverno 2026" required oninput="window._refreshCoverPreview()">
                 </div>
+                <label id="tourn-test-mode-row" class="form-group full-width" style="display:none;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);">
+                  <input type="checkbox" id="tourn-test-mode" onchange="window._syncTournamentTestMode()" style="width:22px;height:22px;accent-color:#22c55e;">
+                  <span id="tourn-test-mode-state">Teste desativado · produção</span>
+                </label>
                 <div class="form-group full-width">
                   <label class="form-label">${_t('create.sportLabel')}</label>
                   <!-- Hidden select for backward compatibility -->
@@ -1236,13 +1240,6 @@ function setupCreateTournamentModal() {
               <!-- v2.6.63: Pontuação Avançada agora usa a render CANÔNICA (mesma da Fase 1 e fases extras). -->
               ${window._advScoringHtml(0)}
 
-              <!-- Lançamento de Resultados (toggles não-excludentes) -->
-              <div style="background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-60a5fa,#60a5fa); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">📋 ${_t('create.resultSection')}</p>
-                ${window._resultEntryButtonsHtml(0)}
-                <input type="hidden" id="select-result-entry" value="organizer">
-              </div>
-
               <!-- ⛔ 2.1: a seção solta "🎾 Tie-break do set" SAIU DAQUI.
                    Ordem do dono (22/ago/2026): _"essa sessão tie break do set não tem mais
                    sentido. temos a sessão formato da partida que já define isso por fase. não
@@ -1502,6 +1499,11 @@ function setupCreateTournamentModal() {
                 </div>
                 <small class="text-muted" id="ranking-primary-desc" style="display:block;margin-bottom:0.65rem;">${_t('create.rankingPrimaryDesc')}</small>
                 <small id="ranking-started-warning" style="display:none;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:.65rem;">${_t('create.rankingPrimaryStartedWarning')}</small>
+                </div>
+                <div id="result-entry-section" style="padding:.8rem 0;border-top:1px solid rgba(88,166,255,.18);">
+                  <p style="margin:0 0 .6rem;font-size:.8rem;color:var(--sp-c-60a5fa,#60a5fa);font-weight:600;text-transform:uppercase;letter-spacing:1px;">Quem lança os placares?</p>
+                  ${window._resultEntryButtonsHtml(0)}
+                  <input type="hidden" id="select-result-entry" value="organizer">
                 </div>
                 <div id="tie-resolution-section"></div>
                 <div id="tiebreaker-criteria-section">
@@ -5645,6 +5647,17 @@ function setupCreateTournamentModal() {
     }
   };
 
+  window._syncTournamentTestMode = function () {
+    var input = document.getElementById('tourn-test-mode');
+    var state = document.getElementById('tourn-test-mode-state');
+    var row = document.getElementById('tourn-test-mode-row');
+    if (!input || !state || !row) return;
+    state.textContent = input.checked ? 'Teste ativado' : 'Teste desativado · produção';
+    state.style.color = input.checked ? '#4ade80' : 'var(--text-muted)';
+    row.style.borderColor = input.checked ? 'rgba(34,197,94,.7)' : 'rgba(255,255,255,.15)';
+    row.style.background = input.checked ? 'rgba(34,197,94,.13)' : 'transparent';
+  };
+
   window.openEditTournamentModal = function (tId, skipNav, loadedTournament) {
     // A rota de edição carrega o documento canônico de forma assíncrona. Quando
     // o callback voltava a procurar pelo id, _findTournamentById podia devolver
@@ -5667,6 +5680,11 @@ function setupCreateTournamentModal() {
     _titleEl.innerText = _t('create.editTournament');
     document.getElementById('edit-tournament-id').value = tId;
     document.getElementById('tourn-name').value = t.name || '';
+    var testModeRow = document.getElementById('tourn-test-mode-row');
+    var testModeInput = document.getElementById('tourn-test-mode');
+    if (testModeRow) testModeRow.style.display = window._isDeveloperIdentity && window._isDeveloperIdentity() ? 'flex' : 'none';
+    if (testModeInput) testModeInput.checked = t.testModeEnabled === true;
+    window._syncTournamentTestMode();
     // Match sport option even if stored value lacks emoji prefix (legacy data)
     const sportSelect = document.getElementById('select-sport');
     const sportVal = t.sport || 'Beach Tennis';
@@ -6938,6 +6956,8 @@ window._saveTournamentClickHandler = async function() {
           // `t.matches` taggeado; doc sem a marca é legado e não muda de lugar.
           storageCanonico: true,
           name,
+          ...(editId && window._isDeveloperIdentity && window._isDeveloperIdentity()
+            ? { testModeEnabled: !!((document.getElementById('tourn-test-mode') || {}).checked) } : {}),
           isPublic: isPublicVal,
           membersOnly: visibilityVal === 'members',
           organizerOnly: visibilityVal === 'organizers',
@@ -9048,6 +9068,12 @@ window.renderCreateTournamentPage = function (container, editId) {
     modalInner = modalEl ? modalEl.querySelector('.modal') : null;
   }
   if (!modalInner) return;
+  if (!editId) {
+    var newTestRow = document.getElementById('tourn-test-mode-row');
+    var newTestInput = document.getElementById('tourn-test-mode');
+    if (newTestRow) newTestRow.style.display = 'none';
+    if (newTestInput) newTestInput.checked = false;
+  }
 
   // Aplique o documento canônico somente depois que setupCreateTournamentModal
   // terminou de criar todos os campos. O código anterior tentava abrir antes

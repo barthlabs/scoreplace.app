@@ -67,7 +67,7 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
     checkNested(raw, fail);
     const config = {};
     Object.keys(raw).forEach(key => {
-      if (!fields.has(key) || key === 'phases' || key === 'ligaRRSchedule') fail('invalid-argument', 'Campo de criação não permitido: ' + key);
+      if (!fields.has(key) || key === 'phases' || key === 'ligaRRSchedule' || key === 'testModeEnabled') fail('invalid-argument', 'Campo de criação não permitido: ' + key);
       try { config[key] = key === 'tvLayout' && validateTvLayout ? validateTvLayout(raw[key]) :
         key === 'tvScreens' ? require('./tv-layout-core').normalizeScreens(raw[key]) : cloneConfig(raw[key], 0, [key]); }
       catch (error) { fail('invalid-argument', error.message); }
