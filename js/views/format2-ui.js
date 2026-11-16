@@ -101,6 +101,25 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _EXT_IDS.filter(function (id) { return ['estimated-games-mode-section', 'phase-dates-box', 'estimated-games-window-section', 'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box'].indexOf(id) < 0; }).forEach(function (id) {
       var el = document.getElementById(id); if (el) slot.appendChild(el);
     });
+    _lockDrawnStandings();
+  }
+  function _hasDrawnGames() {
+    var t = S && S.t;
+    return !!(t && (Number(t._nJogos || 0) > 0 ||
+      Number(t._nPartes && t._nPartes.matches || 0) > 0 ||
+      (Array.isArray(t.rounds) && t.rounds.length) ||
+      (Array.isArray(t.matches) && t.matches.length) ||
+      (Array.isArray(t.groups) && t.groups.length)));
+  }
+  function _lockDrawnStandings() {
+    var locked = _hasDrawnGames();
+    ['adv-scoring-section', 'ranking-primary-choice', 'tie-resolution-section', 'tiebreaker-criteria-section'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.inert = locked;
+      el.setAttribute('aria-disabled', locked ? 'true' : 'false');
+      el.style.opacity = locked ? '0.65' : '';
+    });
   }
   window._f2PlaceExtSections = _placeExt; // pra chamar de fora após o mount
 
@@ -114,6 +133,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       _placeExt();
       _mountElimRoundBounds();
       _renderTieResolution();
+      _lockDrawnStandings();
     } else {
       var c = document.getElementById('view-container');
       if (c) window.renderFormatoPage(c);
@@ -244,6 +264,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       _pill(!singles, "window._f2TieResolution('draw_order')", 'Critérios de desempate') + '</div>' +
       (singles ? '<p style="margin:6px 0 2px;font-size:.76rem;color:var(--text-muted);">Se não houver tempo, a organização pode dispensar as partidas e usar a ordem original do sorteio.</p>' + _tieSinglesControls(cfg) : '') +
       '</section>';
+    _lockDrawnStandings();
   }
 
   // Painel "Inscrições durante a fase" DA ELIMINATÓRIA (2ª fase). Espelha visualmente o bloco do
@@ -599,7 +620,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // Era um "✕ solto colorido", que o cânone proíbe explicitamente (components.css:555).
       '<button type="button" id="f2-sched-ivx" class="cancel-x-btn" title="Sem repetição" onclick="window._f2SchedInterval(\'\')" style="--cx-size:20px;' + (ivVal ? '' : 'display:none;') + '">✕</button>' +
     '</span>';
-    var rounds = fld('Nº de rodadas', '<input id="f2-sched-n" type="number" min="1" max="30" value="' + (r.n || '') + '" placeholder="—" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;">');
+    var drawn = _hasDrawnGames();
+    var singleLocked = drawn && S.cfg.parceria === 'super_eight' && singleSuper8;
+    var alreadyDrawn = drawn ? Math.max((S.t.rounds || []).length, (S.t.swissRoundsData || []).length, 1) : 1;
+    var rounds = fld('Nº de rodadas', '<input id="f2-sched-n" type="number" min="' + alreadyDrawn + '" max="' + (S.cfg.parceria === 'super_eight' ? 7 : 30) + '" value="' + (r.n || '') + '" placeholder="—" onchange="window._f2Rn(this.value)"' + (singleLocked ? ' disabled title="Rodadas definidas pelo sorteio único"' : '') + ' style="' + inp + 'width:90px;text-align:center;">');
     var maxPeople = Number((document.getElementById('tourn-max-participants') || {}).value) ||
       (S.t ? _peopleCount(S.t) : 0);
     var eligible = S.cfg.disputa === 'dupla' && S.cfg.grupos === 1 &&
@@ -608,8 +632,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var unique = eligible ? '<div style="margin-top:12px;">' +
       _toggleRight('Não repetir parceiro', S.cfg.parceria === 'super_eight', 'window._f2UniquePartner(this.checked)') + '</div>' : '';
     var drawMode = S.cfg.parceria === 'super_eight' ? _sec('Quando sortear',
+      '<div' + (drawn ? ' inert aria-disabled="true" style="opacity:.65"' : '') + '>' +
       _binaryChoice('A cada rodada', 'Todas as rodadas de uma vez', singleSuper8,
-        'window._f2SuperEightDrawMode(this.checked)', 'Modo de sorteio das rodadas')) : '';
+        'window._f2SuperEightDrawMode(this.checked)', 'Modo de sorteio das rodadas') + '</div>') : '';
     var tgl = _toggleRight('Sortear manualmente', manual, 'window._f2SchedManual(this.checked)');
     var automatic = manual ? '' : '<div style="margin-top:12px;">' + row1 +
       (singleSuper8 ? '' : fld('Repetir a cada (dias)', ivInput)) + '</div>';
@@ -1565,7 +1590,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!S) return;
     var n = parseInt(v, 10);
     if (!(n >= 1)) { return; } // vazio → mantém tudo (repetir intacto), sem re-render
-    if (S.cfg.parceria === 'super_eight' && n !== 7) S.cfg.parceria = 'sorteio_rodada';
+    if (_hasDrawnGames()) {
+      if (S.cfg.parceria === 'super_eight' && S.cfg.superEightDrawMode === 'single') return;
+      var drawn = Math.max((S.t.rounds || []).length, (S.t.swissRoundsData || []).length, 1);
+      if (n < drawn) { _rerender(); return; }
+      if (S.cfg.parceria === 'super_eight' && n > 7) { _rerender(); return; }
+    }
+    if (S.cfg.parceria === 'super_eight' && n !== 7 && !_hasDrawnGames()) S.cfg.parceria = 'sorteio_rodada';
     S.cfg.rodadas.n = n;
     _norm(); _rerender();
   };

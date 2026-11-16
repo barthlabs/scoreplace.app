@@ -8,8 +8,8 @@
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "3a670edea106f0bfa6fb8b0f40bcd1aca16b7d40",
-      "deployedAt": "2026-11-16T17:12:06.676Z",
+      "backendCommit": "d62c452077307e34002f175c4b19bde869bdb84e",
+      "deployedAt": "2026-11-16T19:28:55.097Z",
       "result": "success",
       "mode": "only"
     },
@@ -38,8 +38,8 @@
       "mode": "only"
     },
     "createTournament": {
-      "backendCommit": "8cd25d74e589e826ce03ad4818d50dfd4a397eec",
-      "deployedAt": "2026-11-16T15:27:46.107Z",
+      "backendCommit": "d62c452077307e34002f175c4b19bde869bdb84e",
+      "deployedAt": "2026-11-16T19:28:55.097Z",
       "result": "success",
       "mode": "only"
     },
@@ -146,8 +146,8 @@
       "mode": "only"
     },
     "resetTournamentToEnrollment": {
-      "backendCommit": "c2b09f2cc11a1ad7f272193734e4b729d9247cf6",
-      "deployedAt": "2026-11-16T19:00:59.083Z",
+      "backendCommit": "d62c452077307e34002f175c4b19bde869bdb84e",
+      "deployedAt": "2026-11-16T19:28:55.097Z",
       "result": "success",
       "mode": "only"
     },

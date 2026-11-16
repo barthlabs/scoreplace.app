@@ -701,7 +701,7 @@
       out.rodadas.turnos = (out.rodadas.modo === 'todos' && out.rodadas.turnos === 'ida_volta') ? 'ida_volta' : 'ida';
     }
     out.rodadas.n = Math.max(1, parseInt(out.rodadas.n, 10) || 1);
-    if (out.parceria === 'super_eight') out.rodadas.n = 7;
+    if (out.parceria === 'super_eight' && out.superEightDrawMode === 'single') out.rodadas.n = 7;
     // Agendamento dos sorteios (só relevante no modo "nº de rodadas").
     out.rodadas.drawFirstDate = out.rodadas.drawFirstDate || '';
     out.rodadas.drawFirstTime = out.rodadas.drawFirstTime || '19:00';

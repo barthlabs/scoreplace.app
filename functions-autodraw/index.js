@@ -212,7 +212,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '2.2.71';
+const CF_VERSION = '2.2.72';
 const TEST_DEVELOPER_UID = 'B17n7JCXYOfqahlcLZ0fKxGGyUu1';
 
 initializeApp();
@@ -5989,6 +5989,15 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       patch.categoryDefinitions = categoryChange.definitions;
     }
     const hasDraw = hasDrawnBracket(t);
+    if (hasDraw) {
+      const lockedStandings = ['advancedScoring', 'rankingPrimary', 'tiebreakers', 'tiebreakersExcluded'];
+      const changedStandings = lockedStandings.filter(key =>
+        Object.prototype.hasOwnProperty.call(patch, key) && !_configAtiva.igual(t[key], patch[key]));
+      if (changedStandings.length) {
+        throw new HttpsError('failed-precondition',
+          'Pontuação e desempates ficam definidos no primeiro sorteio. (recusado: ' + changedStandings.join(', ') + ')');
+      }
+    }
     const planInputsChanged = categoryChanged || ['courtCount', 'gameDuration', 'callTime', 'warmupTime',
       'maxParticipantsPerCategory', 'maxParticipantsByCategory'].some(key =>
       Object.prototype.hasOwnProperty.call(patch, key) && !_configAtiva.igual(patch[key], t[key]));
@@ -6120,7 +6129,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const requestedSitOutScoring = fmt2SitOutScoring || patch.rankingSitOutScoring;
     const sitOutScoringChanged = requestedSitOutScoring &&
       !_configAtiva.igual(oldSitOutScoring, requestedSitOutScoring);
-    const canEditRankingScoring = _configAtiva.canEditRankingSitOutScoring(t);
+    const canEditRankingScoring = !hasDraw && _configAtiva.canEditRankingSitOutScoring(t);
     if (sitOutScoringChanged) {
       if (hasDraw && !canEditRankingScoring) {
         throw new HttpsError('failed-precondition', 'A pontuação de folga não pode mudar depois do avanço da classificatória.');
@@ -6188,7 +6197,34 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
      * mesma mensagem. */
     let _fmt2Mesclado = null;
     let _futurePlan = null;
+    // Sorteio por rodada materializa apenas as rodadas já conhecidas. O total futuro
+    // pode ser ajustado sem alterar jogos publicados; sorteio único fixa as sete.
+    let _roundCountPlan = null;
     if (hasDraw && patch.fmt2 && t.fmt2 &&
+        !_configAtiva.igual(t.fmt2.rodadas && t.fmt2.rodadas.n,
+          patch.fmt2.rodadas && patch.fmt2.rodadas.n)) {
+      const first = Array.isArray(t.phases) && t.phases[0];
+      const n = Number(patch.fmt2.rodadas && patch.fmt2.rodadas.n);
+      const published = Math.max(1, (t.rounds || []).reduce((max, round) =>
+        Math.max(max, Number(round && round.round) || 0), 0),
+        Array.isArray(t.swissRoundsData) ? t.swissRoundsData.length : 0);
+      if (!first || first.formatCode !== 'classification_rounds' ||
+          (t.currentPhaseIndex || 0) !== 0 || t.status === 'finished' ||
+          (t.superEight === true && t.superEightDrawMode === 'single') ||
+          !Number.isSafeInteger(n) || n < published || n > (t.superEight === true ? 7 : 30)) {
+        throw new HttpsError('failed-precondition',
+          'Ajuste apenas as rodadas futuras de um sorteio por rodada.');
+      }
+      const allowed = _configAtiva.CAMINHOS_ATIVOS_FMT2.concat('rodadas.n');
+      const checked = _configAtiva.fmt2Atualizavel(t.fmt2, patch.fmt2, allowed);
+      if (!checked.ok) {
+        throw new HttpsError('failed-precondition',
+          'O número de rodadas não pode alterar outras regras após o sorteio.');
+      }
+      _roundCountPlan = { n, fmt2: checked.valor };
+    }
+    if (hasDraw && patch.fmt2 && t.fmt2 &&
+        !_roundCountPlan &&
         !_configAtiva.fmt2Atualizavel(t.fmt2, patch.fmt2).ok &&
         drawWindow && drawWindow.FORMAT2 && typeof drawWindow.FORMAT2.compileToPhases === 'function') {
       _futurePlan = require('./future-phase-config-core').plan(t, patch.fmt2,
@@ -6211,6 +6247,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         if (_futurePlan && key === 'politicaDaChave' &&
             _configAtiva.igual(patch[key], _futurePlan.politicaDaChave)) return;
         if (key === 'fmt2') {
+          if (_roundCountPlan) { _fmt2Mesclado = _roundCountPlan.fmt2; return; }
           if (_futurePlan) { _fmt2Mesclado = _futurePlan.fmt2; return; }
           const v = _configAtiva.fmt2Atualizavel(t.fmt2, patch.fmt2);
           if (v.ok) { _fmt2Mesclado = v.valor; return; }
@@ -6245,7 +6282,15 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     }
     Object.keys(patch).forEach(key => {
       if (key === 'phases' && hasDraw) {
-        if (_futurePlan) {
+        if (_roundCountPlan) {
+          if (!Array.isArray(patch.phases) || !patch.phases[0] ||
+              Number(patch.phases[0].rounds) !== _roundCountPlan.n) {
+            throw new HttpsError('failed-precondition', 'A fase sorteada só aceita mudar o total de rodadas futuras.');
+          }
+          t.phases[0] = Object.assign({},
+            _fasesDeConfiguracaoAtualizaveis([t.phases[0]], [patch.phases[0]])[0],
+            { rounds:_roundCountPlan.n });
+        } else if (_futurePlan) {
           if (!Array.isArray(patch.phases) || !patch.phases[0]) throw new HttpsError('invalid-argument', 'Fase atual ausente.');
           t.phases[0] = _fasesDeConfiguracaoAtualizaveis([t.phases[0]], [patch.phases[0]])[0];
         } else t.phases = _fasesDeConfiguracaoAtualizaveis(Array.isArray(t.phases) ? t.phases : [], patch.phases);

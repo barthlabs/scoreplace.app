@@ -1928,7 +1928,7 @@ window._translations['en'] = {
   'create.rankingPrimaryWinsDesc': 'Total matches won in this phase. Use the tiebreakers below when tied.',
   'create.rankingPrimaryPointsDesc': '3 points for a win, 1 for a draw, and 0 for a loss. Use the tiebreakers below when tied.',
   'create.rankingPrimaryAdvancedDesc': 'Sum of the values set in Advanced Scoring. Use the tiebreakers below when tied.',
-  'create.rankingPrimaryStartedWarning': 'This tournament already has matches. Changing the metric can reorder standings that have not been published; frozen positions remain.',
+  'create.rankingPrimaryStartedWarning': 'Scoring and tiebreak rules were fixed at the draw.',
   'create.tbGamesDiff': 'Game Differential',
   'create.tbGamesWon': 'Games Won',
   'create.tbResetBtn': 'Restore default',

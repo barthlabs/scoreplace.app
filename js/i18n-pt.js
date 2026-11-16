@@ -1946,7 +1946,7 @@ window._translations['pt'] = {
   'create.rankingPrimaryWinsDesc': 'Total de jogos vencidos na fase. Em caso de igualdade, use os desempates abaixo.',
   'create.rankingPrimaryPointsDesc': '3 pontos por vitória, 1 por empate e 0 por derrota. Em caso de igualdade, use os desempates abaixo.',
   'create.rankingPrimaryAdvancedDesc': 'Soma dos valores definidos em Pontuação Avançada. Em caso de igualdade, use os desempates abaixo.',
-  'create.rankingPrimaryStartedWarning': 'Este torneio já tem jogos. Mudar o critério pode reordenar a classificação ainda não publicada; posições já congeladas permanecem.',
+  'create.rankingPrimaryStartedWarning': 'Pontuação e desempates definidos no sorteio.',
   'create.tbGamesDiff': 'Saldo de Games',
   'create.tbGamesWon': 'Games Vencidos',
   'create.tbResetBtn': 'Restaurar padrão',

@@ -337,7 +337,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   '_assertCategoryConfigBeforeDraw', '_categoryDefinitionsForLabels', '_phaseTieCore', 'createHash',
   '_writeCategoryRemoval', '_phaseCallOrder', '_phaseGridPlan',
   'const exports = {};\n' + configSource + '\nreturn exports.updateTournamentConfiguration;')(
-  fn => fn, HttpsError, configDb, new Set(['fmt2', 'phases', 'name', 'teamSize', 'gruposClassified', 'politicaDaChave', 'genderCategories', 'combinedCategories', 'gameTypes', 'scheduleWindow', 'isPublic', 'membersOnly', 'organizerOnly', 'courtCount', 'gameDuration', 'callTime', 'warmupTime', 'maxParticipantsPerCategory']), new Set(['fmt2', 'phases', 'teamSize', 'gruposClassified', 'politicaDaChave', 'gameTypes']), cloneConfig,
+  fn => fn, HttpsError, configDb, new Set(['fmt2', 'phases', 'name', 'teamSize', 'gruposClassified', 'politicaDaChave', 'genderCategories', 'combinedCategories', 'gameTypes', 'scheduleWindow', 'isPublic', 'membersOnly', 'organizerOnly', 'courtCount', 'gameDuration', 'callTime', 'warmupTime', 'maxParticipantsPerCategory', 'rankingPrimary', 'advancedScoring', 'tiebreakers', 'tiebreakersExcluded']), new Set(['fmt2', 'phases', 'teamSize', 'gruposClassified', 'politicaDaChave', 'gameTypes']), cloneConfig,
   async () => {}, async () => configTournament, () => true,
   (code, message) => new HttpsError(code, message), t => Array.isArray(t.matches) && t.matches.length > 0,
   require('../functions-autodraw/config-ativa-core'), () => ({}),
@@ -762,5 +762,35 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   laterChoice.eliminatoria.linhas = 4;
   await assert.rejects(configHandler({ auth: { uid: 'owner' }, data: { tournamentId: 'tour_test',
     patch: { fmt2: laterChoice } } }), { code: 'failed-precondition' });
+  const perRound = FORMAT2.defaultConfig('Beach Tennis');
+  perRound.disputa = 'dupla'; perRound.parceria = 'super_eight';
+  perRound.grupos = 1; perRound.rodadas.n = 7; perRound.superEightDrawMode = 'rounds';
+  const planned = FORMAT2.compileToPhases(perRound, { sport:'Beach Tennis' });
+  configTournament = { id:'tour_test', creatorUid:'owner', sport:'Beach Tennis',
+    teamSize:2, rulesContractVersion:2, status:'active', fmt2:planned.cfg,
+    phases:planned.phases, superEight:true, superEightDrawMode:'rounds',
+    currentPhaseIndex:0, matches:[{ id:'r1', winner:'A' }], rounds:[{ round:1 }],
+    rankingPrimary:'games_diff', tiebreakers:['wins'] };
+  const reduce = structuredClone(configTournament.fmt2); reduce.rodadas.n = 6;
+  const reducedPhase = FORMAT2.compileToPhases(reduce, { sport:'Beach Tennis' }).phases;
+  assert.equal(reducedPhase[0].rounds, 6, 'compilador preserva seis rodadas por sorteio');
+  const savedRounds = await configHandler({ auth:{ uid:'owner' }, data:{
+    tournamentId:'tour_test', patch:{ fmt2:reduce, phases:reducedPhase } } });
+  assert.equal(savedRounds.ok, true, 'sorteio por rodada aceita reduzir apenas rodadas futuras');
+  assert.equal(configTournament.phases[0].rounds, 6);
+  assert.equal(configTournament.rounds.length, 1, 'rodada publicada permanece');
+  await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{
+    tournamentId:'tour_test', patch:{ rankingPrimary:'wins' } } }),
+  error => error.code === 'failed-precondition' && /Pontuação e desempates/.test(error.message));
+  const belowDrawn = structuredClone(configTournament.fmt2); belowDrawn.rodadas.n = 0;
+  await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{
+    tournamentId:'tour_test', patch:{ fmt2:belowDrawn } } }), { code:'failed-precondition' });
+  const single = structuredClone(configTournament.fmt2);
+  single.rodadas.n = 7; configTournament.fmt2 = single;
+  configTournament.phases[0].rounds = 7;
+  configTournament.superEightDrawMode = 'single';
+  const attempt = structuredClone(single); attempt.rodadas.n = 6;
+  await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{
+    tournamentId:'tour_test', patch:{ fmt2:attempt } } }), { code:'failed-precondition' });
   console.log('✓ intenção nova rejeita valor e contêiner inválidos nas duas portas de escrita');
 })().catch(error => { console.error(error); process.exitCode = 1; });

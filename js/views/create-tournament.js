@@ -6186,7 +6186,7 @@ function setupCreateTournamentModal() {
     var _rankingPrimaryEl = document.getElementById('ranking-primary');
     if (_rankingPrimaryEl) window._setRankingPrimary(['games_diff', 'wins', 'points'].indexOf(t.rankingPrimary) >= 0 ? t.rankingPrimary : 'points');
     var _rankingStartedWarning = document.getElementById('ranking-started-warning');
-    if (_rankingStartedWarning) _rankingStartedWarning.style.display = Array.isArray(t.matches) && t.matches.length ? 'block' : 'none';
+    if (_rankingStartedWarning) _rankingStartedWarning.style.display = window._tournamentHasDraw(t) ? 'block' : 'none';
 
     // Restore tiebreaker order + excluded box (v2.2.47)
     {
@@ -6452,7 +6452,9 @@ function setupCreateTournamentModal() {
 
   // Helper: o torneio já foi sorteado? (usado por checks de compat, ex.: monarch legado).
   window._tournamentHasDraw = function(t) {
-    return (Array.isArray(t.matches) && t.matches.length > 0) ||
+    return Number(t && t._nJogos || 0) > 0 ||
+           Number(t && t._nPartes && t._nPartes.matches || 0) > 0 ||
+           (Array.isArray(t.matches) && t.matches.length > 0) ||
            (Array.isArray(t.rounds) && t.rounds.length > 0) ||
            (Array.isArray(t.groups) && t.groups.length > 0) ||
            (Array.isArray(t.rodadas) && t.rodadas.length > 0);
@@ -7433,6 +7435,12 @@ window._saveTournamentClickHandler = async function() {
               delete tourData.tvLayout;
               delete tourData.tvScreens;
               delete tourData.logoData;
+              // Campos recompostos pelo formulário podem diferir em defaults
+              // históricos. Depois do sorteio, nenhum deles é intenção de edição.
+              ['advancedScoring', 'rankingPrimary', 'tiebreakers',
+                'tiebreakersExcluded', 'rankingSitOutScoring'].forEach(function (key) {
+                delete tourData[key];
+              });
               // A capa pertence à personalização, não à grade publicada.
               // coverImagePatch já distingue foto nova, remoção pelo modo cor
               // e campo vazio enquanto uma foto existente ainda hidrata.
