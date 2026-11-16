@@ -139,12 +139,10 @@ html.sp-android .topbar {
   padding-top: max(env(safe-area-inset-top, 0px), 8px) !important;
 }
 /* ── PWA INSTALADO (Add to Home Screen, display:standalone) ─────────────
-   No iOS o meta apple-mobile-web-app-status-bar-style=black-translucent deixa a status
-   bar SOBRE o conteúdo; sem safe-area o relógio/rede/bateria encavalam no logo da
-   topbar (bug reportado por quem instalou o app). O ajuste de safe-area da topbar só
-   existia pra .sp-native (app Capacitor) — o PWA não tem essa classe. Escopo
-   :not(.sp-native) pra NÃO mexer no app nativo. Inerte no browser comum (não casa
-   display-mode:standalone) e sem notch (env=0). */
+   O modo translúcido da barra de status foi removido do shell web. Preservamos
+   o inset informado pelo WebKit para dispositivos e versões que ainda o exigem;
+   quando vale zero, o padding normal de 0.5rem prevalece. Escopo não nativo:
+   não altera o app Capacitor nem o navegador comum. */
 @media (display-mode: standalone) {
   html:not(.sp-native) .topbar {
     padding-top: max(0.5rem, env(safe-area-inset-top, 0px)) !important;

@@ -385,11 +385,9 @@ html.sp-native #qr-modal-overlay .sticky-back-header,
 html.sp-native #venues-detail-overlay .sticky-back-header {
   padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important;
 }
-/* Mesmo problema no PWA INSTALADO (Add to Home Screen): o meta
-   apple-mobile-web-app-status-bar-style=black-translucent deixa a status bar SOBRE o
-   conteúdo, então o cabeçalho destas overlays fullscreen também fica sob a faixa.
-   Escopo :not(.sp-native) pra não somar com a regra do Capacitor acima. Espelha o fix
-   da .topbar no PWA (layout.css). Inerte no browser comum (não casa standalone). */
+/* No PWA instalado, manter o inset que o WebKit informar para os cabeçalhos
+   de overlays fullscreen. O shell já não solicita barra de status translúcida;
+   esta regra protege versões com safe-area própria. Inerte no navegador comum. */
 @media (display-mode: standalone) {
   html:not(.sp-native) #modal-quick-create .sticky-back-header,
   html:not(.sp-native) #casual-match-overlay .sticky-back-header,
@@ -401,8 +399,8 @@ html.sp-native #venues-detail-overlay .sticky-back-header {
 }
 /* v1.8.65: FICHA DO JOGADOR (#player-profile-overlay, tournaments-analytics.js) — o
    cabeçalho (Voltar + botão de amizade) é o topo do card, colado no topo da tela.
-   No PWA instalado (status bar translúcida SOBRE o conteúdo) e no app nativo
-   (viewport-fit=cover) ele ficava SOB o relógio/sinal/bateria — e sob a status bar
+   No PWA instalado e no app nativo (viewport-fit=cover) ele podia ficar SOB o
+   relógio/sinal/bateria — e sob a status bar
    também significa SEM TOQUE (o iOS reserva a faixa pro scroll-to-top): o "Voltar"
    parecia quebrado, quando na verdade o toque nunca chegava nele (print do dono,
    14/ago). Mesmo padrão das overlays acima; no NATIVO com PISO de 50px porque

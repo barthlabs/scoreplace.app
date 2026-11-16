@@ -7,9 +7,8 @@
  *
  * O app roda em QUATRO contextos e cada um resolve a safe-area de um jeito:
  *   · navegador comum          → `env(safe-area-inset-top)` = 0, nada a fazer
- *   · PWA instalado (iOS)      → `apple-mobile-web-app-status-bar-style=black-translucent`
- *                                põe a status bar SOBRE o conteúdo → PRECISA do inset;
- *                                o <html> não tem classe nenhuma
+ *   · PWA instalado (iOS)      → sem modo black-translucent; WebKit posiciona a
+ *                                barra de status, e env() protege onde houver inset
  *   · nativo iOS (Capacitor)   → `html.sp-native.sp-ios`
  *   · nativo Android           → `html.sp-native.sp-android`
  *
@@ -128,8 +127,21 @@ CONTEXTOS.forEach((ctx) => {
   const html = ler('index.html');
   ok(/viewport-fit=cover/.test(html),
      'o viewport é viewport-fit=cover — sem isso env(safe-area-inset-*) é sempre 0');
-  ok(/apple-mobile-web-app-status-bar-style"\s+content="black-translucent"/.test(html),
-     'a status bar do PWA é black-translucent (é POR ISSO que o inset é obrigatório ali)');
+  ok(!/apple-mobile-web-app-status-bar-style/.test(html),
+     'o PWA não solicita barra de status translúcida sobre o cabeçalho');
+  ok(/name="apple-mobile-web-app-capable"\s+content="yes"/.test(html),
+     'o PWA mantém a capacidade de abrir sem a interface do Safari');
+  ok(/name="theme-color"\s+content="#1e6b9a"/.test(html),
+     'a cor principal do PWA permanece azul');
+  const manifest = ler('manifest.json');
+  ok(/"background_color":\s*"#145584"/.test(manifest) && /"theme_color":\s*"#1e6b9a"/.test(manifest),
+     'o manifesto preserva as duas cores azuis');
+  const layout = ler('css/layout.css');
+  ok(/padding-top:\s*max\(0\.5rem,\s*env\(safe-area-inset-top,\s*0px\)\)/.test(layout),
+     'a topbar preserva o inset quando o WebKit o informa');
+  const sw = ler('sw.js');
+  ok(/event\.request\.mode === 'navigate'[\s\S]{0,100}event\.respondWith\(_navegacaoRedePrimeiro\(event\)\)/.test(sw),
+     'o shell novo chega pela navegação rede-primeiro');
   ok(/classList\.add\('sp-native'\)/.test(html) && /classList\.add\('sp-'\s*\+\s*p\)/.test(html),
      'o <html> ganha sp-native + sp-<plataforma> — é o que separa os contextos');
 }
