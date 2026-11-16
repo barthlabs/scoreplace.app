@@ -130,6 +130,7 @@ const SUITES = [
   'tests/native-update-policy.test.js',
   'tests/native-release-candidate.test.js',
   'tests/format-intent-validation.test.js',
+  'tests/test-mode-tournament.test.js',
   'tests/tournament-titles.test.js',
   'tests/super-eight-core.test.js',
   'tests/dupla-final-option.test.js',
