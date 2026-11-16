@@ -30,7 +30,8 @@ for (let round = 1; round <= 7; round++) {
   const result = draw.generateLigaRound(t, new Date('2026-11-03T12:00:00Z'));
   assert.equal(result.ok, true, 'rodada ' + round + ': ' + result.reason);
   const col = t.rounds[round - 1];
-  assert.equal(col.monarchGroups.length, 2);
+  assert.equal(col.monarchGroups.length, 1);
+  assert.equal(col.monarchGroups[0].players.length, 8);
   assert.equal(col.matches.length, 2);
   assert.deepEqual(col.matches.flatMap(m => m.team1Uids.concat(m.team2Uids)).sort(),
     t.participants.map(p => p.uid).sort());
@@ -53,20 +54,31 @@ assert.deepEqual(namedPlayers, ['Kelly', ...Array.from({ length:7 }, (_, i) =>
   'Jogador ' + String(i + 2).padStart(2, '0'))].sort(),
   'confrontos usam a sequência real das inscrições, inclusive reservas já existentes');
 const initialWithReservations = { ...placeholders, id:'eight-initial-reservations',
-  phases:compiled.phases, storageCanonico:true, rulesContractVersion:2,
+  phases:single.phases, superEightDrawMode:'single', storageCanonico:true, rulesContractVersion:2,
   rounds:[], matches:[], standings:[], superEightOrders:null };
 assert.equal(draw._window._buildPhase0Pool(initialWithReservations, true, 1).length, 8,
   'reservas genéricas participam do pool do sorteio inicial');
 const initialResult = draw.drawInitial(initialWithReservations, { idStamp: 1795251600000 });
 assert.equal(initialResult.ok, true, 'sorteio inicial aceita placeholders reservados: ' + initialResult.reason);
-assert.equal(initialResult.matchCount, 2, 'primeira rodada do Super 8 tem dois confrontos');
-assert.deepEqual(initialWithReservations.matches.flatMap(m => m.team1.concat(m.team2)).sort(), namedPlayers,
-  'o sorteio inicial inclui Kelly e as sete reservas genéricas');
+assert.equal(initialResult.matchCount, 14, 'sorteio único gera os 14 confrontos');
+assert.equal(initialWithReservations.matches.length, 14);
+assert.deepEqual([...new Set(initialWithReservations.matches.map(m => m.round))], [1,2,3,4,5,6,7]);
+assert.equal(initialWithReservations.matches.every(m => m.groupName === 'Super 8' && m.monarchGroup === 0), true);
+const initialPairs = new Set();
+for (const round of [1,2,3,4,5,6,7]) {
+  const games = initialWithReservations.matches.filter(m => m.round === round);
+  assert.equal(games.length, 2);
+  assert.deepEqual(games.flatMap(m => m.team1.concat(m.team2)).sort(), namedPlayers);
+  games.forEach(m => [m.team1, m.team2].forEach(team => initialPairs.add(team.slice().sort().join(':'))));
+}
+assert.equal(initialPairs.size, 28, 'cada parceria ocorre uma única vez');
+assert.deepEqual(initialWithReservations.matches.filter(m => m.round === 1).flatMap(m => m.team1.concat(m.team2)).sort(), namedPlayers,
+  'cada rodada inclui Kelly e as sete reservas genéricas');
 // Inscrições canônicas chegam ao motor apenas com UID. O nome vivo deve estar
 // no contexto da transação, mesmo quando o documento pai tem participants: [].
 const uidOnlyRoster = () => ({ ...placeholders, id:'eight-uid-only',
   participants:[{ uid:'kelly' }, ...placeholders.participants.slice(1).map(p => ({ ...p }))],
-  phases:compiled.phases, storageCanonico:true, rulesContractVersion:2,
+  phases:single.phases, superEightDrawMode:'single', storageCanonico:true, rulesContractVersion:2,
   rounds:[], matches:[], standings:[], superEightOrders:null });
 assert.throws(() => draw.drawInitial(uidOnlyRoster(), { idStamp:1795251600000 }), /exatamente oito/,
   'a inscrição só-UID reproduz a falha quando o servidor não carrega o nome');
@@ -74,9 +86,18 @@ const uidOnlyDraw = uidOnlyRoster();
 const uidOnlyResult = draw._window._spRodaComNomes({ kelly:'Kelly Barth' }, {}, () =>
   draw.drawInitial(uidOnlyDraw, { idStamp:1795251600000 }));
 assert.equal(uidOnlyResult.ok, true);
-assert.equal(uidOnlyResult.matchCount, 2);
-assert.deepEqual(uidOnlyDraw.matches.flatMap(m => m.team1.concat(m.team2)).sort(),
+assert.equal(uidOnlyResult.matchCount, 14);
+assert.deepEqual(uidOnlyDraw.matches.filter(m => m.round === 1).flatMap(m => m.team1.concat(m.team2)).sort(),
   ['Kelly Barth', ...Array.from({ length:7 }, (_, i) => 'Jogador ' + String(i + 2).padStart(2, '0'))].sort());
+for (let round = 1; round <= 7; round++) {
+  const games = uidOnlyDraw.matches.filter(m => m.round === round);
+  games.forEach(m => { m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = 3; });
+  const closed = draw.closeRoundCore(uidOnlyDraw, round - 1);
+  assert.equal(closed.ok, true, 'fecha a rodada ' + round);
+  assert.equal(closed.branch, round === 7 ? 'classificationFinished' : 'nextRound');
+}
+assert.deepEqual(uidOnlyDraw.superEightClosedRounds, [1,2,3,4,5,6,7]);
+assert.equal(uidOnlyDraw.status, 'finished');
 const reservedCycle = { ...t, id:'eight-reserved-cycle',
   participants:placeholders.participants.map(p => ({ ...p })), rounds:[], standings:[], superEightOrders:null };
 const reservedPairs = new Set();

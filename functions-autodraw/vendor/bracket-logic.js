@@ -5036,6 +5036,12 @@ function _generateNextRound(t, det) {
   // Rodada 1). Sem isso, a 1ª categoria adicionava round=1 e a 2ª via max=1 e
   // virava round=2.
   var _batchRound = ((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1;
+  if (t.storageCanonico === true && t.superEight === true) {
+    _batchRound = Math.max(_batchRound, (t.matches || []).reduce(function (mx, m) {
+      return m && (m.phaseIndex || 0) === (t.currentPhaseIndex || 0)
+        ? Math.max(mx, Number(m.round) || 0) : mx;
+    }, 0) + 1);
+  }
 
   // v4.4.114: CAMINHO ÚNICO CANÔNICO. O modo "round_robin" pré-agendado
   // (_drawFromRoundRobinSchedule) foi APAGADO — era um 2º gerador de rodada monarca com
@@ -6428,17 +6434,22 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
       scheduleIndex = chosen[scheduleIndex];
     }
     var scheduled = core.build(ordered).rounds[scheduleIndex];
-    var eightGroups = scheduled.map(function (duel, gi) {
-      var group = _buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length,
+    // Os dois confrontos são jogos da MESMA chave de oito atletas. Um quarteto
+    // por jogo não é um grupo classificatório separado.
+    var eightMatches = scheduled.map(function (duel, gi) {
+      var m = _buildMonarchGroup({ roundNum: roundNum, roundIndex: roundNum - 1,
         gi: gi, players: duel[0].concat(duel[1]), category: category, ts: ts,
-        nameToUid: nameToUid, nameSuffix: ' · oito atletas' });
-      group.matches = group.matches.slice(0, 1);
-      return group;
+        nameToUid: nameToUid }).matches[0];
+      m.monarchGroup = 0;
+      m.groupName = 'Super 8';
+      m.label = 'Rodada ' + roundNum + ' • Jogo ' + (gi + 1);
+      return m;
     });
-    if (isLiga) _recordOpponentHistory(t, eightGroups, category);
+    var eightGroup = { name: 'Super 8', players: ordered.slice(),
+      playersUids: ordered.map(function (name) { return nameToUid[name] || null; }),
+      matches: eightMatches };
     window._appendCanonicalColumn(t, { phase: 'monarch', round: roundNum, status: 'active',
-      format: 'rei_rainha', matches: eightGroups.map(function (g) { return g.matches[0]; }),
-      monarchGroups: eightGroups });
+      format: 'rei_rainha', matches: eightMatches, monarchGroups: [eightGroup] });
     return;
   }
 

@@ -86,7 +86,8 @@ window._clearDrawRuntimeFlags = function (t) {
     // estado de PLAY derivado do sorteio (standings/eliminação/W.O./substituição)
     'swissEliminated', 'swissRoundsData', 'swissStandings', 'classification',
     'phaseCategoryMaterialized',
-    'opponentHistory', 'woClaims', 'ligaSubInvites', 'ligaRRSchedule'
+    'opponentHistory', 'woClaims', 'ligaSubInvites', 'ligaRRSchedule',
+    'superEightOrders', 'superEightClosedRounds'
     // NOTA: checkedIn/absent NÃO entram aqui — são mapas por-uid lidos com Object.keys
     // sem guarda (participants.js:99/117) e _idMapSet vira no-op se o mapa for null
     // (quebraria o próximo check-in). Não são o bug e nunca foram limpos no reset.
@@ -328,17 +329,20 @@ window._realTournamentRehearsalAction = function (tId, action) {
 // inscritos e duplas de origem manual; remove somente jogos, horários e resultados.
 window._restoreTournamentPrePublication = function (tId) {
   var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
-  if (!t || t.isSandbox !== true || t.allowPrePublicationRestore !== true || t.status === 'finished' ||
+  var superEightTest = !!(t && t.superEight === true && t.gruposCount === 1 && t.isSandbox !== true);
+  if (!t || (!superEightTest && (t.isSandbox !== true || t.allowPrePublicationRestore !== true)) || t.status === 'finished' ||
       t._finished === true || t.tournamentStarted ||
       typeof window._hasAnyMatchResult !== 'function' || window._hasAnyMatchResult(t) ||
       typeof showAlertDialog !== 'function') return;
   var n = (typeof window._countCompetitors === 'function') ? window._countCompetitors(t).people : (t.participants || []).length;
-  showAlertDialog('↩️ Restaurar pré-publicação?',
-    'Isto apaga a chave publicada, os <strong>placares</strong>, resultados e horários do sorteio atual. ' +
-    'Preserva as configurações já ajustadas, os <strong>' + n + '</strong> inscritos e as <strong>duplas formadas manualmente</strong>. Não dá pra desfazer.',
+  showAlertDialog(superEightTest ? '🔄 Resetar sorteio?' : '↩️ Restaurar pré-publicação?',
+    superEightTest
+      ? 'Apaga os jogos sorteados. Mantém os <strong>' + n + ' inscritos</strong> e a configuração. As inscrições continuam fechadas.'
+      : 'Isto apaga a chave publicada, os <strong>placares</strong>, resultados e horários do sorteio atual. ' +
+        'Preserva as configurações já ajustadas, os <strong>' + n + '</strong> inscritos e as <strong>duplas formadas manualmente</strong>. Não dá pra desfazer.',
     function () {
       if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
-      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId), restoreMode: 'prePublication' })
+      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId), restoreMode: superEightTest ? 'superEightPreDraw' : 'prePublication' })
         .then(function (result) {
           /* A callable devolve a fotografia canônica JÁ sem partidas. Não esperar o
            * onSnapshot é essencial: redesenhar antes com o objeto velho do AppStore
@@ -368,6 +372,8 @@ window._restoreTournamentPrePublication = function (tId) {
           // a repintura do detalhe falhar; o catch abaixo mostra o erro.
           if (oldSchedule) oldSchedule.remove();
           window._applyCFTournament(String(tId), result.tournament);
+          if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+          if (typeof window._hideLoading === 'function') window._hideLoading();
           var currentHash = String((window.location && window.location.hash) || '');
           var detailHash = '#tournaments/' + encodeURIComponent(id);
           var container = document.getElementById('view-container');
@@ -376,7 +382,8 @@ window._restoreTournamentPrePublication = function (tId) {
               typeof window.renderTournaments === 'function') {
             window.renderTournaments(container, id);
           }
-          if (typeof showNotification === 'function') showNotification('↩️ Pré-publicação restaurada', 'As configurações e duplas formadas manualmente foram preservadas; jogos e placares foram apagados.', 'success');
+          if (typeof showNotification === 'function') showNotification(superEightTest ? '🔄 Sorteio resetado' : '↩️ Pré-publicação restaurada',
+            superEightTest ? 'Os jogos foram apagados; inscrições e configuração foram mantidas.' : 'As configurações e duplas formadas manualmente foram preservadas; jogos e placares foram apagados.', 'success');
         })
         .catch(function (err) {
           window._error && window._error('[restorePrePublication] server error:', err);
@@ -3770,6 +3777,9 @@ window.generateDrawFunction = function (tId) {
             if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(t); } catch (_eH) {} }
             // A grade estimada já veio no recibo canônico de drawRound.
             try { window.AppStore._saveToCache(); } catch (_eC) {}
+            // A resposta da Function confirma o fim do sorteio. Se a página já está
+            // no detalhe, a hash não muda e o spinner antigo ficava preso no render.
+            if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
             if (document.getElementById('final-review-panel')) { document.getElementById('final-review-panel').remove(); document.body.style.overflow = ''; }
             if (window._clearDrawDecisions) window._clearDrawDecisions(tId); // v1.3.93: sorteio efetivou → zera o pacote de decisões (próximo sorteio começa limpo)
             window._lastActiveTournamentId = tId;

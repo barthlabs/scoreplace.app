@@ -154,8 +154,11 @@ window._bracketHeaderFilterButtons = function(isOrg, hasContent, t) {
     (typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : t.matches || [])
       .some(function (m) { return m && !m.isBye && !m.isSitOut && window._userTeamInMatch(t, m, mine) > 0; }));
   if (!isOrg && !hasMyGame) return '';
+  var pendingCount = isOrg && t
+    ? (typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : t.matches || [])
+      .filter(function (m) { return window._bracketIsPendingMatch(m); }).length : 0;
   return '<div class="sp-bracket-header-filters no-print">' +
-    (isOrg ? '<button type="button" class="sp-bracket-header-filter" data-bracket-filter="pending" aria-pressed="' + (!!window._showOnlyPendingMatches) + '" onclick="window._togglePendingMatches(!window._showOnlyPendingMatches)">Jogos pendentes</button>' : '') +
+    (isOrg ? '<button type="button" class="sp-bracket-header-filter" data-bracket-filter="pending" aria-pressed="' + (!!window._showOnlyPendingMatches) + '" onclick="window._togglePendingMatches(!window._showOnlyPendingMatches)"><span class="sp-pending-label-full">Jogos pendentes</span><span class="sp-pending-label-short">Pendentes</span><strong class="sp-pending-count">' + pendingCount + '</strong></button>' : '') +
     (hasMyGame ? '<button type="button" class="sp-bracket-header-filter" data-bracket-filter="mine" aria-pressed="' + (!!window._showOnlyMyMatches) + '" onclick="window._toggleMyMatches(!window._showOnlyMyMatches)">Só meus jogos</button>' : '') +
     '</div>';
 };
@@ -11937,7 +11940,12 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         };
       })
     : (t.rounds || []);
-  const currentRound = rounds.length;
+  // No sorteio único do Super 8 as sete rodadas já existem. A rodada atual é
+  // a primeira ainda aberta; as seguintes continuam visíveis no planejamento.
+  const _closedEightRounds = Array.isArray(t.superEightClosedRounds) ? t.superEightClosedRounds : [];
+  const _firstOpenEightRound = t.superEight === true && t.superEightDrawMode === 'single'
+    ? rounds.findIndex(function (r, i) { return r && _closedEightRounds.indexOf(i + 1) < 0; }) : -1;
+  const currentRound = _firstOpenEightRound >= 0 ? _firstOpenEightRound + 1 : rounds.length;
 
   if (!currentRound) {
     return `

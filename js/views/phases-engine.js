@@ -2096,6 +2096,13 @@
         });
         LT.rounds = []; LT.status = 'active';
         window._generateNextRound(LT);
+        if (LT.superEight === true && LT.superEightDrawMode === 'single') {
+          // Sorteio único materializa os 14 confrontos agora. O resultado das
+          // partidas não altera as parcerias; cada atleta joga as sete rodadas.
+          for (var eightRound = 2; eightRound <= 7; eightRound++) {
+            window._generateNextRound(LT);
+          }
+        }
         /* Contrato compartilhado com functions-autodraw/draw-core: a primeira
          * rodada devolve somente jogos reais; BYE/folga não contam nem no cliente
          * nem na resposta do sorteio do servidor. */
@@ -2103,6 +2110,11 @@
           ? (LT.matches || []).filter(function (m) { return m && (m.phaseIndex || 0) === (LT.currentPhaseIndex || 0); })
           : ((LT.rounds[0] && LT.rounds[0].matches) || []);
         var _lrc = _roundMatches.filter(function (m) { return m && !m.isSitOut && !m.isBye; }).length;
+        if (LT.superEight === true && LT.superEightDrawMode === 'single' && LT.storageCanonico !== true) {
+          _lrc = LT.rounds.reduce(function (total, round) {
+            return total + (round.matches || []).filter(function (m) { return m && !m.isSitOut && !m.isBye; }).length;
+          }, 0);
+        }
         return { kind: 'league', appliedToT: true, roundMatchCount: _lrc };
       }
       // Cadência = eixo da cfg (mesma lógica do buildPhaseLeagueStage, p/ identidade):

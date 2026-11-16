@@ -44,10 +44,12 @@ vm.runInContext(src.slice(headerStart,headerEnd),sandbox,{filename:'bracket-head
 sandbox.window.AppStore={currentUser:{uid:'user'}};
 sandbox.window._collectAllMatches=t=>t.matches||[];
 sandbox.window._userTeamInMatch=(t,m,u)=>m.p1Uid===u.uid?1:m.p2Uid===u.uid?2:0;
+sandbox.window._bracketIsPendingMatch=m=>!m.winner;
 const header=sandbox.window._bracketHeaderFilterButtons;
 const withGame={matches:[{id:'j1',p1Uid:'user',p2Uid:'outro'}]};
 const withoutGame={matches:[{id:'j1',p1Uid:'outro',p2Uid:'outra'}]};
-ok(/Jogos pendentes<\/button>.*Só meus jogos<\/button>/.test(header(true,true,withGame)),'organizador que joga vê os dois botões na ordem correta');
+ok(/Jogos pendentes[\s\S]*?sp-pending-count">1<\/strong><\/button>[\s\S]*?Só meus jogos<\/button>/.test(header(true,true,withGame)),'organizador vê contagem dentro do botão e os dois filtros na ordem correta');
+ok(/sp-pending-count">0<\/strong>/.test(header(true,true,{matches:[{winner:'Ana'}]})),'botão mostra zero quando não há jogo pendente');
 ok(!/Jogos pendentes/.test(header(false,true,withGame)) && /Só meus jogos/.test(header(false,true,withGame)),'participante que joga não vê o filtro administrativo');
 ok(/Jogos pendentes/.test(header(true,true,withoutGame)) && !/Só meus jogos/.test(header(true,true,withoutGame)),'organizador sem jogo não vê Só meus jogos');
 ok(header(false,true,withoutGame)==='','pessoa sem jogo não vê filtros de jogos');

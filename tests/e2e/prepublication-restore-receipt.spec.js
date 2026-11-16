@@ -8,6 +8,47 @@ const drawView = path.join(__dirname, '..', '..', 'js', 'views', 'tournaments-dr
 const bracketLogic = path.join(__dirname, '..', '..', 'js', 'views', 'bracket-logic.js');
 
 test.describe('Restauração pré-publicação', () => {
+  test('Super 8 real volta ao pré-sorteio com inscrições fechadas', async ({ page }) => {
+    await page.setContent('<!doctype html><html><body><main id="view-container">Jogos sorteados</main></body></html>');
+    await page.addScriptTag({ content: `
+      window.location.hash = '#tournaments/super8';
+      window.AppStore = { tournaments: [{ id:'super8', superEight:true, gruposCount:1,
+        isSandbox:false, status:'active', participants:[{uid:'kelly'}, {manualParticipantId:'vaga2'}],
+        matches:[{id:'j1', round:1}], rounds:[] }] };
+      window._countCompetitors = t => ({people:t.participants.length});
+      window._hasAnyMatchResult = () => false;
+      window._applyCFTournament = function(id, fresh) {
+        Object.assign(window.AppStore.tournaments[0], fresh);
+        window.AppStore.tournaments[0].id = id;
+      };
+      window.renderTournaments = function(container) {
+        container.textContent = window.AppStore.tournaments[0].matches.length ? 'Jogos sorteados' : 'Pronto para sortear';
+      };
+      window.showAlertDialog = function(_title, _message, confirm) { window.__confirmRestore = confirm; };
+      window.showNotification = function(title, message, kind) { window.__notice = {title,message,kind}; };
+      window.FirestoreDB = { _callFn: function(name, payload) {
+        window.__call = {name,payload};
+        return Promise.resolve({ok:true,tournament:{status:'closed',
+          participants:[{uid:'kelly'}, {manualParticipantId:'vaga2'}],
+          matches:[],rounds:[],pendingDraw:null}});
+      }};
+    ` });
+    await page.addScriptTag({ path: drawView });
+    await page.evaluate(() => {
+      window._restoreTournamentPrePublication('super8');
+      window.__confirmRestore();
+    });
+    await expect.poll(() => page.evaluate(() => window.__call)).toEqual({
+      name:'resetTournamentToEnrollment', payload:{tournamentId:'super8',restoreMode:'superEightPreDraw'}
+    });
+    await expect(page.locator('#view-container')).toHaveText('Pronto para sortear');
+    await expect.poll(() => page.evaluate(() => ({
+      status:window.AppStore.tournaments[0].status,
+      members:window.AppStore.tournaments[0].participants.length,
+      notice:window.__notice && window.__notice.kind
+    }))).toEqual({status:'closed',members:2,notice:'success'});
+  });
+
   test('substitui imediatamente a chave local pelo recibo limpo da Function', async ({ page }) => {
     await page.setContent('<!doctype html><html><body><main id="view-container">Agenda antiga: jogo-antigo</main><div id="sp-pending-schedule-overlay">Revisão antiga</div></body></html>');
     await page.addScriptTag({ content: `
@@ -17,6 +58,7 @@ test.describe('Restauração pré-publicação', () => {
         matches: [{ id: 'jogo-antigo', scoreP1: 6, scoreP2: 4 }],
         rounds: [{ matches: [{ id: 'jogo-antigo' }] }]
       }] };
+      window._hasAnyMatchResult = function () { return false; };
       window.__pendingInitialDraws = { neon: { kind: 'initial', draft: { matches: [{ id: 'jogo-antigo' }] } } };
       window.__pendingDrawMarkers = { neon: { kind: 'initial' } };
       window._teamDrawReviewApproved = { neon: true };
@@ -92,6 +134,7 @@ test.describe('Restauração pré-publicação', () => {
     await page.setContent('<!doctype html><html><body></body></html>');
     await page.addScriptTag({ content: `
       window.AppStore = { tournaments: [{ id: 'neon', isSandbox: true, allowPrePublicationRestore: true, matches: [{ id: 'antigo' }] }] };
+      window._hasAnyMatchResult = function () { return false; };
       window._error = function () {};
       window.showNotification = function (title, message, kind) { window.__notice = { title, message, kind }; };
       window.showAlertDialog = function (_title, _message, onConfirm) { window.__confirmRestore = onConfirm; };

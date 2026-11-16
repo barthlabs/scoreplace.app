@@ -212,7 +212,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '2.2.68';
+const CF_VERSION = '2.2.69';
 
 initializeApp();
 const db = getFirestore();
@@ -2556,14 +2556,18 @@ exports.resetTournamentToEnrollment = onCall({ timeoutSeconds: 540, memory: '512
       t.isSandbox === true && t.allowPrePublicationRestore === true;
     const mayRestorePrePublication = isPrePublicationRestore && !isFinished && !t.tournamentStarted &&
       typeof drawWindow._hasAnyMatchResult === 'function' && !drawWindow._hasAnyMatchResult(t);
-    if (!isSandboxRestore && !mayRestorePrePublication) {
+    const mayRestoreSuperEight = restoreMode === 'superEightPreDraw' && !sandbox &&
+      t.superEight === true && t.gruposCount === 1 && hasDrawnBracket(t) &&
+      !isFinished && !t.tournamentStarted && !t.pendingDraw &&
+      typeof drawWindow._hasAnyMatchResult === 'function' && !drawWindow._hasAnyMatchResult(t);
+    if (!isSandboxRestore && !mayRestorePrePublication && !mayRestoreSuperEight) {
       throw _drawFail('permission-denied', 'Esta restauração não está habilitada para este torneio.', { tId, uid, restoreMode });
     }
     const before = _antesDoMotor(t), wasAuto = t.drawManual !== true && t.drawFirstDate;
     drawWindow._clearTournamentDraw(t);
     // Na cópia de teste, repetir o sorteio não autoriza inscrições novas.
     // Torneios reais conservam o comportamento anterior de reabertura.
-    t.status = isSandboxRestore ? 'closed' : 'open';
+    t.status = (isSandboxRestore || mayRestoreSuperEight) ? 'closed' : 'open';
     // Preserva a configuração automática e impede que um horário já vencido redesenhe agora.
     if (isSandboxRestore && wasAuto) {
       const at = new Date(String(t.drawFirstDate) + 'T' + String(t.drawFirstTime || '19:00')).getTime();

@@ -194,6 +194,36 @@ console.log('──── 6. torneio LEGADO não muda de lugar sozinho ───
   ok(tl.matches.length === antes.matches, '(6) e NÃO passa a gravar em t.matches — o Confra segue intacto');
 })();
 
+console.log('──── 7. Super 8 é um grupo com sete rodadas visíveis ────');
+(function () {
+  var plan = require('../js/views/super-eight-core.js').build(
+    Array.from({ length: 8 }, function (_, i) { return 'Atleta ' + (i + 1); }));
+  var ms = [];
+  plan.rounds.forEach(function (round, ri) {
+    round.forEach(function (duel, gi) {
+      ms.push({ id:'s8-r' + (ri + 1) + '-j' + (gi + 1), round:ri + 1,
+        phaseIndex:0, isMonarch:true, monarchGroup:0, groupName:'Super 8',
+        team1:duel[0], team2:duel[1], p1:duel[0].join(' / '),
+        p2:duel[1].join(' / '), winner:null });
+    });
+  });
+  var t = { id:'super-eight-render', name:'Super 8', format:'Liga', status:'active',
+    superEight:true, superEightDrawMode:'single', storageCanonico:true,
+    ligaRoundFormat:'rei_rainha', participants:Array.from({ length:8 }, function (_, i) {
+      return { displayName:'Atleta ' + (i + 1) }; }),
+    phases:[{ kind:'classification', rounds:7, superEight:true }], currentPhaseIndex:0,
+    rounds:[], matches:ms };
+  var logical = W._matchesDeClassificatoria(t).rounds;
+  ok(logical.length === 7, '(7) sete rodadas reconstruídas');
+  ok(logical.every(function (r) { return r.monarchGroups.length === 1 &&
+    r.monarchGroups[0].players.length === 8 && r.matches.length === 2; }),
+    '(7) um grupo de oito atletas em cada rodada');
+  var html = desenha(t);
+  ok(html.indexOf('ERRO:') !== 0, '(7) render sem erro: ' + html.slice(0, 90));
+  ok(/Atleta 1/.test(html) && /Atleta 8/.test(html), '(7) os oito atletas aparecem');
+  ok(/Rodada 7/.test(html), '(7) a última rodada já aparece no primeiro sorteio');
+})();
+
 console.log('');
 if (fail) { console.log('❌ dois-storages-desenham-igual: ' + pass + ' ok, ' + fail + ' falha(s)'); fails.forEach(function (f) { console.log('   • ' + f); }); process.exit(1); }
 console.log('✅ dois-storages-desenham-igual: ' + pass + ' asserções, 0 falha(s)');

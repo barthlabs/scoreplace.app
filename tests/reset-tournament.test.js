@@ -109,10 +109,10 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
   var resetStart = server.indexOf('exports.resetTournamentToEnrollment = onCall');
   var resetEnd = server.indexOf('// ─── Rodada extra manual', resetStart);
   var resetServer = server.slice(resetStart, resetEnd);
-  ok(/t\.allowPrePublicationRestore === true/.test(tournaments) && /Voltar ao estado antes do sorteio/.test(tournaments) && /_restoreTournamentPrePublication/.test(tournaments),
-    'as Ferramentas do Organizador oferecem a restauração somente quando a permissão explícita do torneio é true');
-  ok(/_callFn\('resetTournamentToEnrollment', \{ tournamentId: String\(tId\), restoreMode: 'prePublication' \}\)/.test(draw),
-    'a UI identifica explicitamente a restauração pré-publicação na callable canônica');
+  ok(/t\.allowPrePublicationRestore === true/.test(tournaments) && /t\.superEight === true/.test(tournaments) && /Resetar sorteio/.test(tournaments) && /_restoreTournamentPrePublication/.test(tournaments),
+    'as Ferramentas oferecem reset ao Super 8 sorteado e preservam a opção da cópia de teste');
+  ok(/restoreMode: superEightTest \? 'superEightPreDraw' : 'prePublication'/.test(draw),
+    'a UI distingue o reset do Super 8 real da restauração da cópia de teste');
   ok(/result\.ok !== true \|\| !result\.tournament[\s\S]*?_applyCFTournament\(String\(tId\), result\.tournament\)/.test(draw),
     'a UI só confirma o reset com recibo canônico e troca imediatamente o torneio local pela fotografia limpa (não reexibe a chave obsoleta)');
   ok(/const boundary = _gravaTorneio\(tx, ref, t, before, \{ agoraIso \}\);[\s\S]*?return \{ ok: true, changed: true, tournament: boundary\.clean \};/.test(resetServer),
@@ -123,6 +123,9 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
     'o servidor só aceita restauração de Sandbox ou a pré-publicação explicitamente habilitada');
   ok(/const mayRestorePrePublication = [\s\S]*?!t\.tournamentStarted[\s\S]*?!drawWindow\._hasAnyMatchResult\(t\)/.test(resetServer),
     'a permissão de pré-publicação não apaga um torneio que já começou ou tem resultado');
+  ok(/const mayRestoreSuperEight = [\s\S]*?t\.superEight === true[\s\S]*?hasDrawnBracket\(t\)[\s\S]*?!drawWindow\._hasAnyMatchResult\(t\)/.test(resetServer) &&
+    /t\.status = \(isSandboxRestore \|\| mayRestoreSuperEight\) \? 'closed' : 'open'/.test(resetServer),
+    'reset do Super 8 real só vale antes de placares e preserva inscrições fechadas');
 })();
 
 // ── v1.2.45: RESETAR desfaz a dupla SORTEADA mesmo com entrada só-uid ────────
