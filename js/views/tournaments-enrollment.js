@@ -1028,7 +1028,11 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
         participantObj.category = catsArr[0]; // backward compat
         participantObj.categorySource = 'inscricao';
     }
-    if (canonicalCategoryIds) participantObj.categoryIds = canonicalCategoryIds;
+    // A marca sem categoria pertence ao registro no servidor. A entrada da
+    // callable recebe IDs tipados ou nenhum ID, nunca a marca interna.
+    if (canonicalCategoryIds && canonicalCategoryIds[0] !== '__uncategorized__') {
+        participantObj.categoryIds = canonicalCategoryIds;
+    }
     // Guard: se AppStore.currentUser ainda não carregou completamente (race
     // condition entre login e inscrição), o participantObj pode ter todos os
     // identificadores nulos. Nesse caso, abortar silenciosamente — o _tryAutoEnroll

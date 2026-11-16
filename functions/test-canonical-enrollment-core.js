@@ -1,6 +1,7 @@
 'use strict';
 const C = require('./canonical-enrollment-core');
 const R = require('./registration-core');
+const E = require('./enroll-core');
 let pass = 0, fail = 0;
 function ok(name, value) { if (value) pass++; else { fail++; console.error('✗ ' + name); } }
 ok('sentinela canônica de categoria está exportada e é estável', R.UNCATEGORIZED_CATEGORY_ID === '__uncategorized__');
@@ -10,6 +11,10 @@ let result = C.decide(input);
 const uncategorized = Object.assign({}, input, { tournament: { ...base, categoryDefinitions:[], enrollmentRigor:undefined, rigor:'casual' }, participant:{ uid:'u1' } });
 let noCategory = C.decide(uncategorized);
 ok('casual sem categoria inscreve na vaga canônica sem categoria', noCategory.outcome === 'enrolled' &&
+  noCategory.enrollment.creates[0].categoryId === R.UNCATEGORIZED_CATEGORY_ID);
+const noCategoryIntent = E.normalizeParticipantIntent({ uid:'u1' }, 'u1', '2026-11-16T12:00:00Z');
+noCategory = C.decide({ ...uncategorized, participant:noCategoryIntent });
+ok('payload real sem categoria atravessa a validação da callable', noCategory.outcome === 'enrolled' &&
   noCategory.enrollment.creates[0].categoryId === R.UNCATEGORIZED_CATEGORY_ID);
 noCategory = C.decide({ ...input, participant:{ uid:'u2' } });
 ok('casual com categorias disponíveis não exige escolher uma', noCategory.outcome === 'enrolled' &&

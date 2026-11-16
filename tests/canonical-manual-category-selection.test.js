@@ -19,6 +19,8 @@ const picker = enrollment.slice(pickerStart);
 ok(core.includes("if (!_ids.length && !_organizerManual && _enrollmentRigor(t) === 'oficial')") &&
   core.includes('if (_ids.length) participantObj.categoryIds = Array.from(new Set(_ids))'),
   'organizador pode adiar categoria; inscrição oficial exige IDs');
+ok(enrollment.includes("canonicalCategoryIds[0] !== '__uncategorized__'"),
+  'a tela não envia a marca interna sem categoria como ID tipado');
 ok(!/participantObj\.categories\s*=/.test(core) && !/participantObj\.category\s*=/.test(core),
   'inclusão manual não envia rótulo legado como categoria');
 ok(!picker.includes('id="ap-category-ids"') && picker.includes('onConfirm(sel.name, sel.uid, sel.photo)'),
