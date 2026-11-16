@@ -1,21 +1,31 @@
 'use strict';
-/* Datas e logo do local são um bloco único no detalhe. A regressiva já
- * informa o início: o card da dashboard não pode repetir "Começa em X dias". */
+/* Na ficha, logo do local acompanha o título; data e resumo vêm antes da
+ * classificação. A dashboard não repete "Começa em X dias". */
 const fs = require('fs');
 const vm = require('node:vm');
 const detail = fs.readFileSync('js/views/tournaments.js', 'utf8');
+const componentsCss = fs.readFileSync('css/components.css', 'utf8');
 const dashboard = fs.readFileSync('js/views/dashboard.js', 'utf8');
 const editor = fs.readFileSync('js/views/create-tournament.js', 'utf8');
 const DateCard = require('../js/views/tournament-date-card.js');
 const dateColors = require('../functions-autodraw/date-card-colors-core.js');
 let failed = 0;
 function ok(value, label) { console.log((value ? '✓ ' : '✗ ') + label); if (!value) failed++; }
-const datesAt = detail.indexOf('Datas e logo do local formam um único bloco');
-const countdownAt = detail.indexOf('Evento concentrado: a janela publicada manda no relógio');
 const titleAt = detail.indexOf('Middle Left: Nome + Logo + Favorito');
-const detailSlotAt = detail.indexOf('data-vlogo-pid', datesAt);
-ok(datesAt >= 0 && detailSlotAt > datesAt && detailSlotAt < countdownAt, 'logo do local fica ao lado das datas no detalhe');
-ok(detail.indexOf('sp-tournament-date-stack', titleAt) > titleAt && detail.indexOf('sp-tournament-date-stack', titleAt) < datesAt, 'logo do local acompanha a data sem ocupar o título');
+const datesAt = detail.indexOf('sp-tournament-date-actions', titleAt);
+const countdownAt = detail.indexOf('Evento concentrado: a janela publicada manda no relógio');
+const detailSlotAt = detail.indexOf('data-vlogo-pid', titleAt);
+const overviewAt = detail.indexOf('class="sp-overview-stats"', datesAt);
+const podiumAt = detail.indexOf('tournamentId ? podiumHtml', overviewAt);
+ok(titleAt >= 0 && detailSlotAt > titleAt && detailSlotAt < datesAt, 'logo do local fica junto do título na ficha');
+ok(detail.includes('!tournamentId && !dateCardHtml && t.venuePlaceId'),
+  'cards da lista conservam o logo do local ao lado da data textual');
+ok(datesAt > detailSlotAt && overviewAt > datesAt && podiumAt > overviewAt && podiumAt < countdownAt,
+  'data e contagem de inscritos por categoria vêm antes do pódio e da classificação');
+ok(detail.includes('var _detailOverviewAtTop = !!tournamentId;'), 'ordem da ficha vale para todo torneio');
+ok(detail.includes('class="sp-tournament-logo"') &&
+  componentsCss.includes('.sp-tournament-identity-row .sp-tournament-logo'),
+  'layout identifica o logo por classe estável');
 const dashboardDatesAt = dashboard.indexOf('Datas e logo do local. A regressiva logo abaixo');
 const dashboardCountdownAt = dashboard.indexOf('if (isFinished) return \'\';', dashboardDatesAt);
 const dashboardDateBlock = dashboard.slice(dashboardDatesAt, dashboardCountdownAt);
@@ -30,6 +40,13 @@ cases.forEach(([start, end, kind, fragments]) => {
   const html = DateCard.render(start, end);
   ok(html.includes('sp-date-card--' + kind) && fragments.every(s => html.includes(s)) && !html.includes('Período do torneio'), kind + ' usa um único bloco com o conteúdo aprovado');
 });
+const longRangeHtml = DateCard.render('2026-08-02T19:00', '2026-11-12T23:00');
+ok(longRangeHtml.includes('sp-date-card--extended-range') && longRangeHtml.includes('sp-date-cross-grid') &&
+  longRangeHtml.includes('<span class="sp-date-cross-item"><span class="sp-date-day">2</span><span class="sp-date-month">AGO</span>') &&
+  !longRangeHtml.includes('<div class="sp-date-time">') && !longRangeHtml.includes('19:00 — 23:00'),
+  'período de meses centraliza cada dia sobre seu mês e não sugere horário diário');
+ok(DateCard.render('2026-10-30T09:00', '2026-11-02T18:00').includes('09:00 — 18:00'),
+  'intervalo curto entre meses conserva os horários aprovados');
 ok(DateCard.model('2026-11-29T08:00', '2026-11-29').kind === 'start-only', 'sem hora final não inventa término');
 ok(!DateCard.render('2026-11-29', '2026-11-29') && !DateCard.render('2026-12-30T08:00', '2027-01-02T18:00'), 'sem hora e entre anos mantêm exibição anterior');
 const custom = { background:'#123456', text:'#abcdef', day:'#112233', month:'#fedcba', time:'#010203' };

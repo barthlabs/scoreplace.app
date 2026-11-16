@@ -3,6 +3,8 @@
 - Marca e ações do cabeçalho passam a ser renderizadas em camadas separadas no celular para evitar o desfoque observado no atalho web instalado no iPhone.
 - O atalho web usa o espaçamento lateral móvel, e a versão se alinha à base do símbolo sem o deslocamento aplicado em telas maiores.
 - Na ficha do torneio, o padrão de data de um único dia (com ou sem horário final) ocupa cerca de metade da área do logo, com dia e mês mais fortes e horários maiores. A prévia em Personalizar acompanha o padrão, mantendo os ajustes tipográficos e de cor do organizador.
+- Em todas as fichas, data, inscritos e contagens por categoria ficam junto da identidade do torneio, antes de pódio e classificação. O logo do local fica junto ao título; a dashboard mantém sua composição própria.
+- Em datas que atravessam meses, cada dia se centraliza sobre seu mês. Períodos superiores a uma semana omitem o intervalo de horas para não sugerir uma grade diária; intervalos curtos preservam os horários.
 
 ## 2.7.9 — 15/nov/2026 (vínculo histórico de atleta e cabeçalho)
 

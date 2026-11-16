@@ -148,8 +148,14 @@ html.sp-android .topbar {
 @media (display-mode: standalone) {
   html:not(.sp-native) .topbar {
     padding-top: max(0.5rem, env(safe-area-inset-top, 0px)) !important;
-    padding-left: calc(clamp(0.75rem, 2vw, 2rem) + env(safe-area-inset-left, 0px)) !important;
-    padding-right: calc(clamp(0.75rem, 2vw, 2rem) + env(safe-area-inset-right, 0px)) !important;
+    padding-left: calc(2rem + env(safe-area-inset-left, 0px)) !important;
+    padding-right: calc(2rem + env(safe-area-inset-right, 0px)) !important;
+  }
+  @media (max-width: 767px) {
+    html:not(.sp-native) .topbar {
+      padding-left: calc(clamp(0.75rem, 2vw, 2rem) + env(safe-area-inset-left, 0px)) !important;
+      padding-right: calc(clamp(0.75rem, 2vw, 2rem) + env(safe-area-inset-right, 0px)) !important;
+    }
   }
   html:not(.sp-native) .main-content {
     padding-bottom: env(safe-area-inset-bottom, 0px);

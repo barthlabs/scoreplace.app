@@ -3,6 +3,10 @@
 // a versão volta a alinhar sua base com a do pódio.
 // Na ficha, o bloco de data de um único dia ganha mais área e uma hierarquia
 // mais forte para dia, mês e horário. A personalização continua disponível.
+// Em todos os torneios, data, inscritos e contagens por categoria aparecem
+// junto ao nome e logo, antes do pódio e da classificação. O logo do local
+// acompanha o título. Em períodos longos, a data omite horários que poderiam
+// parecer uma programação diária; dia e mês de cada ponta ficam centralizados.
 // 2.7.10 — A versão do cabeçalho alinha pela base do pódio. No detalhe do torneio,
 // Voltar alinha com A–Z; contato, convite e grupo oficial têm a mesma altura,
 // sobem para junto do logo, e o card de data alinha pela base desses botões.

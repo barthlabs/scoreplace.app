@@ -4408,6 +4408,34 @@ function renderTournaments(container, tournamentId = null) {
         var _pReadFg = _rb ? _rb.fg : '#f1f5f9';
         var _pReadBd = _rb ? _rb.border : 'rgba(255,255,255,0.12)';
 
+        // Em toda ficha, data e resumo de inscritos/categorias ficam junto da
+        // identidade do torneio, antes de pódios e classificação. Cards de lista
+        // preservam o resumo no rodapé.
+        var _detailOverviewAtTop = !!tournamentId;
+        var _statsSummaryHtml = `
+               <!-- Stats Column -->
+                <div style="display: inline-flex; flex-direction: column; gap: 8px; width: 100%;">
+                    <div id="stat-boxes-row" ${_pReadBg ? 'data-photo-bg="'+_pReadBg+'" data-photo-fg="'+_pReadFg+'" data-photo-bd="'+_pReadBd+'"' : ''} style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
+                        <div class="stat-box" data-stat="inscritos" ${_pReadBg ? 'style="background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';"' : ''}>
+                           <span style="font-size: 1.1rem; margin-right: 4px;">👤</span>
+                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum ? window._dashNum(individualCount, t, _ccDetail.confiavel) : individualCount}</span>
+                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Inscritos</span>
+                        </div>
+                        ${teamCount > 0 ? `
+                        <div class="stat-box" data-stat="equipes" ${_pReadBg ? 'style="background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';"' : ''}>
+                           <span style="font-size: 1.1rem; margin-right: 4px;">👥</span>
+                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum ? window._dashNum(teamCount, t, _ccDetail.confiavel) : teamCount}</span>
+                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Equipes</span>
+                        </div>
+                        ` : ''}
+                        ${standbyCount > 0 ? `
+                        <div class="stat-box" data-stat="waitlist" style="${window._waitlistStatBoxStyle(_rb)}">${window._waitlistStatBoxHtml(standbyCount, _rb)}</div>
+                        ` : ''}
+                    </div>
+                    ${(typeof window._buildCategoryCountHtml === 'function') ? window._buildCategoryCountHtml(t) : ''}
+                </div>
+        `;
+
         return `
         <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}"${vphotoAttrs} style="position:relative;${venuePhotoBg ? venuePhotoBg : 'background: ' + window._spCor(bgGradient, 'background') + ';'} color: ${window._spCor(_cardTextColor, 'color')}; border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transition: transform 0.2s; ${!tournamentId ? 'cursor: pointer;' : ''}" ${!tournamentId ? `onclick="window._openTournamentCard(event, '${t.id}')" ` : ''}>
           <div class="card-body p-4" style="${_photoPanel}${isOrg ? 'padding-bottom: 38px;' : ''}">
@@ -4446,7 +4474,7 @@ function renderTournaments(container, tournamentId = null) {
             <!-- Logo: na tela de detalhe ocupa 1/3 da largura do card (max 160px), cap responsivo via CSS min() -->
             <div class="sp-tournament-identity-row" style="display: flex; align-items: ${window._tourLogoSrc(t) && tournamentId ? 'flex-start' : 'center'}; gap: ${window._tourLogoSrc(t) && tournamentId ? '18px' : '14px'}; margin: 1.8rem 0 0.5rem 0;">
               ${window._tourLogoSrc(t) ? `
-                <div style="position:relative;width:33%;min-width:100px;flex-shrink:0;aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};">
+                <div class="sp-tournament-logo" style="position:relative;width:33%;min-width:100px;flex-shrink:0;aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};">
                   <img src="${window._tourLogoSrc(t)}" alt="Logo do torneio"
                     style="width:100%;height:100%;border-radius:${window._tournamentLogoRadius(t)};object-fit:contain;display:block;${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
                     ${tournamentId && isOrg ? `onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Clique para editar o logo"` : ''}
@@ -4457,6 +4485,7 @@ function renderTournaments(container, tournamentId = null) {
                 <h4 class="tournament-card-title" style="margin:0;font-weight:800;color:${/^#[0-9a-f]{6}$/i.test(t.titleColor || '') ? t.titleColor : 'white'};text-shadow:0 1px 3px rgba(0,0,0,0.9);text-align:left;">
                   ${window._safeHtml(t.name)}
                 </h4>
+                ${tournamentId && t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="width:clamp(42px,6vw,64px);aspect-ratio:1/1;display:none;margin-top:10px;"></span>' : ''}
               </div>
               ${/* v2.7.36: coração de favorito SEMPRE à direita, alinhado à 1ª linha do nome
                     (align-self:flex-start + margin-top centra na primeira linha do h4). */ ''}
@@ -4467,10 +4496,7 @@ function renderTournaments(container, tournamentId = null) {
             ${(tournamentId && typeof window._opButtonHtml === 'function') ? window._opButtonHtml(t) : ''}
             ${/* v2.3.96: rede de segurança — sorteio em revisão (só organizador) */ ''}
             ${(typeof window._renderPendingDrawBanner === 'function') ? window._renderPendingDrawBanner(t) : ''}
-            ${/* v2.1.16: pódio do torneio encerrado logo abaixo do nome/logo */ ''}
-            ${/* Encerrado por INATIVIDADE não fecha classificação → não tem pódio (ordem do
-                  dono). Pódio de torneio que parou no meio seria uma mentira campeã. */ ''}
-            ${tournamentId ? podiumHtml : ''}
+            ${/* Na ficha, pódio e classificação vêm depois da visão geral do evento. */ ''}
             ${tournamentId ? `<div class="sp-tournament-date-actions"><div class="sp-tournament-actions">
               ${(tournamentId && isOrg && typeof window._devWhatsAppBtnHtml === 'function') ? window._devWhatsAppBtnHtml({ twoLine: true, extra: 'min-height:44px;padding:4px 10px;font-size:0.75rem;' }) : ''}
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
@@ -4483,16 +4509,17 @@ function renderTournaments(container, tournamentId = null) {
                     saiu na 1.8.30, ele ficava sem NENHUM acesso ao grupo (era o estado do
                     Confra). Criar/trocar/abrir agora vivem no painel que este botão abre. */ ''}
               ${(!_waChipJuntoDoEnroll && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
-            </div>${dateCardHtml ? `<div class="sp-tournament-date-stack">${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}${calendarDateHtml(dateCardHtml)}</div>` : ''}</div>` : ''}
+            </div>${dateCardHtml ? `<div class="sp-tournament-date-stack">${calendarDateHtml(dateCardHtml)}</div>` : ''}</div>` : ''}
 
-            <!-- Datas e logo do local formam um único bloco: o brasão fica ao lado
-                 do período, nunca perdido junto ao título do torneio. -->
+            <!-- Sem card visual de data, a data textual permanece sob a identidade. -->
             <div style="display:${dateCardHtml ? 'none' : 'flex'};align-items:center;gap:12px;min-width:0;">
               ${dateCardHtml ? '' : `
               ${calendarDateHtml(`<div style="display:inline-block;font-size:0.9rem;font-weight:500;${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity:0.7;'}">${datesGridHtml}</div>`)}
               `}
-              ${!dateCardHtml && t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
+              ${!tournamentId && !dateCardHtml && t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
             </div>
+            ${_detailOverviewAtTop ? `<div class="sp-overview-stats" style="margin:1rem 0 1.25rem;">${_statsSummaryHtml}</div>` : ''}
+            ${tournamentId ? podiumHtml : ''}
             ${ligaActiveToggleHtml ? `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;" onclick="event.stopPropagation();"><div style="margin-left:auto;">${ligaActiveToggleHtml}</div></div>` : ''}
             ${/* v1.3.15 (dono): tabela "DURAÇÃO ESTIMADA" (8/16/32/64 simulações) REMOVIDA do detalhe —
                  ela é planejamento e vive só na tela de EDIÇÃO (_buildPhaseEstimate por fase). Aqui no
@@ -4592,27 +4619,7 @@ function renderTournaments(container, tournamentId = null) {
             <!-- Bottom Section -->
             <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center;">
 
-               <!-- Stats Column -->
-                <div style="display: inline-flex; flex-direction: column; gap: 8px; width: 100%;">
-                    <div id="stat-boxes-row" ${_pReadBg ? 'data-photo-bg="'+_pReadBg+'" data-photo-fg="'+_pReadFg+'" data-photo-bd="'+_pReadBd+'"' : ''} style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
-                        <div class="stat-box" data-stat="inscritos" ${_pReadBg ? 'style="background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';"' : ''}>
-                           <span style="font-size: 1.1rem; margin-right: 4px;">👤</span>
-                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum ? window._dashNum(individualCount, t, _ccDetail.confiavel) : individualCount}</span>
-                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Inscritos</span>
-                        </div>
-                        ${teamCount > 0 ? `
-                        <div class="stat-box" data-stat="equipes" ${_pReadBg ? 'style="background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';"' : ''}>
-                           <span style="font-size: 1.1rem; margin-right: 4px;">👥</span>
-                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum ? window._dashNum(teamCount, t, _ccDetail.confiavel) : teamCount}</span>
-                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Equipes</span>
-                        </div>
-                        ` : ''}
-                        ${standbyCount > 0 ? `
-                        <div class="stat-box" data-stat="waitlist" style="${window._waitlistStatBoxStyle(_rb)}">${window._waitlistStatBoxHtml(standbyCount, _rb)}</div>
-                        ` : ''}
-                    </div>
-                    ${(typeof window._buildCategoryCountHtml === 'function') ? window._buildCategoryCountHtml(t) : ''}
-                </div>
+               ${_detailOverviewAtTop ? '' : _statsSummaryHtml}
 
                <!-- Configuração Completa do Torneio (dinâmica, por formato) -->
                ${(typeof window._buildTournamentConfigBox === 'function')
