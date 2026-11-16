@@ -4839,7 +4839,9 @@ exports.tournamentOperationControl = onCall({ invoker: 'public' }, async (reques
       reason: current && current.reason || null };
     if (action === 'select') {
       if (current) return { selected: true, day, region: current.region, revision: current.revision, reason: current.reason || null, adopted: true };
-      if (!operator) throw new HttpsError('permission-denied', 'Só a organização ou árbitro confirmado pode iniciar o controle regional.');
+      // O primeiro placar pode ser lançado por um inscrito antes de qualquer ação
+      // operacional da organização. Selecionar a região apenas escolhe a porta;
+      // a autorização do placar continua em applyMatchResult, por jogo e por UID.
       if (protocolSnap.exists && protocolSnap.data().protocolVersion !== 2) throw new HttpsError('failed-precondition', 'Protocolo incompatível.');
       if (!protocolSnap.exists) tx.create(protocolRef, { protocolVersion: 2, activatedAt: now.toISOString(), activatedBy: uid });
       tx.create(controlRef, { region, revision: 1, day, reason: 'initial', selectedAt: now.toISOString(), selectedBy: uid,

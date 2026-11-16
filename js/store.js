@@ -12569,6 +12569,7 @@ window.AppStore = {
     if (!r) {
       try {
         var _reason = window._lastSaveError && window._lastSaveError.reason;
+        var _errorCode = String(window._lastSaveError && window._lastSaveError.code || '');
         var _serverMessage = String(window._lastSaveError && window._lastSaveError.message || '');
         if (_reason === 'pending-other-side') {
           showNotification('O outro time lançou primeiro',
@@ -12585,9 +12586,16 @@ window.AppStore = {
                    _reason === 'later-final-game-already-started') {
           showNotification('Correção exige revisão da chave',
             'O resultado não foi alterado porque já existem jogos posteriores vinculados a ele. A organização precisa revisar esses jogos antes de corrigir o placar.', 'warning');
+        } else if (/permission-denied|unauthenticated/.test(_errorCode)) {
+          showNotification('Sem permissão para lançar o placar',
+            'Sua conta não foi autorizada para este jogo. Atualize o torneio e confira com a organização.', 'error');
+        } else if ((typeof navigator !== 'undefined' && navigator.onLine === false) ||
+                   /unavailable|deadline-exceeded/.test(_errorCode)) {
+          showNotification('Não consegui lançar o placar',
+            'A conexão com o servidor falhou. Confira a conexão e tente novamente.', 'error');
         } else {
           showNotification('Não consegui lançar o placar',
-            'O servidor não confirmou este placar. Confira a conexão e tente novamente.', 'error');
+            'O servidor não confirmou este placar. Atualize o torneio e tente novamente.', 'error');
         }
       } catch (_eN) {}
     }
