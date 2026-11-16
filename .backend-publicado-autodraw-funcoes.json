@@ -140,8 +140,8 @@
       "mode": "only"
     },
     "applyMatchResult": {
-      "backendCommit": "95f238fd4d60f3e5e7f7183065c55064644fa5a8",
-      "deployedAt": "2026-11-14T22:47:44.042Z",
+      "backendCommit": "2ab7d4779913590350d4bcafd32e14fab9b7a5de",
+      "deployedAt": "2026-11-16T23:04:46.286Z",
       "result": "success",
       "mode": "only"
     },
