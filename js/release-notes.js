@@ -1,3 +1,6 @@
+// 2.7.21 — Placeholders reservados participam do sorteio como atletas e
+// conservam a identidade da vaga para vínculo posterior. O Super 8 aceita a
+// Kelly e as sete reservas no sorteio inicial. A versão alinha pela base do nome.
 // 2.7.20 — A ficha do torneio permite salvar mudanças de visibilidade junto
 // do horário estimado. No Super 8, o sorteio não exige grade de jogos;
 // inscrições podem ser fechadas pelo organizador. Cards sem logo alinham

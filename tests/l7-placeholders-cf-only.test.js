@@ -47,7 +47,7 @@ ok(/_isParticipantsRoute/.test(draw) && /renderParticipants\(document\.getElemen
 const poolStart = draw.indexOf('window._buildPhase0Pool');
 const poolEnd = draw.indexOf('// INCREMENT 2', poolStart);
 const poolBlock = draw.slice(poolStart, poolEnd);
-ok(/genericPlaceholderReservation === true/.test(poolBlock), 'reserva genérica não entra no pool do sorteio');
+ok(!/\.filter\(function \(p\) \{ return !\(p && typeof p === 'object' && p\.genericPlaceholderReservation === true\); \}\)/.test(poolBlock), 'reserva genérica permanece no pool do sorteio');
 ok(/_uncategorizedDrawParticipants\(t\)/.test(draw), 'validação de categoria usa a porta canônica de inscritos');
 const sandbox = { window: { _pName: function (p) { return p && (p.displayName || p.name) || ''; } }, Object: Object, Array: Array };
 vm.runInNewContext(poolBlock, sandbox);
@@ -55,9 +55,10 @@ const pool = sandbox.window._buildPhase0Pool({ participants: [
   { name: 'Jogador 01', displayName: 'Jogador 01', manualParticipantId: 'manual-reserva-01', isPlaceholder: true, genericPlaceholderReservation: true },
   { name: 'Ana', displayName: 'Ana', manualParticipantId: 'manual-ana', category: 'Light' }
 ] }, false, 1);
-ok(pool.length === 1 && pool[0].displayName === 'Ana', 'sorteio real não inclui a reserva genérica sem categoria');
+ok(pool.length === 2 && pool[0].displayName === 'Jogador 01' && pool[1].displayName === 'Ana', 'sorteio inclui a reserva genérica como participante');
 const cats = fs.readFileSync('js/views/tournaments-categories.js', 'utf8');
-ok(/genericPlaceholderReservation === true/.test(cats), 'porta canônica ignora reservas genéricas na validação de categoria');
+ok(!/genericPlaceholderReservation === true/.test(cats.slice(cats.indexOf('window._uncategorizedDrawParticipants'), cats.indexOf('// Check if participant belongs'))),
+  'porta canônica valida a categoria de placeholders como a de qualquer participante');
 ok(/_displayTournamentCategory/.test(cats) && /canonicalRegistrationMigration/.test(cats), 'renderer traduz IDs canônicos/legados para o rótulo visível');
 const cards = fs.readFileSync('js/views/tournaments.js', 'utf8');
 ok(/p\.categoryId \|\| p\.category/.test(cards), 'card de dupla lê categoryId antes do rótulo legado');

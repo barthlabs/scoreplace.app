@@ -816,11 +816,9 @@ window._applyMixedOriginCategories = function(t, participants) {
 // ts = teamSize efetivo (duplas mantidas como 1 entrada). NÃO forma duplas — assume que
 // t.participants já tem as entradas certas (o sorteio inicial já rodou _formDoublesTeams).
 window._buildPhase0Pool = function (t, isMon, ts) {
-  // Reserva genérica é capacidade planejada, não inscrição apta ao sorteio.
-  // Ela permanece visível para a organização sem ocupar categoria, dupla, jogo
-  // ou vaga de chave até ser preenchida por uma inscrição real.
-  var _raw = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}))
-    .filter(function (p) { return !(p && typeof p === 'object' && p.genericPlaceholderReservation === true); });
+  // A reserva criada pela organização ocupa uma vaga no sorteio como qualquer
+  // participante. O manualParticipantId preserva sua identidade sem exigir conta.
+  var _raw = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
   var _pName = window._pName ? window._pName : function (p) { return typeof p === 'string' ? p : (p && (p.displayName || p.name) || ''); };
   var pool;
   if (isMon) {

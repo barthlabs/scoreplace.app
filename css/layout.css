@@ -197,7 +197,7 @@ html.sp-native .modal-overlay.active .modal-header {
 }
 .sp-header-brand { gap: 6px; }
 .sp-header-symbol { display: block; flex: none; width: clamp(38px, 7vw, 52px); height: auto; }
-.sp-header-copy { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.sp-header-copy { display: flex; align-items: flex-end; gap: 5px; min-width: 0; }
 .sp-header-copy h1 { margin: 0; line-height: 1; }
 .sp-header-wordmark { display: block; width: clamp(130px, calc(100vw - 190px), 280px); height: auto; }
 .sp-header-version { display: block; color: var(--text-muted); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.3px; line-height: 1.15; white-space: nowrap; }

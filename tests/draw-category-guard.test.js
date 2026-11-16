@@ -10,9 +10,9 @@ const t = { combinedCategories: ['Diamante', 'Ouro'], participants: [
   'Inscrição antiga'
 ] };
 assert.deepEqual(_uncategorizedDrawParticipants(t).map(p =>
-  typeof p === 'string' ? p : p.displayName), ['Sem categoria', 'Inscrição antiga']);
+  typeof p === 'string' ? p : p.displayName), ['Sem categoria', 'Reserva', 'Inscrição antiga']);
 assert.deepEqual(_uncategorizedDrawParticipants({...t, combinedCategories:['Diamante']}), [],
   'categoria única não exige categoria individual');
-assert.deepEqual(_uncategorizedDrawParticipants({...t, participants:[t.participants[0], t.participants[2]]}), [],
-  'reserva genérica não impede o sorteio');
+assert.deepEqual(_uncategorizedDrawParticipants({...t, participants:[t.participants[0], t.participants[2]]}).map(p => p.displayName), ['Reserva'],
+  'placeholder segue a mesma regra de categoria dos demais inscritos');
 console.log('✅ Sorteio multicategoria exige categoria gravada em cada inscrição');

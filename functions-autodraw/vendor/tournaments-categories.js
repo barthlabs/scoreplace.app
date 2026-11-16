@@ -54,8 +54,7 @@ window._uncategorizedDrawParticipants = function(t) {
     if (!window._isMulticategoria(t)) return [];
     var participants = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
     return participants.filter(function(p) {
-        return !(p && typeof p === 'object' && p.genericPlaceholderReservation === true) &&
-            !window._getParticipantCategories(p).some(function(cat) { return !!String(cat || '').trim(); });
+        return !window._getParticipantCategories(p).some(function(cat) { return !!String(cat || '').trim(); });
     });
 };
 
