@@ -1,4 +1,5 @@
-// 2.7.19 — Inscrição casual sem categoria funciona; no moderado, segue para análise.
+// 2.7.19 — Inscrição casual sem categoria funciona sem exigir nem enviar um ID
+// de categoria inexistente; no moderado, segue para análise.
 // O histórico de Kelly inclui a eliminatória. A configuração destaca escolhas ativas,
 // simplifica o Super 8 e a ficha estima o término pelos jogos e quadras.
 // 2.7.18 — A configuração do Super 8 deixa explícito o sorteio único das sete
