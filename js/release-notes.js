@@ -1,3 +1,6 @@
+// 2.7.22 — O sorteio carrega o nome da inscrição canônica na mesma transação,
+// permitindo combinar uma conta só-UID com sete placeholders. A versão no
+// cabeçalho acompanha a base visível do nome.
 // 2.7.21 — Placeholders reservados participam do sorteio como atletas e
 // conservam a identidade da vaga para vínculo posterior. O Super 8 aceita a
 // Kelly e as sete reservas no sorteio inicial. A versão alinha pela base do nome.

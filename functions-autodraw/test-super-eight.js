@@ -62,6 +62,21 @@ assert.equal(initialResult.ok, true, 'sorteio inicial aceita placeholders reserv
 assert.equal(initialResult.matchCount, 2, 'primeira rodada do Super 8 tem dois confrontos');
 assert.deepEqual(initialWithReservations.matches.flatMap(m => m.team1.concat(m.team2)).sort(), namedPlayers,
   'o sorteio inicial inclui Kelly e as sete reservas genéricas');
+// Inscrições canônicas chegam ao motor apenas com UID. O nome vivo deve estar
+// no contexto da transação, mesmo quando o documento pai tem participants: [].
+const uidOnlyRoster = () => ({ ...placeholders, id:'eight-uid-only',
+  participants:[{ uid:'kelly' }, ...placeholders.participants.slice(1).map(p => ({ ...p }))],
+  phases:compiled.phases, storageCanonico:true, rulesContractVersion:2,
+  rounds:[], matches:[], standings:[], superEightOrders:null });
+assert.throws(() => draw.drawInitial(uidOnlyRoster(), { idStamp:1795251600000 }), /exatamente oito/,
+  'a inscrição só-UID reproduz a falha quando o servidor não carrega o nome');
+const uidOnlyDraw = uidOnlyRoster();
+const uidOnlyResult = draw._window._spRodaComNomes({ kelly:'Kelly Barth' }, {}, () =>
+  draw.drawInitial(uidOnlyDraw, { idStamp:1795251600000 }));
+assert.equal(uidOnlyResult.ok, true);
+assert.equal(uidOnlyResult.matchCount, 2);
+assert.deepEqual(uidOnlyDraw.matches.flatMap(m => m.team1.concat(m.team2)).sort(),
+  ['Kelly Barth', ...Array.from({ length:7 }, (_, i) => 'Jogador ' + String(i + 2).padStart(2, '0'))].sort());
 const reservedCycle = { ...t, id:'eight-reserved-cycle',
   participants:placeholders.participants.map(p => ({ ...p })), rounds:[], standings:[], superEightOrders:null };
 const reservedPairs = new Set();

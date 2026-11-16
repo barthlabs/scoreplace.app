@@ -212,7 +212,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '2.2.67';
+const CF_VERSION = '2.2.68';
 
 initializeApp();
 const db = getFirestore();
@@ -410,6 +410,12 @@ async function _preloadDrawNames(t, tx = null) {
     console.warn('[draw-names] preload opcional falhou:', e && e.code || 'erro');
     return empty;
   }
+}
+
+function _withDrawNames(names, fn) {
+  return names && drawWindow && typeof drawWindow._spRodaComNomes === 'function'
+    ? drawWindow._spRodaComNomes(names.nameByUid, names.profByUid, fn)
+    : fn();
 }
 
 // v1.3.52: resolve o perfil POR UID e ESCREVE nos participantes em memória (gênero/skill/idade/
@@ -1849,10 +1855,15 @@ exports.drawRound = onCall(async (request) => {
     if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    // Em inscrições canônicas, o documento pai não contém os participantes.
+    // Carregue os nomes do elenco reidratado nesta mesma transação; sem isso,
+    // uma conta só-UID fica sem nome e o Super 8 enxerga apenas sete atletas.
+    const canonicalDrawNames = t.canonicalRegistrationMigration?.fingerprint
+      ? await _preloadDrawNames(t, tx) : null;
     const _tAntes = _antesDoMotor(t);
     if (decisions && decisions.groupConfig) { const g=decisions.groupConfig; t.gruposCount=parseInt(g.numGroups,10)||t.gruposCount; t.gruposClassified=parseInt(g.classPerGroup,10)||t.gruposClassified; if(g.advanceTotal) t.gruposAdvanceTotal=parseInt(g.advanceTotal,10); if(typeof g.equalOnly==='boolean') t.gruposEqualOnly=g.equalOnly; }
     if (decisions && (decisions.groupConfig || decisions.closeEnrollment)) { t.status='closed'; delete t._suspendedByPanel; delete t._previousStatus; }
-    _enrichParticipantsFromProfiles(t); // v1.3.52: gênero/skill/etc. por uid (inscrito grava só uid)
+    _withDrawNames(canonicalDrawNames, () => _enrichParticipantsFromProfiles(t)); // gênero/skill/etc. por uid
 
     // Re-checa authz sobre o doc FRESCO: entre o read de fora e a transação o organizador
     // pode ter perdido o acesso (transferência de organização / co-host removido).
@@ -1893,9 +1904,9 @@ exports.drawRound = onCall(async (request) => {
 
     _assertDrawParticipantsCategorized(t);
 
-    const res = _drawSeed.withSeed(_manualSeed, () => drawInitial(t, {
+    const res = _withDrawNames(canonicalDrawNames, () => _drawSeed.withSeed(_manualSeed, () => drawInitial(t, {
       idStamp: Date.parse(_agoraIsoTx), decisions: decisions
-    }));
+    })));
     if (!res || !res.ok) {
       // Um motor que não gerou chave nunca pode virar sucesso apenas porque a
       // estimativa da grade devolveu zero jogos.
@@ -2591,8 +2602,9 @@ exports.generateExtraTournamentRound = onCall(async (request) => {
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização gera rodada extra.',{tId,uid});
     const max=(t.rounds||[]).reduce((n,r)=>Math.max(n,Number(r&&r.round)||0),0);
     if(max>=expectedRound) return {ok:true,changed:false};
+    const names=t.canonicalRegistrationMigration?.fingerprint ? await _preloadDrawNames(t,tx) : null;
     const before=_antesDoMotor(t);
-    try { drawWindow._generateNextRound(t,{ts:intentTs}); } catch(e) { throw new HttpsError('failed-precondition','Não foi possível gerar a rodada: '+String(e&&e.message||e).slice(0,200)); }
+    try { _withDrawNames(names,()=>drawWindow._generateNextRound(t,{ts:intentTs})); } catch(e) { throw new HttpsError('failed-precondition','Não foi possível gerar a rodada: '+String(e&&e.message||e).slice(0,200)); }
     const round=(t.rounds||[]).find(r=>r&&Number(r.round)===expectedRound);
     if(!round) return {ok:true,changed:false};
     t.status='active';
@@ -4529,6 +4541,7 @@ exports.closeRound = onCall(async (request) => {
     out = await db.runTransaction(async (tx) => {
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const names = t.canonicalRegistrationMigration?.fingerprint ? await _preloadDrawNames(t, tx) : null;
       const _tAntes = _antesDoMotor(t);
       // Re-checa authz sobre o doc FRESCO (acesso pode ter mudado entre o read de fora e a txn).
       if (!_isTournamentParticipant(t, uid) && !_isTournamentAdmin(t, uid) && !_isConfirmedTournamentReferee(t, uid)) {
@@ -4536,7 +4549,7 @@ exports.closeRound = onCall(async (request) => {
       }
       _hidrataGrupos(t, 'closeRound', tId);
 
-      const res = closeRoundFn(t, roundIdx, resultCtx);
+      const res = _withDrawNames(names, () => closeRoundFn(t, roundIdx, resultCtx));
       if (!res || !res.ok) {
         // stale-round/already-closed/round-incomplete = idempotência/concorrência: NÃO grava
         // (outro fechou primeiro, ou a rodada não fechou de fato). O cliente reconcilia pelo listener.

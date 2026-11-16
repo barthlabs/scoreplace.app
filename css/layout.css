@@ -200,7 +200,7 @@ html.sp-native .modal-overlay.active .modal-header {
 .sp-header-copy { display: flex; align-items: flex-end; gap: 5px; min-width: 0; }
 .sp-header-copy h1 { margin: 0; line-height: 1; }
 .sp-header-wordmark { display: block; width: clamp(130px, calc(100vw - 190px), 280px); height: auto; }
-.sp-header-version { display: block; color: var(--text-muted); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.3px; line-height: 1.15; white-space: nowrap; }
+.sp-header-version { display: block; color: var(--text-muted); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.3px; line-height: 1.15; white-space: nowrap; margin-bottom: clamp(7px, calc((100vw - 190px) * 0.055), 15px); }
 /* Em janelas estreitas, símbolo e assinatura devem reduzir juntos: a barra de
    retorno fica logo abaixo do cabeçalho e cobria a versão e a base do símbolo. */
 @media (max-width: 1199px) {
