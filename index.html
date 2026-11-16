@@ -128,6 +128,11 @@
        plataforma (ex: reader-app no iOS) + classe no <html> pra CSS safe-area. -->
   <script>(function(){try{var C=window.Capacitor;if(C&&typeof C.getPlatform==='function'){var p=C.getPlatform();window.SCOREPLACE_PLATFORM=p;var r=document.documentElement;if(r){r.classList.add('sp-native');r.classList.add('sp-'+p);}}}catch(e){}})();</script>
 
+  <!-- O PWA instalado no iOS precisa de pintura própria durante o boot. Este
+       marcador nasce antes do splash; store.js repete a detecção se o shell
+       antigo estiver em cache no aparelho. -->
+  <script>(function(){try{var r=document.documentElement;if(!r||r.classList.contains('sp-native'))return;var u=navigator.userAgent||'';var apple=/iPhone|iPad|iPod/.test(u)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);var standalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;if(apple&&standalone)r.classList.add('sp-ios-pwa');}catch(e){}})();</script>
+
   <!-- Injetar tema antes para evitar flicker -->
   <script src="js/theme.js?v=2.7.6"></script>
 
@@ -327,16 +332,14 @@
       // durante a abertura, independente do timing do splash. Vira false só
       // quando o boot revela a tela (hide()).
       window._bootInProgress = true;
-      // v4.3.21: pinta html+body com o navy do loader durante o boot. No PWA iOS
-      // standalone o loader (position:fixed;inset:0) NÃO pinta a safe-area de baixo
-      // (home indicator) → o bg do tema (#111114 off-black) vazava ali como uma
-      // "barra preta" que destoava do navy #0f172a do loader. Igualando o bg de
-      // html/body ao loader, a safe-area fica navy = sem seam. Restaurado no hide()
-      // (volta ao bg do tema; em uso normal tudo é #111114 → sem barra).
+      // A safe-area inferior do PWA iOS mostra o fundo de html/body, não o do
+      // loader fixed. Igualar ao azul inferior do gradiente evita a faixa escura.
+      // O hide() remove esta cor inline quando a tela está pronta.
       try {
         var _bootDE = document.documentElement;
-        _bootDE.style.backgroundColor = '#0f172a';
-        if (document.body) document.body.style.backgroundColor = '#0f172a';
+        var _bootBG = _bootDE.classList.contains('sp-ios-pwa') ? '#145584' : '#0f172a';
+        _bootDE.style.backgroundColor = _bootBG;
+        if (document.body) document.body.style.backgroundColor = _bootBG;
       } catch(e){}
       // ⭐ ESCALA DA RAIZ ANTES DA 1ª PINTURA (1.9.71). O CSS declara
       // font-size:calc(clamp(...) * var(--ui-scale, 1)) — mas o padrão REAL do app é
@@ -420,8 +423,7 @@
           el.classList.add('scoreplace-fade-out');
           setTimeout(function(){
             if (el.parentNode) el.parentNode.removeChild(el);
-            // v4.3.21: restaura o bg do tema (navy do boot → #111114). Em uso
-            // normal a safe-area mostra o mesmo #111114 do app → sem barra preta.
+            // Restaura o fundo normal após o splash ser removido.
             try {
               document.documentElement.style.backgroundColor = '';
               if (document.body) document.body.style.backgroundColor = '';

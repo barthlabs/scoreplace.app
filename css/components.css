@@ -1834,6 +1834,18 @@ a.compact-row,
   pointer-events: auto;
 }
 
+/* No PWA iOS, um modal transparente ainda pode manter uma camada de blur
+   composta pelo WebKit. O blur permanece nos modais abertos. */
+html.sp-ios-pwa .modal-overlay {
+  visibility: hidden;
+  transition: opacity .3s ease, visibility 0s linear .3s;
+}
+html.sp-ios-pwa .modal-overlay:not(.active) { backdrop-filter: none; }
+html.sp-ios-pwa .modal-overlay.active {
+  visibility: visible;
+  transition: opacity .3s ease, visibility 0s;
+}
+
 #published-draw-result-overlay {
   z-index: calc(var(--z-modal) + 2);
 }

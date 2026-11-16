@@ -664,6 +664,7 @@ const SUITES = [
   'tests/fase-anterior-grupos-e-resultados.test.js',
   'tests/fase-historica-grupos-externos.test.js',
   'tests/cabecalho-e-busca-fixos-no-celular.test.js',
+  'tests/pwa-ios-sem-faixa-escura-nem-blur.test.js',
   'tests/hidratacao-nao-congela-no-primeiro-quadro.test.js',
   'tests/resultados-espelhados-hidratam-telas.test.js',
   'tests/rodada-tem-numero-global-no-torneio.test.js',

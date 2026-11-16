@@ -3107,6 +3107,20 @@ window._markBootReady = function(_label) {
   window._bootReady = true;
 };
 
+// Repetir a detecção do shell em JS fresco: o PWA iOS pode manter index.html
+// antigo em cache, inclusive a pintura navy feita pelo script inline antigo.
+window._spMarkIosPwa = function() {
+  try {
+    var r = document.documentElement;
+    if (!r || r.classList.contains('sp-native')) return false;
+    var u = navigator.userAgent || '';
+    var apple = /iPhone|iPad|iPod/.test(u) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+    if (apple && standalone) r.classList.add('sp-ios-pwa');
+    return r.classList.contains('sp-ios-pwa');
+  } catch (e) { return false; }
+};
+
 // v2.4.90: SPLASH controlado pela camada JS (store.js é network-first → sempre
 // fresco). O boot loader INLINE vive no index.html, que o PWA iOS guarda em
 // cache — e shells antigos escondiam a tela no `window.load`, IGNORANDO o
@@ -3117,6 +3131,12 @@ window._markBootReady = function(_label) {
 window._ensureBootOverlay = function() {
   try {
     if (window._bootReady === true) return;
+    // Antes de retornar pelo loader inline: um shell antigo pode ter pintado
+    // html/body de navy e deixado essa cor exposta na safe-area inferior.
+    if (window._spMarkIosPwa()) {
+      document.documentElement.style.backgroundColor = '#145584';
+      if (document.body) document.body.style.backgroundColor = '#145584';
+    }
     // v2.4.95: o overlay JS é só FALLBACK. Se o boot loader inline do shell está
     // presente (caso normal — agora ele sobrevive ao sweep), ELE é o splash, com
     // a barra de progresso. Não criamos um segundo overlay por cima (que escondia
@@ -3136,7 +3156,7 @@ window._ensureBootOverlay = function() {
     ov.id = 'sp-js-boot-overlay';
     ov.setAttribute('role', 'status');
     ov.setAttribute('aria-label', 'Carregando scoreplace.app');
-    ov.style.cssText = 'position:fixed;inset:0;background:#0f172a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:100000;transition:opacity .35s ease;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+    ov.style.cssText = 'position:fixed;inset:0;background:' + (document.documentElement.classList.contains('sp-ios-pwa') ? 'linear-gradient(180deg,#1e6b9a,#145584)' : '#0f172a') + ';display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:100000;transition:opacity .35s ease;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
     // O CORPO ÚNICO — logo + bola + mensagem + barra com %. O mesmo de _showLoading,
     // do router e das ~12 telas do meio do app. Uma tela só.
     ov.innerHTML = window._spLoaderBodyHtml('Carregando…', { size: '3rem' });
@@ -3146,7 +3166,11 @@ window._ensureBootOverlay = function() {
       if (window._bootReady === true) {
         window._spLoaderFinish(ov);
         ov.style.opacity = '0';
-        setTimeout(function() { if (ov.parentNode) ov.parentNode.removeChild(ov); }, 380);
+        setTimeout(function() {
+          if (ov.parentNode) ov.parentNode.removeChild(ov);
+          document.documentElement.style.backgroundColor = '';
+          if (document.body) document.body.style.backgroundColor = '';
+        }, 380);
         return;
       }
       setTimeout(_tick, 80);
