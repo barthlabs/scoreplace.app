@@ -24,6 +24,35 @@ async function abrirFormDeTorneio(page) {
 }
 
 test.describe('Formato da partida por FASE (create/edit)', () => {
+  test('um dia usa o início da fase e decisões condicionais seguem a ordem', async ({ page }) => {
+    await abrirFormDeTorneio(page);
+    const state = await page.evaluate(() => {
+      document.getElementById('tourn-start-date').value = '2026-11-21';
+      document.getElementById('tourn-start-time').value = '08:00';
+      document.getElementById('tourn-end-date').value = '2026-11-21';
+      window._renderEstimatedGameHours(true);
+      window._setEstimatedScheduleMode('organizer');
+      const hours = window._readEstimatedGameHours();
+      window._f2TeamForm('super_eight');
+      return {
+        hours, dayInputs: document.querySelectorAll('.estimated-games-day').length,
+        modeBeforeDates: !!(document.getElementById('estimated-games-mode-section').compareDocumentPosition(document.getElementById('phase-dates-box')) & Node.DOCUMENT_POSITION_FOLLOWING),
+        elimination: window._f2GetConfig().eliminatoria.ativa,
+        rounds: window._f2GetConfig().rodadas.n,
+      };
+    });
+    expect(state.hours.mode).toBe('organizer');
+    expect(state.hours.days[0]).toMatchObject({ day:'2026-11-21', startTime:'08:00' });
+    expect(state.dayInputs).toBe(0);
+    expect(state.modeBeforeDates).toBe(true);
+    expect(state.elimination).toBe(false);
+    expect(state.rounds).toBe(7);
+    await expect(page.locator('#f2-config-mount')).toContainText('Sortear as 7 rodadas de uma vez');
+    await expect(page.locator('#f2-config-mount')).not.toContainText('Pontos de quem folga');
+    await page.locator('#waitlist-config-section > label').click();
+    await expect(page.locator('#waitlist-config-fields')).toBeVisible();
+    await expect(page.locator('#waitlist-capacity')).toHaveValue('4');
+  });
   test('pontuação principal e desempate ficam juntos na classificatória', async ({ page }) => {
     await abrirFormDeTorneio(page);
     const slot = page.locator('#f2-classif-extra');
@@ -41,20 +70,20 @@ test.describe('Formato da partida por FASE (create/edit)', () => {
         (tie.compareDocumentPosition(elim) & Node.DOCUMENT_POSITION_FOLLOWING));
     });
     expect(order).toBe(true);
-    await expect(page.locator('[data-ranking-primary="points"]')).toContainText('Pontos da classificação');
-    await page.locator('[data-ranking-primary="points"]').click();
-    await expect(page.locator('#ranking-primary-desc')).toContainText('3 pontos por vitória, 1 por empate');
-    await expect(page.locator('#ranking-primary')).toHaveValue('points');
-    await page.locator('label:has(#adv-scoring-enabled)').click();
     await expect(page.locator('[data-ranking-primary="points"]')).toContainText('Pontos avançados');
+    await page.locator('[data-ranking-primary="points"]').click();
     await expect(page.locator('#ranking-primary-desc')).toContainText('Soma dos valores');
+    await expect(page.locator('#ranking-primary')).toHaveValue('points');
+    await expect(page.locator('#adv-scoring-enabled')).toBeChecked();
     await page.evaluate(() => window._f2TeamForm('super_eight'));
     await expect(slot.locator('#tiebreaker-section')).toHaveCount(1);
     await expect(page.locator('#ranking-primary')).toHaveValue('points');
     await expect(page.locator('[data-ranking-primary="points"]')).toContainText('Pontos avançados');
     await expect(page.locator('#f2-config-mount')).not.toContainText('Pontos de quem folga');
     await page.locator('label:has(#adv-scoring-enabled)').click();
-    await expect(page.locator('[data-ranking-primary="points"]')).toContainText('Pontos da classificação');
+    await expect(page.locator('#ranking-primary')).toHaveValue('games_diff');
+    await expect(page.locator('[data-ranking-primary="points"]')).toContainText('Pontos avançados');
+    await expect(page.locator('#f2-config-mount')).not.toContainText('3. 🏆 Fase Eliminatória');
   });
 
   test('o bloco do form vive DENTRO da fase inicial, não solto no torneio', async ({ page }) => {
@@ -68,6 +97,7 @@ test.describe('Formato da partida por FASE (create/edit)', () => {
     });
     expect(soltoNoForm).toBe(false);
     await expect(page.locator('#f2-phase-dates-slot > #phase-dates-box')).toHaveCount(1);
+    await expect(page.locator('#f2-hours-mode-slot > #estimated-games-mode-section')).toHaveCount(1);
     await expect(page.locator('#f2-hours-slot > #estimated-games-window-section')).toHaveCount(1);
     const order = await page.evaluate(() => {
       const ids = ['phase-dates-box', 'estimated-games-window-section'];
@@ -75,7 +105,9 @@ test.describe('Formato da partida por FASE (create/edit)', () => {
       const hours = document.getElementById(ids[1]);
       const manual = Array.from(document.querySelectorAll('#f2-config-mount label'))
         .find(el => el.textContent.includes('Sortear manualmente'));
-      return !!(dates && manual && hours &&
+      const mode = document.getElementById('estimated-games-mode-section');
+      return !!(mode && dates && manual && hours &&
+        (mode.compareDocumentPosition(dates) & Node.DOCUMENT_POSITION_FOLLOWING) &&
         (dates.compareDocumentPosition(manual) & Node.DOCUMENT_POSITION_FOLLOWING) &&
         (manual.compareDocumentPosition(hours) & Node.DOCUMENT_POSITION_FOLLOWING));
     });

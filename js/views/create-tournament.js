@@ -168,20 +168,25 @@ window._renderEstimatedGameHours = function (datesChanged) {
   var savedDays = state.saved && Array.isArray(state.saved.days) ? state.saved.days : [];
   if (!state.mode) state.mode = state.saved && state.saved.mode ||
     (savedDays.length ? 'organizer' : 'participants');
-  var modeHtml = '<fieldset class="estimated-games-mode"><legend>Horários dos jogos</legend>'
-    + '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">'
-    + '<span>Organizador determina quando cada jogo acontece</span><span class="toggle-switch"><input type="checkbox" role="switch" aria-label="Organizador determina os horários dos jogos" onchange="window._setEstimatedScheduleMode(this.checked ? \'organizer\' : \'participants\')"'
-    + (state.mode === 'organizer' ? ' checked' : '') + (state.locked || !!(state.saved && state.saved.interleavedPlan) ? ' disabled' : '')
-    + '><span class="toggle-slider"></span></span></label>'
-    + '<p class="estimated-games-help">Desligado: participantes combinam os jogos dentro do prazo do torneio. Ligado: o organizador define os dias e horários previstos.</p></fieldset>';
+  var modeToggle = document.getElementById('estimated-games-mode-toggle');
+  if (modeToggle) {
+    modeToggle.checked = state.mode === 'organizer';
+    modeToggle.disabled = !!(state.locked || state.saved && state.saved.interleavedPlan);
+  }
+  var modeParticipants = document.getElementById('estimated-games-mode-participants');
+  var modeOrganizer = document.getElementById('estimated-games-mode-organizer');
+  if (modeParticipants) modeParticipants.style.color = state.mode === 'participants' ? 'var(--sp-c-c7d2fe,#c7d2fe)' : 'var(--text-muted)';
+  if (modeOrganizer) modeOrganizer.style.color = state.mode === 'organizer' ? 'var(--sp-c-c7d2fe,#c7d2fe)' : 'var(--text-muted)';
+  var gameHoursSection = document.getElementById('estimated-games-window-section');
+  if (gameHoursSection) gameHoursSection.style.display = state.mode === 'organizer' ? '' : 'none';
   if (state.mode === 'participants') {
-    mount.innerHTML = modeHtml;
+    mount.innerHTML = '';
     if (typeof window._renderPhaseCallOrder === 'function') window._renderPhaseCallOrder();
     if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh();
     return;
   }
   if (!days.length) {
-    mount.innerHTML = modeHtml + '<p>Informe as datas de início e fim da fase.</p>';
+    mount.innerHTML = '';
     if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh();
     return;
   }
@@ -191,13 +196,14 @@ window._renderEstimatedGameHours = function (datesChanged) {
   var saved = (state.saved && Array.isArray(state.saved.days)) ? state.saved.days : [];
   var defaultStart = (document.getElementById('tourn-start-time') || {}).value || '09:00';
   var defaultEnd = (document.getElementById('tourn-end-time') || {}).value || '22:00';
-  mount.innerHTML = modeHtml + (multipleDays && !state.locked ? '<div class="estimated-games-add" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+  mount.innerHTML = '<p class="estimated-games-help">O primeiro jogo começa no início da fase. As demais partidas entram na sequência do sorteio, conforme as quadras e a duração estimada.</p>' + (multipleDays && !state.locked ? '<div class="estimated-games-add" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
     + '<label>Dia com jogos <input id="estimated-games-add-day" type="date" class="form-control" min="' + startDate + '" max="' + endDate + '"></label>'
     + '<button type="button" class="btn btn-secondary" onclick="window._addEstimatedGameDay()">Adicionar dia</button></div>' : '') + days.map(function (day) {
     var existing = state.valuesByDay[day] || saved.find(function (item) { return item && item.day === day; }) || {};
     var start = /^\d{2}:\d{2}$/.test(existing.startTime || '') ? existing.startTime : defaultStart;
     var end = /^\d{2}:\d{2}$/.test(existing.endTime || '') ? existing.endTime : defaultEnd;
     var label = new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit' });
+    if (!multipleDays && !state.locked) return '';
     return '<div class="estimated-games-day" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))">'
       + '<strong style="min-width:110px">' + label + '</strong>'
       + '<label>Das <input type="time" class="form-control" style="width:110px;display:inline-block" value="' + start + '" data-day="' + day + '" data-kind="startTime" oninput="window._setEstimatedGameHour(this)"' + (state.locked ? ' disabled' : '') + '></label>'
@@ -270,7 +276,7 @@ window._readEstimatedGameHours = function () {
   if (oldWindows.some(function (item) { return item && currentCats.indexOf(item.category) < 0; })) state.touched = true;
   if (!state.touched) return null;
   var days = _estimatedGameDays();
-  if (!days.length) return { error:'Informe ao menos um dia com jogos.' };
+  if (!days.length) return null; // A validação das datas da fase já aponta o campo que falta.
   var saved = (state.saved && Array.isArray(state.saved.days)) ? state.saved.days : [];
   var defaultStart = (document.getElementById('tourn-start-time') || {}).value || '09:00';
   var defaultEnd = (document.getElementById('tourn-end-time') || {}).value || '22:00';
@@ -771,7 +777,15 @@ function setupCreateTournamentModal() {
                 <small class="text-muted" style="display:block;margin-top:4px;" id="formato-desc">${_t('format.elimination')} — ${_t('create.descElimSimples')}</small>
               </div>
 
-              <!-- Datas da fase (logo abaixo do Formato) — v2.6.46 -->
+              <div id="estimated-games-mode-section" style="margin-bottom:12px;padding:12px;border:1px solid rgba(96,165,250,.3);border-radius:10px">
+                <div style="font-weight:700;margin-bottom:8px">🕒 Quem define quando os jogos acontecem?</div>
+                <label style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;cursor:pointer;font-size:.85rem;font-weight:700">
+                  <span id="estimated-games-mode-participants">Participantes combinam entre si</span>
+                  <span class="toggle-switch"><input id="estimated-games-mode-toggle" type="checkbox" role="switch" aria-label="Participantes combinam entre si ou organizador determina quando cada jogo acontece" onchange="window._setEstimatedScheduleMode(this.checked ? 'organizer' : 'participants')"><span class="toggle-slider"></span></span>
+                  <span id="estimated-games-mode-organizer">Organizador determina quando cada jogo acontece</span>
+                </label>
+              </div>
+              <!-- Datas da fase (logo abaixo da escolha de horários) -->
               <div id="phase-dates-box" style="background:rgba(99,102,241,0.04); border:1px solid rgba(129,140,248,0.18); border-radius:10px; padding:0.6rem 0.4rem; margin-bottom:1rem;">
                 <div style="font-size:0.72rem; color:var(--sp-c-a5b4fc,#a5b4fc); font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.5rem; padding-left:0.35rem;">📅 ${_t('create.phaseDatesTitle')}</div>
                 <div class="dates-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:8px;align-items:stretch;">
@@ -806,7 +820,7 @@ function setupCreateTournamentModal() {
                 </div>
                 <div id="estimated-games-window-section" style="margin-top:12px;padding:12px;border:1px solid rgba(96,165,250,.3);border-radius:10px">
                   <div style="font-weight:700">🕒 Horários dos jogos</div>
-                  <div style="color:var(--text-muted);font-size:.75rem;margin-top:4px">Defina o início e o fim de cada dia. Esses horários aparecerão para confirmação no planejamento do sorteio; não são prazos das rodadas.</div>
+                  <div style="color:var(--text-muted);font-size:.75rem;margin-top:4px">Em um único dia, valem o início e o fim da fase informados acima. Em vários dias, ajuste as janelas abaixo se necessário.</div>
                   <div id="estimated-games-window-days" style="margin-top:8px"></div>
                 </div>
                 <div id="phase-call-order-editor" style="margin-top:12px"></div>
@@ -1331,9 +1345,9 @@ function setupCreateTournamentModal() {
                   </div>
                 </div>
                 <div class="courts-row" style="display:flex; gap:10px; align-items:flex-start; margin-bottom:0.5rem;">
-                  <div class="form-group courts-count-field" style="flex:0 0 100px;">
+                  <div class="form-group courts-count-field" style="flex:0 0 110px;max-width:110px;">
                     <label class="form-label">${_t('create.courtsLabel')}</label>
-                    <input type="number" class="form-control" id="tourn-court-count" aria-label="Número de quadras" min="1" max="50" value="1" style="text-align:center;" oninput="window._onCourtCountChange()">
+                    <input type="number" class="form-control" id="tourn-court-count" aria-label="Número de quadras" min="1" max="50" value="1" style="width:100%;box-sizing:border-box;text-align:center;" oninput="window._onCourtCountChange()">
                   </div>
                   <div class="form-group" style="flex:1; min-width:0;">
                     <label class="form-label">${_t('create.courtNamesLabel')} <small style="opacity:0.6;">${_t('create.courtNamesSep')}</small></label>
@@ -1411,6 +1425,16 @@ function setupCreateTournamentModal() {
                   </div>
                 </div>
               </div>
+              <div id="waitlist-config-section" style="padding:12px;margin-bottom:14px;border:1px solid rgba(129,140,248,.3);border-radius:10px;">
+                <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;font-weight:700;">Lista de espera
+                  <span class="toggle-switch"><input type="checkbox" id="waitlist-enabled" onchange="window._syncWaitlistConfig()"><span class="toggle-slider"></span></span>
+                </label>
+                <div id="waitlist-config-fields" style="display:none;margin-top:10px;">
+                  <label class="form-label" for="waitlist-capacity">Máximo de pessoas na lista de espera</label>
+                  <input type="number" class="form-control" id="waitlist-capacity" min="1" max="999" value="4" style="width:100px;box-sizing:border-box;text-align:center;">
+                  <small class="text-muted" style="display:block;margin-top:6px;">Quando as vagas terminarem, os próximos inscritos entram na lista pela ordem de inscrição. O primeiro da fila é chamado para uma vaga liberada.</small>
+                </div>
+              </div>
 
               <!-- (Categorias movido para o box FASE 1) -->
 
@@ -1466,10 +1490,10 @@ function setupCreateTournamentModal() {
                 <div id="ranking-primary-choice">
                 <h3 style="margin:0 0 .65rem;color:var(--text-main);font-size:1rem;">${_t('create.rankingPrimaryLabel')}</h3>
                 <input type="hidden" id="ranking-primary" value="games_diff">
-                <div role="group" aria-label="${_t('create.rankingPrimaryLabel')}" id="ranking-primary-buttons" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:.55rem;">
-                  <button type="button" data-ranking-primary="games_diff" aria-pressed="true" onclick="window._setRankingPrimary('games_diff')" class="btn btn-secondary btn-sm">${_t('create.rankingPrimaryGamesDiff')}</button>
-                  <button type="button" data-ranking-primary="wins" aria-pressed="false" onclick="window._setRankingPrimary('wins')" class="btn btn-secondary btn-sm">${_t('create.tbWins')}</button>
-                  <button type="button" data-ranking-primary="points" aria-pressed="false" onclick="window._setRankingPrimary('points')" class="btn btn-secondary btn-sm">${_t('create.rankingPrimaryPoints')}</button>
+                <div role="group" aria-label="${_t('create.rankingPrimaryLabel')}" id="ranking-primary-buttons" style="display:flex;flex-wrap:wrap;justify-content:flex-start;gap:7px;margin-bottom:.55rem;">
+                  <button type="button" data-ranking-primary="games_diff" aria-pressed="true" onclick="window._setRankingPrimary('games_diff')" class="btn btn-secondary btn-sm">Saldo de games</button>
+                  <button type="button" data-ranking-primary="wins" aria-pressed="false" onclick="window._setRankingPrimary('wins')" class="btn btn-secondary btn-sm">Vitórias</button>
+                  <button type="button" data-ranking-primary="points" aria-pressed="false" onclick="window._setRankingPrimary('points', true)" class="btn btn-secondary btn-sm">Pontos avançados</button>
                 </div>
                 <small class="text-muted" id="ranking-primary-desc" style="display:block;margin-bottom:0.65rem;">${_t('create.rankingPrimaryDesc')}</small>
                 <small id="ranking-started-warning" style="display:none;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:.65rem;">${_t('create.rankingPrimaryStartedWarning')}</small>
@@ -1570,8 +1594,12 @@ function setupCreateTournamentModal() {
     }
 
     // Setup tiebreaker drag-and-drop
-    window._setRankingPrimary = function(value) {
+    window._setRankingPrimary = function(value, fromUser) {
       if (['points', 'wins', 'games_diff'].indexOf(value) < 0) return;
+      if (value === 'points' && fromUser) {
+        var advanced = document.getElementById('adv-scoring-enabled');
+        if (advanced && !advanced.checked) { advanced.checked = true; window._onAdvScoringToggle(0); }
+      }
       var input = document.getElementById('ranking-primary');
       if (input) input.value = value;
       document.querySelectorAll('#ranking-primary-buttons [data-ranking-primary]').forEach(function(button) {
@@ -1587,7 +1615,7 @@ function setupCreateTournamentModal() {
       var input = document.getElementById('ranking-primary');
       var value = input ? input.value : 'games_diff';
       var points = document.querySelector('#ranking-primary-buttons [data-ranking-primary="points"]');
-      if (points) points.textContent = _t(enabled ? 'create.rankingPrimaryAdvancedPoints' : 'create.rankingPrimaryPoints');
+      if (points) points.textContent = 'Pontos avançados';
       var desc = document.getElementById('ranking-primary-desc');
       var detailKey = value === 'games_diff' ? 'create.rankingPrimaryGamesDiffDesc'
         : value === 'wins' ? 'create.rankingPrimaryWinsDesc'
@@ -1660,9 +1688,14 @@ function setupCreateTournamentModal() {
         var active = document.getElementById('tiebreaker-list');
         var excluded = document.getElementById('tiebreaker-excluded-list');
         if (!active || !excluded) return;
+        var originalOrder = ['pontos_avancados', 'confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio', 'juventude', 'saldo_games', 'games_vencidos'];
         Array.from(active.querySelectorAll('li[data-tb]')).forEach(function(li) {
           excluded.appendChild(li);
           window._tbUpdateRowControls(li);
+        });
+        originalOrder.forEach(function(key) {
+          var li = Array.from(excluded.querySelectorAll('li[data-tb]')).find(function(item) { return item.dataset.tb === key; });
+          if (li) excluded.appendChild(li);
         });
       };
 
@@ -2111,6 +2144,10 @@ function setupCreateTournamentModal() {
       if (_capacityRow && _capacityRow.parentElement === _formParent) {
         try { _formParent.insertBefore(_capacityRow, box); } catch (e) {}
       }
+      var _enrollmentModel = document.getElementById('enroll-model-section');
+      var _waitlistConfig = document.getElementById('waitlist-config-section');
+      if (_enrollmentModel && _enrollmentModel.parentElement) { try { _formParent.insertBefore(_enrollmentModel, box); } catch (e) {} }
+      if (_waitlistConfig && _waitlistConfig.parentElement) { try { _formParent.insertBefore(_waitlistConfig, box); } catch (e) {} }
       if (_venue && _venue.parentElement === _formParent) {
         try { _formParent.insertBefore(_venue, box); } catch (e) {}
       }
@@ -2425,7 +2462,9 @@ function setupCreateTournamentModal() {
 
     var isOpen = !!open.checked;
     var isClosed = !isOpen;
+    var hasWaitlist = !!((document.getElementById('waitlist-enabled') || {}).checked);
     if (isClosed) expand.checked = false;
+    else if (!hasWaitlist) expand.checked = true;
     var value = isClosed ? 'closed' : (expand.checked ? 'expand' : 'standby');
     var hidden = document.getElementById('late-enrollment');
     if (hidden) hidden.value = value;
@@ -2435,7 +2474,7 @@ function setupCreateTournamentModal() {
     window._setLateEnrollmentModeVisual(document.getElementById('late-mode-enrollment'), isOpen);
     window._setLateEnrollmentModeVisual(document.getElementById('late-mode-matchups'), !!expand.checked);
     var matchupChoice = document.getElementById('late-matchups-choice');
-    if (matchupChoice) matchupChoice.style.display = isOpen ? '' : 'none';
+    if (matchupChoice) matchupChoice.style.display = isOpen && hasWaitlist ? '' : 'none';
 
     var closedDesc = document.getElementById('late-closed-desc');
     if (closedDesc) closedDesc.textContent = _t(isClosed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc');
@@ -2483,6 +2522,7 @@ function setupCreateTournamentModal() {
     if (slotsBox) slotsBox.style.display = (mode === 'draw') ? 'block' : 'none';
     var capBox = document.getElementById('cap-max-container');
     if (capBox) capBox.style.display = (mode === 'draw') ? 'none' : 'block';
+    if (typeof window._syncWaitlistConfig === 'function') window._syncWaitlistConfig();
     // Auto-close (corrida) é incompatível com vagas-por-sorteio
     window._updateAutoCloseVisibility();
     // Atualiza a unidade da vaga conforme o modo de inscrição
@@ -2492,6 +2532,16 @@ function setupCreateTournamentModal() {
       hint.textContent = (enr === 'individual') ? 'vagas = pessoas' : 'vagas = duplas/times';
     }
     window._recalcDuration();
+  };
+
+  window._syncWaitlistConfig = function() {
+    var toggle = document.getElementById('waitlist-enabled');
+    var fields = document.getElementById('waitlist-config-fields');
+    var section = document.getElementById('waitlist-config-section');
+    var mode = (document.getElementById('enrollment-limit-mode') || {}).value || 'cap';
+    if (section) section.style.display = mode === 'cap' ? '' : 'none';
+    if (fields) fields.style.display = toggle && toggle.checked && mode === 'cap' ? '' : 'none';
+    if (typeof window._syncLateEnrollment === 'function') window._syncLateEnrollment();
   };
 
   // Política de chamada da lista de espera (só no modo Vagas).
@@ -3577,6 +3627,9 @@ function setupCreateTournamentModal() {
     var on = enEl ? enEl.checked : false;
     var body = document.getElementById('adv-scoring-body' + s);
     if (body) body.style.display = on ? 'block' : 'none';
+    if (idx === 0 && !on && (document.getElementById('ranking-primary') || {}).value === 'points') {
+      window._setRankingPrimary('games_diff');
+    }
     if (typeof window._onAdvApplyLiveToggle === 'function') window._onAdvApplyLiveToggle(idx);
     if (idx === 0 && typeof window._updateRankingPrimaryModeLabel === 'function') window._updateRankingPrimaryModeLabel();
   };
@@ -5976,6 +6029,11 @@ function setupCreateTournamentModal() {
       infoEl.innerHTML = '';
     }
     document.getElementById('tourn-court-count').value = t.courtCount || 1;
+    var _waitlistToggle = document.getElementById('waitlist-enabled');
+    var _waitlistSize = document.getElementById('waitlist-capacity');
+    if (_waitlistToggle) _waitlistToggle.checked = Number(t.waitlistCapacity) > 0;
+    if (_waitlistSize && Number(t.waitlistCapacity) > 0) _waitlistSize.value = t.waitlistCapacity;
+    if (typeof window._syncWaitlistConfig === 'function') window._syncWaitlistConfig();
     document.getElementById('tourn-court-names').value = t.courtNames ? t.courtNames.join(', ') : '';
     document.getElementById('tourn-call-time').value = t.callTime != null ? t.callTime : 5;
     document.getElementById('tourn-warmup-time').value = t.warmupTime != null ? t.warmupTime : 5;
@@ -6781,6 +6839,12 @@ window._saveTournamentClickHandler = async function() {
         const targetSlotsVal = parseInt((document.getElementById('tourn-target-slots') || {}).value) || null;
         const callPolicyVal = (document.getElementById('call-policy') || {}).value || 'present';
         const isDrawMode = enrollLimitModeVal === 'draw';
+        const waitlistEnabled = !isDrawMode && !!((document.getElementById('waitlist-enabled') || {}).checked);
+        const waitlistCapacityVal = waitlistEnabled ? Number((document.getElementById('waitlist-capacity') || {}).value) : 0;
+        if (waitlistEnabled && (!Number.isSafeInteger(waitlistCapacityVal) || waitlistCapacityVal < 1 || waitlistCapacityVal > 999 || !maxPartsVal)) {
+          showAlertDialog('Lista de espera', 'Defina as vagas do torneio e um tamanho válido para a lista de espera.', null, { type:'warning' });
+          return;
+        }
         var _reRaw = document.getElementById('select-result-entry').value || 'organizer';
         var resultEntryVal;
         try { resultEntryVal = JSON.parse(_reRaw); } catch(e) { resultEntryVal = _reRaw; }
@@ -6912,6 +6976,8 @@ window._saveTournamentClickHandler = async function() {
           // No modo Vagas-por-sorteio nunca há corrida: zera limite/auto-close
           // pra que os gatilhos de fechamento automático fiquem inertes.
           maxParticipants: isDrawMode ? null : maxPartsVal,
+          waitlistCapacity: waitlistCapacityVal,
+          waitlistCallPolicy: waitlistEnabled ? 'enrollment_order' : null,
           // ⛔ Não aceitar um total independente quando este valor existe: a tela
           // recalcula `maxParticipants` a partir das categorias antes de chegar aqui.
           // Persistir a unidade deixa template/edição reconstituírem 16 × 6 = 96.
@@ -8644,6 +8710,11 @@ window._prefillFromTemplate = function(tpl) {
   // Max participants
   var maxP = document.getElementById('tourn-max-participants');
   if (maxP && tpl.maxParticipants) maxP.value = tpl.maxParticipants;
+  var _templateWaitlist = document.getElementById('waitlist-enabled');
+  var _templateWaitlistSize = document.getElementById('waitlist-capacity');
+  if (_templateWaitlist) _templateWaitlist.checked = Number(tpl.waitlistCapacity) > 0;
+  if (_templateWaitlistSize && Number(tpl.waitlistCapacity) > 0) _templateWaitlistSize.value = tpl.waitlistCapacity;
+  if (typeof window._syncWaitlistConfig === 'function') window._syncWaitlistConfig();
 
   // Courts
   var courts = document.getElementById('tourn-court-count');
@@ -9266,6 +9337,8 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       teamSize: parseInt(get('tourn-team-size')) || 1,
       gameTypes: get('tourn-game-types') || 'duplas',
       maxParticipants: parseInt(get('tourn-max-participants')) || '',
+      waitlistCapacity: getChecked('waitlist-enabled') ? (parseInt(get('waitlist-capacity')) || 0) : 0,
+      waitlistCallPolicy: getChecked('waitlist-enabled') ? 'enrollment_order' : null,
       maxParticipantsPerCategory: parseInt(get('tourn-max-per-category')) || '',
       maxParticipantsByCategory: (function() { try { return getChecked('tourn-custom-category-capacity') ? JSON.parse(get('tourn-max-by-category') || '{}') : {}; } catch (e) { return {}; } })(),
       autoCloseOnFull: getChecked('tourn-auto-close'),

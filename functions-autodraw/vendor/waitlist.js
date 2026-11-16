@@ -157,6 +157,21 @@ var ScoreplaceWaitlist;
         if (monarch) {
             Object.keys(monarch).forEach((category) => array(monarch[category]).forEach((e) => addEntry(e, 'monarchWaitlist')));
         }
+        if (tournament.waitlistCallPolicy === 'enrollment_order') {
+            output.sort((a, b) => {
+                const entryA = record(a.entry);
+                const entryB = record(b.entry);
+                const seqA = numberOrNull(entryA && entryA.enrollSeq);
+                const seqB = numberOrNull(entryB && entryB.enrollSeq);
+                if (seqA != null && seqB != null)
+                    return seqA - seqB;
+                if (seqA != null)
+                    return -1;
+                if (seqB != null)
+                    return 1;
+                return String(entryA && entryA.addedAt || '').localeCompare(String(entryB && entryB.addedAt || ''));
+            });
+        }
         return output;
     }
     ScoreplaceWaitlist.getWaitlistWithSource = getWaitlistWithSource;

@@ -13,6 +13,13 @@ result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base,
 ok('fase sorteada com inscrição tardia manda para espera', result.outcome === 'waitlisted' && result.enrollment.creates[0].status === 'waitlisted');
 result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base, { maxParticipants: 1 }), registrations: [confirmed], participant: { uid: 'u2', categoryIds: ['fem-a'] } }));
 ok('capacidade confirmada bloqueia entrada antes do sorteio', result.outcome === 'capacityFull');
+result = C.decide(Object.assign({}, input, { tournament:Object.assign({}, base, { maxParticipants:1, waitlistCapacity:1 }),
+  registrations:[confirmed], participant:{uid:'u2', categoryIds:['fem-a']} }));
+ok('primeiro excedente canônico entra na lista de espera', result.outcome === 'waitlisted' && result.enrollment.creates[0].status === 'waitlisted');
+const firstWaitlisted = result.enrollment.creates[0];
+result = C.decide(Object.assign({}, input, { tournament:Object.assign({}, base, { maxParticipants:1, waitlistCapacity:1 }),
+  registrations:[confirmed, firstWaitlisted], participant:{uid:'u3', categoryIds:['fem-a']} }));
+ok('lista de espera canônica respeita o limite', result.outcome === 'capacityFull');
 result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base, { maxParticipants: 1 }), registrations: [confirmed] }));
 ok('repetição idêntica vence teto de vagas e continua idempotente', result.outcome === 'alreadyRegistered');
 result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base, {

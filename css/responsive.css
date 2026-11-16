@@ -1219,7 +1219,7 @@ body.hamburger-open #header-notif-bell { display: none !important; }
   }
   .courts-row .courts-count-field {
     flex: none !important;
-    width: 100% !important;
+    width: 110px !important;
   }
 }
 

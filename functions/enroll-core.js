@@ -321,6 +321,29 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs, options) {
   }
   var knownStandby = Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [];
   var knownWaitlist = Array.isArray(data.waitlist) ? data.waitlist : [];
+  var personSlots = function(p) {
+    if (!p || typeof p !== 'object') return 1;
+    if (Array.isArray(p.participants) && p.participants.length) return p.participants.length;
+    return (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name) ? 2 : 1;
+  };
+  var waitlistCapacity = parseInt(data.waitlistCapacity, 10) || 0;
+  var queueOnWaitlist = function() {
+    if (waitlistCapacity <= 0) return null;
+    if (isAlreadyEnrolled(knownStandby, participantObj) || isAlreadyEnrolled(knownWaitlist, participantObj)) {
+      return { outcome:'alreadyWaitlisted', participants:participants, updateData:null };
+    }
+    var used = knownStandby.concat(knownWaitlist).reduce(function(sum, p) { return sum + personSlots(p); }, 0);
+    if (used + personSlots(participantObj) > waitlistCapacity) return null;
+    var entry = cleanUndefined(participantObj);
+    var nextStandby = knownStandby.concat([entry]);
+    var nextData = Object.assign({}, data, { standbyParticipants:nextStandby });
+    var touched = allocateEnrollSeqs(nextData);
+    var update = { standbyParticipants:nextStandby, memberUids:computeMemberUids(nextData) };
+    touched.forEach(function(key) { if (key !== 'standbyParticipants' && nextData[key] !== undefined) update[key] = nextData[key]; });
+    if (extraUpdates) Object.keys(extraUpdates).forEach(function(key) { update[key] = cleanUndefined(extraUpdates[key]); });
+    return { outcome:'waitlisted', participants:participants, standbyParticipants:nextStandby,
+      updateData:update, entry:entry, waitlist:nextData.waitlist, monarchWaitlist:nextData.monarchWaitlist };
+  };
   /* Não deduplicar pessoas pelo nome. Planilhas reais podem ter homônimos, e a
    * identidade canônica já foi validada acima (UID ou manualParticipantId). */
   // v1.6.86 — FASE SORTEADA → LISTA DE ESPERA. Vem ANTES do teto de vagas de propósito:
@@ -330,6 +353,9 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs, options) {
   // open=true e a pessoa era empurrada pra participants depois do sorteio — inscrita,
   // fora dos grupos, fora da espera (Confra ago/2026). Ver waitlist-core._phaseDrawDone.
   if (phaseDrawDone(data) && !organizerManual) {
+    if (waitlistCapacity > 0) {
+      return queueOnWaitlist() || { outcome:'capacityFull', participants:participants, updateData:null };
+    }
     var standby = knownStandby;
     var waitlist = knownWaitlist;
     if (isAlreadyEnrolled(standby, participantObj) || isAlreadyEnrolled(waitlist, participantObj)) {
@@ -358,11 +384,6 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs, options) {
   }
   var capMax = parseInt(data.maxParticipants, 10);
   var isDrawMode = data.enrollmentLimitMode === 'draw';
-  var personSlots = function(p) {
-    if (!p || typeof p !== 'object') return 1;
-    if (Array.isArray(p.participants) && p.participants.length) return p.participants.length;
-    return (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name) ? 2 : 1;
-  };
   // A capacidade mostrada na ficha também limita a inscrição por categoria.
   // Registros legados sem categoria explícita continuam sujeitos ao total geral.
   if (!organizerManual && !isDrawMode && (data.maxParticipantsPerCategory || Object.keys(data.maxParticipantsByCategory || {}).length) && Array.isArray(data.combinedCategories)) {
@@ -378,12 +399,12 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs, options) {
       var limit = Object.prototype.hasOwnProperty.call(limits, cat) ? Number(limits[cat]) : Number(data.maxParticipantsPerCategory);
       if (!Number.isSafeInteger(limit) || limit <= 0) continue;
       var occupied = participants.reduce(function(sum, p) { return sum + (categoryNames(p).indexOf(cat) >= 0 ? personSlots(p) : 0); }, 0);
-      if (occupied + personSlots(participantObj) > limit) return { outcome: 'capacityFull', participants: participants, updateData: null };
+      if (occupied + personSlots(participantObj) > limit) return queueOnWaitlist() || { outcome: 'capacityFull', participants: participants, updateData: null };
     }
   }
   var occupiedSlots = participants.reduce(function(sum, p) { return sum + personSlots(p); }, 0);
   if (!organizerManual && !isDrawMode && !isNaN(capMax) && capMax > 0 && occupiedSlots + personSlots(participantObj) > capMax) {
-    return { outcome: 'capacityFull', participants: participants, updateData: null };
+    return queueOnWaitlist() || { outcome: 'capacityFull', participants: participants, updateData: null };
   }
   participants = participants.concat([cleanUndefined(participantObj)]);
   var enrollData = Object.assign({}, data, { participants: participants });
@@ -394,7 +415,7 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs, options) {
   var maxP = parseInt(data.maxParticipants, 10);
   var autoClose = false, reachedDraw = false;
   var enrolledSlots = occupiedSlots + personSlots(participantObj);
-  if (!organizerManual && !isDrawMode && !isNaN(maxP) && maxP > 0 && enrolledSlots >= maxP) {
+  if (!organizerManual && !isDrawMode && waitlistCapacity <= 0 && !isNaN(maxP) && maxP > 0 && enrolledSlots >= maxP) {
     updateData.status = 'closed'; autoClose = true;
   }
   if (!organizerManual && isDrawMode && !isNaN(maxP) && maxP > 0 && enrolledSlots >= maxP && !data.waitlistNoticeSent) {

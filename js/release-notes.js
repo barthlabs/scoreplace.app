@@ -1,3 +1,8 @@
+// 2.7.18 — A configuração do Super 8 deixa explícito o sorteio único das sete
+// rodadas ou sorteios sucessivos, sem eliminatória. O organizador escolhe quem
+// marca os jogos antes das datas; em evento de um dia, o primeiro jogo começa
+// no início da fase, sem repetir o horário. Lista de espera com tamanho e ordem
+// de inscrição, critérios compactos e pontuação de folga somente quando aplicável.
 // 2.7.17 — Na fase classificatória, a pontuação avançada, o critério principal
 // e os desempates aparecem juntos, nessa ordem. Saldo, vitórias e pontos explicam
 // como ordenam a tabela; com a pontuação avançada ligada, a opção de pontos usa

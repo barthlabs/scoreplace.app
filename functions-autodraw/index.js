@@ -5662,7 +5662,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   // A capacidade por categoria é declarativa; o total que a tela calcula continua
   // em maxParticipants para os fluxos legados de inscrição. Os dois precisam passar
   // pela mesma porta de edição, senão a ficha salva recusaria 16 × 6 = 96.
-  'maxParticipants','maxParticipantsPerCategory','maxParticipantsByCategory','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
+  'maxParticipants','maxParticipantsPerCategory','maxParticipantsByCategory','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy','waitlistCapacity','waitlistCallPolicy',
   'resultEntry','woScope','lateEnrollment','newMatchups','venue','venueAccess','venueLat',
   'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
   'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','coverGradientBalance','coverGradientBlend','titleColor','dateCardColors','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',

@@ -727,6 +727,7 @@
 
     var e = out.eliminatoria || {};
     e.ativa = !!e.ativa; // v4.4.32: pode desligar SEMPRE (grupos ou pontos corridos); default = defaultConfig
+    if (out.parceria === 'super_eight') e.ativa = false;
     // Dupla eliminatória clássica usa uma chave. Na simples o organizador define
     // quantas linhas independentes ou convergentes terá o torneio.
     e.dupla = e.dupla === true;

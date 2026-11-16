@@ -41,7 +41,29 @@ function decide(input) {
   });
   if (eligibilityDecision.outcome !== 'accepted') return eligibilityDecision;
   const drawn = enrollCore.phaseDrawDone(tournament);
-  const status = drawn && !organizerManual ? 'waitlisted' : (eligibilityDecision.validationState === 'pending_review' ? 'pending' : 'confirmed');
+  const waitlistCapacity = Number.parseInt(tournament.waitlistCapacity, 10) || 0;
+  const requestKey = participant.uid ? 'uid:' + participant.uid : 'manual:' + participant.manualParticipantId;
+  const activeParticipantKeys = new Set(registrations
+    .filter(item => item && ['confirmed', 'pending'].includes(item.status))
+    .map(item => item.participantKey));
+  const occupiedWaitlist = new Set(registrations
+    .filter(item => item && item.status === 'waitlisted')
+    .map(item => item.participantKey));
+  const cap = Number.parseInt(tournament.maxParticipants, 10);
+  const capReached = !organizerManual && !drawn && tournament.enrollmentLimitMode !== 'draw' &&
+    Number.isFinite(cap) && cap > 0 && !activeParticipantKeys.has(requestKey) && activeParticipantKeys.size >= cap;
+  const labels = new Map(definitions.map(definition => [definition.id, definition.label]));
+  const byName = tournament.maxParticipantsByCategory || {};
+  const general = Number(tournament.maxParticipantsPerCategory);
+  const categoryReached = !organizerManual && !drawn && tournament.enrollmentLimitMode !== 'draw' && categoryIds.some(categoryId => {
+    const label = labels.get(categoryId);
+    const limit = Object.prototype.hasOwnProperty.call(byName, label) ? Number(byName[label]) : general;
+    if (!Number.isSafeInteger(limit) || limit <= 0) return false;
+    const occupied = registrations.filter(item => item && item.categoryId === categoryId && ['confirmed', 'pending'].includes(item.status)).length;
+    return occupied >= limit;
+  });
+  const mustWait = !organizerManual && (drawn || (waitlistCapacity > 0 && (capReached || categoryReached)));
+  const status = mustWait ? 'waitlisted' : (eligibilityDecision.validationState === 'pending_review' ? 'pending' : 'confirmed');
   const enrollment = mutations.enroll(tournament.id || tournament.tournamentId, registrations, participant, categoryIds, {
     status,
     validationState: eligibilityDecision.validationState,
@@ -53,7 +75,10 @@ function decide(input) {
   if (!enrollment.creates.length && !enrollment.updates.length) {
     return Object.assign({}, eligibilityDecision, { outcome: enrollment.outcome, enrollment, categoryIds });
   }
-  if (!organizerManual && !drawn && tournament.enrollmentLimitMode !== 'draw') {
+  if (mustWait && waitlistCapacity > 0 && !occupiedWaitlist.has(requestKey) && occupiedWaitlist.size >= waitlistCapacity) {
+    return { outcome:'capacityFull' };
+  }
+  if (!mustWait && !organizerManual && !drawn && tournament.enrollmentLimitMode !== 'draw') {
     const byName = tournament.maxParticipantsByCategory || {};
     const general = Number(tournament.maxParticipantsPerCategory);
     const labels = new Map(definitions.map(definition => [definition.id, definition.label]));
@@ -68,8 +93,7 @@ function decide(input) {
       if (occupied + incoming > limit) return { outcome: 'capacityFull', categoryId };
     }
   }
-  const cap = Number.parseInt(tournament.maxParticipants, 10);
-  if (!organizerManual && !drawn && tournament.enrollmentLimitMode !== 'draw' && Number.isFinite(cap) && cap > 0) {
+  if (!mustWait && !organizerManual && !drawn && tournament.enrollmentLimitMode !== 'draw' && Number.isFinite(cap) && cap > 0) {
     const activeParticipantKeys = new Set(registrations
       .filter((registration) => registration && ['confirmed', 'pending'].includes(registration.status))
       .map((registration) => registration.participantKey));

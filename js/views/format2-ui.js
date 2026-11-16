@@ -77,7 +77,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // própria eliminatória, quando é eliminação direta). O slot #f2-classif-extra já muda de
   // lugar conforme a fase inicial, então o bloco acompanha sozinho. A fase eliminatória
   // POSTERIOR tem a sua própria seção (_gsmElimBlock), gravada em cfg.eliminatoria.scoring.
-  var _EXT_IDS = ['gsm-section', 'adv-scoring-section', 'tiebreaker-section',
+  var _EXT_IDS = ['gsm-section', 'adv-scoring-section', 'tiebreaker-section', 'estimated-games-mode-section',
     'phase-dates-box', 'estimated-games-window-section',
     'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box',
     'late-enroll-box', 'gender-ratio-box'];
@@ -89,14 +89,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _placeExt() {
     var slot = document.getElementById('f2-classif-extra');
+    var modeSlot = document.getElementById('f2-hours-mode-slot');
     var datesSlot = document.getElementById('f2-phase-dates-slot');
     var hoursSlot = document.getElementById('f2-hours-slot');
+    if (modeSlot) { var mode = document.getElementById('estimated-games-mode-section'); if (mode) modeSlot.appendChild(mode); }
     if (datesSlot) { var dates = document.getElementById('phase-dates-box'); if (dates) datesSlot.appendChild(dates); }
     if (hoursSlot) ['estimated-games-window-section', 'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box'].forEach(function (id) {
       var el = document.getElementById(id); if (el) hoursSlot.appendChild(el);
     });
     if (!slot) return;
-    _EXT_IDS.filter(function (id) { return ['phase-dates-box', 'estimated-games-window-section', 'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box'].indexOf(id) < 0; }).forEach(function (id) {
+    _EXT_IDS.filter(function (id) { return ['estimated-games-mode-section', 'phase-dates-box', 'estimated-games-window-section', 'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box'].indexOf(id) < 0; }).forEach(function (id) {
       var el = document.getElementById(id); if (el) slot.appendChild(el);
     });
   }
@@ -237,8 +239,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     el.innerHTML = '<section style="padding:12px;margin:8px 0 14px;border:1px solid var(--sp-b-255-255-255-016,rgba(255,255,255,.16));border-radius:10px;background:var(--sp-g-255-255-255-005,rgba(255,255,255,.05));">' +
       '<h4 style="margin:0 0 5px;color:var(--text-main);">Empate na classificação</h4>' +
       '<p style="margin:0 0 10px;font-size:.8rem;color:var(--text-muted);">Escolha como resolver um empate que afete a classificação.</p>' +
-      _pill(singles, "window._f2TieResolution('singles_then_draw')", '🎾 Simples de desempate') +
-      _pill(!singles, "window._f2TieResolution('draw_order')", '📋 Critérios de desempate') +
+      '<div class="sp-tie-mode-choices" role="group" aria-label="Como desempatar a classificação">' +
+      _pill(singles, "window._f2TieResolution('singles_then_draw')", 'Simples de desempate') +
+      _pill(!singles, "window._f2TieResolution('draw_order')", 'Critérios de desempate') + '</div>' +
       (singles ? '<p style="margin:6px 0 2px;font-size:.76rem;color:var(--text-muted);">Se não houver tempo, a organização pode dispensar as partidas e usar a ordem original do sorteio.</p>' + _tieSinglesControls(cfg) : '') +
       '</section>';
   }
@@ -947,10 +950,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           _pill(cfg.manualPairingPolicy === 'athletes_only', "window._f2PairAuthority('athletes_only')", 'Atletas') +
           _pill(cfg.manualPairingPolicy === 'open', "window._f2PairAuthority('open')", 'Organização e atletas'));
       } else {
-        fBtns += _sec('Como a dupla será definida',
-          _pill(isSorteio, "window._f2TeamForm('sorteio')", '🎲 Sorteio') +
-          (um ? _pill(pr === 'rei_rainha', "window._f2TeamForm('rei_rainha')", '👑 Resultado · Rei/Rainha') +
-            _pill(pr === 'super_eight', "window._f2TeamForm('super_eight')", '8️⃣ Resultado · Super 8') : ''));
+        fBtns += _sec('Como serão formados os confrontos na classificatória',
+          _pill(isSorteio, "window._f2TeamForm('sorteio')", 'Parceiros sorteados') +
+          (um ? _pill(pr === 'rei_rainha', "window._f2TeamForm('rei_rainha')", 'Rei/Rainha') +
+            _pill(pr === 'super_eight', "window._f2TeamForm('super_eight')", 'Cada atleta faz dupla com todos') : '') +
+          '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;">A dupla pode mudar em cada rodada. Uma dupla fixa para a eliminatória é definida naquela fase, se houver.</div>');
       }
       // v4.4.30: Sorteio + 1 grupo → toggle "Novo parceiro a cada rodada" (ON por padrão).
       // ON = sorteio_rodada (rotativo, individual); OFF = dupla sorteada 1× e fixa até o fim.
@@ -962,13 +966,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             ? 'A cada rodada, parceiro (e adversário) são sorteados de novo — pontuação individual.'
             : 'A dupla é sorteada 1× e permanece fixa até o fim do torneio.') + '</div>';
       }
-      if (pr === 'super_eight') {
-        var oneDraw = cfg.superEightDrawMode === 'single';
-        fBtns += '<div style="margin-top:14px;">' + _toggleRight('Um sorteio para as 7 rodadas', oneDraw, 'window._f2SuperEightDrawMode(this.checked)') + '</div>' +
-          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (oneDraw
-            ? 'O primeiro sorteio fixa todos os confrontos. A rodada seguinte é liberada ao concluir a anterior.'
-            : 'Cada rodada sorteia uma das combinações ainda não usadas. Cada atleta joga 7 vezes e faz dupla uma vez com cada outro atleta.') + '</div>';
-      }
+      if (pr === 'super_eight') fBtns += '<div style="font-size:.72rem;color:var(--text-muted);margin-top:8px;">Com 8 atletas e 1 grupo, esta configuração forma um Super 8: 7 rodadas, um set com cada parceiro e sem eliminatória.</div>';
       formationControls += fBtns;
     }
     if (isDupla && !cfg.classifAtiva) {
@@ -1056,7 +1054,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       rInner = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px;">' +
         (cfg.parceria === 'super_eight' ? 'Super 8 — 7 jogos por atleta, 14 confrontos no total; pontuação individual.' :
           'Sorteio a cada rodada — ' + (cfg.parceria === 'rei_rainha' ? 'grupos de 4, parceiros rotativos' : 'parceiro e adversário sorteados') + '; pontuação individual.') +
-        '</div>' + _schedBlock(cfg.rodadas);
+        '</div>' + (cfg.parceria === 'super_eight'
+          ? _sec('Quando definir os confrontos', _binaryChoice('Sortear a cada rodada', 'Sortear as 7 rodadas de uma vez', cfg.superEightDrawMode === 'single', 'window._f2SuperEightDrawMode(this.checked)', 'Modo de sorteio das rodadas'))
+          : '') + _schedBlock(cfg.rodadas);
       if (cfg.parceria === 'rei_rainha' && cfg.rankingRemainderPolicy === 'lottery_average') {
         rInner += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Atletas ativos sem quarteto ficam de folga por sorteio; antes de repetir uma folga, são priorizados os que ainda não folgaram.</div>';
       }
@@ -1090,7 +1090,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     classifSchedule += _sec('Rodadas', rInner);
     var isRankingRounds = cfg.classifAtiva && cfg.grupos === 1 && cfg.rodadas.modo === 'fixo' && !(tc && tc.enabled);
-    if (isRankingRounds && cfg.parceria !== 'super_eight') {
+    var _canBye = cfg.parceria !== 'super_eight' && !!cfg.rodadas.allowSelfDeactivation;
+    if (isRankingRounds && _canBye) {
       var so = cfg.rankingSitOutScoring || { mode: 'average' };
       var scoringLocked = !!(S.t && (((S.t.currentPhaseIndex || 0) > 0) || S.t.status === 'finished'));
       var sitOutControls =
@@ -1348,7 +1349,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }
     }
     if (!cfg.classifAtiva && isDupla) eb = _phaseBlock('Inscrição e formação de duplas', '#818cf8', formationControls) + eb;
-    var _elimDatesExtra = !cfg.classifAtiva && e.ativa ? '<div id="f2-phase-dates-slot" style="margin-top:12px;"></div>' : '';
+    var _elimDatesExtra = !cfg.classifAtiva && e.ativa ? '<div id="f2-hours-mode-slot" style="margin-top:12px;"></div><div id="f2-phase-dates-slot" style="margin-top:12px;"></div>' : '';
     var elimInner = e.ativa ? (_elimDatesExtra + eb + _elimEndExtra + _elimInitExtra) : '';
     // v4.4.52: fase avançou → config da eliminatória travada (cinza, sem cliques). Nota muda
     // conforme haja classificatória (avançou de fase) ou seja eliminação direta (já sorteada).
@@ -1369,7 +1370,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Slot (Datas + Inscrições) dentro da CLASSIFICATÓRIA quando ela está ativa.
     if (cfg.classifAtiva) classifSchedule += '<div id="f2-hours-slot" style="margin-top:12px;"></div><div id="f2-classif-extra" style="margin-top:4px;"></div>';
 
-    var datesSlot = '<div id="f2-phase-dates-slot" style="margin-top:12px;"></div>';
+    var datesSlot = '<div id="f2-hours-mode-slot" style="margin-top:12px;"></div><div id="f2-phase-dates-slot" style="margin-top:12px;"></div>';
     var formationStep = isDupla && cfg.classifAtiva ? _phaseBlock('Inscrição e formação de duplas', '#818cf8', formationControls) : '';
     var structureSummary = '<div id="f2-estrutura-block">' + _estruturaBlock(cfg) + '</div>';
     var teamChoiceStep = teamChoiceControls ? teamChoiceControls : '';
@@ -1408,7 +1409,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ? 'Saída escolhida: entrada direta na eliminatória.'
       : (e.ativa ? 'Saída escolhida: a classificatória seleciona participantes para a eliminatória.'
         : 'Saída escolhida: classificação final de ' + _titleUnit + ', sem eliminatória.');
-    var eliminationStep = _phaseBlock('3. 🏆 Fase Eliminatória', '#fbbf24', e.ativa ? elimInner : '',
+    var eliminationStep = cfg.parceria === 'super_eight' ? '' : _phaseBlock('3. 🏆 Fase Eliminatória', '#fbbf24', e.ativa ? elimInner : '',
       _hdrRight(_elimLocked,
         _toggleRight('Ativa', e.ativa, 'window._f2Elim(this.checked)',
           _elimLocked || (e.ativa && !cfg.classifAtiva))));
@@ -1577,7 +1578,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // v1.4.12/15: autodesativação dos inscritos (id liga-allow-self-deactivation, lido pelo save
   // do form). Sem _rerender: o toggle é estado puro do modelo, e re-renderizar aqui roubaria o
   // foco do bloco. Grava a escolha EXPLÍCITA — que vence o default de rodada única (format2.js).
-  window._f2AllowSelfDeact = function (checked) { if (!S) return; S.cfg.rodadas.allowSelfDeactivation = !!checked; };
+  window._f2AllowSelfDeact = function (checked) { if (!S) return; S.cfg.rodadas.allowSelfDeactivation = !!checked; _norm(); _rerender(); };
   // v4.5.88: Nº de RODADAS derivado da janela pela MESMA fórmula ESTRITA do runtime
   // (window._phasePlannedRounds): floor((fim − 1º − 1ms) / (iv×dia)) + 1 = nº de sorteios
   // que disparam ESTRITAMENTE antes do fim. Antes usava Math.round(janela/iv), que diverge

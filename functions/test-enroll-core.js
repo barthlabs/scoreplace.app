@@ -193,6 +193,15 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
 
 // ── Capacidade cheia (modo cap) rejeita ──────────────────────────────────────
 (() => {
+  const data = { status:'open', maxParticipants:2, waitlistCapacity:1,
+    waitlistCallPolicy:'enrollment_order', participants:[{uid:'a-uid'}, {uid:'b-uid'}], standbyParticipants:[] };
+  const first = C.computeEnroll(data, {uid:'c-uid'}, null, NOW);
+  eq('primeiro excedente entra na espera configurada', first.outcome, 'waitlisted');
+  eq('espera não fecha as inscrições ao completar vagas', first.updateData.standbyParticipants.length, 1);
+  const full = C.computeEnroll(Object.assign({}, data, first.updateData), {uid:'d-uid'}, null, NOW);
+  eq('limite da lista de espera é aplicado', full.outcome, 'capacityFull');
+})();
+(() => {
   const data = { status: 'open', maxParticipants: 2, participants: [{ uid: 'a-uid' }, { uid: 'b-uid' }] };
   const r = C.computeEnroll(data, { uid: 'c-uid', displayName: 'C' }, null, NOW);
   eq('lotado → capacityFull', r.outcome, 'capacityFull');
