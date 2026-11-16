@@ -2,8 +2,8 @@
   "schema": 1,
   "entries": {
     "drawRound": {
-      "backendCommit": "09b77d66266a73a4a018bb1cc4b2d6e7447004fe",
-      "deployedAt": "2026-11-16T18:54:06.403Z",
+      "backendCommit": "c2b09f2cc11a1ad7f272193734e4b729d9247cf6",
+      "deployedAt": "2026-11-16T19:00:59.083Z",
       "result": "success",
       "mode": "only"
     },
@@ -44,8 +44,8 @@
       "mode": "only"
     },
     "autoDraw": {
-      "backendCommit": "09b77d66266a73a4a018bb1cc4b2d6e7447004fe",
-      "deployedAt": "2026-11-16T18:54:06.403Z",
+      "backendCommit": "c2b09f2cc11a1ad7f272193734e4b729d9247cf6",
+      "deployedAt": "2026-11-16T19:00:59.083Z",
       "result": "success",
       "mode": "only"
     },
@@ -146,8 +146,8 @@
       "mode": "only"
     },
     "resetTournamentToEnrollment": {
-      "backendCommit": "09b77d66266a73a4a018bb1cc4b2d6e7447004fe",
-      "deployedAt": "2026-11-16T18:54:06.403Z",
+      "backendCommit": "c2b09f2cc11a1ad7f272193734e4b729d9247cf6",
+      "deployedAt": "2026-11-16T19:00:59.083Z",
       "result": "success",
       "mode": "only"
     },
@@ -176,8 +176,8 @@
       "mode": "only"
     },
     "closeRound": {
-      "backendCommit": "09b77d66266a73a4a018bb1cc4b2d6e7447004fe",
-      "deployedAt": "2026-11-16T18:54:06.403Z",
+      "backendCommit": "c2b09f2cc11a1ad7f272193734e4b729d9247cf6",
+      "deployedAt": "2026-11-16T19:00:59.083Z",
       "result": "success",
       "mode": "only"
     },
@@ -200,8 +200,8 @@
       "mode": "only"
     },
     "generateExtraTournamentRound": {
-      "backendCommit": "09b77d66266a73a4a018bb1cc4b2d6e7447004fe",
-      "deployedAt": "2026-11-16T18:54:06.403Z",
+      "backendCommit": "c2b09f2cc11a1ad7f272193734e4b729d9247cf6",
+      "deployedAt": "2026-11-16T19:00:59.083Z",
       "result": "success",
       "mode": "only"
     },
