@@ -5667,7 +5667,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
   'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','coverGradientBalance','coverGradientBlend','titleColor','dateCardColors','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
   'courtNames','courtOrder','callTime','warmupTime','gameDuration','scoring','swissRounds',
-  'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','temporada','equilibrado',
+  'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','superEight','superEightDrawMode','temporada','equilibrado',
   'clusterSize','balanceBy','genderRatio','genderRatioDisabled','wlGroupBalance','ligaNewPlayerScore',
   'ligaInactivity','ligaInactivityX','allowSelfDeactivation','ligaOpenEnrollment',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy','rankingSitOutScoring',
@@ -5695,7 +5695,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
  * de rodadas da fase e, se não bater, DESCARTA o arranjo e volta pra divisão igual.
  * Os demais campos desta lista continuam onde estavam — esses sim redesenham a chave. */
 const _CONFIG_ESTRUTURAL = new Set([
-  'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds','registrationSettings','genderRatioDisabled',
+  'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds','superEight','superEightDrawMode','registrationSettings','genderRatioDisabled',
   'gruposCount','gruposClassified','gruposEqualOnly','gruposSeedVip','gruposSeedCategory',
   'teamCompetition','categorySchedule','turnos','categoryDefinitions',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy','rankingSitOutScoring','monarchAdvanceToElim',

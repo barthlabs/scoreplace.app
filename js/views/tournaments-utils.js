@@ -2785,6 +2785,10 @@ window._owedDrawSlotMs = function(firstDateStr, firstTimeStr, intervalDays, last
 
 window._nextOwedDrawMs = function(t, nowMs) {
     if (!t) return null;
+    // No Super 8 de sorteio único, o primeiro sorteio já fixou o ciclo completo.
+    // Mesmo um sorteio antecipado pela organização consome a única vaga automática.
+    if (t.superEight === true && t.superEightDrawMode === 'single' &&
+        Array.isArray(t.rounds) && t.rounds.length > 0) return null;
     var _now = (typeof nowMs === 'number') ? nowMs : Date.now();
     // v3.1.16 (inc 8): Liga incremental de FASE POSTERIOR tem agenda PRÓPRIA (config da
     // fase) + dedup por phaseRounds[cur].lastAutoDrawAt. Mesma MATEMÁTICA do Fase-0 (via

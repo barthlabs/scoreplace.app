@@ -4657,7 +4657,8 @@ window._applyRoundCloseToTournament = function (t, roundIdx) {
     t.status = 'finished';
     return 'classificationFinished';
   }
-  if (typeof window._isLigaAutoDraw === 'function' && window._isLigaAutoDraw(t)) return 'ligaScheduled';
+  if (typeof window._isLigaAutoDraw === 'function' && window._isLigaAutoDraw(t) &&
+      !(t.superEight === true && t.superEightDrawMode === 'single')) return 'ligaScheduled';
   // Gera a próxima rodada só se ainda não existe uma após esta (idempotência).
   if (t.rounds.length <= roundIdx + 1) _generateNextRound(t);
   return 'nextRound';
@@ -4964,7 +4965,8 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
     // ANTES da hora — e inflando o "X/Y partidas" (o progresso soma TODAS as
     // rodadas existentes). Liga manual e Suíço seguem gerando na conclusão,
     // pois têm gatilho próprio (botão / fluxo contínuo do Suíço).
-    var _ligaScheduled = window._isLigaAutoDraw(t); // v2.7.6: canônico
+    var _ligaScheduled = window._isLigaAutoDraw(t) &&
+      !(t.superEight === true && t.superEightDrawMode === 'single');
     if (_ligaScheduled) {
       showNotification(
         _t('bui.roundClosedTitle') || 'Rodada encerrada',
@@ -6378,7 +6380,15 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     if (!t.superEightOrders) t.superEightOrders = {};
     var eightKey = category || '_default_';
     if (!Array.isArray(t.superEightOrders[eightKey])) {
-      t.superEightOrders[eightKey] = players.map(function (name) {
+      var eightSeed = players.slice();
+      if (t.superEightDrawMode === 'single' || t.superEightDrawMode === 'rounds') {
+        var eightRandom = det && typeof det.rnd === 'function' ? det.rnd : Math.random;
+        for (var si = eightSeed.length - 1; si > 0; si--) {
+          var sj = Math.floor(eightRandom() * (si + 1));
+          var swap = eightSeed[si]; eightSeed[si] = eightSeed[sj]; eightSeed[sj] = swap;
+        }
+      }
+      t.superEightOrders[eightKey] = eightSeed.map(function (name) {
         return { uid: nameToUid[name] || null, name: name };
       });
     }
@@ -6390,7 +6400,18 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     if (ordered.some(function (name) { return !name; }) || new Set(ordered).size !== 8) {
       throw new Error('O elenco de oito atletas mudou durante o ciclo.');
     }
-    var scheduled = core.build(ordered).rounds[roundNum - 1];
+    var scheduleIndex = roundNum - 1;
+    if (t.superEightDrawMode === 'rounds') {
+      if (!t.superEightRoundOrder) t.superEightRoundOrder = {};
+      var chosen = t.superEightRoundOrder[eightKey] || (t.superEightRoundOrder[eightKey] = []);
+      if (chosen[scheduleIndex] == null) {
+        var available = [0, 1, 2, 3, 4, 5, 6].filter(function (i) { return chosen.indexOf(i) < 0; });
+        var random = det && typeof det.rnd === 'function' ? det.rnd : Math.random;
+        chosen[scheduleIndex] = available[Math.floor(random() * available.length)];
+      }
+      scheduleIndex = chosen[scheduleIndex];
+    }
+    var scheduled = core.build(ordered).rounds[scheduleIndex];
     var eightGroups = scheduled.map(function (duel, gi) {
       var group = _buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length,
         gi: gi, players: duel[0].concat(duel[1]), category: category, ts: ts,
@@ -6995,7 +7016,9 @@ function _phaseGenNextLeagueRound(t, phaseIdx, det) {
   var faux = {
     id: t.id, format: 'Liga', ligaDrawMode: 'standard',
     superEight: cfg.superEight === true,
+    superEightDrawMode: cfg.superEightDrawMode,
     superEightOrders: st.superEightOrders,
+    superEightRoundOrder: st.superEightRoundOrder,
     ligaRoundFormat: _cfgMonarch ? 'rei_rainha' : 'standard',
     // Rei/Rainha: formação dos grupos de 4 honra o eixo da FASE (cfg.groupsBy:
     // 'sorteio'|'ranking'); fallback pro top-level e pro default do gerador ('ranking').
@@ -7014,6 +7037,7 @@ function _phaseGenNextLeagueRound(t, phaseIdx, det) {
   try { window._generateNextRound(faux, det); }
   catch (e) { if (window._warn) window._warn('[brick4] gen liga round falhou', e); return false; }
   if (faux.superEightOrders) st.superEightOrders = faux.superEightOrders;
+  if (faux.superEightRoundOrder) st.superEightRoundOrder = faux.superEightRoundOrder;
   if (faux.rounds.length <= before) return false;
   var newRound = faux.rounds[faux.rounds.length - 1];
   if (!newRound || !Array.isArray(newRound.matches) || !newRound.matches.length) return false;
@@ -7051,6 +7075,7 @@ window._phaseGenNextLeagueRound = _phaseGenNextLeagueRound;
 // Roda no poller (só organizador escreve) e corrige os dados já afetados sem
 // intervenção manual. Retorna true se removeu alguma rodada.
 function _healPrematureLigaRounds(t) {
+  if (t && t.superEight === true && t.superEightDrawMode === 'single') return false;
   // `rounds` é o storage da fase 0. Em fase posterior, ou sem agenda
   // classificatória canônica, nunca tentar "curar" pelo rótulo histórico Liga.
   var autoCfg = window._autoDrawScheduleForCurrentPhase && window._autoDrawScheduleForCurrentPhase(t);

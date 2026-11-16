@@ -198,7 +198,7 @@ function sameGroup(ns) { var pre = ns.map(function (n) { return n[0]; }); return
   var branch = ui.indexOf('if (!cfg.classifAtiva) {', elimStart);
   ok(elimStart >= 0 && control > elimStart && control < branch && /if \(isDupla\) eb \+=/.test(ui.slice(elimStart, control)),
     '(3) o controle aparece no começo de eb, antes dos ramos com/sem classificatória, só para duplas');
-  ok(/var elimInner = e\.ativa \? \(eb \+/.test(ui) && /aria-disabled="true"[^\n]*\+ eb \+/.test(ui),
+  ok(/var elimInner = e\.ativa \? \(_elimDatesExtra \+ eb \+/.test(ui) && /aria-disabled="true"[^\n]*\+ eb \+/.test(ui),
     '(3) o controle permanece no trecho da eliminatória bloqueado após sorteio');
   ok(/if \(!\(isDupla && cfg\.eliminatoria\.openReiRainha\)\)/.test(ui) ||
      /if \(isDupla && !cfg\.eliminatoria\.openReiRainha\)/.test(ui),

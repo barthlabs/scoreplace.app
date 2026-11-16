@@ -77,7 +77,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // própria eliminatória, quando é eliminação direta). O slot #f2-classif-extra já muda de
   // lugar conforme a fase inicial, então o bloco acompanha sozinho. A fase eliminatória
   // POSTERIOR tem a sua própria seção (_gsmElimBlock), gravada em cfg.eliminatoria.scoring.
-  var _EXT_IDS = ['gsm-section', 'phase-dates-box', 'late-enroll-box', 'gender-ratio-box'];
+  var _EXT_IDS = ['gsm-section', 'phase-dates-box', 'estimated-games-window-section',
+    'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box',
+    'late-enroll-box', 'gender-ratio-box'];
   function _stashExt() {
     var mount = document.getElementById('f2-config-mount');
     var holder = mount && mount.parentNode;
@@ -86,8 +88,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _placeExt() {
     var slot = document.getElementById('f2-classif-extra');
+    var datesSlot = document.getElementById('f2-phase-dates-slot');
+    var hoursSlot = document.getElementById('f2-hours-slot');
+    if (datesSlot) { var dates = document.getElementById('phase-dates-box'); if (dates) datesSlot.appendChild(dates); }
+    if (hoursSlot) ['estimated-games-window-section', 'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box'].forEach(function (id) {
+      var el = document.getElementById(id); if (el) hoursSlot.appendChild(el);
+    });
     if (!slot) return;
-    _EXT_IDS.forEach(function (id) { var el = document.getElementById(id); if (el) slot.appendChild(el); });
+    _EXT_IDS.filter(function (id) { return ['phase-dates-box', 'estimated-games-window-section', 'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box'].indexOf(id) < 0; }).forEach(function (id) {
+      var el = document.getElementById(id); if (el) slot.appendChild(el);
+    });
   }
   window._f2PlaceExtSections = _placeExt; // pra chamar de fora após o mount
 
@@ -554,15 +564,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (isNaN(d1.getTime()) || isNaN(d2.getTime()) || d2 <= d1) return null;
     return (d2 - d1) / 86400000; // dias FRACIONÁRIOS — o horário conta na janela
   }
-  // Bloco de agendamento dos sorteios (modo "nº de rodadas"). Layout pedido pelo dono:
-  //   Data do 1º sorteio | Hora
-  //   Nº de rodadas | Repetir a cada (dias)
-  //   [toggle] Sortear manualmente  (embaixo)
-  // Manual é o efetivo quando não há data do 1º sorteio (auto precisa dela).
+  // O modo manual vem primeiro: ele determina se os campos de agenda aparecem.
+  // Na agenda automática, a repetição vem antes da quantidade de rodadas derivada.
   function _schedBlock(r) {
     var inp = 'padding:8px 10px;border-radius:8px;border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;font-size:0.85rem;';
-    var canAuto = !!r.drawFirstDate;
-    var manual = !!r.drawManual || !canAuto;
+    var manual = !!r.drawManual;
+    var singleSuper8 = S.cfg.parceria === 'super_eight' && S.cfg.superEightDrawMode === 'single';
     var ivVal = (parseInt(r.drawIntervalDays, 10) >= 1) ? parseInt(r.drawIntervalDays, 10) : '';
     // v4.4.62: título com white-space:nowrap — evita que "Repetir a cada (dias)" quebre em 2
     // linhas em telas estreitas (o que, com align-items:flex-end, empurrava o "Nº de rodadas"
@@ -573,9 +580,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       fld('Data do 1º sorteio', '<input type="date" class="form-control" value="' + _safe(r.drawFirstDate || '') + '" onchange="window._f2SchedDate(this.value)" style="flex:1 1 0;min-width:0;">') +
       fld('Hora', '<input type="time" class="form-control" value="' + _safe(r.drawFirstTime || '19:00') + '" onchange="window._f2SchedTime(this.value)" style="flex:0 0 auto;">') +
     '</div>';
-    // v4.4.29: VIA DE MÃO DUPLA — "Repetir a cada" e "Nº de rodadas" se ajustam mutuamente pela
-    // janela da fase (editar um recalcula o outro). Nenhum trava o outro. Apagar o repetir o deixa
-    // VAZIO (sem repetição) e NÃO volta sozinho nem mexe nas rodadas; ✕ zera. Ambos editáveis.
+    // A repetição pode derivar o número de rodadas abaixo, mas o número de
+    // rodadas nunca altera a repetição ou as datas já percorridas acima.
     // v4.4.71: ids estáveis + ✕ SEMPRE no DOM (display alternado) → _f2SchedRefresh
     // atualiza os valores derivados sem reconstruir os inputs (preserva a digitação nativa).
     var ivInput = '<span style="display:inline-flex;align-items:center;gap:6px;">' +
@@ -584,11 +590,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // Era um "✕ solto colorido", que o cânone proíbe explicitamente (components.css:555).
       '<button type="button" id="f2-sched-ivx" class="cancel-x-btn" title="Sem repetição" onclick="window._f2SchedInterval(\'\')" style="--cx-size:20px;' + (ivVal ? '' : 'display:none;') + '">✕</button>' +
     '</span>';
-    var row2 = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;">' +
-      fld('Repetir a cada (dias)', ivInput) +
-      fld('Nº de rodadas', '<input id="f2-sched-n" type="number" min="1" max="30" value="' + (r.n || '') + '" placeholder="—" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;">') +
-    '</div>';
-    var tgl = '<div style="margin-top:14px;">' + _toggleRight('Sortear manualmente', manual, 'window._f2SchedManual(this.checked)') + '</div>';
+    var rounds = fld('Nº de rodadas', '<input id="f2-sched-n" type="number" min="1" max="30" value="' + (r.n || '') + '" placeholder="—" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;"' + (S.cfg.parceria === 'super_eight' ? ' disabled' : '') + '>');
+    var tgl = _toggleRight('Sortear manualmente', manual, 'window._f2SchedManual(this.checked)');
+    var automatic = manual ? '' : '<div style="margin-top:12px;">' + row1 +
+      (singleSuper8 ? '' : fld('Repetir a cada (dias)', ivInput)) + '</div>';
     // v1.4.12/15 — "Deixar inscritos ficarem de fora (Ativado/Desativado)". O controle existia
     // no #liga-fields do form antigo e SUMIU quando o configurador novo (format2) assumiu a
     // config da fase. Mora aqui porque é decisão da MESMA fase que o agendamento define.
@@ -613,8 +618,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     '</div>';
     var note = '<div id="f2-sched-note" style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">' + _f2SchedNote(r) + '</div>';
     return '<div style="margin-top:14px;padding:12px 13px;border-radius:10px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));">' +
-      '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:12px;">Agendamento dos sorteios</div>' +
-      row1 + row2 + tgl + _adTgl + note + '</div>';
+      '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:12px;">Sorteio das rodadas</div>' +
+      tgl + automatic + '<div style="margin-top:12px;">' + rounds + '</div>' +
+      (S.cfg.parceria === 'super_eight'
+        ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:10px;">Os oito atletas permanecem ativos durante as sete rodadas.</div>'
+        : _adTgl) + note + '</div>';
   }
 
   // Conta PESSOAS inscritas (dupla-entry = 2; senão 1). project_count_people_not_entries.
@@ -914,8 +922,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     structureControls += _sec('Estrutura — nº de grupos',
       '<div style="display:flex;align-items:center;gap:12px;">' +
       '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="window._f2GruposLive(this.value)" onchange="window._f2Grupos(this.value)" style="flex:1;accent-color:#818cf8;">' +
-      '<span id="f2-grupos-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:var(--sp-c-c7d2fe,#c7d2fe);">' + cfg.grupos + '</span></div>' +
-      '<div id="f2-estrutura-block">' + _estruturaBlock(cfg) + '</div>');
+      '<span id="f2-grupos-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:var(--sp-c-c7d2fe,#c7d2fe);">' + cfg.grupos + '</span></div>');
 
     // (A FORMAÇÃO das duplas — participantes montam × organizador, + times sorteados vs
     //  montados — fica nos toggles detalhados da seção "Formação de Duplas" abaixo do form.)
@@ -948,6 +955,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (porRodada
             ? 'A cada rodada, parceiro (e adversário) são sorteados de novo — pontuação individual.'
             : 'A dupla é sorteada 1× e permanece fixa até o fim do torneio.') + '</div>';
+      }
+      if (pr === 'super_eight') {
+        var oneDraw = cfg.superEightDrawMode === 'single';
+        fBtns += '<div style="margin-top:14px;">' + _toggleRight('Um sorteio para as 7 rodadas', oneDraw, 'window._f2SuperEightDrawMode(this.checked)') + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (oneDraw
+            ? 'O primeiro sorteio fixa todos os confrontos. A rodada seguinte é liberada ao concluir a anterior.'
+            : 'Cada rodada sorteia uma das combinações ainda não usadas. Cada atleta joga 7 vezes e faz dupla uma vez com cada outro atleta.') + '</div>';
       }
       formationControls += fBtns;
     }
@@ -998,9 +1012,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           '<div style="margin-top:12px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Escopo da tabela</div>' +
           _pill(tc.aggregation !== 'per_category', 'window._f2TeamAggregation(\'overall\')', '🌐 Geral') +
           _pill(tc.aggregation === 'per_category', 'window._f2TeamAggregation(\'per_category\')', '🏷️ Por categoria') +
-          (cfg.grupos > 1 && !cfg.eliminatoria.ativa
-            ? '<div style="font-size:.72rem;color:var(--text-muted);margin-top:7px;line-height:1.45;">Sem final entre grupos, cada grupo tem seu campeão. “Geral” soma as categorias <b>dentro de cada grupo</b>; “Por categoria” dá um título por categoria em cada grupo.</div>'
-            : '') +
           '<div style="margin-top:8px;">' +
           _pill(tc.classificationUnit !== 'pair', 'window._f2TeamClassificationUnit(\'team\')', '👥 Por time') +
           _pill(tc.classificationUnit === 'pair', 'window._f2TeamClassificationUnit(\'pair\')', '🤝 Por dupla') + '</div>' +
@@ -1036,9 +1047,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (rotativo) {
       // Rei/Rainha (ou sorteio a cada rodada): SEMPRE nº de rodadas + agendamento (rotativo por
       // rodada). "Todos contra todos" não se aplica — mas o Nº de rodadas FICA (pedido do dono).
-      rInner = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px;">Sorteio a cada rodada — ' +
-        (cfg.parceria === 'rei_rainha' ? 'grupos de 4, parceiros rotativos' : 'parceiro e adversário sorteados') +
-        '; pontuação individual.</div>' + _schedBlock(cfg.rodadas);
+      rInner = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px;">' +
+        (cfg.parceria === 'super_eight' ? 'Super 8 — 7 jogos por atleta, 14 confrontos no total; pontuação individual.' :
+          'Sorteio a cada rodada — ' + (cfg.parceria === 'rei_rainha' ? 'grupos de 4, parceiros rotativos' : 'parceiro e adversário sorteados') + '; pontuação individual.') +
+        '</div>' + _schedBlock(cfg.rodadas);
       if (cfg.parceria === 'rei_rainha' && cfg.rankingRemainderPolicy === 'lottery_average') {
         rInner += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Atletas ativos sem quarteto ficam de folga por sorteio; antes de repetir uma folga, são priorizados os que ainda não folgaram.</div>';
       }
@@ -1320,7 +1332,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // v1.3.99: na eliminação DIRETA (sem classificatória) a fase inicial carrega o slot do FORM
       // (#f2-classif-extra = DATAS + INSCRIÇÕES durante a fase). Guardo SEPARADO pra ficar FORA do
       // wrapper de trava — igual às datas da classificatória (abaixo). Só a ESTRUTURA trava.
-      if (!cfg.classifAtiva) _elimInitExtra = '<div id="f2-classif-extra" style="margin-top:12px;"></div>';
+      if (!cfg.classifAtiva) _elimInitExtra = '<div id="f2-hours-slot" style="margin-top:12px;"></div><div id="f2-classif-extra" style="margin-top:12px;"></div>';
       else {
         eb += _lateEnrollElimBlock(e);
         // v1.6.80: término PRÓPRIO da eliminatória — FORA do wrapper de trava (igual às datas
@@ -1329,7 +1341,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         _elimEndExtra = _elimEndDateBlock(e) + _elimRoundBoundsHtml();
       }
     }
-    var elimInner = e.ativa ? (eb + _elimEndExtra + _elimInitExtra) : '';
+    if (!cfg.classifAtiva && isDupla) eb = _phaseBlock('Inscrição e formação de duplas', '#818cf8', formationControls) + eb;
+    var _elimDatesExtra = !cfg.classifAtiva && e.ativa ? '<div id="f2-phase-dates-slot" style="margin-top:12px;"></div>' : '';
+    var elimInner = e.ativa ? (_elimDatesExtra + eb + _elimEndExtra + _elimInitExtra) : '';
     // v4.4.52: fase avançou → config da eliminatória travada (cinza, sem cliques). Nota muda
     // conforme haja classificatória (avançou de fase) ou seja eliminação direta (já sorteada).
     if (_elimLocked) {
@@ -1342,22 +1356,27 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         // torneio (estender/abreviar a fase, aceitar/parar novos confrontos).
         : '🔒 <b>Estrutura travada</b> — formato, chaves e estratégia não mudam mais (já sorteada). Você ainda pode ajustar as <b>datas</b> e as <b>inscrições durante a fase</b> abaixo.';
       elimInner = '<div style="font-size:0.76rem;color:var(--sp-c-fde68a,#fde68a);background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">' + _elimNote + '</div>' +
-        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + eb + '</div>' +
+        _elimDatesExtra + '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + eb + '</div>' +
         _elimEndExtra + _elimInitExtra;   // DATAS + INSCRIÇÕES FORA do lock → editáveis no calor do torneio
     }
 
     // Slot (Datas + Inscrições) dentro da CLASSIFICATÓRIA quando ela está ativa.
-    if (cfg.classifAtiva) classifSchedule += '<div id="f2-classif-extra" style="margin-top:4px;"></div>';
+    if (cfg.classifAtiva) classifSchedule += '<div id="f2-hours-slot" style="margin-top:12px;"></div><div id="f2-classif-extra" style="margin-top:4px;"></div>';
 
-    var classifInner = cfg.classifAtiva ? (structureControls + classifSchedule) : '';
+    var datesSlot = '<div id="f2-phase-dates-slot" style="margin-top:12px;"></div>';
+    var formationStep = isDupla && cfg.classifAtiva ? _phaseBlock('Inscrição e formação de duplas', '#818cf8', formationControls) : '';
+    var structureSummary = '<div id="f2-estrutura-block">' + _estruturaBlock(cfg) + '</div>';
+    var teamChoiceStep = teamChoiceControls ? teamChoiceControls : '';
+    var classifStructure = structureControls + formationStep + teamChoiceStep;
+    var classifInner = cfg.classifAtiva ? (classifStructure + datesSlot + classifSchedule) : '';
     // v4.4.51/v4.5.49: fase classificatória já sorteada → só a ESTRUTURA (formato/grupos/formação)
     // fica cinza e sem interação. O AGENDAMENTO (repetição, nº de rodadas) e as DATAS/Inscrições
     // (#f2-classif-extra, dentro de classifSchedule) ficam FORA do wrapper → SEMPRE editáveis, pra
     // o organizador ajustar a temporada durante a fase (reduzir/estender rodadas, mudar o término).
     if (_classifLocked) {
       classifInner = '<div style="font-size:0.76rem;color:var(--sp-c-c7d2fe,#c7d2fe);background:rgba(129,140,248,0.12);border:1px solid rgba(129,140,248,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">🔒 <b>Estrutura travada</b> — formato, grupos e formação não mudam mais (fase já sorteada). Você ainda pode ajustar o <b>agendamento</b> (repetição, nº de rodadas, término da fase) e a <b>fase eliminatória</b>.</div>' +
-        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + structureControls + '</div>' +
-        classifSchedule;
+        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + classifStructure + '</div>' +
+        datesSlot + classifSchedule;
     }
 
     // v4.4.52: cadeado 🔒 ENTRE o título e o toggle quando a fase está travada.
@@ -1368,19 +1387,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var priorLocked = _p0Drawn
       ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">'
       : '<div>';
-    var entryStep = _phaseBlock('Disputa', '#818cf8',
+    var entryStep = _phaseBlock('1. Disputa', '#818cf8',
       priorLocked + entryControls + '</div>');
-    var formationStep = isDupla ? _phaseBlock('Inscrição e formação de duplas', '#818cf8',
-      priorLocked + formationControls + '</div>') : '';
-    var teamChoiceStep = teamChoiceControls ?
-      (_classifLocked ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
-      teamChoiceControls + '</div>' : '';
-    var classifStep = _phaseBlock('4. 🎯 Fase Classificatória', '#818cf8',
-      cfg.classifAtiva ? (teamChoiceStep + classifInner + scoringControls) : '',
+    var classifStep = _phaseBlock('2. 🎯 Fase Classificatória', '#818cf8',
+      cfg.classifAtiva ? (classifInner + scoringControls) : '',
       _hdrRight(_phaseLocks.classifToggleLocked,
         _toggleRight('Ativa', cfg.classifAtiva, 'window._f2ClassifAtiva(this.checked)',
-          _phaseLocks.classifToggleLocked || (cfg.classifAtiva && !e.ativa))));
-    var h = entryStep + formationStep + classifStep;
+          _phaseLocks.classifToggleLocked)));
+    var h = entryStep + classifStep;
     var _titleUnit = cfg.teamCompetition && cfg.teamCompetition.enabled
       ? (cfg.teamCompetition.classificationUnit === 'pair' ? 'dupla' : 'time')
       : (cfg._scoreBy === 'individual' ? 'atleta' : 'dupla');
@@ -1388,12 +1402,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ? 'Saída escolhida: entrada direta na eliminatória.'
       : (e.ativa ? 'Saída escolhida: a classificatória seleciona participantes para a eliminatória.'
         : 'Saída escolhida: classificação final de ' + _titleUnit + ', sem eliminatória.');
-    var eliminationStep = _phaseBlock('5. 🏆 Fase Eliminatória', '#fbbf24', e.ativa ? elimInner : '',
+    var eliminationStep = _phaseBlock('3. 🏆 Fase Eliminatória', '#fbbf24', e.ativa ? elimInner : '',
       _hdrRight(_elimLocked,
         _toggleRight('Ativa', e.ativa, 'window._f2Elim(this.checked)',
           _elimLocked || (e.ativa && !cfg.classifAtiva))));
-    var review = _phaseBlock('6. Revisão das decisões', '#818cf8',
-      '<p style="font-size:.85rem;color:var(--text-main);">' + _safe(_outcome) + '</p>' +
+    var review = _phaseBlock('4. Revisão das decisões', '#818cf8',
+      '<p style="font-size:.85rem;color:var(--text-main);">' + _safe(_outcome) + '</p>' + structureSummary +
       (cfg.classifAtiva && !e.ativa
         ? '<p style="font-size:.78rem;color:var(--text-muted);">As colocações saem da tabela. Não há partida de disputa de 3º e 4º lugar.</p>'
         : '') +
@@ -1516,7 +1530,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       else { S.cfg.parceria = 'fixa'; S.cfg.formacaoDupla = 'sorteio'; }
     }
     else if (v === 'rei_rainha') { S.cfg.parceria = 'rei_rainha'; S.cfg.formacaoDupla = 'sorteio'; }
-    else if (v === 'super_eight') { S.cfg.parceria = 'super_eight'; S.cfg.formacaoDupla = 'sorteio'; }
+    else if (v === 'super_eight') {
+      S.cfg.parceria = 'super_eight'; S.cfg.formacaoDupla = 'sorteio'; S.cfg.superEightDrawMode = 'single';
+      if (!S.cfg.rodadas.drawFirstDate) S.cfg.rodadas.drawManual = true;
+    }
     _norm(); _rerender();
   };
   // v4.4.30: toggle "Novo parceiro a cada rodada" dentro do Sorteio. ON = sorteio_rodada
@@ -1527,50 +1544,34 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     else { S.cfg.parceria = 'fixa'; S.cfg.formacaoDupla = 'sorteio'; }
     _norm(); _rerender();
   };
+  window._f2SuperEightDrawMode = function (single) {
+    if (!S || S.cfg.parceria !== 'super_eight') return;
+    S.cfg.superEightDrawMode = single ? 'single' : 'rounds';
+    _norm(); _rerender();
+  };
   window._f2Modo = function (v) { S.cfg.rodadas.modo = v; _norm(); _rerender(); };
   window._f2Turnos = function (v) {
     if (!S) return;
     if (v === 'ida_volta' && window.FORMAT2.resolveTurnos(S.cfg).groups > 1) { _rerender(); return; }
     S.cfg.rodadas.turnos = v; _norm(); _rerender();
   };
-  // CANON (v4.5.24, regra-mãe): editar o Nº de RODADAS → MOVE a DATA FINAL (mantém V). Fim =
-  // 1º + N×repetição (última rodada tem 1 intervalo pra ser jogada → todos os N sorteios disparam).
-  // Só cai no legado (deriva o intervalo pela janela) quando não dá pra derivar o fim (sem V/1º sorteio).
+  // A quantidade de rodadas é a última decisão da agenda; não reescreve datas
+  // nem repetição situadas acima dela.
   window._f2Rn = function (v) {
     if (!S) return;
     var n = parseInt(v, 10);
     if (!(n >= 1)) { return; } // vazio → mantém tudo (repetir intacto), sem re-render
-    S.cfg.rodadas.n = n;
-    if (n <= 1) S.cfg.rodadas.drawIntervalDays = null;             // 1 rodada não repete
-    // v4.5.47: com repetição definida, o Nº de rodadas define o TÉRMINO da fase (1º + N×intervalo).
-    // Só quando não dá pra derivar o fim (sem repetição/1º sorteio) cai no legado: intervalo pela janela.
-    else if (!_syncEndFromSchedule()) { var d = _windowDays(); if (d) S.cfg.rodadas.drawIntervalDays = Math.max(1, Math.round(d / n)); }
-    // CANON (dono, 17/jul): N > 1 EXIGE repetição — o painel TEM que MOSTRAR de quanto em
-    // quanto tempo. Sem isso o intervalo ficava vazio (= sorteio único) e o sistema fazia 1
-    // rodada enquanto o painel dizia N: contradição invisível pro usuário, e a rodada 2 nunca
-    // sorteava (sem intervalo não há próximo slot ⇒ nextDrawAt inexistente). Fallback: divide
-    // a janela da fase; sem janela, diário (o menor passo real) — nunca vazio.
-    if (n > 1) {
-      var _iv = parseInt(S.cfg.rodadas.drawIntervalDays, 10);
-      if (!(_iv >= 1)) { var _wd = _windowDays(); S.cfg.rodadas.drawIntervalDays = (_wd && _wd >= n) ? Math.max(1, Math.floor(_wd / n)) : 1; }
-    }
+    S.cfg.rodadas.n = n > 1 && !S.cfg.rodadas.drawManual &&
+      !(parseInt(S.cfg.rodadas.drawIntervalDays, 10) >= 1) &&
+      !(S.cfg.parceria === 'super_eight' && S.cfg.superEightDrawMode === 'single') ? 1 : n;
     _norm(); _f2SchedRefresh(); // v4.4.71: atualiza no lugar (sem destruir o input em edição)
   };
-  // Agendamento dos sorteios (modo "nº de rodadas"). Toggle "Sortear manualmente" (checked =
-  // manual). A data re-renderiza (recalcula o intervalo sugerido e o default manual/auto). Hora
-  // e intervalo NÃO re-renderizam (preserva foco); editar o intervalo desliga o auto-sugerido.
+  // O modo manual oculta a agenda automática e mantém a quantidade de rodadas.
   window._f2SchedManual = function (checked) { if (!S) return; S.cfg.rodadas.drawManual = !!checked; _norm(); _rerender(); };
   // v1.4.12/15: autodesativação dos inscritos (id liga-allow-self-deactivation, lido pelo save
   // do form). Sem _rerender: o toggle é estado puro do modelo, e re-renderizar aqui roubaria o
   // foco do bloco. Grava a escolha EXPLÍCITA — que vence o default de rodada única (format2.js).
   window._f2AllowSelfDeact = function (checked) { if (!S) return; S.cfg.rodadas.allowSelfDeactivation = !!checked; };
-  // A data/hora do 1º sorteio é TAMBÉM o início da fase (pedido do dono): espelha nos
-  // campos #tourn-start-date/#tourn-start-time e dispara os recálculos do form.
-  function _mirrorPhaseStart() {
-    var sd = document.getElementById('tourn-start-date'); if (sd && S.cfg.rodadas.drawFirstDate) sd.value = S.cfg.rodadas.drawFirstDate;
-    var st = document.getElementById('tourn-start-time'); if (st && S.cfg.rodadas.drawFirstTime) st.value = S.cfg.rodadas.drawFirstTime;
-    ['_recalcDuration', '_checkWeather'].forEach(function (fn) { if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} } });
-  }
   // v4.5.88: Nº de RODADAS derivado da janela pela MESMA fórmula ESTRITA do runtime
   // (window._phasePlannedRounds): floor((fim − 1º − 1ms) / (iv×dia)) + 1 = nº de sorteios
   // que disparam ESTRITAMENTE antes do fim. Antes usava Math.round(janela/iv), que diverge
@@ -1600,43 +1601,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var n = _strictNFromWindow(iv);
     if (n != null) S.cfg.rodadas.n = Math.max(1, n);
   }
-  // v4.5.47 (pedido do dono): 1º sorteio + repetição + Nº de rodadas → o TÉRMINO da fase DERIVA
-  // pra MANTER o Nº de rodadas escolhido. Último sorteio = 1º + (N−1)×intervalo; o fim fica UM
-  // intervalo além (o "tempo médio de uma rodada" = dias de repetição), dando à última rodada a
-  // janela pra ser jogada → fim = 1º + N×intervalo, na MESMA hora do 1º sorteio. Cai ESTRITAMENTE
-  // depois do último sorteio, então os N sorteios disparam e a contagem estrita (_phasePlannedRounds)
-  // relê exatamente N. Escreve nos campos de término da fase (#tourn-end-date/#tourn-end-time).
-  // Retorna true se conseguiu derivar o fim (precisa de 1º sorteio + intervalo + rodadas).
-  function _syncEndFromSchedule() {
-    if (!S || !S.cfg || !S.cfg.rodadas) return false;
-    var r = S.cfg.rodadas;
-    var n = parseInt(r.n, 10);
-    var iv = parseInt(r.drawIntervalDays, 10);
-    if (!(n >= 1) || !(iv >= 1)) return false;
-    var _v = function (id) { var el = document.getElementById(id); return el ? (el.value || '') : ''; };
-    var firstDate = r.drawFirstDate || _v('tourn-start-date') || '';
-    var firstTime = (r.drawFirstDate ? (r.drawFirstTime || '19:00') : (_v('tourn-start-time') || '19:00'));
-    if (!firstDate) return false;
-    var first = new Date(firstDate + 'T' + firstTime);
-    if (isNaN(first.getTime())) return false;
-    var end = new Date(first.getTime() + n * iv * 86400000);
-    var endDEl = document.getElementById('tourn-end-date');
-    if (!endDEl) return false;
-    endDEl.value = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
-    var endTEl = document.getElementById('tourn-end-time'); if (endTEl) endTEl.value = firstTime;
-    ['_recalcDuration', '_checkWeather'].forEach(function (fn) { if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} } });
-    return true;
-  }
   // Exposto pros campos legados de Início/Término da fase (#tourn-start/end-date/time).
   window._f2RecalcRoundsFromWindow = function () { if (!S || !S.cfg || S.cfg.rodadas.modo !== 'fixo') return; _recalcN(); _norm(); _f2SchedRefresh(); };
   // v4.4.71: texto da nota derivado do estado — compartilhado por _schedBlock (render) e
   // _f2SchedRefresh (update in-place). Fonte única do texto, sem divergir.
   function _f2SchedNote(r) {
     var canAuto = !!r.drawFirstDate;
-    var manual = !!r.drawManual || !canAuto;
+    var manual = !!r.drawManual;
     var ivVal = (parseInt(r.drawIntervalDays, 10) >= 1) ? parseInt(r.drawIntervalDays, 10) : '';
-    if (manual) return canAuto ? 'Você sorteia cada rodada manualmente, quando quiser.' : 'Informe a data do 1º sorteio para poder sortear automaticamente.';
-    if (ivVal) return 'Sorteia a cada ' + ivVal + ' dia(s) a partir do 1º sorteio, dentro das datas da fase. Editar rodadas ou repetição ajusta o outro pela janela.';
+    if (manual) return 'Sem sorteio agendado. A organização inicia o sorteio quando decidir.';
+    if (!canAuto) return 'Informe a data do 1º sorteio para ativar o agendamento automático.';
+    if (S.cfg.parceria === 'super_eight' && S.cfg.superEightDrawMode === 'single') return 'Um sorteio agendado fixa a sequência das sete rodadas.';
+    if (ivVal) return 'Sorteia a cada ' + ivVal + ' dia(s) a partir do 1º sorteio, dentro das datas da fase.';
     return 'Sem repetição: sorteia só o 1º; você libera as próximas rodadas manualmente.';
   }
   // v4.4.71 FIX: atualiza os valores DERIVADOS do bloco de agendamento (Nº de rodadas,
@@ -1663,19 +1639,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var was = !!S.cfg.rodadas.drawFirstDate;
     S.cfg.rodadas.drawFirstDate = v || '';
     var nowSet = !!S.cfg.rodadas.drawFirstDate;
-    // v4.4.76: preencher a data (vazia→setada) LIGA o modo automático sozinho — a
-    // presença de uma data futura já sinaliza intenção de sortear automaticamente.
-    // O usuário pode voltar pra manual no toggle em seguida. Mata a pegadinha
-    // "data setada + Sortear manualmente ligado = sorteio que nunca acontece"
-    // (nextDrawAt nem era computado). Só na transição vazia→setada (não briga com
-    // edições de data já preenchida nem com o manual reativado depois).
-    if (nowSet && !was) S.cfg.rodadas.drawManual = false;
-    // CANON (v4.5.24): mexeu em qualquer coisa que NÃO seja o Nº de rodadas → recalcula as RODADAS
-    // pela janela (mantém V e F). Só editar o campo "Nº de rodadas" move a data final (_f2Rn).
-    _mirrorPhaseStart(); _recalcN(); _norm();
+    // A data do sorteio vem depois das datas da fase e antes do número de
+    // rodadas. Não modifica os controles já percorridos pelo organizador.
+    _recalcN(); _norm();
     if (was !== nowSet) _rerender(); else _f2SchedRefresh();
   };
-  window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _mirrorPhaseStart(); _recalcN(); _norm(); _f2SchedRefresh(); };
+  window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _recalcN(); _norm(); _f2SchedRefresh(); };
   // CANON (v4.5.24): editar REPETIR (mantendo F) → recalcula as RODADAS pela janela.
   // CANON (dono, 17/jul): apagar o REPETIR = sorteio ÚNICO ⇒ o painel passa a mostrar
   // "Nº de rodadas = 1". Antes deixava vazio e NÃO mexia nas rodadas → dava pra salvar
@@ -1686,9 +1655,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2SchedInterval = function (v) {
     if (!S) return;
     var iv = parseInt(v, 10);
-    if (!(iv >= 1)) { S.cfg.rodadas.drawIntervalDays = null; S.cfg.rodadas.n = 1; _norm(); _f2SchedRefresh(); return; } // vazio = sorteio único ⇒ 1 rodada (mostrado)
+    if (!(iv >= 1)) { S.cfg.rodadas.drawIntervalDays = null; if (S.cfg.parceria !== 'super_eight') S.cfg.rodadas.n = 1; _norm(); _f2SchedRefresh(); return; }
     S.cfg.rodadas.drawIntervalDays = iv;
-    var _n = _strictNFromWindow(iv); if (_n != null) S.cfg.rodadas.n = Math.max(1, _n); // recalcula rodadas (estrito = runtime)
+    var nextN = _strictNFromWindow(iv); if (nextN != null) S.cfg.rodadas.n = Math.max(1, nextN);
     _norm(); _f2SchedRefresh();
   };
   // Slider de classificados: número + resumo da eliminatória ao vivo no arraste; re-render ao soltar.

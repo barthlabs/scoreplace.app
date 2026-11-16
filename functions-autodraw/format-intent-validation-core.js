@@ -6,6 +6,7 @@
 const ENUMS = [
   ['disputa', ['individual', 'dupla']],
   ['parceria', ['fixa', 'rei_rainha', 'sorteio_rodada', 'super_eight']],
+  ['superEightDrawMode', ['single', 'rounds']],
   ['formacaoDupla', ['manual', 'sorteio']],
   ['manualPairingPolicy', ['organizer_only', 'athletes_only', 'open']],
   ['classifScope', ['overall', 'per_group']],

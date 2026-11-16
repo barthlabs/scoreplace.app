@@ -172,11 +172,18 @@ uiCfg.parceria = 'fixa';
 uiHarness.window._f2MountInForm(uiBox, 'Beach Tennis', uiCfg, { id: 'future-test' });
 assert.match(uiBox.innerHTML, /Confrontos na chave/, 'organizador vê a decisão de semeadura');
 assert.match(uiBox.innerHTML, /Saída escolhida: a classificatória seleciona participantes para a eliminatória/);
-const decisionTitles = ['4. 🎯 Fase Classificatória', '5. 🏆 Fase Eliminatória', '6. Revisão das decisões'];
+const decisionTitles = ['2. 🎯 Fase Classificatória', '3. 🏆 Fase Eliminatória', '4. Revisão das decisões'];
 assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).filter(index => index >= 0).length,
   decisionTitles.length, 'o fluxo exibe só as seções que controlam decisões');
 assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).slice().sort((a, b) => a - b),
   decisionTitles.map(title => uiBox.innerHTML.indexOf(title)), 'as seções seguem a ordem fixa');
+const flowIds = ['Estrutura — nº de grupos', 'Inscrição e formação de duplas',
+  'f2-phase-dates-slot', 'Sortear manualmente', 'Data do 1º sorteio',
+  'Repetir a cada (dias)', 'id="f2-sched-n"', 'f2-hours-slot'];
+const flowPositions = flowIds.map(label => uiBox.innerHTML.indexOf(label));
+assert(flowPositions.every(position => position >= 0) &&
+  flowPositions.every((position, index) => index === 0 || position > flowPositions[index - 1]),
+  'decisões e campos dependentes seguem uma única passada de cima para baixo: ' + JSON.stringify(flowIds.map((label, index) => [label, flowPositions[index]])));
 assert.doesNotMatch(uiBox.innerHTML, /Quem disputa os jogos\?|Como se formam as duplas\?/,
   'perguntas estáticas antigas não ocupam espaço no formulário');
 assert.match(uiBox.innerHTML, /Simples[\s\S]*?Duplas[\s\S]*?Inscrição individual[\s\S]*?Dupla formada/,
@@ -198,13 +205,13 @@ assert.equal(uiHarness.window._f2GetConfig().eliminatoria.semeadura, 'sorteio',
 uiHarness.window._f2Elim(false);
 assert.match(uiBox.innerHTML, /Saída escolhida: classificação final de dupla, sem eliminatória/);
 assert.match(uiBox.innerHTML, /Não há partida de disputa de 3º e 4º lugar/);
-assert.match(uiBox.innerHTML, /5\. 🏆 Fase Eliminatória/, 'o bloco desligado permanece visível');
+assert.match(uiBox.innerHTML, /3\. 🏆 Fase Eliminatória/, 'o bloco desligado permanece visível');
 assert.doesNotMatch(uiBox.innerHTML, /Confrontos na chave/, 'o bloco desligado recolhe as decisões da chave');
 uiHarness.window._f2Elim(true);
 uiHarness.window._f2ClassifAtiva(false);
-assert.match(uiBox.innerHTML, /4\. 🎯 Fase Classificatória/, 'o bloco desligado permanece visível');
+assert.match(uiBox.innerHTML, /2\. 🎯 Fase Classificatória/, 'o bloco desligado permanece visível');
 assert.doesNotMatch(uiBox.innerHTML, /Pontuação agregada para times/, 'entrada direta recolhe a pontuação de times');
-assert.match(uiBox.innerHTML, /5\. 🏆 Fase Eliminatória/, 'entrada direta mantém a eliminatória');
+assert.match(uiBox.innerHTML, /3\. 🏆 Fase Eliminatória/, 'entrada direta mantém a eliminatória');
 const mixedCfg = FORMAT2.defaultConfig('Futevôlei');
 mixedCfg.disputa = 'dupla';
 mixedCfg.parceria = 'fixa';

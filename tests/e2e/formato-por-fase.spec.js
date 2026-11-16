@@ -34,6 +34,19 @@ test.describe('Formato da partida por FASE (create/edit)', () => {
       return !!(g && g.parentElement && g.parentElement.id === 'form-create-tournament');
     });
     expect(soltoNoForm).toBe(false);
+    await expect(page.locator('#f2-phase-dates-slot > #phase-dates-box')).toHaveCount(1);
+    await expect(page.locator('#f2-hours-slot > #estimated-games-window-section')).toHaveCount(1);
+    const order = await page.evaluate(() => {
+      const ids = ['phase-dates-box', 'estimated-games-window-section'];
+      const dates = document.getElementById(ids[0]);
+      const hours = document.getElementById(ids[1]);
+      const manual = Array.from(document.querySelectorAll('#f2-config-mount label'))
+        .find(el => el.textContent.includes('Sortear manualmente'));
+      return !!(dates && manual && hours &&
+        (dates.compareDocumentPosition(manual) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+        (manual.compareDocumentPosition(hours) & Node.DOCUMENT_POSITION_FOLLOWING));
+    });
+    expect(order).toBe(true);
   });
 
   test('a fase eliminatória tem o SEU próprio bloco de formato — sem toggle', async ({ page }) => {

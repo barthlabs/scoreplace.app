@@ -110,13 +110,32 @@ const coerente = function (s) { return !(s.n > 1 && !(parseInt(s.iv, 10) >= 1));
     '[CLUSTERS] sorteio livre mantém a política de repetição explícita — got ' + JSON.stringify(out.classificationPairing));
 })();
 
-// ── [REGRA-2] mudar o Nº de rodadas ⇒ calcula e mostra o Repetir ────────────────────────
+// ── [REGRA-2] o campo inferior não altera a repetição já escolhida acima ───────────────
 (function () {
   const st = mount({ drawIntervalDays: null, n: 1 });   // parte de "sorteio único"
   W._f2Rn(2);
-  ok(parseInt(st().iv, 10) >= 1, '[REGRA-2] pôr 2 rodadas ⇒ Repetir é CALCULADO (nunca vazio) — got ' + JSON.stringify(st()));
-  ok(st().n === 2, '[REGRA-2] as 2 rodadas ficam');
+  ok(st().iv === null, '[REGRA-2] Nº de rodadas não reescreve Repetir acima — got ' + JSON.stringify(st()));
+  ok(st().n === 1, '[REGRA-2] sem repetição, o número permanece 1');
   ok(coerente(st()), '[REGRA-2] sem contradição após mudar as rodadas');
+})();
+
+// Super 8: escolha anterior às rodadas e modo manual sem agendamento persistido.
+(function () {
+  mount();
+  W._f2TeamForm('super_eight');
+  W._f2SuperEightDrawMode(true);
+  W._f2SchedManual(true);
+  let cfg = W._f2GetConfig();
+  let saved = W.FORMAT2.compileToPhases(cfg, { sport:'Beach Tennis' });
+  ok(cfg.rodadas.n === 7 && saved.topLevel.superEightDrawMode === 'single', 'Super 8 fixa sete rodadas com um sorteio');
+  ok(cfg.rodadas.allowSelfDeactivation === false, 'Super 8 mantém os oito atletas ativos durante o ciclo');
+  ok(saved.topLevel.drawManual === true && !saved.topLevel.drawFirstDate && saved.phases[0].drawManual === true,
+    'Sortear manualmente desativa a agenda persistida');
+  W._f2SuperEightDrawMode(false);
+  cfg = W._f2GetConfig();
+  saved = W.FORMAT2.compileToPhases(cfg, { sport:'Beach Tennis' });
+  ok(saved.topLevel.superEightDrawMode === 'rounds' && saved.phases[0].superEightDrawMode === 'rounds',
+    'sorteios sucessivos são salvos na fase e no torneio');
 })();
 
 // ── [BUG-RANKING] o estado exato do doc real não pode mais ser criado pelo painel ───────

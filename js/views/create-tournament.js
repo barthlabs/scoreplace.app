@@ -169,9 +169,10 @@ window._renderEstimatedGameHours = function (datesChanged) {
   if (!state.mode) state.mode = state.saved && state.saved.mode ||
     (savedDays.length ? 'organizer' : 'participants');
   var modeHtml = '<fieldset class="estimated-games-mode"><legend>Horários dos jogos</legend>'
-    + '<label><input type="checkbox" role="switch" aria-label="Organizador determina os horários dos jogos" onchange="window._setEstimatedScheduleMode(this.checked ? \'organizer\' : \'participants\')"'
+    + '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">'
+    + '<span>Organizador determina quando cada jogo acontece</span><span class="toggle-switch"><input type="checkbox" role="switch" aria-label="Organizador determina os horários dos jogos" onchange="window._setEstimatedScheduleMode(this.checked ? \'organizer\' : \'participants\')"'
     + (state.mode === 'organizer' ? ' checked' : '') + (state.locked || !!(state.saved && state.saved.interleavedPlan) ? ' disabled' : '')
-    + '> Organizador determina quando cada jogo acontece</label>'
+    + '><span class="toggle-slider"></span></span></label>'
     + '<p class="estimated-games-help">Desligado: participantes combinam os jogos dentro do prazo do torneio. Ligado: o organizador define os dias e horários previstos.</p></fieldset>';
   if (state.mode === 'participants') {
     mount.innerHTML = modeHtml;
@@ -804,7 +805,7 @@ function setupCreateTournamentModal() {
                   </div>
                 </div>
                 <div id="estimated-games-window-section" style="margin-top:12px;padding:12px;border:1px solid rgba(96,165,250,.3);border-radius:10px">
-                  <div style="font-weight:700">🕒 Horários estimados das atividades (jogos)</div>
+                  <div style="font-weight:700">🕒 Horários dos jogos</div>
                   <div style="color:var(--text-muted);font-size:.75rem;margin-top:4px">Defina o início e o fim de cada dia. Esses horários aparecerão para confirmação no planejamento do sorteio; não são prazos das rodadas.</div>
                   <div id="estimated-games-window-days" style="margin-top:8px"></div>
                 </div>
@@ -7117,6 +7118,27 @@ window._saveTournamentClickHandler = async function() {
           if (window._warn) window._warn('[save] format2 indisponível (_f2GetConfig/FORMAT2 nulo) — save ABORTADO (sem fallback)');
           return;
         }
+        if (_f2cfg.parceria === 'super_eight' && !_f2cfg.rodadas.drawManual && !_f2cfg.rodadas.drawFirstDate) {
+          showAlertDialog('Agenda do Super 8',
+            'Informe a data do primeiro sorteio ou ative “Sortear manualmente”.',
+            null, { type:'warning' });
+          return;
+        }
+        if (_f2cfg.parceria === 'super_eight' && _f2cfg.superEightDrawMode === 'rounds' &&
+            !_f2cfg.rodadas.drawManual && _f2cfg.rodadas.drawFirstDate) {
+          var _firstSuper8 = new Date(_f2cfg.rodadas.drawFirstDate + 'T' + (_f2cfg.rodadas.drawFirstTime || '19:00'));
+          var _endSuper8Date = (document.getElementById('tourn-end-date') || {}).value || '';
+          var _endSuper8Time = (document.getElementById('tourn-end-time') || {}).value || '23:59';
+          var _endSuper8 = new Date(_endSuper8Date + 'T' + _endSuper8Time);
+          var _intervalSuper8 = parseInt(_f2cfg.rodadas.drawIntervalDays, 10);
+          if (!(_intervalSuper8 >= 1) || isNaN(_firstSuper8.getTime()) || isNaN(_endSuper8.getTime()) ||
+              _firstSuper8.getTime() + 6 * _intervalSuper8 * 86400000 >= _endSuper8.getTime()) {
+            showAlertDialog('Agenda do Super 8',
+              'Sete sorteios automáticos exigem que o último aconteça antes do fim da fase. Para um torneio de um dia, escolha sorteio único ou marque “Sortear manualmente”.',
+              null, { type:'warning' });
+            return;
+          }
+        }
         try {
           var _f2sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || tourData.sport;
           var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry, lateEnrollment: tourData.lateEnrollment, newMatchups: tourData.newMatchups });
@@ -7126,6 +7148,11 @@ window._saveTournamentClickHandler = async function() {
            * cliente não é trava. `politicaDaChave` entrou em `_CONFIG_ESTRUTURAL` no autodraw, e o
            * servidor recusa a alteração com a mesma mensagem dos outros campos estruturais. */
           Object.assign(tourData, _f2out.topLevel);
+          if (_f2cfg.parceria === 'super_eight') tourData.allowSelfDeactivation = false;
+          else if (window._editingTournament && window._editingTournament.superEight === true) {
+            tourData.superEight = false;
+            tourData.superEightDrawMode = null;
+          }
           tourData.phases = _f2out.phases;
           // O compilador recria phases[]. Preserva os limites que pertencem à
           // classificatória e aos controles próprios das fases posteriores.
@@ -8532,7 +8559,7 @@ window._f2TemplateCopy = function(fmt2Bruto) {
     });
     return out;
   };
-  var out = pick(raw, ['disputa', 'grupos', 'parceria', 'formacaoDupla', 'manualPairingOpen', 'manualPairingPolicy',
+  var out = pick(raw, ['disputa', 'grupos', 'parceria', 'superEightDrawMode', 'formacaoDupla', 'manualPairingOpen', 'manualPairingPolicy',
     'classifAtiva', 'classificados', 'classifScope', '_scoreBy', 'historicalSinglesOverride',
     'rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution', 'tieSinglesPoints', 'tieSinglesMargin']);
   if (raw.rodadas) {

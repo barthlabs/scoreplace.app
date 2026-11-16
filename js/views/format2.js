@@ -543,6 +543,7 @@
       : 1;
     var pairing = classif.pairing || {};
     if (first.superEight === true || tournament.superEight === true) cfg.parceria = 'super_eight';
+    if (cfg.parceria === 'super_eight') cfg.superEightDrawMode = first.superEightDrawMode || tournament.superEightDrawMode || 'rounds';
     else if (pairing.strategy === 'monarch_groups') cfg.parceria = 'rei_rainha';
     else if (cfg.disputa === 'dupla') cfg.parceria = pairing.entryMode === 'fixed' ? 'fixa' : 'sorteio_rodada';
     if (cfg.grupos === 1 && classif.structure !== 'groups') {
@@ -712,6 +713,8 @@
     // explícita do organizador (true/false) sempre vence. Só decide quando ninguém decidiu.
     if (out.rodadas.allowSelfDeactivation == null) out.rodadas.allowSelfDeactivation = (out.rodadas.n !== 1);
     else out.rodadas.allowSelfDeactivation = (out.rodadas.allowSelfDeactivation !== false);
+    if (out.parceria === 'super_eight') out.rodadas.allowSelfDeactivation = false;
+    out.superEightDrawMode = out.superEightDrawMode === 'single' ? 'single' : 'rounds';
     out.rodadas._intervalAuto = (out.rodadas._intervalAuto !== false); // sugere intervalo até o user editar
 
     out.classificados = Math.max(1, parseInt(out.classificados, 10) || 2);
@@ -1091,7 +1094,7 @@
       top.enrollmentMode = ligaFixedPairs && cfg.formacaoDupla === 'manual' ? 'teams' : 'individual';
       top.manualPairing = ligaFixedPairs && cfg.formacaoDupla === 'manual' ? cfg.manualPairingPolicy : 'organizer_only';
       top.ligaRoundFormat = isRR ? 'rei_rainha' : 'standard';
-      if (isSuperEight) top.superEight = true;
+      if (isSuperEight) { top.superEight = true; top.superEightDrawMode = cfg.superEightDrawMode; }
       top.rankingSitOutScoring = cfg.rankingSitOutScoring;
       if (isRR) top.rankingRemainderPolicy = cfg.rankingRemainderPolicy;
       top.ligaDrawMode = 'standard';           // rodada-a-rodada (não RR pré-gerado)
@@ -1109,12 +1112,14 @@
       if (!_schedManual) {
         top.drawFirstDate = cfg.rodadas.drawFirstDate;
         top.drawFirstTime = cfg.rodadas.drawFirstTime || '19:00';
-        top.drawIntervalDays = (cfg.rodadas.drawIntervalDays >= 1) ? cfg.rodadas.drawIntervalDays : null; // vazio = sem repetição
+        top.drawIntervalDays = isSuperEight && cfg.superEightDrawMode === 'single' ? null :
+          ((cfg.rodadas.drawIntervalDays >= 1) ? cfg.rodadas.drawIntervalDays : null);
       }
       p0 = Object.assign(_phaseBase(re), {
         kind: 'classification', classification: { structure: 'round_robin', pairing: _roundPairing }, name: isSuperEight ? 'Super 8 individual' : isRR ? 'Rei/Rainha' : 'Pontos Corridos',
         formatCode: 'classification_rounds',
         drawMode: top.drawMode, reiRainha: isRR, superEight: isSuperEight,
+        superEightDrawMode: isSuperEight ? cfg.superEightDrawMode : null,
         rankingRemainderPolicy: isRR ? cfg.rankingRemainderPolicy : null,
         rankingSitOutScoring: cfg.rankingSitOutScoring,
         rounds: cfg.rodadas.n, groupsBy: 'sorteio',
@@ -1124,7 +1129,8 @@
         drawManual: _schedManual,
         drawFirstDate: _schedManual ? '' : cfg.rodadas.drawFirstDate,
         drawFirstTime: _schedManual ? '' : (cfg.rodadas.drawFirstTime || '19:00'),
-        drawIntervalDays: _schedManual ? null : ((cfg.rodadas.drawIntervalDays >= 1) ? cfg.rodadas.drawIntervalDays : null)
+        drawIntervalDays: _schedManual || isSuperEight && cfg.superEightDrawMode === 'single' ? null :
+          ((cfg.rodadas.drawIntervalDays >= 1) ? cfg.rodadas.drawIntervalDays : null)
       });
     } else {
       // Compatibilidade: documentos que nasceram com a agenda parcial dentro de

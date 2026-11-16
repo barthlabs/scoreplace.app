@@ -44,7 +44,7 @@ base.eliminatoria.roundBounds = ['2026-12-10T19:00'];
 base.teamCompetition.enabled = true;
 headless.window._f2MountInForm(box, 'Beach Tennis', base, { id: 'test' });
 const get = () => headless.window._f2GetConfig();
-const titles = () => [box.innerHTML.indexOf('4. 🎯 Fase Classificatória'), box.innerHTML.indexOf('5. 🏆 Fase Eliminatória')];
+const titles = () => [box.innerHTML.indexOf('2. 🎯 Fase Classificatória'), box.innerHTML.indexOf('3. 🏆 Fase Eliminatória')];
 assert(titles().every(x => x >= 0), 'os dois blocos de fase sempre aparecem');
 assert(!box.innerHTML.includes('Haverá classificatória?'), 'não há pergunta redundante');
 assert(!box.innerHTML.includes('Como o torneio define o campeão?'), 'não há escolha paralela à fase');
