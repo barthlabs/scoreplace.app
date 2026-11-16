@@ -211,8 +211,8 @@ html.sp-native .modal-overlay.active .modal-header {
   .sp-header-version { margin-right: calc(clamp(136px, 25vw, 210px) * 0.064); }
 }
 @media (max-width: 767px) {
-  /* No PWA do iPhone a versão (já transformada) aparece nítida, mas os SVGs
-     da barra fixa ficam borrados. Isolar marca e ações em camadas pequenas. */
+  /* Na captura do PWA do iPhone, a versão aparece nítida e os SVGs da barra
+     fixa ficam borrados. Separar as camadas é uma tentativa: confirmar no aparelho. */
   .sp-header-brand, .topbar-right-icons { transform: translateZ(0); }
   /* Sem deslocamento, a base da versão já coincide com a do símbolo no celular. */
   .sp-header-version { transform: translateZ(0); }

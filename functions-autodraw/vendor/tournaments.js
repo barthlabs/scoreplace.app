@@ -4518,7 +4518,7 @@ function renderTournaments(container, tournamentId = null) {
               `}
               ${!tournamentId && !dateCardHtml && t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
             </div>
-            ${_detailOverviewAtTop ? `<div class="sp-overview-stats" style="margin:1rem 0 1.25rem;">${_statsSummaryHtml}</div>` : ''}
+            ${_detailOverviewAtTop ? `<div class="sp-overview-stats">${_statsSummaryHtml}</div>` : ''}
             ${tournamentId ? podiumHtml : ''}
             ${ligaActiveToggleHtml ? `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;" onclick="event.stopPropagation();"><div style="margin-left:auto;">${ligaActiveToggleHtml}</div></div>` : ''}
             ${/* v1.3.15 (dono): tabela "DURAÇÃO ESTIMADA" (8/16/32/64 simulações) REMOVIDA do detalhe —

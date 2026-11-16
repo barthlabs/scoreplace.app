@@ -1,7 +1,7 @@
 ## 2.7.11 — 15/nov/2026 (cabeçalho web móvel)
 
-- Marca e ações do cabeçalho passam a ser renderizadas em camadas separadas no celular para evitar o desfoque observado no atalho web instalado no iPhone.
-- O atalho web usa o espaçamento lateral móvel, e a versão se alinha à base do símbolo sem o deslocamento aplicado em telas maiores.
+- Marca e ações do cabeçalho passam a ser renderizadas em camadas separadas no celular, como tentativa de corrigir o desfoque visto no atalho web instalado no iPhone; a nitidez precisa de confirmação no aparelho.
+- No atalho web instalado em telas de até 767px, o cabeçalho usa o espaçamento lateral móvel; em telas maiores, o recuo de 2rem continua. A versão se alinha à base do símbolo no celular.
 - Na ficha do torneio, o padrão de data de um único dia (com ou sem horário final) ocupa cerca de metade da área do logo, com dia e mês mais fortes e horários maiores. A prévia em Personalizar acompanha o padrão, mantendo os ajustes tipográficos e de cor do organizador.
 - Em todas as fichas, data, inscritos e contagens por categoria ficam junto da identidade do torneio, antes de pódio e classificação. O logo do local fica junto ao título; a dashboard mantém sua composição própria.
 - Em datas que atravessam meses, cada dia se centraliza sobre seu mês. Períodos superiores a uma semana omitem o intervalo de horas para não sugerir uma grade diária; intervalos curtos preservam os horários.

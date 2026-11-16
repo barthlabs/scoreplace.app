@@ -26,6 +26,9 @@ ok(detail.includes('var _detailOverviewAtTop = !!tournamentId;'), 'ordem da fich
 ok(detail.includes('class="sp-tournament-logo"') &&
   componentsCss.includes('.sp-tournament-identity-row .sp-tournament-logo'),
   'layout identifica o logo por classe estável');
+ok(componentsCss.includes('min-width:var(--sp-date-one-day-width)') &&
+  componentsCss.includes('padding-right:calc(var(--sp-date-one-day-width) + 24px)'),
+  'largura do cartão e reserva para ações usam a mesma medida');
 const dashboardDatesAt = dashboard.indexOf('Datas e logo do local. A regressiva logo abaixo');
 const dashboardCountdownAt = dashboard.indexOf('if (isFinished) return \'\';', dashboardDatesAt);
 const dashboardDateBlock = dashboard.slice(dashboardDatesAt, dashboardCountdownAt);

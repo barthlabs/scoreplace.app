@@ -1,11 +1,12 @@
-// 2.7.11 — No celular, o cabeçalho web mantém o símbolo, o nome e os ícones
-// nítidos. No atalho instalado, a margem lateral acompanha a do navegador;
+// 2.7.11 — No celular, o cabeçalho web renderiza símbolo, nome e ícones em
+// camadas próprias para tentar melhorar a nitidez; o resultado no iPhone ainda
+// precisa de confirmação. No atalho instalado, a margem lateral acompanha a do navegador;
 // a versão volta a alinhar sua base com a do pódio.
 // Na ficha, o bloco de data de um único dia ganha mais área e uma hierarquia
 // mais forte para dia, mês e horário. A personalização continua disponível.
 // Em todos os torneios, data, inscritos e contagens por categoria aparecem
 // junto ao nome e logo, antes do pódio e da classificação. O logo do local
-// acompanha o título. Em períodos longos, a data omite horários que poderiam
+// acompanha o título em todas as fichas. Em períodos longos, a data omite horários que poderiam
 // parecer uma programação diária; dia e mês de cada ponta ficam centralizados.
 // 2.7.10 — A versão do cabeçalho alinha pela base do pódio. No detalhe do torneio,
 // Voltar alinha com A–Z; contato, convite e grupo oficial têm a mesma altura,

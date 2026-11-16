@@ -1,8 +1,7 @@
 'use strict';
-/* Regressão Paineiras/Confra: venue.logoUrl (Storage) precisa hidratar o mesmo
- * slot que antes aceitava apenas logoData legado. No detalhe, o brasão do local
- * pertence ao período do evento — não ao título — para que os dois dados sejam
- * lidos como um único bloco. */
+/* Regressão Paineiras/Confra: venue.logoUrl (Storage) precisa hidratar o slot
+ * legado. Em toda ficha, o brasão do local acompanha o título do torneio;
+ * nos cartões de lista continua junto da data textual. */
 const fs = require('fs');
 let bad = 0;
 function ok(value, label) { console.log((value ? '✓ ' : '✗ ') + label); if (!value) bad++; }
@@ -17,19 +16,18 @@ const loader = store.slice(begin, end);
 const heroBegin = tournaments.indexOf('<!-- Middle Left: Nome + Logo + Favorito -->');
 const heroEnd = tournaments.indexOf('/* v2.8.67:', heroBegin);
 const hero = tournaments.slice(heroBegin, heroEnd);
-const datesBegin = tournaments.indexOf('<!-- Datas e logo do local formam um único bloco:');
-const datesEnd = tournaments.indexOf('/* v0.16.90:', datesBegin);
-const dates = tournaments.slice(datesBegin, datesEnd);
+const datesBegin = tournaments.indexOf('<!-- Sem card visual de data, a data textual permanece sob a identidade. -->');
+const dates = tournaments.slice(datesBegin, datesBegin + 850);
 
 ok(/window\._venueLogoSrc\s*=\s*function/.test(store), 'acessor canônico de logo do local existe no runtime');
 ok(begin >= 0 && /_venueLogoSrc\s*\?\s*window\._venueLogoSrc\(v\)/.test(loader), 'logo do local lê logoUrl/Storage pelo acessor canônico');
 ok(/window\._hydrateVenueLogos\s*=\s*function/.test(loader) && /querySelectorAll\('\[data-vlogo-pid\]/.test(loader), 'hidratador busca os slots de logo do local');
 ok(/el\.style\.display\s*=\s*'block'/.test(loader), 'hidratador revela o slot ao receber a imagem');
-ok(!/data-vlogo-pid/.test(hero), 'título do torneio não disputa espaço com o logo do local');
+ok(/tournamentId && t\.venuePlaceId \? '<span data-vlogo-pid=/.test(hero), 'em toda ficha, logo do local fica sob o título');
 ok(/display:flex;flex-direction:column;align-self:stretch/.test(hero), 'coluna do título preserva o contrato responsivo do nome');
-ok(/data-vlogo-pid/.test(dates), 'bloco de datas contém o slot do logo do local');
-ok(/sp-tournament-date-stack/.test(tournaments) && /display:\$\{dateCardHtml \? 'none' : 'flex'\};align-items:center;gap:12px;min-width:0/.test(dates), 'logo do local acompanha a data nova e o bloco antigo fica oculto');
-ok(/width:clamp\(42px,11vw,64px\)/.test(dates), 'logo do local tem dimensão responsiva ao lado do período');
+ok(/!tournamentId && !dateCardHtml && t\.venuePlaceId/.test(dates), 'na lista, logo do local continua no bloco da data textual');
+ok(/sp-tournament-date-stack/.test(tournaments) && /display:\$\{dateCardHtml \? 'none' : 'flex'\};align-items:center;gap:12px;min-width:0/.test(dates), 'a data visual e a textual são alternativas');
+ok(/width:clamp\(42px,6vw,64px\)/.test(hero), 'logo do local tem dimensão responsiva junto ao título');
 ok(/position:relative;width:33%;min-width:100px;flex-shrink:0;aspect-ratio:/.test(hero), 'logo do evento mantém exatamente a largura original de 33%');
 ok(/class="tournament-card-title"/.test(hero), 'o título tem classe própria para a regra responsiva');
 ok(/font-size:\s*clamp\(1\.45rem,\s*6\.4vw,\s*2\.25rem\)\s*!important/.test(responsive) && /_fitTournamentTitles/.test(store), 'o título ocupa o maior tamanho que cabe no slot real');
