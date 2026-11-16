@@ -139,12 +139,6 @@ CONTEXTOS.forEach((ctx) => {
   const layout = ler('css/layout.css');
   ok(/padding-top:\s*max\(0\.5rem,\s*env\(safe-area-inset-top,\s*0px\)\)/.test(layout),
      'a topbar preserva o inset quando o WebKit o informa');
-  const pwaFosco = regras.filter((r) => r.sel.includes('html.sp-ios-pwa:not(.sp-native) .topbar'));
-  ok(pwaFosco.length === 1 && /display-mode:\s*standalone/.test(pwaFosco[0].media) &&
-     /max-width:\s*767px/.test(pwaFosco[0].media) && /orientation:\s*portrait/.test(pwaFosco[0].media),
-     'o recuo extra da faixa fosca existe somente no PWA Apple móvel em retrato');
-  ok(pwaFosco.length === 1 && /padding-top:\s*calc\(max\(0\.5rem,\s*env\(safe-area-inset-top,\s*0px\)\)\s*\+\s*32px\)\s*!important/.test(pwaFosco[0].valor),
-     'o recuo extra preserva o inset e vence a regra geral do PWA');
   const sw = ler('sw.js');
   ok(/event\.request\.mode === 'navigate'[\s\S]{0,100}event\.respondWith\(_navegacaoRedePrimeiro\(event\)\)/.test(sw),
      'o shell novo chega pela navegação rede-primeiro');

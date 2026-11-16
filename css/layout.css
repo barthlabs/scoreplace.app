@@ -159,16 +159,6 @@ html.sp-android .topbar {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
-/* O PWA Apple em retrato pode receber uma faixa fosca do sistema além do inset
-   informado ao CSS. Na captura de 590px, a marca começa perto de y=90 e a versão
-   já está nítida em y=123. Somar 32px CSS ao recuo existente desloca marca e
-   controles cerca de 48px na captura, para baixo dessa faixa. A medição física
-   final depende do iPhone; paisagem mantém o cabeçalho compacto de 50px. */
-@media (display-mode: standalone) and (max-width: 767px) and (orientation: portrait) {
-  html.sp-ios-pwa:not(.sp-native) .topbar {
-    padding-top: calc(max(0.5rem, env(safe-area-inset-top, 0px)) + 32px) !important;
-  }
-}
 /* respiro no rodapé pra o conteúdo não sumir sob o indicador de home (iPhone sem botão) */
 html.sp-native .main-content {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px));
