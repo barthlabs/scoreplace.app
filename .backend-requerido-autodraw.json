@@ -1,12 +1,14 @@
 {
   "schema": 1,
-  "backendCommit": "c2b09f2cc11a1ad7f272193734e4b729d9247cf6",
-  "scopeNote": "Sorteio único Super 8, fecho das sete rodadas e restauração pré-sorteio.",
+  "backendCommit": "8cd6efe402663a47bb67ce06a5f59a3c3001cbcf",
+  "scopeNote": "Modo de teste, critérios fixos após sorteio e ajuste de rodadas futuras.",
   "functions": [
     "drawRound",
     "closeRound",
     "generateExtraTournamentRound",
     "autoDraw",
-    "resetTournamentToEnrollment"
+    "resetTournamentToEnrollment",
+    "createTournament",
+    "updateTournamentConfiguration"
   ]
 }
