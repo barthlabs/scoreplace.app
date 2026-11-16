@@ -14,7 +14,7 @@ const f2 = fs.readFileSync('js/views/format2.js', 'utf8');
 const bracket = fs.readFileSync('js/views/bracket.js', 'utf8');
 
 assert.ok(create.includes('id="late-matchups-choice"'), 'a escolha tardia da fase inicial tem wrapper próprio');
-assert.ok(/matchupChoice\.style\.display = isOpen \? '' : 'none'/.test(create), 'Fechadas esconde a escolha de entradas tardias');
+assert.ok(/matchupChoice\.style\.display = isOpen && hasWaitlist \? '' : 'none'/.test(create), 'a escolha de suplentes aparece apenas com inscrições abertas e lista de espera');
 assert.ok(/var confRow = !isClosed \? modeSwitch/.test(f2ui), 'a eliminatória também omite a escolha quando fechada');
 assert.ok(bracket.includes('(!_leFechadas ? _linhaTog'), 'o atalho da chave segue a mesma regra');
 
