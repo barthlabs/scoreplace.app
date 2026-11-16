@@ -1,15 +1,12 @@
 {
   "schema": 1,
-  "backendCommit": "8cd25d74e589e826ce03ad4818d50dfd4a397eec",
-  "scopeNote": "Sincronização do vendor de torneios para o horário estimado do Super 8.",
+  "backendCommit": "c2b09f2cc11a1ad7f272193734e4b729d9247cf6",
+  "scopeNote": "Sorteio único Super 8, fecho das sete rodadas e restauração pré-sorteio.",
   "functions": [
-    "createTournament",
-    "updateTournamentConfiguration",
-    "applyTournamentFormat",
     "drawRound",
     "closeRound",
     "generateExtraTournamentRound",
     "autoDraw",
-    "autoDrawReconcile"
+    "resetTournamentToEnrollment"
   ]
 }
