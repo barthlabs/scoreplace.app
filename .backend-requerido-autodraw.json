@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "30eeba37887076fb2c95e848e52da290eec48990",
-  "scopeNote": "Super 8 e classificatória: sorteio único ou por rodada, agenda manual, lista de espera limitada e ordem de inscrição.",
+  "backendCommit": "8cd25d74e589e826ce03ad4818d50dfd4a397eec",
+  "scopeNote": "Sincronização do vendor de torneios para o horário estimado do Super 8.",
   "functions": [
     "createTournament",
     "updateTournamentConfiguration",
