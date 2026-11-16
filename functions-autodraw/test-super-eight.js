@@ -89,6 +89,16 @@ assert.equal(uidOnlyResult.ok, true);
 assert.equal(uidOnlyResult.matchCount, 14);
 assert.deepEqual(uidOnlyDraw.matches.filter(m => m.round === 1).flatMap(m => m.team1.concat(m.team2)).sort(),
   ['Kelly Barth', ...Array.from({ length:7 }, (_, i) => 'Jogador ' + String(i + 2).padStart(2, '0'))].sort());
+const secondRoundGame = uidOnlyDraw.matches.find(m => m.round === 2);
+const secondRoundWinnerBefore = secondRoundGame.winner;
+const wrongRoundResult = draw.closeRoundCore(uidOnlyDraw, 0, {
+  matchId: secondRoundGame.id,
+  payload: { winner:'Jogador 02', scoreP1:6, scoreP2:0 }
+});
+assert.equal(wrongRoundResult.ok, false);
+assert.equal(wrongRoundResult.reason, 'result-outside-round');
+assert.equal(secondRoundGame.winner, secondRoundWinnerBefore,
+  'fechar R1 não aplica placar a jogo de R2');
 for (let round = 1; round <= 7; round++) {
   const games = uidOnlyDraw.matches.filter(m => m.round === round);
   games.forEach(m => { m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = 3; });

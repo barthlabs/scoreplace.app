@@ -1363,9 +1363,6 @@ function closeRoundCore(t, roundIdx, resultCtx) {
   const win = g.window;
   if (!t) return { ok: false, reason: 'no-tournament' };
   if (t.superEight === true && t.superEightDrawMode === 'single' && t.storageCanonico === true) {
-    if (resultCtx && resultCtx.matchId && typeof win._applyResultToTournament === 'function') {
-      win._applyResultToTournament(t, resultCtx.matchId, resultCtx.payload || {});
-    }
     const rounds = Array.from({ length: 7 }, (_, index) =>
       (t.matches || []).filter(m => m && Number(m.round) === index + 1 &&
         (m.phaseIndex || 0) === (t.currentPhaseIndex || 0) && !m.isBye && !m.isSitOut));
@@ -1375,6 +1372,14 @@ function closeRoundCore(t, roundIdx, resultCtx) {
     const closed = Array.isArray(t.superEightClosedRounds) ? t.superEightClosedRounds : [];
     if (closed.includes(roundIdx + 1)) return { ok: false, reason: 'already-closed' };
     if (roundIdx > 0 && !closed.includes(roundIdx)) return { ok: false, reason: 'stale-round' };
+    if (resultCtx && resultCtx.matchId) {
+      if (!rounds[roundIdx].some(m => String(m.id) === String(resultCtx.matchId))) {
+        return { ok: false, reason: 'result-outside-round' };
+      }
+      if (typeof win._applyResultToTournament === 'function') {
+        win._applyResultToTournament(t, resultCtx.matchId, resultCtx.payload || {});
+      }
+    }
     const unfinished = rounds[roundIdx].filter(m => !m.winner);
     if (unfinished.length) return { ok: false, reason: 'round-incomplete', unfinished: unfinished.length };
     t.superEightClosedRounds = closed.concat(roundIdx + 1);

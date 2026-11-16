@@ -212,7 +212,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '2.2.69';
+const CF_VERSION = '2.2.70';
 
 initializeApp();
 const db = getFirestore();
@@ -2604,6 +2604,9 @@ exports.generateExtraTournamentRound = onCall(async (request) => {
   return db.runTransaction(async tx=>{
     const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização gera rodada extra.',{tId,uid});
+    if(t.superEight === true && t.superEightDrawMode === 'single') {
+      throw new HttpsError('failed-precondition','O Super 8 de sorteio único tem exatamente sete rodadas.');
+    }
     const max=(t.rounds||[]).reduce((n,r)=>Math.max(n,Number(r&&r.round)||0),0);
     if(max>=expectedRound) return {ok:true,changed:false};
     const names=t.canonicalRegistrationMigration?.fingerprint ? await _preloadDrawNames(t,tx) : null;

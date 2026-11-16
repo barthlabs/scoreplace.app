@@ -4123,13 +4123,14 @@ function renderTournaments(container, tournamentId = null) {
                     // como de rodadas. Comportamento idêntico ao inline que estava aqui.
                     var _faseEhElim = window._currentPhaseIsElimination(t);
                     var _adManualLbl = hasDraw ? '🎲 Rodada Extra (manual)' : '🎲 Sortear agora (manual)';
-                    var _manualBtn = _faseEhElim ? '' : `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._confirmManualAutoDraw('${t.id}')">${_adManualLbl}</button>`;
+                    var _super8Complete = hasDraw && t.superEight === true && t.superEightDrawMode === 'single';
+                    var _manualBtn = (_faseEhElim || _super8Complete) ? '' : `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._confirmManualAutoDraw('${t.id}')">${_adManualLbl}</button>`;
                     sortearBtn = _manualBtn;   // o "Avançar de Fase" entra depois, uma vez só, pros três ramos
                 }
             } else if (isCurrentLeaguePhase && t.drawManual) {
                 sortearBtn = (t.status === 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window.generateDrawFunction('${t.id}')">🎲 Sortear</button>` : '';
                 sortearAberto = (t.status !== 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="${sortearOnClick}">🎲 Sortear</button>` : '';
-                if (hasDraw) {
+                if (hasDraw && !(t.superEight === true && t.superEightDrawMode === 'single')) {
                     sortearBtn = `<button class="btn btn-warning hover-lift" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window.generateDrawFunction('${t.id}')">🎲 Próxima Rodada</button>`;
                 }
             } else {

@@ -2380,6 +2380,10 @@ function _extraRoundRng(seed) {
 window._generateExtraRound = function (tId) {
     var t = window._findTournamentById ? window._findTournamentById(tId) : (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
     if (!t) return;
+    if (t.superEight === true && t.superEightDrawMode === 'single') {
+        if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+        return;
+    }
     if (typeof window._generateNextRound !== 'function') { if (typeof showNotification === 'function') showNotification('Indisponível', 'Motor de rodadas não carregado.', 'warning'); return; }
     var _cur = t.currentPhaseIndex || 0;
     var _phaseMonarchInMatches = (t.rounds || []).length === 0 &&
@@ -3569,6 +3573,7 @@ window.generateDrawFunction = function (tId) {
         (Array.isArray(t.groups) && t.groups.length > 0);
     if (_hasExistingDraw) {
         if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+        if (t.superEight === true && t.superEightDrawMode === 'single') return;
         // Fase de CHAVE (eliminatória): não há "rodada extra" possível — a próxima rodada sai
         // dos vencedores, não de sorteio novo. Recusa seca. Leitura ÚNICA, compartilhada com o
         // botão "Rodada Extra" (tournaments-utils.js) pra os dois nunca divergirem.
