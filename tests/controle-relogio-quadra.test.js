@@ -53,5 +53,7 @@ assert.equal(prePublicationAllowed('prePublication', false, { allowPrePublicatio
   'torneio real não pode restaurar o sorteio, mesmo que tenha flag legada');
 assert.equal(prePublicationAllowed('prePublication', true, { isSandbox: true, allowPrePublicationRestore: true }), true,
   'o mesmo controle continua disponível no sandbox');
-assert.match(fs.readFileSync('js/views/tournaments.js', 'utf8'), /hasDraw && t\.isSandbox === true && t\.allowPrePublicationRestore === true/);
+const tournaments = fs.readFileSync('js/views/tournaments.js', 'utf8');
+assert.match(tournaments, /hasDraw && \(\(t\.isSandbox === true && t\.allowPrePublicationRestore === true\) \|\| \(t\.superEight === true && t\.gruposCount === 1 && t\.isSandbox !== true\)\)/,
+  'restauração visível só no sandbox habilitado ou no Super 8 real de um grupo');
 console.log('✓ FF e REW preservam a mesma fase/tempo na chave e NO AR; servidor valida e grava o relógio');
