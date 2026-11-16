@@ -622,7 +622,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     '</span>';
     var drawn = _hasDrawnGames();
     var singleLocked = drawn && S.cfg.parceria === 'super_eight' && singleSuper8;
-    var alreadyDrawn = drawn ? Math.max((S.t.rounds || []).length, (S.t.swissRoundsData || []).length, 1) : 1;
+    var alreadyDrawn = drawn ? Math.max((S.t.rounds || []).length, (S.t.swissRoundsData || []).length,
+      (S.t.matches || []).reduce(function (max, match) {
+        return match && Number(match.phaseIndex || 0) === 0 ? Math.max(max, Number(match.round) || 0) : max;
+      }, 0), 1) : 1;
     var rounds = fld('Nº de rodadas', '<input id="f2-sched-n" type="number" min="' + alreadyDrawn + '" max="' + (S.cfg.parceria === 'super_eight' ? 7 : 30) + '" value="' + (r.n || '') + '" placeholder="—" onchange="window._f2Rn(this.value)"' + (singleLocked ? ' disabled title="Rodadas definidas pelo sorteio único"' : '') + ' style="' + inp + 'width:90px;text-align:center;">');
     var maxPeople = Number((document.getElementById('tourn-max-participants') || {}).value) ||
       (S.t ? _peopleCount(S.t) : 0);
@@ -1592,7 +1595,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!(n >= 1)) { return; } // vazio → mantém tudo (repetir intacto), sem re-render
     if (_hasDrawnGames()) {
       if (S.cfg.parceria === 'super_eight' && S.cfg.superEightDrawMode === 'single') return;
-      var drawn = Math.max((S.t.rounds || []).length, (S.t.swissRoundsData || []).length, 1);
+      var drawn = Math.max((S.t.rounds || []).length, (S.t.swissRoundsData || []).length,
+        (S.t.matches || []).reduce(function (max, match) {
+          return match && Number(match.phaseIndex || 0) === 0 ? Math.max(max, Number(match.round) || 0) : max;
+        }, 0), 1);
       if (n < drawn) { _rerender(); return; }
       if (S.cfg.parceria === 'super_eight' && n > 7) { _rerender(); return; }
     }

@@ -6207,7 +6207,10 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       const n = Number(patch.fmt2.rodadas && patch.fmt2.rodadas.n);
       const published = Math.max(1, (t.rounds || []).reduce((max, round) =>
         Math.max(max, Number(round && round.round) || 0), 0),
-        Array.isArray(t.swissRoundsData) ? t.swissRoundsData.length : 0);
+        Array.isArray(t.swissRoundsData) ? t.swissRoundsData.length : 0,
+        (t.matches || []).reduce((max, match) =>
+          match && Number(match.phaseIndex || 0) === 0
+            ? Math.max(max, Number(match.round) || 0) : max, 0));
       if (!first || first.formatCode !== 'classification_rounds' ||
           (t.currentPhaseIndex || 0) !== 0 || t.status === 'finished' ||
           (t.superEight === true && t.superEightDrawMode === 'single') ||

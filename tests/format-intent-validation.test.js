@@ -779,6 +779,16 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   assert.equal(savedRounds.ok, true, 'sorteio por rodada aceita reduzir apenas rodadas futuras');
   assert.equal(configTournament.phases[0].rounds, 6);
   assert.equal(configTournament.rounds.length, 1, 'rodada publicada permanece');
+  // Torneios legados podem guardar a rodada apenas nos jogos, sem t.rounds.
+  configTournament.rounds = [];
+  configTournament.matches = [{ id:'r3-legado', phaseIndex:0, round:3, winner:'A' }];
+  const legacyBelowPublished = structuredClone(configTournament.fmt2);
+  legacyBelowPublished.rodadas.n = 2;
+  await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{
+    tournamentId:'tour_test', patch:{ fmt2:legacyBelowPublished } } }),
+  { code:'failed-precondition' }, 'jogos legados da terceira rodada impedem reduzir para duas');
+  configTournament.matches = [{ id:'r1', winner:'A' }];
+  configTournament.rounds = [{ round:1 }];
   await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{
     tournamentId:'tour_test', patch:{ rankingPrimary:'wins' } } }),
   error => error.code === 'failed-precondition' && /Pontuação e desempates/.test(error.message));

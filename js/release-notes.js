@@ -1,6 +1,7 @@
 // 2.7.24 — O Super 8 gera um grupo com sete rodadas e 14 jogos no sorteio único.
 // O sorteio único fixa as rodadas; no sorteio por rodada, a organização pode
-// ajustar apenas o total futuro, preservando jogos já sorteados. Pontuação e
+// ajustar apenas o total futuro, preservando jogos já sorteados, inclusive os
+// de torneios antigos que guardam a rodada somente nos jogos. Pontuação e
 // desempates ficam definidos no primeiro sorteio. O desenvolvedor pode ativar
 // o modo de teste na edição para resetar o sorteio e simular resultados.
 // O controle de quem lança os placares aparece junto da classificação.
