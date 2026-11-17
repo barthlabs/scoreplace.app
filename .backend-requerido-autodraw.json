@@ -1,10 +1,21 @@
 {
   "schema": 1,
-  "backendCommit": "9faed05ce2b1bf1da0d1f05b7421e61c4dd5efba",
-  "scopeNote": "Ordem canônica dos inscritos no sorteio e no reset; duração canônica da grade.",
+  "backendCommit": "7ed572d68e0d9eb78118ffd93d6e89c41107e5f1",
+  "scopeNote": "Isolamento do modo Teste no sorteio, resumo e notificações.",
   "functions": [
     "drawRound",
     "resetTournamentToEnrollment",
-    "updateTournamentConfiguration"
+    "deliverScoreNotification",
+    "applyCategoryCommunicationMarkers",
+    "updateTournamentConfiguration",
+    "advanceTournamentPhase",
+    "resolvePendingDraw",
+    "finishTournament",
+    "setPhasePromotion",
+    "autoDraw",
+    "closePhaseLeagueRound",
+    "autoDrawReconcile",
+    "sendPushNotification",
+    "tournamentSummary"
   ]
 }
