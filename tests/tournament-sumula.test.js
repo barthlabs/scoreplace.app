@@ -386,6 +386,9 @@ const reserveIndex = orderedPages.findIndex(page => page.commands.some(command =
 const bracketIndex = orderedPages.findIndex(page => page.commands.some(command => command.includes('CHAVE ELIMINAT')));
 assert(scoreIndex >= 0 && scoreIndex < reserveIndex && reserveIndex < bracketIndex,
   'folha de desempate fica entre a fase de grupos e a eliminatória');
+assert(orderedPages[scoreIndex].width > orderedPages[scoreIndex].height &&
+  orderedPages[bracketIndex].width < orderedPages[bracketIndex].height,
+  'jogos classificatórios mantêm paisagem enquanto a chave fica em retrato');
 assert.strictEqual(globalThis._tournamentGamesPlan(camis).totalPlanned, plannedBefore,
   'o roteiro não altera o total operacional calculado antes para as fases');
 for (const orientation of ['landscape','portrait']) {
@@ -457,6 +460,9 @@ const realizedBracket = core.makePages(realized, {orientation:'portrait'})
   .find(page => page.commands.some(command => command.includes('CHAVE ELIMINAT')));
 assert(realizedBracket && realizedBracket.width === 595,
   'jogos eliminatórios materializados têm chave vertical');
+assert(!core.makePages(realized).some(page => page.commands.some(command =>
+  command.includes('ASSINATURAS DOS ATLETAS'))),
+  'a folha da chave substitui as folhas individuais de jogos eliminatórios');
 const realizedCommands = realizedBracket.commands.join('\n');
 for (const athlete of ['Tatiana Rossi DAmico','Fernanda Gomes','Joana Granato',
   'Bianca Vicintin Abud','Cris Spina','Luciana Campos',String.raw`Fl\341via Fabbrocini Sanches`,'Fabrizia Frank'])

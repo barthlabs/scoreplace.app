@@ -874,6 +874,8 @@
       }
     }
     var unscheduled = model.undated || [];
+    // A chave vertical é a súmula da eliminatória: nela se anotam o vencedor e
+    // o placar de cada avanço. Folhas de placar individuais duplicariam a fase.
     appendScorePages(model.matches.filter(function (m) { return !m.elimination; }),
       unscheduled.filter(function (m) { return !m.elimination; }));
     pages.push.apply(pages, groupStandingPages(model, orientation));
@@ -1040,12 +1042,9 @@
       if (typeof root.showNotification === 'function') root.showNotification('Súmula indisponível', 'Não há jogos ou chave disponíveis.', 'warning');
       return;
     }
-    var hasBracket = model.matches.concat(model.undated || []).some(function (m) { return m.elimination; }) ||
-      !!(model.future && model.future.categories && model.future.categories.some(function (bucket) {
-        return bucket.matches && bucket.matches.length;
-      }));
-    var both = orientation === 'both' && !onlyAttendance && !hasBracket;
-    orientation = hasBracket || orientation === 'portrait' ? 'portrait' : 'landscape';
+    // A chave usa sempre retrato; as demais folhas seguem a escolha do pacote.
+    var both = orientation === 'both' && !onlyAttendance;
+    orientation = orientation === 'portrait' ? 'portrait' : 'landscape';
     var bytes = both ? zipFiles(['landscape','portrait'].map(function (direction) {
       return { name:filename(model, direction, false), bytes:encodePdf(makePages(model, { orientation:direction })) };
     })) : encodePdf(onlyAttendance ? makeAttendancePages(model) : makePages(model, { orientation:orientation }));
