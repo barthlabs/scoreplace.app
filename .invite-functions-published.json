@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "contractHash": "dfce3b9ff61f04c3ef699b1b2bfe699b07a5ec42b9e3153b0f0fdd1a02886cb7",
+  "contractHash": "665eeb4696c882b6374749391c56725b122607e39520be9b830200de9790ee72",
   "functions": [
     "mutateHostOrganization",
     "respondHostInvite",
     "manageTournamentReferee"
   ],
-  "deployedAt": "2026-11-07T11:02:55.940Z"
+  "deployedAt": "2026-11-17T23:28:52.826Z"
 }
