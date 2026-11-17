@@ -38,6 +38,19 @@ const rosterCanonical = R.rosterFromRegistrations([
 ]);
 ok('leitura canônica mantém a ordem independente da ordem da consulta Firestore',
   JSON.stringify(rosterReordered) === JSON.stringify(rosterCanonical));
+ok('inscrição individual preserva a sequência na projeção após o reset',
+  rosterReordered[0].uid === 'u1' && rosterReordered[0].enrollSeq === 1 && rosterReordered[1].enrollSeq === 2);
+const firstAccount = R.rosterFromRegistrations([
+  { registrationId:'first', categoryId:'cat-a', participantKind:'account', participantUid:'kelly', createdAt:'2026-11-16T15:56:24.467Z', status:'confirmed' },
+]);
+ok('inscrição canônica antiga sem sequência recebe sua posição de chegada',
+  firstAccount.length === 1 && firstAccount[0].enrollSeq === 1);
+const chronological = R.rosterFromRegistrations([
+  { registrationId:'later', categoryId:'cat-a', participantKind:'manual', manualParticipantId:'placeholder', manualDisplayName:'Jogador 01', createdAt:'2026-11-16T15:57:37.750Z', status:'confirmed' },
+  { registrationId:'first', categoryId:'cat-a', participantKind:'account', participantUid:'kelly', createdAt:'2026-11-16T15:56:24.467Z', status:'confirmed' },
+]);
+ok('data de inscrição vence o número escrito no nome do placeholder',
+  chronological[0].uid === 'kelly' && chronological[0].enrollSeq === 1 && chronological[1].enrollSeq === 2);
 const rosterInterleaved = R.rosterFromRegistrations([
   { registrationId: 'a', categoryId: 'cat-a', participantKind: 'account', participantUid: 'u1', status: 'confirmed', fixedPairId: 'pair-1' },
   { registrationId: 'b', categoryId: 'cat-b', participantKind: 'account', participantUid: 'u2', status: 'confirmed', fixedPairId: null },

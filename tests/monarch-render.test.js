@@ -92,6 +92,24 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
 
 // ---------- 4. VARREDURA: 8/12/16 jogadores → sempre grupos de 4, 3 jogos, sem sobra ----------
 (function () {
+  const t = { superEight: true };
+  const row = { name: 'Kelly', played: 3, wins: 3, losses: 0 };
+  ok(W._reiRainhaInvictoCrown(t, [row], row, { groupDone: true }) === '',
+    'Super 8: três vitórias não exibem coroa nem bola 8');
+  row.played = 6; row.wins = 6;
+  ok(W._reiRainhaInvictoCrown(t, [row], row, { groupDone: true }) === '',
+    'Super 8: seis vitórias ainda não dão conquista');
+  row.played = 7; row.wins = 7;
+  var badge = W._reiRainhaInvictoCrown(t, [row], row, { groupDone: false });
+  ok(badge.includes('🎱') && !badge.includes('Rei') && !badge.includes('Rainha'),
+    'Super 8: sete vitórias exibem só a bola 8');
+  row.losses = 1; row.wins = 6;
+  ok(W._reiRainhaInvictoCrown(t, [row], row, { groupDone: true }) === '',
+    'Super 8: sete partidas com derrota não dão conquista');
+})();
+
+// ---------- 4. VARREDURA: 8/12/16 jogadores → sempre grupos de 4, 3 jogos, sem sobra ----------
+(function () {
   let sweepFail = 0;
   [8, 12, 16].forEach(function (n) {
     const t = buildViaDraw('Liga', n, { ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true });

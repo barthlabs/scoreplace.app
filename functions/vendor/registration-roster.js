@@ -41,12 +41,12 @@ var ScoreplaceRegistrationRoster;
             .map((value) => Number(value)).find((value) => Number.isFinite(value));
         if (explicit !== undefined)
             return { rank: explicit, fallback: '', index };
-        const named = numericName(name);
-        if (named !== null)
-            return { rank: named, fallback: '', index };
         const created = timestamp(doc.createdAt);
         if (created !== null)
             return { rank: created, fallback: '', index };
+        const named = numericName(name);
+        if (named !== null)
+            return { rank: named, fallback: '', index };
         return { rank: Number.POSITIVE_INFINITY, fallback: name.toLocaleLowerCase(), index };
     }
     function compareOrder(a, b) {
@@ -69,12 +69,18 @@ var ScoreplaceRegistrationRoster;
         }
         throw new Error('registro de participante inválido');
     }
-    function soloEntry(registration, person) {
+    function soloEntry(registration, person, position) {
         const categoryId = text(registration.categoryId);
         // `category`/`categories` são apenas a superfície compatível do motor
         // legado. O ID explícito permite que as portas de mutação nunca tenham de
         // recuperar identidade de um rótulo visível.
-        const entry = { categoryId, category: categoryId, categories: [categoryId] };
+        // A projeção canônica precisa carregar a posição estável. O reset reconstrói
+        // este elenco a partir das inscrições; sem a sequência, o cliente numerava
+        // apenas as reservas e deixava a pessoa real sem crachá.
+        const explicit = [registration.enrollSeq, registration.registrationOrder]
+            .filter((value) => value !== null && value !== undefined && value !== '')
+            .map(Number).find((value) => Number.isSafeInteger(value) && value > 0);
+        const entry = { categoryId, category: categoryId, categories: [categoryId], enrollSeq: explicit === undefined ? position + 1 : explicit };
         if (person.genderSource === 'organizador') {
             entry.gender = person.gender;
             entry.genderSource = person.genderSource;
@@ -146,7 +152,7 @@ var ScoreplaceRegistrationRoster;
             seen.add(id);
             const person = member(registration, index), pairId = text(registration.fixedPairId);
             if (!pairId) {
-                ordered.push({ order: person.order, entry: soloEntry(registration, person) });
+                ordered.push({ order: person.order, entry: soloEntry(registration, person, order) });
                 return;
             }
             const key = pairId + '\u0000' + categoryId;

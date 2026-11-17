@@ -163,7 +163,15 @@
           athletes:Array.isArray(names) ? names.map(text).filter(Boolean) : [] };
       }).filter(function (group) { return group.athletes.length === 4; });
     });
-    return { tournament: text(t.name || t.title || 'Torneio'), matches: matches, undated: undated,
+    var configuredCategories = Array.isArray(t.categoryDefinitions) && t.categoryDefinitions.length
+      ? t.categoryDefinitions.filter(function (def) { return def && def.enabled !== false; }).map(function (def) { return text(def.label); })
+      : (Array.isArray(t.combinedCategories) ? t.combinedCategories.map(text) : []);
+    var renderedCategories = configuredCategories.length ? configuredCategories
+      : real.map(function (m) { return m.category || 'Sem categoria'; });
+    var showCategories = new Set(renderedCategories.filter(Boolean)).size > 1;
+    return { tournament: text(t.name || t.title || 'Torneio'), superEight:t.superEight === true,
+      showCategories:showCategories,
+      matches: matches, undated: undated,
       days: days, future:future, pending:pending, tiebreakGroups:tiebreakGroups,
       groupStandings:groupStandings,
       tiePoints:Math.max(1, Math.min(99, Number(t.fmt2 && t.fmt2.tieSinglesPoints) || 5)),
@@ -352,14 +360,16 @@
     var gamesPerSet = model.scoring && model.scoring.gamesPerSet || 6;
     var gameLabel = slots === 1 ? '1 set de ' + gamesPerSet + ' games' : 'melhor de ' + slots + ' sets';
     var headerWidth = right - 68 - left;
-    var categories = Array.from(new Set(matches.map(function (m) { return m.category || 'Sem categoria'; })));
+    var categories = Array.from(new Set(matches.map(function (m) {
+      return model.showCategories ? (m.category || 'Sem categoria') : '';
+    }).filter(Boolean)));
     p.fillRect(0, 0, p.width, 76, '0.071 0.133 0.220');
     p.write(fitLabel(model.tournament, headerWidth, portrait ? 11 : 13, true),
       left, 22, portrait ? 11 : 13, true, null, '1 1 1');
     p.write(fitLabel(dayLabel(day) + '  |  ' + gameLabel + '  |  Página ' + part + '/' + total,
       headerWidth, 8, false), left, 38, 8, false, null, '1 1 1');
     p.write(fitLabel(courtLabel, headerWidth, 8, true), left, 51, 8, true, null, '1 1 1');
-    p.write(categoriesLabel(categories, headerWidth, portrait ? 6.7 : 7.2),
+    if (categories.length) p.write(categoriesLabel(categories, headerWidth, portrait ? 6.7 : 7.2),
       left, 65, portrait ? 6.7 : 7.2, false, null, '1 1 1');
     p.logo(right - 60, 4, 60);
     p.line(divider, 79, divider, bodyTop + bodyRows*rowHeight, 0.55);
@@ -384,9 +394,10 @@
       p.write(String(m.number || '-'), left+3, y+rowHeight/2+3, 8, true);
       p.write(m.time, hourX+3, y+rowHeight/2+3, 7.5);
       var categoryWidth = namesX - courtX - 14;
-      var categoryLines = sideLines(m.category || 'Sem categoria', categoryWidth, 5.5, false)
-        || [fitLabel(m.category || 'Sem categoria', categoryWidth, 5.5, false)];
-      p.write(categoryLines[0], courtX+3, y+10, 5.5);
+      var categoryLabel = model.showCategories ? (m.category || 'Sem categoria') : '';
+      var categoryLines = categoryLabel ? (sideLines(categoryLabel, categoryWidth, 5.5, false)
+        || [fitLabel(categoryLabel, categoryWidth, 5.5, false)]) : [];
+      if (categoryLines[0]) p.write(categoryLines[0], courtX+3, y+10, 5.5);
       if (categoryLines[1]) p.write(categoryLines[1], courtX+3, y+17, 5.5);
       p.line(courtX+7, y+rowHeight-10, namesX-10, y+rowHeight-10, 0.55);
       writeSide(p, m.team1, m.p1, namesX, y, sideWidth, portrait, false, dense);
@@ -500,7 +511,8 @@
     var p = pdfPage(842, 595), x = [20, 160, 207, 303, 393, 530, 822];
     p.fillRect(0, 0, p.width, 77, '0.071 0.133 0.220');
     p.write(fitLabel(model.tournament, 680, 12, true), 20, 23, 12, true, null, '1 1 1');
-    p.write(fitLabel('LISTA DE CHAMADA  |  ' + category + '  |  Folha ' + part + '/' + total, 680, 9, true),
+    var heading = 'LISTA DE CHAMADA' + (model.showCategories ? '  |  ' + category : '') + '  |  Folha ' + part + '/' + total;
+    p.write(fitLabel(heading, 680, 9, true),
       20, 48, 9, true, null, '1 1 1');
     p.logo(763, 8, 54);
     ['ATLETA', 'JOGO', 'DIA / HORA', 'QUADRA', 'PARCEIRO(A)', 'ADVERSÁRIOS'].forEach(function (label, i) {
@@ -615,7 +627,7 @@
     });
     p.fillRect(0, 0, p.width, 77, '0.071 0.133 0.220');
     p.write(fitLabel(model.tournament, right-left-80, 13, true), left, 24, 13, true, null, '1 1 1');
-    p.write(fitLabel('CHAVE ELIMINATÓRIA  |  ' + (bucket.category || 'Categoria única'),
+    p.write(fitLabel('CHAVE ELIMINATÓRIA' + (model.showCategories ? '  |  ' + (bucket.category || 'Sem categoria') : ''),
       right-left-80, 10, true), left, 47, 10, true, null, '1 1 1');
     p.write(fitLabel(title + (bucket.partial ? '  |  Estrutura parcial' : ''), right-left-80, 8),
       left, 64, 8, false, null, '1 1 1');
@@ -738,7 +750,7 @@
     rows.forEach(function (row, i) {
       var y = top + i*step;
       p.box(left, y-15, right-left, step-4);
-      var label = kind === 'tiebreak' ? 'Desempate, se necessário  |  ' + row.category + '  |  ' + row.name +
+      var label = kind === 'tiebreak' ? 'Desempate, se necessário  |  ' + (model.showCategories ? row.category + '  |  ' : '') + row.name +
         (row.court ? '  |  ' + row.court : '')
         : row.ref + '  |  ' + (row.third ? '3º lugar' : row.final ? 'Final' : 'Rodada ' + row.round);
       p.write(fitLabel(label, right-left-20, 8, true), left+8, y-2, 8, true);
@@ -794,7 +806,7 @@
         var y = 100 + index * (portrait ? 174 : 154), head = y + 28, row = 27;
         p.box(left, y, boxWidth, 146);
         p.rect(left, y, boxWidth, 25, 0.91);
-        p.write(fitLabel(group.category + '  |  ' + group.name, boxWidth - 20, 9, true), left + 9, y + 17, 9, true);
+        p.write(fitLabel((model.showCategories ? group.category + '  |  ' : '') + group.name, boxWidth - 20, 9, true), left + 9, y + 17, 9, true);
         var cols = [left + 9, left + 61, right - 157, right - 109, right - 61];
         ['POSIÇÃO', 'ATLETA', 'VITÓRIAS', 'DERROTAS', 'SALDO'].forEach(function (label, i) {
           p.write(label, cols[i], head + 9, 7, true);
@@ -894,7 +906,7 @@
           return { category:category || 'Sem categoria', name:'Grupo: __________', court:'' };
         });
         pages.push(writingPage(model, 'RESERVA PARA DESEMPATES',
-          (category || 'Sem categoria') + '  |  preencher o grupo se houver empate',
+          (model.showCategories ? (category || 'Sem categoria') + '  |  ' : '') + 'preencher o grupo se houver empate',
           rows, 1, 1, orientation, 'tiebreak'));
       }
       appendScorePages(model.matches.filter(function (m) { return m.elimination && m.category === category; }),

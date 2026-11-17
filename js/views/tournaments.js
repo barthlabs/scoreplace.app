@@ -220,7 +220,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
     var _pairCategorySafe = String(_pairTournamentCategory).replace(/[&<>"']/g, function (ch) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[ch];
     });
-    var _pairCategoryBadge = members
+    var _pairCategoryBadge = members && (!window._showTournamentCategoryLabels || window._showTournamentCategoryLabels(t))
       ? (_pairTournamentCategory
         ? '<div title="Categoria definida para esta dupla neste torneio" style="align-self:center;font-size:0.68rem;font-weight:800;color:var(--sp-c-c7d2fe,#c7d2fe);background:rgba(99,102,241,0.2);border:1px solid rgba(129,140,248,0.58);border-radius:7px;padding:3px 8px;line-height:1.25;white-space:nowrap;">🏷️ ' + _pairCategorySafe + '</div>'
         : '<div title="O organizador precisa atribuir uma categoria customizada do torneio a esta dupla" style="align-self:center;font-size:0.66rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(245,158,11,0.13);border:1px dashed rgba(245,158,11,0.6);border-radius:7px;padding:3px 8px;line-height:1.25;">⚠️ Categoria do torneio pendente</div>')
@@ -4186,15 +4186,10 @@ function renderTournaments(container, tournamentId = null) {
             // tem teste varrendo (tests/area-scaling-canon.test.js) — foi ele que pegou
             // este erro meu. Ver [[project_web_area_scaling_canon]].
             const inviteModalHtml = `
-             <div id="invite-modal-${t.id}" class="invite-modal-container" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6);  z-index: 9999; cursor: default; box-sizing: border-box;" onclick="event.stopPropagation()">
-                <div style="position:absolute;top:calc(var(--scroll-anchor, 120px) + 4px);left:50%;transform:translateX(-50%);background: var(--bg-card); width: calc(100% - 2rem); max-width: 340px; max-height:calc(100% - var(--scroll-anchor, 120px) - 16px); overflow-y:auto; -webkit-overflow-scrolling:touch; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 20px 40px rgba(0,0,0,0.4); animation: fadeIn 0.2s ease; box-sizing: border-box;">
+             <div id="invite-modal-${t.id}" class="invite-modal-container" style="display: none; position: fixed; top: var(--scroll-anchor, 120px); left: 0; width: 100%; height: calc(100% - var(--scroll-anchor, 120px)); background: rgba(0,0,0,0.6); z-index: 9999; cursor: default; box-sizing: border-box;" onclick="event.stopPropagation();if(event.target===this)closeInviteModal('${t.id}')">
+                <div style="position:absolute;top:4px;left:50%;transform:translateX(-50%);background: var(--bg-card); width: calc(100% - 2rem); max-width: 340px; max-height:calc(100% - 16px); overflow-y:auto; -webkit-overflow-scrolling:touch; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 20px 40px rgba(0,0,0,0.4); animation: fadeIn 0.2s ease; box-sizing: border-box;" onclick="event.stopPropagation()">
 
-                   <!-- Standard back header row -->
-                   <div style="display:flex;align-items:center;gap:8px;padding:0.5rem 0.75rem;border-bottom:1px solid var(--border-color);">
-                      <button onclick="event.stopPropagation();closeInviteModal('${t.id}')" aria-label="Voltar ao torneio" style="display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:20px;border:1px solid rgba(96,165,250,0.78);background:rgba(59,130,246,0.2);color:var(--text-bright);cursor:pointer;font-size:0.8rem;font-weight:800;box-shadow:0 1px 8px rgba(59,130,246,0.22);flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Voltar</button>
-                      <div style="flex:1;text-align:center;font-size:0.85rem;font-weight:700;color:var(--text-bright);">Convidar para o Torneio</div>
-                      <button class="back-hdr-ham" type="button" aria-label="Abrir menu" onclick="event.stopPropagation();typeof window._toggleHamburger==='function'&&window._toggleHamburger(this);" style="width:32px;height:32px;border:none;background:transparent;color:var(--text-color);cursor:pointer;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
-                   </div>
+                   <div style="padding:0.65rem 0.75rem;border-bottom:1px solid var(--border-color);text-align:center;font-size:0.85rem;font-weight:700;color:var(--text-bright);">Convidar para o Torneio</div>
 
                    <div style="padding: 0.6rem 0.85rem; display: flex; flex-direction: column; gap: 0.6rem; box-sizing: border-box;">
 
@@ -4309,7 +4304,7 @@ function renderTournaments(container, tournamentId = null) {
                      <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._printTournament('${t.id}')">🖨️ Imprimir</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._exportTournamentCSV('${t.id}')">📊 Exportar CSV</button>
-                     ${(isOrg || isConfirmedReferee) && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
+                     ${!isOrg && isConfirmedReferee && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
                    </div>
                  `;
                 } else if (hasDraw) {
@@ -4324,7 +4319,7 @@ function renderTournaments(container, tournamentId = null) {
                      <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._printTournament('${t.id}')">🖨️ Imprimir</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._exportTournamentCSV('${t.id}')">📊 Exportar CSV</button>
-                     ${(isOrg || isConfirmedReferee) && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
+                     ${!isOrg && isConfirmedReferee && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
                    </div>
                  `;
                 } else {
@@ -4489,14 +4484,14 @@ function renderTournaments(container, tournamentId = null) {
                 </div>
               ` : ''}
               <div class="sp-tournament-title-slot" style="flex:1;min-width:0;display:flex;flex-direction:column;align-self:stretch;">
-                <h4 class="tournament-card-title" style="margin:0;font-weight:800;color:${/^#[0-9a-f]{6}$/i.test(t.titleColor || '') ? t.titleColor : 'white'};text-shadow:0 1px 3px rgba(0,0,0,0.9);text-align:left;">
+                <h4 class="tournament-card-title${String(t.name || '').trim().length <= 12 ? ' tournament-card-title--short' : ''}" style="margin:0;font-weight:800;color:${/^#[0-9a-f]{6}$/i.test(t.titleColor || '') ? t.titleColor : 'white'};text-shadow:0 1px 3px rgba(0,0,0,0.9);text-align:left;">
                   ${window._safeHtml(t.name)}
                 </h4>
-                ${tournamentId && t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="width:clamp(42px,6vw,64px);aspect-ratio:1/1;display:none;margin-top:10px;"></span>' : ''}
+                ${tournamentId && t.venuePlaceId && !(dateCardHtml && !window._tourLogoSrc(t)) ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="width:clamp(42px,6vw,64px);aspect-ratio:1/1;display:none;margin-top:10px;"></span>' : ''}
               </div>
               ${/* v2.7.36: coração de favorito SEMPRE à direita, alinhado à 1ª linha do nome
                     (align-self:flex-start + margin-top centra na primeira linha do h4). */ ''}
-              ${tournamentId ? `<span data-fav-id="${t.id}" onclick="event.stopPropagation(); window._toggleFavorite('${t.id}', event)" title="${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}" style="font-size:1.5rem;cursor:pointer;flex-shrink:0;align-self:flex-start;margin-top:6px;color:${window._spCor((typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '#f43f5e' : 'rgba(255,255,255,0.4)', 'color')};transition:all 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '❤️' : '♡'}</span>` : ''}
+              ${tournamentId ? `<div class="sp-tournament-right-rail"><span data-fav-id="${t.id}" onclick="event.stopPropagation(); window._toggleFavorite('${t.id}', event)" title="${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}" style="font-size:1.5rem;cursor:pointer;flex-shrink:0;align-self:flex-start;margin-top:6px;color:${window._spCor((typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '#f43f5e' : 'rgba(255,255,255,0.4)', 'color')};transition:all 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '❤️' : '♡'}</span>${dateCardHtml && !window._tourLogoSrc(t) && t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="width:clamp(42px,6vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}</div>` : ''}
               ${!tournamentId ? `<span data-fav-id="${t.id}" onclick="event.stopPropagation(); window._toggleFavorite('${t.id}', event)" style="font-size:1.8rem;cursor:pointer;flex-shrink:0;align-self:flex-start;color:${window._spCor((typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '#f43f5e' : 'rgba(255,255,255,0.4)', 'color')};transition:all 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '❤️' : '♡'}</span>` : ''}
             </div>
             ${/* v2.8.67: enquete ativa → botão brilhante logo abaixo do nome */ ''}
@@ -4525,7 +4520,27 @@ function renderTournaments(container, tournamentId = null) {
               `}
               ${!tournamentId && !dateCardHtml && t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
             </div>
-            ${_detailOverviewAtTop ? `<div class="sp-overview-stats">${_statsSummaryHtml}</div>` : ''}
+            <div class="sp-overview-stats">${_statsSummaryHtml}</div>
+            <div class="sp-tournament-config-overview">
+              ${(typeof window._buildTournamentConfigBox === 'function')
+                ? window._buildTournamentConfigBox(t, { bg: _pReadBg || '', open: !!tournamentId })
+                : ''}
+            </div>
+            ${t.venue ? `
+            <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: 8px; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:8px 11px;' : 'opacity: 0.65;'}">
+               ${t.venueLat && t.venueLon ? '<a href="' + (t.venuePlaceId ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(t.venue) + '&query_place_id=' + t.venuePlaceId : 'https://www.google.com/maps/search/?api=1&query=' + t.venueLat + ',' + t.venueLon) + '" target="_blank" title="Ver no mapa" style="font-size:1.15rem; flex-shrink:0; line-height:1; text-decoration:none;">🗺️</a>' : '<span style="font-size: 1rem; flex-shrink:0;">📍</span>'}
+               <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;">
+                 <span style="font-weight:600;">${window._safeHtml(t.venue)}</span>
+                 ${t.courtCount > 0 ? '<span style="font-size:0.75rem; font-weight:400; opacity:0.7;">' + t.courtCount + (t.courtCount > 1 ? ' quadras' : ' quadra') + '</span>' : ''}
+                 ${t.venueAddress ? '<span style="font-size:0.75rem; font-weight:400; opacity:0.7;">' + window._safeHtml(t.venueAddress) + '</span>' : ''}
+               </span>
+               <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; align-self:stretch;">
+                 ${(t.venuePlaceId || t.venue) ? '<button onclick="event.stopPropagation();window._openVenueFromTournament(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')" title="Ver detalhes do local (movimento, contatos, reviews)" style="background:linear-gradient(135deg,#FFD700,#DAA520);border:none;color:#1a0f00;border-radius:8px;padding:5px 10px;font-size:0.72rem;font-weight:800;cursor:pointer;white-space:nowrap;">📍 Place</button>' : ''}
+               </div>
+            </div>
+            ${tournamentId && t.venueLat && t.venueLon ? '<div id="tournament-venue-map" data-lat="' + t.venueLat + '" data-lng="' + t.venueLon + '" data-venue="' + window._safeHtml(t.venue || '') + '" style="width:100%;height:180px;border-radius:10px;overflow:hidden;border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));margin-top:8px;background:#1a1a2e;"></div>' : ''}` : ''}
+
+
             ${tournamentId ? podiumHtml : ''}
             ${ligaActiveToggleHtml ? `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;" onclick="event.stopPropagation();"><div style="margin-left:auto;">${ligaActiveToggleHtml}</div></div>` : ''}
             ${/* v1.3.15 (dono): tabela "DURAÇÃO ESTIMADA" (8/16/32/64 simulações) REMOVIDA do detalhe —
@@ -4562,7 +4577,7 @@ function renderTournaments(container, tournamentId = null) {
                 // chama `_renderTournamentProgress` desde a v2.1.52, o MESMO box de progresso
                 // do detalhe. O dono viu a redundância de novo na tela inicial e teve que
                 // mandar tirar duas vezes. Agora o box saiu das DUAS telas.
-                return ((typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'lg') : '');
+                return '';
               }
 
               // Evento concentrado: a janela publicada manda no relógio, não a chave.
@@ -4606,19 +4621,6 @@ function renderTournaments(container, tournamentId = null) {
 
             ${(typeof window._buildDurationForecast === 'function') ? window._buildDurationForecast(t) : ''}
 
-            ${t.venue ? `
-            <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: 8px; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:8px 11px;' : 'opacity: 0.65;'}">
-               ${t.venueLat && t.venueLon ? '<a href="' + (t.venuePlaceId ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(t.venue) + '&query_place_id=' + t.venuePlaceId : 'https://www.google.com/maps/search/?api=1&query=' + t.venueLat + ',' + t.venueLon) + '" target="_blank" title="Ver no mapa" style="font-size:1.15rem; flex-shrink:0; line-height:1; text-decoration:none;">🗺️</a>' : '<span style="font-size: 1rem; flex-shrink:0;">📍</span>'}
-               <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;">
-                 <span style="font-weight:600;">${window._safeHtml(t.venue)}</span>
-                 ${t.courtCount > 0 ? '<span style="font-size:0.75rem; font-weight:400; opacity:0.7;">' + t.courtCount + (t.courtCount > 1 ? ' quadras' : ' quadra') + '</span>' : ''}
-                 ${t.venueAddress ? '<span style="font-size:0.75rem; font-weight:400; opacity:0.7;">' + window._safeHtml(t.venueAddress) + '</span>' : ''}
-               </span>
-               <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; align-self:stretch;">
-                 ${(t.venuePlaceId || t.venue) ? '<button onclick="event.stopPropagation();window._openVenueFromTournament(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')" title="Ver detalhes do local (movimento, contatos, reviews)" style="background:linear-gradient(135deg,#FFD700,#DAA520);border:none;color:#1a0f00;border-radius:8px;padding:5px 10px;font-size:0.72rem;font-weight:800;cursor:pointer;white-space:nowrap;">📍 Place</button>' : ''}
-               </div>
-            </div>
-            ${tournamentId && t.venueLat && t.venueLon ? '<div id="tournament-venue-map" data-lat="' + t.venueLat + '" data-lng="' + t.venueLon + '" data-venue="' + window._safeHtml(t.venue || '') + '" style="width:100%;height:180px;border-radius:10px;overflow:hidden;border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));margin-top:8px;background:#1a1a2e;"></div>' : ''}` : ''}
 
             <!-- Linha separadora -->
             <div style="height: 1px; background: var(--sp-g-255-255-255-01,rgba(255,255,255,0.1)); margin: 1.8rem 0;"></div>
@@ -4626,12 +4628,6 @@ function renderTournaments(container, tournamentId = null) {
             <!-- Bottom Section -->
             <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center;">
 
-               ${_detailOverviewAtTop ? '' : _statsSummaryHtml}
-
-               <!-- Configuração Completa do Torneio (dinâmica, por formato) -->
-               ${(typeof window._buildTournamentConfigBox === 'function')
-                 ? window._buildTournamentConfigBox(t, { bg: _pReadBg || '', open: true })
-                 : ''}
                ${t.ligaSeasonMonths ? (() => {
                     const _sm = t.ligaSeasonMonths;
                     if (!t.startDate) return '';
@@ -4710,6 +4706,7 @@ function renderTournaments(container, tournamentId = null) {
               <div class="org-tools-label" style="${_TOOLS_LABEL_CSS} ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
+                ${hasDraw && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button><button class="btn btn-outline hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
                 ${isOrg && Array.isArray(t.matches) && t.matches.some(m => m && (m.isMonarch === true || m.monarchGroup != null)) ? `<button class="btn btn-outline hover-lift" onclick="event.stopPropagation(); window._openPublishedInitialDrawResult('${_escAttr(t.id)}')">🖼️ Resultado do sorteio</button>` : ''}
                 ${/* create-tournament.js is deferred after this view; the hash fallback is intentional so a direct detail render never loses Editar during that load window. */ !isFinished ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); if (typeof window._navigateToCreateTournament === 'function') { window._navigateToCreateTournament('${_escAttr(t.id)}'); } else { window.location.hash = '#novo-torneio/${_escAttr(t.id)}'; }">✏️ ${_t('btn.edit')}</button>` : ''}
                 <button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.location.hash='#comunicados/${t.id}'">📢 Comunicados</button>
@@ -4789,6 +4786,7 @@ function renderTournaments(container, tournamentId = null) {
                   ficando no pé do card. */ ''}
             ${tournamentId && isFinished && window.AppStore.currentUser && !t.isSandbox ? `<div style="margin-top:10px;"><button class="btn btn-outline hover-lift" onclick="event.stopPropagation();window._openHistoricalAthleteClaims('${_escAttr(t.id)}')">Reconhecer minha participação</button></div>` : ''}
             ${actionsHtml}
+            ${(typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'lg') : ''}
 
           </div>
           ${isOrg ? `<div style="position:absolute;bottom:6px;right:8px;opacity:0.9;pointer-events:none;" title="Organizador">

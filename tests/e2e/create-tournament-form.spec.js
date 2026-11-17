@@ -23,21 +23,16 @@ async function openCreateModal(page) {
 }
 const selVal = (page, id) => page.evaluate((i) => { var el = document.getElementById(i); return el ? el.value : null; }, id);
 
-test.describe('Camada 2 — Criar Torneio: clique→valor (Formato)', () => {
-  test('cada botão de Formato grava o valor interno certo em #select-formato', async ({ page }) => {
+test.describe('Camada 2 — Criar Torneio: configurador de fases', () => {
+  test('a fase classificatória pode ser desligada e ligada no configurador atual', async ({ page }) => {
     await openCreateModal(page);
-
-    await page.click('#formato-buttons .formato-btn[data-fmt="grupos"]');
-    expect(await selVal(page, 'select-formato')).toBe('grupos_mata');
-    await expect(page.locator('#formato-buttons .formato-btn[data-fmt="grupos"]')).toHaveClass(/formato-btn-active/);
-
-    await page.click('#formato-buttons .formato-btn[data-fmt="pontos"]');
-    expect(await selVal(page, 'select-formato')).toBe('liga'); // "Pontos Corridos" exibido, valor interno 'liga' (intocado)
-
-    await page.click('#formato-buttons .formato-btn[data-fmt="elim"]');
-    expect(await selVal(page, 'select-formato')).toBe('elim_simples');
-    // só um botão ativo por vez
-    expect(await page.locator('#formato-buttons .formato-btn-active').count()).toBe(1);
+    await page.evaluate(() => window._f2MountInEditForm());
+    const classificatoria = page.locator('input[onchange="window._f2ClassifAtiva(this.checked)"]');
+    await expect(classificatoria).toBeChecked();
+    await classificatoria.locator('xpath=../..').click();
+    await expect.poll(() => page.evaluate(() => window._f2GetConfig().classifAtiva)).toBe(false);
+    await classificatoria.locator('xpath=../..').click();
+    await expect.poll(() => page.evaluate(() => window._f2GetConfig().classifAtiva)).toBe(true);
   });
 
   test('toggle Dupla Eliminatória alterna elim_simples ↔ elim_dupla', async ({ page }) => {
@@ -74,7 +69,7 @@ test('saldo principal, simples e nenhum desempate adicional podem coexistir sem 
   await expect(page.locator('#tiebreaker-criteria-section')).toBeVisible();
 });
 
-test('grade usa chamada e aquecimento da ficha e oculta prazos por rodada', async ({ page }) => {
+test('todos os formatos usam os três tempos da ficha e ocultam prazos por rodada', async ({ page }) => {
   await openCreateModal(page);
   await page.evaluate(() => {
     document.getElementById('tourn-start-date').value = '2026-11-29';
@@ -83,11 +78,22 @@ test('grade usa chamada e aquecimento da ficha e oculta prazos por rodada', asyn
     window._renderEstimatedGameHours();
   });
   await expect(page.locator('#round-bounds-toggle-row')).toBeHidden();
-  await expect(page.locator('#phase-grid-call-time')).toBeVisible();
-  await page.locator('#phase-grid-call-time').fill('7');
-  await page.locator('#phase-grid-warmup-time').fill('3');
+  await expect(page.locator('#time-estimates-container')).toBeVisible();
+  await expect(page.locator('#phase-grid-call-time, #phase-grid-warmup-time, #phase-grid-elimination-play')).toHaveCount(0);
+  await page.locator('#tourn-call-time').fill('7');
+  await page.locator('#tourn-warmup-time').fill('3');
+  await page.locator('#tourn-game-duration').fill('25');
   expect(await selVal(page, 'tourn-call-time')).toBe('7');
   expect(await selVal(page, 'tourn-warmup-time')).toBe('3');
+  expect(await selVal(page, 'tourn-game-duration')).toBe('25');
+  await page.evaluate(() => {
+    window._f2MountInForm(document.getElementById('f2-config-mount'), 'Beach Tennis', null, null);
+    window._f2Disputa('dupla');
+    window._f2TeamForm('super_eight');
+  });
+  await expect(page.locator('#time-estimates-container')).toBeVisible();
+  await expect(page.locator('#tourn-game-duration')).toHaveValue('25');
+  await expect(page.locator('#phase-grid-call-time, #phase-grid-warmup-time, #phase-grid-elimination-play')).toHaveCount(0);
   await page.evaluate(() => window._setEstimatedScheduleMode('participants'));
   await expect(page.locator('#round-bounds-toggle-row')).toBeVisible();
 });
@@ -135,16 +141,13 @@ test('recorte de logo mantém transparência PNG e fundo escolhido gera imagem o
   expect(await page.evaluate(() => window._cropResults[1].startsWith('data:image/jpeg;base64,'))).toBe(true);
 });
 
-test.describe('Camada 2 — Criar Torneio: clique→valor (Modo de sorteio)', () => {
-  test('cada botão de Modo de Sorteio grava data-value em #draw-mode', async ({ page }) => {
+test.describe('Camada 2 — Criar Torneio: formação dos confrontos', () => {
+  test('as opções de parceiros atualizam a configuração da classificatória', async ({ page }) => {
     await openCreateModal(page);
-
-    await page.click('#draw-mode-buttons .draw-mode-btn[data-value="rei_rainha"]');
-    expect(await selVal(page, 'draw-mode')).toBe('rei_rainha');
-    await expect(page.locator('#draw-mode-buttons .draw-mode-btn[data-value="rei_rainha"]')).toHaveClass(/draw-mode-active/);
-
-    await page.click('#draw-mode-buttons .draw-mode-btn[data-value="sorteio"]');
-    expect(await selVal(page, 'draw-mode')).toBe('sorteio');
-    expect(await page.locator('#draw-mode-buttons .draw-mode-active').count()).toBe(1);
+    await page.evaluate(() => window._f2MountInEditForm());
+    await page.getByRole('button', { name: 'Rodada Rei/Rainha' }).click();
+    await expect.poll(() => page.evaluate(() => window._f2GetConfig().parceria)).toBe('rei_rainha');
+    await page.getByRole('button', { name: 'Parceiros sorteados' }).click();
+    await expect.poll(() => page.evaluate(() => window._f2GetConfig().parceria)).toBe('sorteio_rodada');
   });
 });

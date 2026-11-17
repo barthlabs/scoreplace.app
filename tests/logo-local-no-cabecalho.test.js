@@ -23,13 +23,13 @@ ok(/window\._venueLogoSrc\s*=\s*function/.test(store), 'acessor canônico de log
 ok(begin >= 0 && /_venueLogoSrc\s*\?\s*window\._venueLogoSrc\(v\)/.test(loader), 'logo do local lê logoUrl/Storage pelo acessor canônico');
 ok(/window\._hydrateVenueLogos\s*=\s*function/.test(loader) && /querySelectorAll\('\[data-vlogo-pid\]/.test(loader), 'hidratador busca os slots de logo do local');
 ok(/el\.style\.display\s*=\s*'block'/.test(loader), 'hidratador revela o slot ao receber a imagem');
-ok(/tournamentId && t\.venuePlaceId \? '<span data-vlogo-pid=/.test(hero), 'em toda ficha, logo do local fica sob o título');
+ok(/sp-tournament-right-rail/.test(hero) && /dateCardHtml && !window\._tourLogoSrc\(t\) && t\.venuePlaceId \? '<span data-vlogo-pid=/.test(hero), 'sem logo do evento, o logo do local fica na coluna do coração e na base da data');
 ok(/display:flex;flex-direction:column;align-self:stretch/.test(hero), 'coluna do título preserva o contrato responsivo do nome');
 ok(/!tournamentId && !dateCardHtml && t\.venuePlaceId/.test(dates), 'na lista, logo do local continua no bloco da data textual');
 ok(/sp-tournament-date-stack/.test(tournaments) && /display:\$\{dateCardHtml \? 'none' : 'flex'\};align-items:center;gap:12px;min-width:0/.test(dates), 'a data visual e a textual são alternativas');
 ok(/width:clamp\(42px,6vw,64px\)/.test(hero), 'logo do local tem dimensão responsiva junto ao título');
 ok(/position:relative;width:33%;min-width:100px;flex-shrink:0;aspect-ratio:/.test(hero), 'logo do evento mantém exatamente a largura original de 33%');
-ok(/class="tournament-card-title"/.test(hero), 'o título tem classe própria para a regra responsiva');
+ok(/class="tournament-card-title\$\{/.test(hero), 'o título tem classe própria para a regra responsiva');
 ok(/font-size:\s*clamp\(1\.45rem,\s*6\.4vw,\s*2\.25rem\)\s*!important/.test(responsive) && /_fitTournamentTitles/.test(store), 'o título ocupa o maior tamanho que cabe no slot real');
 ok(/text-wrap:\s*pretty/.test(responsive) && /overflow-wrap:\s*normal\s*!important/.test(responsive) && /word-break:\s*normal\s*!important/.test(responsive), 'palavras do título não são partidas no meio');
 ok(!/@media \(max-width: 430px\)[\s\S]*\.tournament-card-title/.test(responsive), 'não há teto móvel artificial que reduza o título antes de necessário');

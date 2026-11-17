@@ -529,6 +529,30 @@ window._getTournamentCategories = function(t) {
     return combined;
 };
 
+// A categoria única continua no modelo para inscrição, sorteio e resultados;
+// no card ela não diferencia ninguém e não precisa de etiqueta.
+window._showTournamentCategoryLabels = function(t) {
+    var cats = window._getTournamentCategories(t);
+    var labels = new Set((cats || []).map(function(cat) { return String(cat || '').trim(); }).filter(Boolean));
+    if (labels.size > 0 || !t) return labels.size > 1;
+    // Dados legados podem trazer categorias nos jogos sem a lista configurada.
+    // Use-as só quando distinguem de fato dois caminhos competitivos.
+    var addMatches = function(matches) {
+        if (!Array.isArray(matches) || labels.size > 1) return;
+        matches.forEach(function(match) {
+            var label = String(match && (match.category || match.categoryName) || '').trim();
+            if (label) labels.add(label);
+        });
+    };
+    addMatches(t.matches);
+    (Array.isArray(t.rounds) ? t.rounds : []).forEach(function(round) { addMatches(round && round.matches); });
+    (Array.isArray(t.phases) ? t.phases : []).forEach(function(phase) {
+        addMatches(phase && phase.matches);
+        (phase && Array.isArray(phase.rounds) ? phase.rounds : []).forEach(function(round) { addMatches(round && round.matches); });
+    });
+    return labels.size > 1;
+};
+
 // Traduz a categoria estrutural recebida do servidor para a apresentação da
 // tela. O ID continua sendo usado nas mutações; somente o rótulo sai para o
 // usuário. Sem esta ponte, `legacy-<hash>` aparecia como se fosse categoria e
@@ -661,7 +685,7 @@ function _ensureMistoGenderProfiles(t, uidsNeeded) {
 // Build HTML showing category participant counts
 window._buildCategoryCountHtml = function(t) {
     var cats = window._getTournamentCategories(t);
-    if (!cats || cats.length === 0) return '';
+    if (!window._showTournamentCategoryLabels(t)) return '';
     var sorted = window._sortCategoriesBySkillOrder(cats, t.skillCategories);
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
 

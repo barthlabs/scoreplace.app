@@ -1872,7 +1872,7 @@ window._translations['pt'] = {
   // ⭐ POR SET, não por partida (25/ago/2026). Dizer "do Jogo" foi a origem do
   // mal-entendido: a previsão dava o mesmo tempo pra set único e pra melhor de 3.
   // Quem multiplica pelos sets do formato da fase é `_minutosDaPartida`.
-  'create.gameDurLabel': 'Duração Média do Set',
+  'create.gameDurLabel': 'Tempo de jogo',
   'create.gameDurDesc': 'Duração estimada de cada SET. A partida multiplica pelos sets do formato da fase (melhor de 3 ≈ 2,5 sets; melhor de 5 ≈ 4,5).',
   'create.estDuration': 'Duração Estimada',
   'create.matchFormat': 'Formato da Partida',

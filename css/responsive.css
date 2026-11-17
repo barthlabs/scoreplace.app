@@ -26,6 +26,15 @@
   word-break: normal !important;
   hyphens: none;
 }
+.tournament-card-title--short {
+  font-size: clamp(2.5rem, 7vw, 5.75rem) !important;
+}
+.sp-dashboard-identity .tournament-card-title--short {
+  font-size: clamp(2rem, 5vw, 3.5rem) !important;
+}
+@media (max-width: 767px) {
+  .tournament-card-title--short { font-size: clamp(2rem, 9vw, 3.25rem) !important; }
+}
 
 /* Dashboard cards - Mobile Stack */
 @media (max-width: 767px) {

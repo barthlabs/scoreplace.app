@@ -187,11 +187,11 @@ console.log('\n── badge e filtro do membro de dupla ──');
   const fonte = st.slice(st.indexOf('window._profileMetaSlots = function'), st.indexOf('// Carrega perfis (por uid'));
   eval(fonte.slice(0, fonte.lastIndexOf('};') + 2));
   const dupla = { p1Uid: 'u1', p2Uid: 'u2', p1Gender: 'masculino', p1GenderSource: 'organizador' };
-  const html = window._profileMetaSlots(dupla, 'Um / Dois', true, { sport: 'Beach Tennis', combinedCategories: ['Masc C'] }, true);
+  const html = window._profileMetaSlots(dupla, 'Um / Dois', true, { sport: 'Beach Tennis', combinedCategories: ['Masc C', 'Fem C'] }, true);
   ok(html.indexOf('[masculino]') !== -1, '⭐ o badge do membro nasce com a decisão do organizador');
   ok(html.indexOf('data-pmeta-gender-org="1"') !== -1,
     '⭐⭐ e a decisão viaja no atributo — é o que impede o repinte de trocá-la pelo perfil');
-  const semMarca = window._profileMetaSlots({ p1Uid: 'u1', p1Gender: 'masculino' }, 'Um / Dois', true, { combinedCategories: ['Masc C'] }, true);
+  const semMarca = window._profileMetaSlots({ p1Uid: 'u1', p1Gender: 'masculino' }, 'Um / Dois', true, { combinedCategories: ['Masc C', 'Fem C'] }, true);
   ok(semMarca.indexOf('data-pmeta-gender-org="1"') === -1,
     'valor legado sem marca NÃO vira decisão (ele perderia para o perfil, como sempre)');
 }

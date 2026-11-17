@@ -66,6 +66,16 @@ const dupla = (u1, u2, cat) => ({ p1Uid: u1, p2Uid: u2, p1Name: 'A', p2Name: 'B'
 console.log('──── misto-tag-so-com-1-1 ────');
 
 (function () {
+  const s = ctx({});
+  eq(s._buildCategoryCountHtml({ combinedCategories: ['Fem Light'], participants: [solo('f1', 'Fem Light')] }), '',
+    'categoria única não gera etiqueta em qualquer torneio');
+  eq(s._showTournamentCategoryLabels({ combinedCategories:['Fem Light'], matches:[{ category:'Fem Light' }] }), false,
+    'categoria única configurada permanece invisível nos jogos');
+  eq(s._showTournamentCategoryLabels({ matches:[{ category:'Fem Light' }, { category:'Masc Light' }] }), true,
+    'duas categorias legadas sem configuração ainda são distinguíveis');
+})();
+
+(function () {
   const shell = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const identity = fs.readFileSync(path.join(__dirname, '..', 'js/views/identity-core.js'), 'utf8');
   ok(identity.includes('window._entryTeamMembers = function'),
@@ -78,7 +88,7 @@ console.log('──── misto-tag-so-com-1-1 ────');
   const s = ctx({});
   s._entryTeamMembers = (p) => p && p.p1Name && p.p2Name ? [p.p1Name, p.p2Name] : null;
   const t = { id: 'neon', genderCategories: ['Fem'], skillCategories: ['Light'],
-    combinedCategories: ['Fem Light'],
+    combinedCategories: ['Fem Light', 'Masc Light'],
     participants: Array.from({ length: 8 }, (_, i) => dupla('a' + i, 'b' + i, 'Fem Light')) };
   ok(s._buildCategoryCountHtml(t).indexOf('>16<') !== -1,
     '[duplas] etiqueta Fem Light conta 16 inscritos, não 8 cards de dupla');
@@ -109,7 +119,7 @@ console.log('──── misto-tag-so-com-1-1 ────');
 (function () {
   const s = ctx({ a1: 'feminino', a2: 'feminino', a3: 'feminino' });
   const t = {
-    id: 't2', genderCategories: ['misto_obrigatorio'], skillCategories: [], combinedCategories: ['Misto Obrig.'],
+    id: 't2', genderCategories: ['misto_obrigatorio'], skillCategories: [], combinedCategories: ['Misto Obrig.', 'Fem'],
     participants: [solo('a1', 'Misto Obrig.'), solo('a2', 'Misto Obrig.'), solo('a3', 'Misto Obrig.')]
   };
   const html = s._buildCategoryCountHtml(t);
@@ -123,7 +133,7 @@ console.log('──── misto-tag-so-com-1-1 ────');
 (function () {
   const s = ctx({ f1: 'feminino', f2: 'feminino', m1: 'masculino', m2: 'masculino' });
   const t = {
-    id: 't3', genderCategories: ['Misto'], skillCategories: [], combinedCategories: ['Misto'],
+    id: 't3', genderCategories: ['Misto'], skillCategories: [], combinedCategories: ['Misto', 'Fem'],
     participants: [solo('f1', 'Misto'), solo('f2', 'Misto'), solo('m1', 'Misto'), solo('m2', 'Misto')]
   };
   const html = s._buildCategoryCountHtml(t);
@@ -155,7 +165,7 @@ console.log('──── misto-tag-so-com-1-1 ────');
 (function () {
   const s = ctx({ f1: 'feminino', m1: 'masculino', f2: 'feminino', m2: 'masculino' });
   const t = {
-    id: 't6', genderCategories: ['Misto'], skillCategories: [], combinedCategories: ['Misto'],
+    id: 't6', genderCategories: ['Misto'], skillCategories: [], combinedCategories: ['Misto', 'Fem'],
     participants: [dupla('f1', 'm1', 'Misto'), dupla('f2', 'm2', 'Misto')]
   };
   ok(s._buildCategoryCountHtml(t).indexOf('Misto') !== -1, '[dupla] 2 duplas fem+masc → 2x2 → tag aparece');
@@ -214,10 +224,10 @@ console.log('──── misto-tag-so-com-1-1 ────');
   };
   s._dashRerender = function () { reRendered++; };
   const t = {
-    id: 't9', genderCategories: ['Misto'], skillCategories: [], combinedCategories: ['Misto'],
+    id: 't9', genderCategories: ['Misto'], skillCategories: [], combinedCategories: ['Misto', 'Fem'],
     participants: [solo('f1', 'Misto'), solo('m1', 'Misto')]
   };
-  eq(s._buildCategoryCountHtml(t), '', '[frio] sem perfil carregado, gênero é desconhecido → tag some');
+  ok(s._buildCategoryCountHtml(t).indexOf('Misto') === -1, '[frio] sem perfil carregado, gênero é desconhecido → tag some');
   ok(!!asked && asked.indexOf('f1') !== -1 && asked.indexOf('m1') !== -1, '[frio] dispara a carga dos perfis da categoria mista');
   return new Promise(r => setTimeout(r, 0)).then(() => {
     eq(reRendered, 1, '[frio] re-renderiza a dashboard UMA vez quando os perfis chegam');

@@ -6039,6 +6039,8 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
               Number(proposed.courts) !== Number(effectiveTournament.courtCount) ||
               !Number.isSafeInteger(proposed.totalGames) || proposed.totalGames < 1 ||
               !Number.isSafeInteger(proposed.eliminationPlayMinutes) || proposed.eliminationPlayMinutes < 1 ||
+              (planSupplied && !_configAtiva.igual(original, proposed) &&
+                Number(proposed.eliminationPlayMinutes) !== Number(effectiveTournament.gameDuration || 30)) ||
               Number(proposed.eliminationMinutes) !== Number(proposed.eliminationPlayMinutes) +
                 Number(effectiveTournament.callTime || 0) + Number(effectiveTournament.warmupTime || 0)) {
             throw new HttpsError('invalid-argument', 'A grade não corresponde à programação deste torneio.');

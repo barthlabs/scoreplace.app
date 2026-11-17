@@ -520,7 +520,10 @@ function setupCreateTournamentModal() {
                   <input type="text" class="form-control" id="tourn-name" placeholder="Ex: Copa de Inverno 2026" required oninput="window._refreshCoverPreview()">
                 </div>
                 <label id="tourn-test-mode-row" class="form-group full-width" style="display:none;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);">
-                  <input type="checkbox" id="tourn-test-mode" onchange="window._syncTournamentTestMode()" style="width:22px;height:22px;accent-color:#22c55e;">
+                  <span class="toggle-switch" style="--toggle-on-bg:#16a34a;--toggle-on-glow:rgba(34,197,94,.35);--toggle-on-border:#4ade80;">
+                    <input type="checkbox" role="switch" id="tourn-test-mode" aria-label="Ativar modo de teste" onchange="window._syncTournamentTestMode()">
+                    <span class="toggle-slider"></span>
+                  </span>
                   <span id="tourn-test-mode-state">Teste desativado · produção</span>
                 </label>
                 <div class="form-group full-width">
@@ -3596,7 +3599,7 @@ function setupCreateTournamentModal() {
     // Suíço antigo é mapeado para Liga ao editar; não existe opção independente.
     // Assim, uma única condição controla os formatos de pontos corridos.
     var estimContainer = document.getElementById('time-estimates-container');
-    if (estimContainer) estimContainer.style.display = isLiga ? 'none' : '';
+    if (estimContainer) estimContainer.style.display = '';
 
     // Sistema de Pontos Avançado: vale em QUALQUER classificatória com tabela de pontos.
     // v4.4.59 (pedido do dono): Liga (incluindo Suíço mapeado) OU classificatória do format2 (Fase de Grupos /
@@ -5176,7 +5179,6 @@ function setupCreateTournamentModal() {
   };
 
   window._recalcDuration = function () {
-    if (typeof window._syncPhaseGridTimingInputs === 'function') window._syncPhaseGridTimingInputs();
     if (window._renderGruposSuggestions) { try { window._renderGruposSuggestions(); } catch (e) {} }
     if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
     /* mudou data ou hora da fase → a régua muda de tamanho; o arranjo do organizador é

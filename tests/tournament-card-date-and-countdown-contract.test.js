@@ -34,12 +34,22 @@ ok(detail.includes('class="sp-tournament-logo"') &&
 ok(componentsCss.includes('min-width:var(--sp-date-one-day-width)') &&
   componentsCss.includes('padding-right:calc(var(--sp-date-one-day-width) + 24px)'),
   'largura do cartão e reserva para ações usam a mesma medida');
-const dashboardDatesAt = dashboard.indexOf('Datas e logo do local. A regressiva logo abaixo');
+const dashboardDatesAt = dashboard.indexOf('Quando há logo do torneio, o logo do local continua ao lado da data.');
 const dashboardCountdownAt = dashboard.indexOf('if (isFinished) return \'\';', dashboardDatesAt);
 const dashboardDateBlock = dashboard.slice(dashboardDatesAt, dashboardCountdownAt);
 ok(!/tournament\\.starts(In|Today|Tomorrow)/.test(dashboardDateBlock), 'dashboard não duplica a regressiva com “Começa em”');
 ok(dashboard.includes('sp-dashboard-identity--date-first') && componentsCss.includes('.sp-dashboard-identity--date-first .sp-tournament-title-slot'),
   'sem logo, título do card inicial alinha ao topo da data');
+const dashboardIdentityAt = dashboard.indexOf('sp-tournament-identity-row ${dateCardHtml');
+const dashboardStatsAt = dashboard.indexOf('<!-- Inscritos e configuração vêm imediatamente após a data. -->', dashboardIdentityAt);
+const dashboardConfigAt = dashboard.indexOf('<!-- Configuração Completa do Torneio', dashboardStatsAt);
+const dashboardVenueAt = dashboard.indexOf('${t.venueName ? `', dashboardStatsAt);
+const dashboardWeatherAt = dashboard.indexOf('window._weatherSlotHtml(t, \'sm\')', dashboardConfigAt);
+ok(dashboardIdentityAt >= 0 && dashboardStatsAt > dashboardIdentityAt && dashboardConfigAt > dashboardStatsAt &&
+  dashboardVenueAt > dashboardConfigAt && dashboardWeatherAt > dashboardVenueAt,
+  'dashboard mostra inscritos e configuração sob a data e deixa a previsão no rodapé');
+ok(dashboard.includes('sp-dashboard-identity--venue-bottom') && componentsCss.includes('.sp-dashboard-identity--venue-bottom .sp-tournament-title-slot'),
+  'sem logo do torneio, logo do local alinha à base da data');
 const cases = [
   ['2026-11-29T08:00', '2026-11-29T16:00', 'one-day', ['29', 'NOV', '08:00 — 16:00']],
   ['2026-11-06T08:00', '2026-11-08T18:00', 'same-month', ['6', '>a<', '8', 'NOV', '08:00 — 18:00']],

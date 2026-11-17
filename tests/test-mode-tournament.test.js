@@ -13,6 +13,8 @@ assert(form.includes("rowt('organizer'") && form.includes("rowt('players'") && f
   'organizador, participantes e árbitro mantêm controles independentes');
 assert(form.includes("id=\"tourn-test-mode-row\"") && form.includes("id=\"tourn-test-mode\""),
   'modo de teste está no formulário');
+assert(/class="toggle-switch"[^>]*>[\s\S]*?<input type="checkbox" role="switch" id="tourn-test-mode"[\s\S]*?<span class="toggle-slider"><\/span>/.test(form),
+  'modo de teste usa o mesmo controle deslizante dos demais toggles');
 const html = fs.readFileSync('index.html', 'utf8');
 const editorAssetVersion = (html.match(/js\/views\/create-tournament\.js\?v=(\d+\.\d+\.\d+)/) || [])[1];
 assert(editorAssetVersion && editorAssetVersion.split('.').map(Number).reduce((n, part) => n * 1000 + part, 0) > 2007019,

@@ -403,6 +403,12 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   const saveProposal = await configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
     patch:{ scheduleWindow:{ days:gridDays, interleavedPlan:{ ...proposal.plan, editorVersion:2 } } } } });
   assert.equal(saveProposal.ok, true, 'proposta nova é gravada antes do sorteio');
+  configTournament = structuredClone(emptyGridTournament);
+  const divergentTiming = { ...proposal.plan, editorVersion:2,
+    eliminationPlayMinutes:30, eliminationMinutes:40 };
+  await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
+    patch:{ scheduleWindow:{ days:gridDays, interleavedPlan:divergentTiming } } } }),
+  { code:'invalid-argument' }, 'grade nova não pode gravar tempo de jogo diferente do torneio');
   const existingGridTournament = { ...structuredClone(emptyGridTournament),
     scheduleWindow:{ days:gridDays, interleavedPlan:{ ...proposal.plan, editorVersion:2 } } };
   const drawnGridTournament = { ...structuredClone(existingGridTournament), matches:[{ id:'drawn-1' }],

@@ -1736,7 +1736,7 @@ function _bracketOperationsStandingsHtml(group, t, slot, courtHtml, categoryLabe
   });
   return '<article class="sp-match-card sp-operations-standings-card"><div class="sp-mc-head">' +
     (navHtml || _bracketOperationsNavHtml(group, 3, slot)) + '</div>' +
-    '<span class="sp-operations-standings-category">' + safe(categoryLabel || '') + ' · ' +
+    '<span class="sp-operations-standings-category">' + (window._showTournamentCategoryLabels && !window._showTournamentCategoryLabels(t) ? '' : safe(categoryLabel || '') + ' · ') +
       safe(String(group.name).replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '')) + '</span>' +
     '<div class="sp-operations-standings-status">' +
     (finished ? 'CLASSIFICAÇÃO' : 'CLASSIFICAÇÃO PARCIAL') + '</div>' +
@@ -4155,6 +4155,7 @@ window._bracketCategoryTabsMount = function () {
     if (cat && dateCategories[day].indexOf(cat) === -1) dateCategories[day].push(cat);
   });
   var dateMode = isTeamSchedule && !isOnlyLines && !hasUnscheduledCard && dates.length > 1;
+  var showCategoryLabels = !window._showTournamentCategoryLabels || window._showTournamentCategoryLabels(currentTournament);
   root.setAttribute('data-bracket-date-tabs', dateMode ? '1' : '0');
   if (dateMode) { dates.sort(); byGender = dateCategories; order = dates; }
   var titles = { fem: '♀ Feminina', masc: '♂ Masculina', misto: '⚥ Mista' };
@@ -4170,7 +4171,7 @@ window._bracketCategoryTabsMount = function () {
     }
   });
   var genderHtml = (isOnlyLines
-    ? byGender.linhas.map(function (cat) {
+    ? (showCategoryLabels ? byGender.linhas : []).map(function (cat) {
       var escaped = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       return '<button type="button" data-bracket-primary-tab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'linhas\',\'' + escaped + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:106px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, 'linhas')) : _bracketTabLabel(cat, 'linhas')) + '</button>';
     }).join('')
@@ -4186,7 +4187,7 @@ window._bracketCategoryTabsMount = function () {
     var upcomingSubtab = isTeamSchedule && gender !== 'linhas' && generalAgendaByGender[gender]
       ? '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="__upcoming" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'__upcoming\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">Próximos jogos</button>'
       : '';
-    return generalSubtab + upcomingSubtab + byGender[gender].map(function (cat) {
+    return generalSubtab + upcomingSubtab + ((!showCategoryLabels && !dateMode) ? [] : byGender[gender]).map(function (cat) {
       var safe = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var label = dateMode ? cat : _bracketTabLabel(cat, gender);
       return '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + safe + '\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">' + (window._safeHtml ? window._safeHtml(label) : label) + '</button>';
@@ -4219,7 +4220,7 @@ window._bracketCategoryTabsMount = function () {
   // overflow porque também hospeda a busca e suas sugestões.
   root.innerHTML = window._bracketPrimaryTabsHtml(genderHtml, presentationTabs)
     + '<div data-bracket-search-slot="stack" hidden style="width:100%;min-width:0;padding:8px 4px 0;box-sizing:border-box;"></div>'
-    + (isOnlyLines ? '' : '<div data-bracket-category-tabs style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;padding:9px 4px 0;border-bottom:1px solid rgba(129,140,248,.42);">' + categoryHtml + '</div>')
+    + (isOnlyLines || !categoryHtml ? '' : '<div data-bracket-category-tabs style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;padding:9px 4px 0;border-bottom:1px solid rgba(129,140,248,.42);">' + categoryHtml + '</div>')
     + (roundHtml ? '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;border-top:1px solid rgba(255,255,255,.07);">' + roundHtml + '</div>' : '')
     + (isRoundBased ? '' : '<div data-bracket-round-rail aria-label="Rodadas da chave" hidden style="overflow-x:auto;overflow-y:hidden;max-width:100%;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);scrollbar-width:thin;"></div>');
   document.querySelectorAll('[data-bracket-presentation-fallback]').forEach(function (fallback) {
@@ -5323,6 +5324,7 @@ function renderBracket(container, tournamentId, isInline) {
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._printTournament('${_tIdSafe}')">🖨️ Imprimir</button>` : '<span></span>'}
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift" onclick="window._exportTournamentCSV('${_tIdSafe}')">📊 CSV</button>` : '<span></span>'}
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._tvMode('${_tIdSafe}')">📺 Modo TV</button>` : '<span></span>'}
+      ${hasContent && isOrg && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._downloadTournamentSumula('${_tIdSafe}', 'both')">📋 Súmulas</button>` : ''}
       ${isOrg && !isTournamentFinished && !hasContent ? `<button class="btn btn-primary btn-sm hover-lift" style="grid-column:span 2;" onclick="if(window._handleSortearClick)window._handleSortearClick('${_tIdSafe}',false);else window.generateDrawFunction('${_tIdSafe}')">🎲 Realizar Sorteio</button>` : ''}
       ${(hasContent && isOrg && t.testModeEnabled === true && typeof window._isDeveloperIdentity === 'function' && window._isDeveloperIdentity()) ? `<button class="btn btn-warning btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="${t.isSandbox === true ? 'window._resetTournamentToEnrollment' : 'window._restoreTournamentPrePublication'}('${_tIdSafe}')">🔄 Resetar sorteio</button>` : ''}
       ${(hasContent && isOrg && !isTournamentFinished && t.testModeEnabled === true && typeof window._isDeveloperIdentity === 'function' && window._isDeveloperIdentity()) ? `<button class="btn btn-purple btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._devSimulateCurrentPhase('${_tIdSafe}')">🎲 Simular resultados</button>` : ''}
@@ -12247,7 +12249,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     <div class="card" style="margin-top:1.5rem;">
       ${rankingCountdownHtml}
       <div class="sp-bracket-round-heading" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
-        <h3 class="card-title" style="margin:0;border-left:3px solid ${_isReiRainhaRound ? '#fbbf24' : 'var(--primary-color)'};padding-left:10px;">${_isReiRainhaRound ? '👑 ' : ''}${isClassificationQualifier ? _classificationQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + (isSuico ? ` / ${maxRounds}` : ''))} ${currentRoundData.status === 'complete' ? '— ' + _t('bracket.complete') + ' ✓' : ''}</h3>
+        <h3 class="card-title" style="margin:0;border-left:3px solid ${_isReiRainhaRound && !t.superEight ? '#fbbf24' : 'var(--primary-color)'};padding-left:10px;">${_isReiRainhaRound && !t.superEight ? '👑 ' : ''}${isClassificationQualifier ? _classificationQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + (isSuico ? ` / ${maxRounds}` : ''))} ${currentRoundData.status === 'complete' ? '— ' + _t('bracket.complete') + ' ✓' : ''}</h3>
         ${isOrg && !isFinished && allComplete && _phaseCad ? `
           <button class="btn btn-success btn-sm hover-lift" onclick="window._phaseCloseLeagueRound('${String(_phaseCad.tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${parseInt(_phaseCad.phaseIdx, 10) || 0})">
             🔁 Encerrar rodada e sortear próxima
@@ -12987,7 +12989,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // v2.4.6: título gendered da série — 👑 Rei / 👑 Rainha / 👑 Rei/Rainha
           // conforme a composição de gênero dos 4 jogadores do grupo.
           var _monarchTitle = (typeof window._monarchGroupTitle === 'function') ? window._monarchGroupTitle(g.players, t) : 'Rei/Rainha';
-          var _monarchBadge = '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(251,191,36,0.15);color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;">👑 ' + window._safeHtml(_monarchTitle) + '</span>';
+          var _monarchBadge = t.superEight === true ? '' : '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(251,191,36,0.15);color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;">👑 ' + window._safeHtml(_monarchTitle) + '</span>';
           var _ligaCtrl = (typeof window._ligaGroupControlsHtml === 'function') ? window._ligaGroupControlsHtml(t, currentRound - 1, g) : '';
           // Header do grupo (pedido do dono, jul/2026): no GRUPO DO USUÁRIO → [W.O.]
           // [Cheguei] [Propor datas]; nos DEMAIS grupos → só o W.O. (que os próprios
@@ -13317,7 +13319,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   })();
 
   let standingsTablesHtml = _hideGeneralStandings ? '' : standingsSections.map(function(sec) {
-    var displayLabel = sec.label && window._displayCategoryName ? window._displayCategoryName(sec.label) : sec.label;
+    var displayLabel = window._showTournamentCategoryLabels && !window._showTournamentCategoryLabels(t)
+      ? '' : (sec.label && window._displayCategoryName ? window._displayCategoryName(sec.label) : sec.label);
     var _roundLabel = currentRound + (isSuico ? ' / ' + maxRounds : '');
     var title = displayLabel
       ? _t('bracket.standingsTitleCat', {cat: displayLabel, n: _roundLabel})
@@ -13365,7 +13368,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       if (!rd || !rd.matches || rd.matches.length === 0) continue;
       var prevMatchOffset = rounds.slice(0, ri).reduce(function(sum, r) { return sum + (r.matches || []).length; }, 0);
       var rdComplete = (rd.matches || []).every(function(m) { return m.winner || m.isBye || m.isSitOut; });
-      var rdIsRR = rd.format === 'rei_rainha';
+      var rdIsRR = rd.format === 'rei_rainha' && t.superEight !== true;
       prevRoundsInner += '<div style="margin-bottom: 12px;">' +
         '<div class="sp-bracket-round-heading" style="font-weight: 700; font-size: 0.85rem; color: var(--text-bright); margin-bottom: 8px;">' + (rdIsRR ? '👑 ' : '') + _t('bracket.round', {n: ri + 1}) + (rdComplete ? ' — ' + _t('bracket.complete') + ' ✓' : '') + '</div>' +
         '<div style="display: flex; flex-wrap: wrap; gap: 12px;">';
@@ -13546,7 +13549,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       if (keys.length < 2) return;
 
       // Build table
-      var displayLabel = catLabel && window._displayCategoryName ? window._displayCategoryName(catLabel) : catLabel;
+      var displayLabel = window._showTournamentCategoryLabels && !window._showTournamentCategoryLabels(t)
+        ? '' : (catLabel && window._displayCategoryName ? window._displayCategoryName(catLabel) : catLabel);
       var title = displayLabel ? _t('bracket.h2hTitle', {cat: displayLabel}) : _t('bracket.h2hTitleSimple');
 
       var thCells = '<th style="padding:6px 4px;font-size:0.6rem;color:var(--text-muted);text-align:center;min-width:28px;"></th>';

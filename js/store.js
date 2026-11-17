@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.27';
+window.SCOREPLACE_VERSION = '2.7.28';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -5448,6 +5448,16 @@ window._installBackNavDelegate = function() {
     e.preventDefault();
     e.stopPropagation();
 
+    // O convite é um painel sobre o detalhe do torneio. O Voltar geral fecha
+    // primeiro esse painel, sem sair do torneio nem duplicar outro botão nele.
+    var invitePanels = document.getElementsByClassName('invite-modal-container');
+    for (var inviteIndex = 0; inviteIndex < invitePanels.length; inviteIndex++) {
+      if (invitePanels[inviteIndex].style.display && invitePanels[inviteIndex].style.display !== 'none') {
+        invitePanels[inviteIndex].style.display = 'none';
+        return;
+      }
+    }
+
     // Dismiss overlays first so no stale full-screen modal masks the target view.
     try { if (typeof window._dismissAllOverlays === 'function') window._dismissAllOverlays(); } catch(err) {}
 
@@ -6700,6 +6710,12 @@ window._CROWN_B_MASC = window._reiRainhaCrownSvg('B');
 // _reiRainhaInvictoCrown: variante TORNEIO — só com o grupo COMPLETO e para o invicto que
 // disputou a rodada inteira (maxPlayed do grupo) — evita "rei falso" por BYE/sit-out.
 window._reiRainhaInvictoCrown = function(tournament, standings, s, opts) {
+  var superEight = tournament && (tournament.superEight === true ||
+    (Array.isArray(tournament.phases) && tournament.phases.some(function(phase) { return phase && phase.superEight === true; })));
+  if (superEight) {
+    return s && s.played === 7 && s.wins === 7 && s.losses === 0
+      ? '<span role="img" aria-label="Super 8: sete vitórias" title="Super 8: sete vitórias" style="margin-left:3px;">🎱</span>' : '';
+  }
   if (!s || !opts || !opts.groupDone) return '';
   if (!(s.played > 0) || s.losses !== 0) return '';
   var maxPlayed = 0;
@@ -10603,6 +10619,10 @@ window._profileMetaTournamentAxes = function(t) {
 };
 
 window._profileMetaBadgesHtml = function(gender, skill, birth, prefixName, t, tournamentCategory) {
+  // Uma categoria só não diferencia inscritos; os dados continuam no slot
+  // para filtros e decisões da organização, mas não geram etiqueta visual.
+  if (t && typeof window._showTournamentCategoryLabels === 'function' &&
+      !window._showTournamentCategoryLabels(t)) return '';
   var prefix = prefixName ? '<span style="font-size:0.6rem;color:var(--text-muted);font-weight:700;margin-right:1px;">' + window._safeHtml(prefixName) + ':</span>' : '';
   // A categoria que o torneio já atribuiu é a informação útil no card. Não a
   // decompor em lacunas de perfil nem substituir por "sem cat".
@@ -10855,7 +10875,8 @@ window._fitTournamentTitles = function(root, force) {
       // máximo e cortava a última palavra no card da dashboard. A prioridade aqui
       // é deliberada: dashboard e detalhe precisam obedecer ao mesmo cálculo.
       el.style.removeProperty('font-size');
-      el.style.whiteSpace = 'normal';
+      var shortTitle = el.classList.contains('tournament-card-title--short');
+      el.style.whiteSpace = shortTitle ? 'nowrap' : 'normal';
       var bw = el.getBoundingClientRect().width;
       if (!bw) continue; // card ainda fora do fluxo: a próxima mutação/redimensionamento cobre
       var maxPx = parseFloat(window.getComputedStyle(el).fontSize) || 16;
@@ -10863,7 +10884,8 @@ window._fitTournamentTitles = function(root, force) {
       // Mede a palavra mais larga isoladamente. `scrollWidth` do h4 com várias
       // linhas pode ser igual à caixa mesmo quando uma linha está sendo recortada
       // pelo overflow do card; a sonda elimina essa ambiguidade.
-      var words = String(el.textContent || '').trim().split(/\s+/).filter(Boolean);
+      var titleText = String(el.textContent || '').trim();
+      var words = shortTitle ? [titleText] : titleText.split(/\s+/).filter(Boolean);
       var probe = document.createElement('span');
       var computed = window.getComputedStyle(el);
       probe.style.cssText = 'position:fixed;left:-10000px;top:-10000px;visibility:hidden;display:inline-block;white-space:nowrap;pointer-events:none;';

@@ -1,3 +1,8 @@
+// 2.7.28 — Configuração de tempos em um só lugar; torneios de categoria única
+// ocultam seu rótulo nas fichas, chaves e súmulas. Súmulas e listas de chamada
+// incluem os jogos do Super 8. Cards destacam o nome, a data e o local na ordem
+// de leitura escolhida. O modo de teste usa chave liga/desliga e as inscrições
+// preservam a numeração após resetar o sorteio.
 // 2.7.27 — Classificação cumulativa e presença por UID no Super 8.
 // 2.7.26 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.25 — Atualização consolidada de produção com as correções validadas desde a última publicação.

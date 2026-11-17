@@ -689,6 +689,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
   function _renderCategoryTable(rows, t) {
+    if (typeof window._showTournamentCategoryLabels === 'function' &&
+        !window._showTournamentCategoryLabels(t)) return '';
     // v1.3.2-beta: derivar categorias dos inscritos quando o organizador
     // não configurou. Lógica: se t tem combinedCategories + ageCategories,
     // usa. Senão, deriva do que aparece nos perfis (gender × skill,

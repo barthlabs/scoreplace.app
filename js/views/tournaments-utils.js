@@ -3580,6 +3580,8 @@ window._buildTournamentConfigBox = function (t, opts) {
         return t.tiebreakers.map(function (k) { return TB[k] || k; }).join(' › ');
     }
     function fmtCategories() {
+        if (typeof window._showTournamentCategoryLabels === 'function' &&
+            !window._showTournamentCategoryLabels(t)) return '';
         var dn = window._displayCategoryName || function (c) { return c; };
         var list = [];
         if (Array.isArray(t.combinedCategories) && t.combinedCategories.length) list = t.combinedCategories.slice();

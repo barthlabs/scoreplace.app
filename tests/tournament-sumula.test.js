@@ -13,8 +13,10 @@ assert(sumulaSource.includes(crypto.createHash('sha256').update(officialSvg).dig
 const detailSource = fs.readFileSync('js/views/tournaments.js', 'utf8');
 assert(detailSource.includes("typeof window._downloadTournamentSumula === 'function' ?"),
   'organizador vê o botão Súmula no bloco de ações do torneio');
-assert.strictEqual((detailSource.match(/📋 Súmulas<\/button>/g) || []).length, 2,
-  'um botão Súmulas aparece nos estados com sorteio e encerrado');
+assert.strictEqual((detailSource.match(/📋 Súmulas<\/button>/g) || []).length, 3,
+  'organizador encontra Súmulas nas ferramentas e árbitro nos estados com sorteio e encerrado');
+assert(fs.readFileSync('js/views/bracket.js', 'utf8').includes("_downloadTournamentSumula('${_tIdSafe}', 'both')"),
+  'a chave também oferece súmulas depois do sorteio');
 assert(!detailSource.includes('📋 Súmula vertical</button>'), 'não mantém botão separado por orientação');
 let warning = null;
 globalThis._findTournamentById = () => ({ id:'sem-grade', name:'Sem grade', matches:[], arbitros:[{uid:'ref-1',status:'confirmed'}] });
@@ -47,6 +49,30 @@ for (const orientation of ['landscape','portrait']) {
     assert(content.includes(label), 'coluna ou atleta ausente: ' + label);
 }
 const at = (day, hour) => new Date(day + 'T' + hour + ':00-03:00').toISOString();
+const superEight = { name:'Super 8', superEight:true, sport:'Beach Tennis', scoring:{type:'sets',setsToWin:1,gamesPerSet:6} };
+const superEightGames = Array.from({length:14}, (_, i) => ({
+  id:'super8-' + (i + 1), scheduledGameNumber:i + 1,
+  scheduledAt:at('2026-11-21', String(9 + Math.floor(i / 2)).padStart(2, '0') + ':00'),
+  court:'Quadra ' + (i % 2 + 1), round:Math.floor(i / 2) + 1,
+  p1:'Jogador 01 / Jogador 02', p2:'Jogador 03 / Jogador 04'
+}));
+const superEightModel = core.collect(superEight, superEightGames);
+assert.strictEqual(superEightModel.matches.length, 14, 'Super 8 leva todos os 14 confrontos à súmula');
+assert.deepStrictEqual(superEightModel.days, ['2026-11-21']);
+const superEightPages = core.makePages(superEightModel);
+assert(superEightPages.length >= 2, 'Super 8 gera páginas para as duas quadras');
+assert(!superEightPages.slice(0, 2).some(page => page.commands.join('\n').includes('Sem categoria')),
+  'súmula sem categoria não inventa esse rótulo');
+assert(!superEightPages.some(page => page.commands.join('\n').includes('LISTA DE CHAMADA  |  Sem categoria')),
+  'lista de chamada do Super 8 também omite a categoria inexistente');
+const singleCategory = { name:'Categoria única', combinedCategories:['Fem Light'],
+  sport:'Beach Tennis', scoring:{ type:'sets', setsToWin:1, gamesPerSet:6 } };
+const singleCategoryPages = core.makePages(core.collect(singleCategory, [{ id:'single', scheduledGameNumber:1,
+  scheduledAt:at('2026-11-21','09:00'), court:'Quadra 1', category:'Fem Light',
+  p1:'Ana / Bia', p2:'Clara / Débora' }]));
+assert(singleCategoryPages.length > 0, 'torneio de categoria única gera súmula');
+assert(!singleCategoryPages.some(page => page.commands.join('\n').includes('Fem Light')),
+  'torneio com uma categoria não mostra seu rótulo na súmula');
 const t = { name:'NEON NIGHTMARE', sport:'Beach Tennis', scoring:{ type:'sets', setsToWin:1, gamesPerSet:6 },
   competitionTeams:[{ id:'team-1', name:'Venom' }, { id:'team-2', name:'Volt' }] };
 const matches = [
@@ -185,8 +211,8 @@ assert.deepStrictEqual(call[0].athletes[0].games.map(g => [g.number,g.partner,g.
   [9,'Cris Melo','Bia Costa / Dora Luz','Quadra 1','08:20'],
   [17,'Dora Luz','Bia Costa / Cris Melo','Quadra 1','08:40']
 ]);
-assert(core.makePages(rotating).at(-1).commands.join('\n').includes('(LISTA DE CHAMADA  |  Diamante  |  Folha 1/1)'),
-  'a lista por categoria vem depois das súmulas');
+assert(core.makePages(rotating).at(-1).commands.join('\n').includes('(LISTA DE CHAMADA  |  Folha 1/1)'),
+  'uma categoria única é omitida na lista de chamada');
 const incomplete = core.collect(t, [{ id:'incompleto', scheduledGameNumber:33,
   scheduledAt:at('2026-11-13','09:00'), category:'Ouro', p1:'Ana Lima / A definir', p2:'Bia Costa / Cris Melo' }]);
 assert.deepStrictEqual(core.callList(incomplete)[0].skipped, [33],

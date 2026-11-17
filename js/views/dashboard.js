@@ -1060,7 +1060,7 @@ function renderDashboard(container) {
             </div>` : ''}
 
             <!-- Middle: Logo 1/3 + conteúdo 2/3 -->
-            <div class="sp-tournament-identity-row ${dateCardHtml ? 'sp-dashboard-identity' : ''} ${dateCardHtml && !window._tourLogoSrc(t) ? 'sp-dashboard-identity--date-first' : ''}" style="display:flex;align-items:${dateCardHtml ? 'stretch' : 'flex-start'};gap:14px;margin:1.4rem 0 1.2rem 0;">
+            <div class="sp-tournament-identity-row ${dateCardHtml ? 'sp-dashboard-identity' : ''} ${dateCardHtml && !window._tourLogoSrc(t) ? 'sp-dashboard-identity--date-first' : ''} ${dateCardHtml && !window._tourLogoSrc(t) && t.venuePlaceId ? 'sp-dashboard-identity--venue-bottom' : ''}" style="display:flex;align-items:${dateCardHtml ? 'stretch' : 'flex-start'};gap:14px;margin:1.4rem 0 0.35rem 0;">
               ${dateCardHtml ? `<div class="sp-dashboard-logo-date">${window._tourLogoSrc(t) ? `<img src="${window._tourLogoSrc(t)}" alt="Logo" style="aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};border-radius:${window._tournamentLogoRadius(t)};">` : ''}${dateCardHtml}</div>` : (window._tourLogoSrc(t) ? `<div style="width:33%;min-width:80px;flex-shrink:0;aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};"><img src="${window._tourLogoSrc(t)}" alt="Logo" style="width:100%;height:100%;border-radius:${window._tournamentLogoRadius(t)};object-fit:contain;display:block;"></div>` : '')}
               <div class="sp-tournament-title-slot" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0;${dateCardHtml && window._tourLogoSrc(t) ? 'justify-content:flex-end;' : 'justify-content:flex-start;'}">
                 <div style="display:flex;align-items:flex-start;gap:6px;">
@@ -1074,7 +1074,7 @@ function renderDashboard(container) {
                         Título de torneio não é nome de jogador: sua caixa não tem altura fixa,
                         portanto o encolhedor de nomes não consegue medi-lo. Dashboard e detalhe
                         usam a mesma classe fluida, com quebra apenas entre palavras. */''}
-                  <h4 class="tournament-card-title"
+                  <h4 class="tournament-card-title${String(t.name || '').trim().length <= 12 ? ' tournament-card-title--short' : ''}"
                       style="margin:0;font-weight:800;color:white;flex:1;min-width:0;">
                     ${window._safeHtml(t.name)}
                   </h4>
@@ -1083,121 +1083,22 @@ function renderDashboard(container) {
                 ${_finDurStr ? `<div style="font-size:0.78rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;margin-top:4px;">⏱️ durou ${_finDurStr}</div>` : ''}
                 ${/* v2.8.67: enquete ativa → botão brilhante abaixo do nome */ ''}
                 ${(typeof window._opButtonHtml === 'function') ? window._opButtonHtml(t) : ''}
+                ${dateCardHtml && !window._tourLogoSrc(t) && t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" style="width:clamp(40px,13vw,58px);aspect-ratio:1/1;display:none;align-self:flex-end;margin-top:auto;"></span>' : ''}
               </div>
             </div>
 
-            ${t.venueName ? `
-            <!-- Local -->
-            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: -0.8rem; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:6px 10px;max-width:100%;' : 'opacity: 0.6;'}">
-               <span style="font-size: 1rem;">📍</span>
-               <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${window._safeHtml(t.venueName)}</span>
-            </div>
-            ` : ''}
-
-            <!-- Datas e logo do local. A regressiva logo abaixo é a fonte única
-                 para "começa em"; o card não mantém uma segunda contagem. -->
-            <div style="display:${dateCardHtml ? (t.venuePlaceId ? 'flex' : 'none') : 'flex'};align-items:center;justify-content:space-between;gap:10px;">
+            <!-- Quando há logo do torneio, o logo do local continua ao lado da data. -->
+            <div style="display:${dateCardHtml ? (t.venuePlaceId && window._tourLogoSrc(t) ? 'flex' : 'none') : 'flex'};align-items:center;justify-content:space-between;gap:10px;">
             ${dateCardHtml ? '' : `
             <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.8;'} flex-wrap: wrap;">
                ${datesGridHtml}
             </div>
             `}
-            ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" style="flex-shrink:0;width:clamp(40px,13vw,58px);aspect-ratio:1/1;display:none;"></span>' : ''}
+            ${t.venuePlaceId && (!dateCardHtml || window._tourLogoSrc(t)) ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" style="flex-shrink:0;width:clamp(40px,13vw,58px);aspect-ratio:1/1;display:none;"></span>' : ''}
             </div>
 
-            ${(() => {
-              if (isFinished) return '';
-              var _now = Date.now();
-              var _isLiga = window._isLigaFormat && window._isLigaFormat(t);
-
-              // Liga: um único countdown excludente (início → próximo sorteio → prazo da
-              // rodada → fim da temporada)
-              if (_isLiga) {
-                // ⛔ 2.1.9 — O BOX "Fim da rodada / Rodada em andamento" SAIU DAQUI TAMBÉM.
-                // Ordem do dono, a SEGUNDA vez: _"mandei tirar esse fim da rodada e rodada em
-                // andamento (box/sessao toda) que esta redundante com a sessao de barras de
-                // progressao que já aparece logo depois da previsao do tempo"_.
-                //
-                // ⚠️ POR QUE ELE VOLTOU — e a causa é um comentário, não um revert. A 2.1.1
-                // tirou o box do DETALHE e escreveu, ali e na mensagem do commit, que "no card
-                // da dashboard ele é a ÚNICA fonte dessa informação (o card não desenha o box
-                // de progresso)". Isso era FALSO: o card chama `_renderTournamentProgress`
-                // umas 50 linhas abaixo, desde a v2.1.52 — o mesmo box de progresso do
-                // detalhe. A meia-remoção nasceu de uma afirmação sobre OUTRO trecho do
-                // arquivo que ninguém conferiu, e o dono viu a redundância de novo.
-                //
-                // É a MESMA classe de erro da 2.1.7 (um comentário em bracket.js afirmava que
-                // o "Propor datas" tinha ganhado a exceção do organizador; não tinha). Duas
-                // levas seguidas: comentário que descreve a INTENÇÃO e é lido como se
-                // descrevesse o CÓDIGO. Aqui o que trava é o teste, não este texto.
-                //
-                // O que fica: o toggle Liga (exclusivo do card) e a previsão do tempo, que o
-                // dono foi procurar em três mensagens na v1.8.82 e quer nesta tela.
-                var _ligaToggleDash = (typeof window._buildLigaActiveToggleHtml === 'function')
-                  ? window._buildLigaActiveToggleHtml(t)
-                  : '';
-                var _toggleRowDash = _ligaToggleDash
-                  ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _ligaToggleDash + '</div>'
-                  : '';
-                // A previsão NÃO depende mais de haver countdown — antes um `if (!_boxD)
-                // return` a derrubava junto quando não havia box. Ela tem gate próprio
-                // (venueLat/venueLon em _weatherSlotHtml), então não sobra caixa vazia.
-                return _toggleRowDash +
-                  ((typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'sm') : '');
-              }
-
-              // Não-Liga: evento concentrado tem relógio canônico da janela. Antes do
-              // horário de início ele NUNCA pode mostrar "Fim do torneio", ainda que
-              // a chave tenha sido anulada ou ainda não exista.
-              var _concentratedCountdown = (typeof window._concentratedTournamentCountdownEvent === 'function')
-                ? window._concentratedTournamentCountdownEvent(t, _now) : null;
-              var _events = _concentratedCountdown ? [_concentratedCountdown] : [];
-              if (!_concentratedCountdown && isAberto && t.registrationLimit) {
-                var _rd = new Date(t.registrationLimit).getTime();
-                if (!isNaN(_rd) && _rd > _now) _events.push({ ts: _rd, label: _t('event.enrollClose'), icon: '⏰', color: '#f59e0b' });
-              }
-              if (!_concentratedCountdown && t.startDate) {
-                var _sd2 = new Date(t.startDate).getTime();
-                if (!isNaN(_sd2) && _sd2 > _now && !sorteioRealizado) _events.push({ ts: _sd2, label: _t('event.tournamentStart'), icon: '🏁', color: '#10b981' });
-              }
-              // v1.6.83: "🏆 Fim do torneio" conta pro fim da ÚLTIMA fase — com t.endDate cru
-              // a contagem zerava no fim da classificatória, com a eliminatória ainda por vir.
-              var _edRaw = window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate;
-              if (!_concentratedCountdown && _edRaw) {
-                var _ed = new Date(_edRaw).getTime();
-                if (!isNaN(_ed) && _ed > _now) _events.push({ ts: _ed, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' });
-              }
-              if (_events.length === 0) return '';
-              _events.sort(function(a,b) { return a.ts - b.ts; });
-              var _next = _events[0];
-              if (_next.labelKey) _next.label = _t(_next.labelKey);
-              var _countdownText = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
-              var _rgb2 = _next.color === '#f59e0b' ? '245,158,11' : _next.color === '#10b981' ? '16,185,129' : '139,92,246';
-              var _rbCt2 = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
-              var _ctColor2 = _rbCt2.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
-              return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + window._spCor(_rbCt2.bg, 'background') + ';border:1px solid rgba(' + _rgb2 + ',0.55);border-radius:12px;">' +
-                '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
-                '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ' !important;">' + _next.label + '</span>' +
-                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.1rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;white-space:nowrap;flex-shrink:0;">' + _countdownText + '</span>' +
-              '</div>';
-            })()}
-
-            ${(typeof window._buildDurationForecast === 'function') ? window._buildDurationForecast(t) : ''}
-
-            ${(() => {
-              // v2.1.52: box de progresso COMPLETO (mesmo do card de detalhes) no
-              // lugar do pill simples de "tempo decorrido".
-              // v2.3.14: Liga TAMBÉM usa a barra rica (com a barra roxa do torneio
-              // inteiro). Antes era excluída — o que deixava só a barra simples.
-              if (!sorteioRealizado || isFinished) return '';
-              return (typeof window._renderTournamentProgress === 'function') ? window._renderTournamentProgress(t) : '';
-            })()}
-
-            <!-- Linha separadora -->
-            <div style="height: 1px; background: var(--sp-g-255-255-255-01,rgba(255,255,255,0.1)); margin: 1.8rem 0;"></div>
-
-            <!-- Bottom Section -->
-            <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; ${_pReadBg ? '' : 'opacity: 0.75;'}">
+            <!-- Inscritos e configuração vêm imediatamente após a data. -->
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-top: 0.35rem; ${_pReadBg ? '' : 'opacity: 0.75;'}">
 
                <!-- Stats Column -->
                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
@@ -1251,6 +1152,101 @@ function renderDashboard(container) {
                   <div><strong>${_t('dashboard.labelAccess')}:</strong> ${publicText}</div>
                </div>`}
             </div>
+
+            ${t.venueName ? `
+            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: 0.8rem; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:6px 10px;max-width:100%;' : 'opacity: 0.6;'}">
+               <span style="font-size: 1rem;">📍</span>
+               <span style="min-width:0;display:flex;flex-direction:column;"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${window._safeHtml(t.venueName)}</span>${Number(t.courtCount) > 0 ? '<span>' + Number(t.courtCount) + (Number(t.courtCount) === 1 ? ' quadra' : ' quadras') + '</span>' : ''}</span>
+               ${Number.isFinite(Number(t.venueLat)) && Number.isFinite(Number(t.venueLon)) && t.venueLat != null && t.venueLon != null ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.venueName)}${t.venuePlaceId ? '&query_place_id=' + encodeURIComponent(t.venuePlaceId) : ''}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="Ver local no mapa" style="margin-left:auto;">🗺️</a>` : ''}
+            </div>
+            ` : ''}
+
+            <div style="height: 1px; background: var(--sp-g-255-255-255-01,rgba(255,255,255,0.1)); margin: 1rem 0;"></div>
+
+            ${(() => {
+              if (isFinished) return '';
+              var _now = Date.now();
+              var _isLiga = window._isLigaFormat && window._isLigaFormat(t);
+
+              // Liga: um único countdown excludente (início → próximo sorteio → prazo da
+              // rodada → fim da temporada)
+              if (_isLiga) {
+                // ⛔ 2.1.9 — O BOX "Fim da rodada / Rodada em andamento" SAIU DAQUI TAMBÉM.
+                // Ordem do dono, a SEGUNDA vez: _"mandei tirar esse fim da rodada e rodada em
+                // andamento (box/sessao toda) que esta redundante com a sessao de barras de
+                // progressao que já aparece logo depois da previsao do tempo"_.
+                //
+                // ⚠️ POR QUE ELE VOLTOU — e a causa é um comentário, não um revert. A 2.1.1
+                // tirou o box do DETALHE e escreveu, ali e na mensagem do commit, que "no card
+                // da dashboard ele é a ÚNICA fonte dessa informação (o card não desenha o box
+                // de progresso)". Isso era FALSO: o card chama `_renderTournamentProgress`
+                // umas 50 linhas abaixo, desde a v2.1.52 — o mesmo box de progresso do
+                // detalhe. A meia-remoção nasceu de uma afirmação sobre OUTRO trecho do
+                // arquivo que ninguém conferiu, e o dono viu a redundância de novo.
+                //
+                // É a MESMA classe de erro da 2.1.7 (um comentário em bracket.js afirmava que
+                // o "Propor datas" tinha ganhado a exceção do organizador; não tinha). Duas
+                // levas seguidas: comentário que descreve a INTENÇÃO e é lido como se
+                // descrevesse o CÓDIGO. Aqui o que trava é o teste, não este texto.
+                //
+                // O que fica: o toggle Liga (exclusivo do card) e a previsão do tempo, que o
+                // dono foi procurar em três mensagens na v1.8.82 e quer nesta tela.
+                var _ligaToggleDash = (typeof window._buildLigaActiveToggleHtml === 'function')
+                  ? window._buildLigaActiveToggleHtml(t)
+                  : '';
+                var _toggleRowDash = _ligaToggleDash
+                  ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _ligaToggleDash + '</div>'
+                  : '';
+                // A previsão fica no rodapé do card para não separar a data dos inscritos.
+                return _toggleRowDash;
+              }
+
+              // Não-Liga: evento concentrado tem relógio canônico da janela. Antes do
+              // horário de início ele NUNCA pode mostrar "Fim do torneio", ainda que
+              // a chave tenha sido anulada ou ainda não exista.
+              var _concentratedCountdown = (typeof window._concentratedTournamentCountdownEvent === 'function')
+                ? window._concentratedTournamentCountdownEvent(t, _now) : null;
+              var _events = _concentratedCountdown ? [_concentratedCountdown] : [];
+              if (!_concentratedCountdown && isAberto && t.registrationLimit) {
+                var _rd = new Date(t.registrationLimit).getTime();
+                if (!isNaN(_rd) && _rd > _now) _events.push({ ts: _rd, label: _t('event.enrollClose'), icon: '⏰', color: '#f59e0b' });
+              }
+              if (!_concentratedCountdown && t.startDate) {
+                var _sd2 = new Date(t.startDate).getTime();
+                if (!isNaN(_sd2) && _sd2 > _now && !sorteioRealizado) _events.push({ ts: _sd2, label: _t('event.tournamentStart'), icon: '🏁', color: '#10b981' });
+              }
+              // v1.6.83: "🏆 Fim do torneio" conta pro fim da ÚLTIMA fase — com t.endDate cru
+              // a contagem zerava no fim da classificatória, com a eliminatória ainda por vir.
+              var _edRaw = window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate;
+              if (!_concentratedCountdown && _edRaw) {
+                var _ed = new Date(_edRaw).getTime();
+                if (!isNaN(_ed) && _ed > _now) _events.push({ ts: _ed, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' });
+              }
+              if (_events.length === 0) return '';
+              _events.sort(function(a,b) { return a.ts - b.ts; });
+              var _next = _events[0];
+              if (_next.labelKey) _next.label = _t(_next.labelKey);
+              var _countdownText = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
+              var _rgb2 = _next.color === '#f59e0b' ? '245,158,11' : _next.color === '#10b981' ? '16,185,129' : '139,92,246';
+              var _rbCt2 = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
+              var _ctColor2 = _rbCt2.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
+              return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + window._spCor(_rbCt2.bg, 'background') + ';border:1px solid rgba(' + _rgb2 + ',0.55);border-radius:12px;">' +
+                '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
+                '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ' !important;">' + _next.label + '</span>' +
+                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.1rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;white-space:nowrap;flex-shrink:0;">' + _countdownText + '</span>' +
+              '</div>';
+            })()}
+
+            ${(typeof window._buildDurationForecast === 'function') ? window._buildDurationForecast(t) : ''}
+
+            ${(() => {
+              // v2.1.52: box de progresso COMPLETO (mesmo do card de detalhes) no
+              // lugar do pill simples de "tempo decorrido".
+              // v2.3.14: Liga TAMBÉM usa a barra rica (com a barra roxa do torneio
+              // inteiro). Antes era excluída — o que deixava só a barra simples.
+              if (!sorteioRealizado || isFinished) return '';
+              return (typeof window._renderTournamentProgress === 'function') ? window._renderTournamentProgress(t) : '';
+            })()}
 
             ${(() => {
               var _html = '';
@@ -1358,6 +1354,8 @@ function renderDashboard(container) {
               if (!isParticipating && !_amOrgX) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Ocultar este torneio da sua lista" style="background:transparent;border:1px solid var(--border-color);color:var(--text-muted);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;" onmouseover="this.style.color=\'var(--text-bright)\'" onmouseout="this.style.color=\'var(--text-muted)\'">🙈 Ocultar</button></div>';
               return '';
             })()}
+
+            ${(typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'sm') : ''}
 
           </div>
         </div>

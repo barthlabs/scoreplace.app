@@ -78,7 +78,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // lugar conforme a fase inicial, então o bloco acompanha sozinho. A fase eliminatória
   // POSTERIOR tem a sua própria seção (_gsmElimBlock), gravada em cfg.eliminatoria.scoring.
   var _EXT_IDS = ['gsm-section', 'adv-scoring-section', 'tiebreaker-section', 'estimated-games-mode-section',
-    'phase-dates-box', 'estimated-games-window-section',
+    'phase-dates-box', 'estimated-games-window-section', 'time-estimates-container',
     'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box',
     'late-enroll-box', 'gender-ratio-box'];
   function _stashExt() {
@@ -94,11 +94,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var hoursSlot = document.getElementById('f2-hours-slot');
     if (modeSlot) { var mode = document.getElementById('estimated-games-mode-section'); if (mode) modeSlot.appendChild(mode); }
     if (datesSlot) { var dates = document.getElementById('phase-dates-box'); if (dates) datesSlot.appendChild(dates); }
-    if (hoursSlot) ['estimated-games-window-section', 'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box'].forEach(function (id) {
+    if (hoursSlot) ['estimated-games-window-section', 'time-estimates-container', 'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box'].forEach(function (id) {
       var el = document.getElementById(id); if (el) hoursSlot.appendChild(el);
     });
     if (!slot) return;
-    _EXT_IDS.filter(function (id) { return ['estimated-games-mode-section', 'phase-dates-box', 'estimated-games-window-section', 'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box'].indexOf(id) < 0; }).forEach(function (id) {
+    _EXT_IDS.filter(function (id) { return ['estimated-games-mode-section', 'phase-dates-box', 'estimated-games-window-section', 'time-estimates-container', 'phase-call-order-editor', 'round-bounds-toggle-row', 'round-bounds-box'].indexOf(id) < 0; }).forEach(function (id) {
       var el = document.getElementById(id); if (el) slot.appendChild(el);
     });
     _lockDrawnStandings();
@@ -131,6 +131,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var el = document.getElementById('f2-config-mount');
       if (el) el.innerHTML = _bodyControls();
       _placeExt();
+      if (typeof window._renderPhaseGridEditor === 'function') window._renderPhaseGridEditor();
       _mountElimRoundBounds();
       _renderTieResolution();
       _lockDrawnStandings();

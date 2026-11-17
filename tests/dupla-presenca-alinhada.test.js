@@ -39,7 +39,9 @@ assert(html.indexOf('Ausente esquerda') > positions[2]);
 assert(html.indexOf('Ausente direita') > positions[3]);
 assert.strictEqual((html.match(/_markAbsent\(\)/g) || []).length, 2,
   'os dois handlers W.O. continuam presentes');
-assert(html.includes('🏷️ Fem Light'));
+assert(!html.includes('🏷️ Fem Light'), 'categoria única não cria etiqueta visual');
+const multiCategoryHtml = W._duplaCard({ ...t, combinedCategories:['Fem Light', 'Masc Light'] }, pair, false);
+assert(multiCategoryHtml.includes('🏷️ Fem Light'), 'duas categorias mantêm a identificação da dupla');
 assert(!html.includes('META_SENTINEL'), 'categoria do par suprime metadados por membro');
 
 const detailWithoutRollCall = W._duplaCard(t, pair, false);
@@ -63,7 +65,7 @@ const linkedPair = { p1Uid: 'uid-real', p1Name: 'Nome antigo', p2ManualId: 'manu
   p2Name: 'Pessoa sem conta', category: 'Fem Light' };
 const linkedCard = W._duplaCard({ ...t, participants: [linkedPair] }, linkedPair, false);
 assert.match(linkedCard, /data-dupla-member-header="1"[\s\S]*?data-player-profile-uid="uid-real"/);
-const manualHeader = linkedCard.match(/data-dupla-member-header="2"[\s\S]*?(?=<div data-dupla-member-actions|<div title="Categoria)/);
+const manualHeader = linkedCard.match(/data-dupla-member-header="2"[\s\S]*?<\/div>/);
 assert(manualHeader && manualHeader[0].includes('Pessoa sem conta'));
 assert(manualHeader[0].includes('title="Pessoa sem conta"'), 'tooltip de nome longo preservado');
 assert(!manualHeader[0].includes('data-player-profile-uid=') && !manualHeader[0].includes('sp-person-name-link'));
