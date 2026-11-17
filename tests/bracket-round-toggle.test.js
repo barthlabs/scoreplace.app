@@ -122,7 +122,7 @@ assert.match(source, /class="bracket-previous-phase-button"/, 'fase anterior usa
     assert.equal(narrow.switchFits && narrow.rowFits && narrow.touchHeight >= 44 && narrow.railWidth >= 120 && narrow.tabWidth >= 56, true,
       'em 320 px o seletor e as abas ficam acessíveis na mesma linha, com toque de 44 px');
     assert.match(source, /roundMatches\.every\(function \(m\) \{ return !!m\.winner; \}\)/, 'multifase considera a disputa de 3º lugar para concluir a rodada');
-    assert.match(source, /root\.innerHTML = window\._bracketPrimaryTabsHtml\(genderHtml, presentationTabs\)/, 'a tela usa o mesmo layout medido no teste');
+    assert.match(source, /root\.innerHTML = '<div data-bracket-search-slot="stack"[^']*<\/div>'\s*\+ window\._bracketPrimaryTabsHtml\(genderHtml, presentationTabs\)/, 'a tela usa o mesmo layout medido no teste');
     console.log('bracket-round-toggle: OK');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
