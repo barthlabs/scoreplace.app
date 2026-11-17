@@ -5,6 +5,7 @@
 const crypto = require('crypto');
 const boundary = require('./canonical-registration-boundary-core');
 const payment = require('./registration-payment-core');
+const testMode = require('./test-mode-core');
 
 function makeService({ db, storage, HttpsError, FieldValue }) {
   function fail(code, message) { throw new HttpsError(code, message); }
@@ -22,10 +23,11 @@ function makeService({ db, storage, HttpsError, FieldValue }) {
     const tournament = db.collection('tournaments').doc(tournamentId);
     return { tournament, registration:tournament.collection('registrations').doc(registrationId) };
   }
-  async function checked(tx, tournamentRef, registrationRef, tournamentId) {
+  async function checked(tx, tournamentRef, registrationRef, tournamentId, callerUid) {
     const tSnap = await tx.get(tournamentRef);
     if (!tSnap.exists) fail('not-found', 'Torneio não encontrado.');
     const tournament = tSnap.data() || {};
+    if (!testMode.canAccess(tournament, callerUid)) fail('not-found', 'Torneio não encontrado.');
     if (tournament.isSandbox === true) fail('failed-precondition', 'Comprovante não é usado no sandbox.');
     const migration = boundary.migrationOf({ ...tournament, id:tournamentId });
     const rosterSnap = await tx.get(tournamentRef.collection('registrations').limit(migration.expectedCount + 1));
@@ -56,7 +58,7 @@ function makeService({ db, storage, HttpsError, FieldValue }) {
   }
   function notice(tx, ref, tournament, id, type, title, message, recipients, now) {
     const uids = [...new Set((recipients || []).filter(Boolean).map(String))];
-    if (!uids.length || tournament.organizerOnly) return;
+    if (!uids.length || tournament.organizerOnly || testMode.active(tournament)) return;
     tx.create(ref.collection('notificationOutbox').doc(id), {
       schema:1, kind:'tournament-notification', type, title, message,
       tournamentId:ref.id, tournamentName:String(tournament.name || ''),
@@ -93,7 +95,7 @@ function makeService({ db, storage, HttpsError, FieldValue }) {
     }
     const ref = refs(tournamentId, registrationId);
     return db.runTransaction(async tx => {
-      const state = await checked(tx, ref.tournament, ref.registration, tournamentId);
+      const state = await checked(tx, ref.tournament, ref.registration, tournamentId, uid);
       const context = payment.paymentContext(state.tournament);
       if (context === 'late') {
         fail('failed-precondition', 'O envio de comprovante exige torneio antes do sorteio.');
@@ -143,7 +145,7 @@ function makeService({ db, storage, HttpsError, FieldValue }) {
     if (!['approve', 'reject'].includes(action)) fail('invalid-argument', 'Decisão inválida.');
     const ref = refs(tournamentId, registrationId);
     return db.runTransaction(async tx => {
-      const state = await checked(tx, ref.tournament, ref.registration, tournamentId);
+      const state = await checked(tx, ref.tournament, ref.registration, tournamentId, uid);
       if (!organizer(state.tournament, uid)) fail('permission-denied', 'Só a organização confere pagamentos.');
       if (payment.paymentContext(state.tournament) === 'late') {
         fail('failed-precondition', 'A conferência manual exige torneio antes do sorteio.');
@@ -160,8 +162,8 @@ function makeService({ db, storage, HttpsError, FieldValue }) {
       catch (error) { fail('failed-precondition', error.message); }
       const now = new Date().toISOString();
       tx.update(ref.registration, paymentPatch(next, now));
-      tx.update(ref.tournament, { memberUids:boundary.memberUids(
-        { ...state.tournament, id:tournamentId }, nextRoster), updatedAt:FieldValue.serverTimestamp() });
+      tx.update(ref.tournament, { memberUids:testMode.memberUids(state.tournament, boundary.memberUids(
+        { ...state.tournament, id:tournamentId }, nextRoster)), updatedAt:FieldValue.serverTimestamp() });
       tx.create(auditRef(ref.tournament, before.proofPath, action), { schema:1,
         registrationId, participantUid:before.participantUid, action,
         proofPath:before.proofPath, paymentMethod:before.paymentMethod || null,
@@ -185,6 +187,7 @@ function makeService({ db, storage, HttpsError, FieldValue }) {
     const tournamentSnap = await tournamentRef.get();
     if (!tournamentSnap.exists || tournamentSnap.data().isSandbox === true) fail('not-found', 'Torneio não encontrado.');
     const tournament = tournamentSnap.data() || {};
+    if (!testMode.canAccess(tournament, uid)) fail('not-found', 'Torneio não encontrado.');
     let methods;
     try { methods = payment.directMethods(tournament.registrationSettings, payment.paymentContext(tournament)); }
     catch (_) { return { payments:[], paymentMethods:null }; }
@@ -215,6 +218,7 @@ function makeService({ db, storage, HttpsError, FieldValue }) {
     const snap = await ref.get();
     if (!snap.exists || snap.data().isSandbox === true) fail('not-found', 'Torneio não encontrado.');
     const tournament = snap.data() || {};
+    if (!testMode.canAccess(tournament, uid)) fail('not-found', 'Torneio não encontrado.');
     if (!organizer(tournament, uid)) fail('permission-denied', 'Só a organização confere pagamentos.');
     const pageSize = 100;
     let query = ref.collection('registrations').where('paymentState', '==', 'proof_submitted').orderBy('__name__');

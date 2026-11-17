@@ -137,8 +137,9 @@ try {
     if (discovered.docs.some(d => d.id === 'hidden')) throw new Error(col + ': descoberta expôs torneio oculto');
     await assertFails(list(stranger, col, 'isPublic', false));
     await assertFails(list(stranger, col, 'creatorUid', org));
-    const legacyCreated = await checkList('criador legado', list('uid_legacy_creator', col, 'creatorUid', 'uid_legacy_creator'));
-    if (!legacyCreated.docs.some(d => d.id === 'legacy_creator')) throw new Error(col + ': criador legado perdeu o próprio torneio');
+    // creatorUid não prova acesso na consulta: o modo Teste pode ocultar o
+    // torneio até do criador que não é desenvolvedor.
+    await assertFails(list('uid_legacy_creator', col, 'creatorUid', 'uid_legacy_creator'));
   }
   // Mesmo formato da contagem de privados em todos-torneios: só os vinculados.
   const ownPrivate = await assertSucceeds(list(member, 'tournaments_summary', 'memberUids', member));

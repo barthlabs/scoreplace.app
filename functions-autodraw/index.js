@@ -324,6 +324,10 @@ async function _queueDrawEmail(profile, opts, sentTo) {
   // o killswitch principal é o _sbMuteAuto, este é a rede embaixo dele. E-mail de SB
   // chega em gente que nem sabe que o SB existe. [[project_sandbox_tournament]]
   if (/^\(SB\)/.test(String(opts.tournamentName || '')) || /_sb(\b|$)/.test(String(opts.tournamentUrl || ''))) return 0;
+  if (opts.tournamentId) {
+    const current = await db.collection('tournaments').doc(String(opts.tournamentId)).get();
+    if (!current.exists || (current.data() || {}).testModeEnabled === true) return 0;
+  }
   const emails = _profileEmails(profile);
   if (!emails.length) return 0;
   const now = Date.now();
@@ -338,6 +342,7 @@ async function _queueDrawEmail(profile, opts, sentTo) {
         level: level,
         message: opts.message || '',
         tournamentName: opts.tournamentName || '',
+        tournamentId: opts.tournamentId || '',
         tournamentUrl: opts.tournamentUrl || '',
         ctaLabel: opts.ctaLabel || '',
         ctaUrl: opts.ctaUrl || '',
@@ -359,6 +364,7 @@ function _drawEmailOpts(t, tId, message) {
     level: 'fundamental',                 // NOTIF_CATALOG.draw.level
     message: message,
     tournamentName: t.name || '',
+    tournamentId: tId,
     tournamentUrl: base + '/#tournaments/' + tId,
     ctaLabel: 'Ver chave',
     ctaUrl: base + '/#bracket/' + tId
@@ -1604,8 +1610,10 @@ function _applyWriteBoundary(data) {
    * Quem manda na autorização é `adminUids`, logo abaixo, e ele FICA. */
   ['organizerEmail', 'creatorEmail', 'adminEmails', 'organizerName'].forEach((campo) => { delete data[campo]; });
   data.adminUids = w._computeAdminUids(data);
-  data.memberUids = w._mergeMemberUids(data, data.memberUids, w._computeMemberUids(data));
-  data.refereeUids = data.isSandbox === true ? [] : ScoreplaceRefereeRoster.sanitizeAll(data.arbitros)
+  data.memberUids = data.testModeEnabled === true ? [TEST_DEVELOPER_UID]
+    : (data.testModeVisibilityBefore ? w._computeMemberUids(data)
+      : w._mergeMemberUids(data, data.memberUids, w._computeMemberUids(data)));
+  data.refereeUids = data.isSandbox === true || data.testModeEnabled === true ? [] : ScoreplaceRefereeRoster.sanitizeAll(data.arbitros)
     .filter(entry => entry.status === 'confirmed').map(entry => entry.uid).sort();
   /* ── L6.R1 · O `nextDrawAt` CANÔNICO SAI DAQUI, e nunca do passado ────────────────────
    * Esta é a fronteira por onde TODA escrita do autodraw passa — sorteio manual, fecho de
@@ -3160,7 +3168,7 @@ function _notificationPersonName(value, fallback) {
 }
 
 function _scoreNotificationEvent(t, m, outcome, actor, at, context) {
-  if (t && (t.notificationsMuted === true || _rehearsal.enrollmentFrozen(t))) return null;
+  if (t && (t.testModeEnabled === true || t.notificationsMuted === true || _rehearsal.enrollmentFrozen(t))) return null;
   // Disputa nunca é confirmação: mesmo que o jogo conserve sets de um placar
   // anterior, só a notificação própria da transição pode sair da transação.
   if (!m || outcome === 'in-progress' || outcome === 'disputed') return null;
@@ -3248,7 +3256,7 @@ function _scoreNotificationEvent(t, m, outcome, actor, at, context) {
 // Contestação não tem novo placar para comunicar; ela é uma transição do fluxo. Ainda
 // assim o aviso nasce junto com a mudança canônica, nunca do navegador que apertou o botão.
 function _disputeNotificationEvent(t, m, actor, at) {
-  if (!t || !m || t.notificationsMuted === true || _rehearsal.enrollmentFrozen(t)) return null;
+  if (!t || !m || t.testModeEnabled === true || t.notificationsMuted === true || _rehearsal.enrollmentFrozen(t)) return null;
   const recipients = new Set();
   if (t.creatorUid) recipients.add(String(t.creatorUid));
   (Array.isArray(t.adminUids) ? t.adminUids : []).forEach(uid => { if (uid) recipients.add(String(uid)); });
@@ -3276,7 +3284,7 @@ function _disputeNotificationEvent(t, m, actor, at) {
 // placar e nunca no telefone do organizador. Assim participantes recebem o aviso mesmo
 // quando o browser fecha logo depois de apertar o botão.
 function _matchReopenedNotificationEvent(t, m, outcome, actor, at) {
-  if (!t || !m || t.notificationsMuted === true || _rehearsal.enrollmentFrozen(t)) return null;
+  if (!t || !m || t.testModeEnabled === true || t.notificationsMuted === true || _rehearsal.enrollmentFrozen(t)) return null;
   const recipients = new Set(_slotUidsOf(m, 'p1').concat(_slotUidsOf(m, 'p2')));
   if (t.creatorUid) recipients.add(String(t.creatorUid));
   (Array.isArray(t.adminUids) ? t.adminUids : []).forEach(uid => { if (uid) recipients.add(String(uid)); });
@@ -3344,14 +3352,14 @@ async function _criarOutboxDeJogoLiberado(tournamentId, tournament, specs, nowMs
 }
 
 async function _notificarJogosProntosDoTorneio(tournamentId, rawTournament, includeDeadlineReminders) {
-  if (!rawTournament || rawTournament.organizerOnly === true || !drawWindow || typeof drawWindow._collectAllMatches !== 'function') return;
+  if (!rawTournament || rawTournament.testModeEnabled === true || rawTournament.organizerOnly === true || !drawWindow || typeof drawWindow._collectAllMatches !== 'function') return;
   let tournament = rawTournament;
   const ref = db.collection('tournaments').doc(String(tournamentId));
   /* ⛔ A NOTIFICAÇÃO SEMPRE LÊ O TORNEIO MONTADO. O marcador legado pode faltar na
    * fotografia, mas os jogos canônicos continuam na subcoleção; usar o doc magro aqui
    * silenciaria precisamente os avisos de confrontos liberados. [[project_torneio_nasce_dividido]] */
   tournament = await _leTorneio(_TX_LEITURA, ref, String(tournamentId));
-  if (!tournament || tournament.organizerOnly === true) return;
+  if (!tournament || tournament.testModeEnabled === true || tournament.organizerOnly === true) return;
   const matches = drawWindow._collectAllMatches(tournament);
   const now = Date.now();
   const ready = _matchReadyNotifications.readySpecs(tournament, matches);
@@ -3528,7 +3536,7 @@ exports.deliverScoreNotification = onDocumentWritten(
     const recipients = Array.isArray(item.recipients) ? Array.from(new Set(item.recipients.map(String).filter(Boolean))) : [];
     const visibilitySnap = await db.collection('tournaments').doc(tId).get();
     const visibility = visibilitySnap.exists ? (visibilitySnap.data() || {}) : {};
-    if (_rehearsal.enrollmentFrozen(visibility) || visibility.notificationsMuted === true || visibility.organizerOnly === true) {
+    if (_rehearsal.enrollmentFrozen(visibility) || visibility.notificationsMuted === true || visibility.organizerOnly === true || visibility.testModeEnabled === true) {
       // update, nunca set: um gatilho atrasado não pode recriar o recibo
       // depois de o reset ter apagado a árvore do torneio.
       await after.ref.update({ dispatchStatus: 'suppressed', suppressedAt: new Date().toISOString() })
@@ -5237,7 +5245,7 @@ exports.applyCategoryCommunicationMarkers = onCall(async (request) => {
 
 function _queueProfileCategoryNotice(tx, ref, t, eventId, recipients, type, level, message, nowIso) {
   const unique = Array.from(new Set((recipients || []).map(String).filter(Boolean)));
-  if (!unique.length || t.isSandbox || t.notificationsMuted || t.organizerOnly) return;
+  if (!unique.length || t.testModeEnabled === true || t.isSandbox || t.notificationsMuted || t.organizerOnly) return;
   tx.set(ref.collection('notificationOutbox').doc(_outboxDocIdPart(eventId)), {
     schema: 1, kind: 'tournament-notification', type, title: '🏷️ Categoria atualizada', message,
     tournamentId: String(t.id || ''), tournamentName: String(t.name || ''), level: level || 'all', recipients: unique,
@@ -5918,6 +5926,21 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização atualiza a configuração.', { tId, uid });
+    if (t.testModeEnabled === true && uid !== TEST_DEVELOPER_UID) {
+      throw new HttpsError('permission-denied', 'Torneio em teste.');
+    }
+    const turningTestOn = t.testModeEnabled !== true && patch.testModeEnabled === true;
+    const turningTestOff = t.testModeEnabled === true && patch.testModeEnabled === false;
+    const testVisibilityBefore = turningTestOn ? {
+      isPublic: t.isPublic === true,
+      membersOnly: t.membersOnly === true,
+      organizerOnly: t.organizerOnly === true
+    } : null;
+    if (t.testModeEnabled === true && !turningTestOff &&
+        ['isPublic', 'membersOnly', 'organizerOnly'].some(key =>
+          Object.prototype.hasOwnProperty.call(patch, key) && patch[key] !== t[key])) {
+      throw new HttpsError('failed-precondition', 'Desative o teste antes de mudar a visibilidade.');
+    }
     if ('tvActiveScreen' in patch || 'tvScreens' in patch) {
       const availableScreens = 'tvScreens' in patch ? patch.tvScreens : t.tvScreens;
       const activeScreen = 'tvActiveScreen' in patch ? patch.tvActiveScreen : t.tvActiveScreen;
@@ -6315,6 +6338,26 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         t[key] = patch[key];
       }
     });
+    if (turningTestOn) {
+      t.testModeVisibilityBefore = testVisibilityBefore;
+      t.isPublic = false;
+      t.membersOnly = false;
+      t.organizerOnly = true;
+      t.memberUids = [TEST_DEVELOPER_UID];
+      t.refereeUids = [];
+      tx.delete(db.collection('tournaments_summary').doc(tId));
+      tx.delete(db.collection('discoveryFeed').doc(tId));
+    } else if (turningTestOff) {
+      const previous = t.testModeVisibilityBefore;
+      if (!previous || typeof previous !== 'object') {
+        throw new HttpsError('failed-precondition', 'Visibilidade anterior do teste ausente.');
+      }
+      t.isPublic = previous.isPublic === true;
+      t.membersOnly = previous.membersOnly === true;
+      t.organizerOnly = previous.organizerOnly === true;
+      delete t.testModeVisibilityBefore;
+      t.memberUids = [];
+    }
     // O seletor geral da ficha controla a classificatória atual. Depois do
     // sorteio, a mescla de phases preserva sua estrutura; sem sincronizar esta
     // permissão, o topo dizia "jogadores" enquanto o servidor ainda exigia
@@ -6367,7 +6410,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     t.history.push({ date: agoraIso, message: _futurePlan
       ? 'Configuração da fase futura revisada antes de gerar seus jogos.' : 'Regras atualizadas pela organização.', byUid: uid });
     const extras = [];
-    if (wasOrganizerOnly && t.organizerOnly !== true && !t.isSandbox) {
+    if (wasOrganizerOnly && t.organizerOnly !== true && !t.isSandbox && !turningTestOff) {
       const admins = new Set([t.creatorUid].concat(Array.isArray(t.adminUids) ? t.adminUids : []).map(String));
       // No modo restrito memberUids contém só admins. O elenco carregado de
       // registrations por _leTorneio é a fonte de quem deve receber a liberação.
@@ -7186,7 +7229,7 @@ exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) =
 });
 
 async function _notifyAdvancedPhase(t, tId, phaseIndex, nowIso) {
-  if (!t || t.isSandbox || t.notificationsMuted || t.organizerOnly) return;
+  if (!t || t.testModeEnabled === true || t.isSandbox || t.notificationsMuted || t.organizerOnly) return;
   const ids = new Set();
   // A fase pode armazenar jogos em matches, rounds ou phaseRounds. A novidade é do
   // torneio e deve chegar aos inscritos mesmo se o formato ainda não expõe um match plano.
@@ -7657,7 +7700,7 @@ function _hasTournamentDraw(t) {
 }
 function _enqueueEnrollmentNotice(tx, ref, t, type, title, message, nowIso) {
   const recipients = _seasonRecipientUids(t);
-  if (!recipients.length || t.isSandbox || t.notificationsMuted || t.organizerOnly) return;
+  if (!recipients.length || t.testModeEnabled === true || t.isSandbox || t.notificationsMuted || t.organizerOnly) return;
   tx.set(ref.collection('notificationOutbox').doc(type + '-' + String(Date.parse(nowIso))), {
     schema: 1, kind: 'tournament-notification', type, title, message,
     tournamentId: String(t.id || ref.id), tournamentName: String(t.name || ''),
@@ -8009,7 +8052,7 @@ exports.finishTournament = onCall(async request => {
     }
     const recipients = _seasonRecipientUids(t);
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso: nowIso });
-    if (recipients.length && !t.isSandbox && !t.notificationsMuted) {
+    if (recipients.length && t.testModeEnabled !== true && !t.isSandbox && !t.notificationsMuted) {
       tx.set(ref.collection('notificationOutbox').doc('manual-finished'), {
         schema: 1, kind: 'tournament-notification', type: 'tournament_finished',
         title: '🏁 Torneio encerrado', message: 'O torneio ' + String(t.name || '') + ' foi encerrado.',
@@ -8413,7 +8456,7 @@ exports.setPhasePromotion = onCall(async (request) => {
 
 async function _notifyPublishedPendingDraw(t,tId,roundIndex,nowIso) {
   // ⛔ A finalização privada nunca comunica jogadores: só torneio explicitamente público.
-  if(!_drawCanBePublishedPublicly(t) || t.notificationsMuted || t.organizerOnly) return;
+  if(t.testModeEnabled === true || !_drawCanBePublishedPublicly(t) || t.notificationsMuted || t.organizerOnly) return;
   const ids=new Set(); (t.participants||[]).forEach(p=>[p&&p.uid,p&&p.p1Uid,p&&p.p2Uid].forEach(u=>u&&ids.add(String(u))));
   const {profByUid}=await _loadLiveNames(ids); const mailed=new Set();
   for(const uid of ids){ const profile=profByUid[uid]; if(!profile) continue; const msg='🔄 Chave e horários estimados publicados no torneio '+(t.name||'')+'. Confira seus jogos: os horários podem mudar conforme o andamento.';
@@ -8779,7 +8822,7 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
         };
 
         // Sandbox/killswitch: o SB SORTEIA na mesma CF (fidelidade), mas NÃO notifica.
-        const _sbMuteAuto = (t.isSandbox === true || t.notificationsMuted === true || t.organizerOnly === true);
+        const _sbMuteAuto = (t.testModeEnabled === true || t.isSandbox === true || t.notificationsMuted === true || t.organizerOnly === true);
         if (_sbMuteAuto) console.log(`Auto-draw: ${tId} é sandbox/mudo — sorteio feito, notificações suprimidas`);
         const notifiedUids = new Set();
         const _mailedTo = new Set();   // dedup de E-MAIL da rodada (a mesma pessoa por 2 uids)
@@ -8964,7 +9007,7 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
     return '🔄 Nova rodada no torneio ' + (t.name || '') + '!\n\n' + gamesText + (t.venue ? '\n\n📍 ' + t.venue : '');
   };
   // Sandbox/killswitch: SB sorteia na mesma CF, mas não notifica.
-  const _sbMuteAuto = (t.isSandbox === true || t.notificationsMuted === true || t.organizerOnly === true);
+  const _sbMuteAuto = (t.testModeEnabled === true || t.isSandbox === true || t.notificationsMuted === true || t.organizerOnly === true);
   const notified = new Set();
   const _mailedToPh = new Set();   // dedup de e-mail desta rodada de fase
   let _mailedPh = 0;
@@ -8995,7 +9038,7 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
 
 // Notificação de rodada incremental manual/automática: uma única entrega server-side.
 async function _notifyIncrementalPhaseRound(t, tId, phaseIdx, nowIso) {
-  if (t.organizerOnly === true) return;
+  if (t.testModeEnabled === true || t.organizerOnly === true) return;
   const slot = (t.phaseRounds && t.phaseRounds[phaseIdx]) || {};
   const rounds = slot.rounds || [];
   const maxR = rounds.reduce((mx, r) => Math.max(mx, (r && r.round) || 1), 0);
@@ -9015,13 +9058,13 @@ async function _notifyIncrementalPhaseRound(t, tId, phaseIdx, nowIso) {
     for (const uid of mine) {
       if (notified.has(uid)) continue; notified.add(uid);
       const profile=profByUid[uid]; if (!profile) continue;
-      if (!t.isSandbox && !t.notificationsMuted && profile.notifyPlatform !== false) {
+      if (t.testModeEnabled !== true && !t.isSandbox && !t.notificationsMuted && profile.notifyPlatform !== false) {
         try {
           // ID determinístico: retry da callable não duplica o aviso da mesma rodada.
           await db.collection('users').doc(uid).collection('notifications').doc('phase-round-' + tId + '-' + phaseIdx + '-' + maxR).set({ type:'draw', fromUid:'system', fromName:'scoreplace.app', fromPhoto:'', tournamentId:tId, tournamentName:t.name||'', message, createdAt:nowIso, read:false }, { merge:true });
         } catch (e) { console.warn(`Notif phase manual error uid ${uid}:`, e && e.message); }
       }
-      if (!t.isSandbox && !t.notificationsMuted) await _queueDrawEmail(profile,_drawEmailOpts(t,tId,message),mailed);
+      if (t.testModeEnabled !== true && !t.isSandbox && !t.notificationsMuted) await _queueDrawEmail(profile,_drawEmailOpts(t,tId,message),mailed);
     }
   }
 }
@@ -9096,6 +9139,8 @@ exports.closePhaseLeagueRound = onCall(async (request) => {
 // A mensagem é PERSONALIZADA: cada um lê "você" e os nomes dos outros três.
 async function _avisarGrupoFormado(tId, tName, novos, profiles) {
   if (!Array.isArray(novos) || !novos.length) return 0;
+  const current = await db.collection('tournaments').doc(String(tId)).get();
+  if (!current.exists || (current.data() || {}).testModeEnabled === true) return 0;
   const prof = profiles || {};
   const nomeDe = (uid, fallback) => {
     const d = prof[uid];
@@ -9291,6 +9336,7 @@ exports.sendPushNotification = onDocumentCreated('users/{userId}/notifications/{
   if (notifData && notifData.tournamentId) {
     const tournamentSnap = await db.collection('tournaments').doc(String(notifData.tournamentId)).get();
     const tournament = tournamentSnap.exists ? (tournamentSnap.data() || {}) : {};
+    if (tournament.testModeEnabled === true) return;
     if (tournament.organizerOnly === true && !_isTournamentAdmin(tournament, userId)) return;
   }
 
@@ -9406,6 +9452,15 @@ exports.tournamentSummary = onDocumentWritten(
         await db.collection('tournaments_summary').doc(id).delete().catch(() => {});
         return;
       }
+      if (depois.testModeEnabled === true) {
+        await db.runTransaction(async tx => {
+          const root = await tx.get(db.collection('tournaments').doc(id));
+          if (!root.exists || root.data().testModeEnabled === true) {
+            tx.delete(db.collection('tournaments_summary').doc(id));
+          }
+        });
+        return;
+      }
 
       // as funções do APP, do shim. Sem elas o resumo sairia com os derivados
       // NULOS — melhor não ter número do que ter número errado.
@@ -9451,14 +9506,21 @@ exports.tournamentSummary = onDocumentWritten(
         console.error('[tournamentSummary]', id, '⛔ não montei das subcoleções — resumo NÃO regravado', eM);
         return;
       }
-      if (antes && !_tourSummary.summaryMudou(antes, depois, id, H)) {
+      if (antes && antes.testModeEnabled !== true && !_tourSummary.summaryMudou(antes, depois, id, H)) {
         // nada que o cartão mostra mudou → não regrava (economia real em torneio ao vivo)
         return;
       }
 
       const resumo = _tourSummary.buildSummary(paraResumo, id, H);
       if (!resumo) return;
-      await db.collection('tournaments_summary').doc(id).set(resumo);
+      // Um evento antigo pode terminar depois da ativação do teste. Releia o
+      // documento na mesma transação que publicaria o resumo.
+      await db.runTransaction(async tx => {
+        const root = await tx.get(db.collection('tournaments').doc(id));
+        const summaryRef = db.collection('tournaments_summary').doc(id);
+        if (!root.exists || root.data().testModeEnabled === true) tx.delete(summaryRef);
+        else tx.set(summaryRef, resumo);
+      });
     } catch (e) {
       console.error('[tournamentSummary] falhou', id, e);
     }

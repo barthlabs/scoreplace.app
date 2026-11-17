@@ -79,7 +79,7 @@ function eq(a, b, m) { ok(a === b, m + ' — esperado ' + JSON.stringify(b) + ',
 
     ok(/onDocumentWritten/.test(sync) && /"tournaments\/\{tid\}"/.test(sync),
       'syncDiscoveryFeed escuta o documento do torneio');
-    ok(/collection\("discoveryFeed"\)/.test(sync) && /\.delete\(\)/.test(sync),
+    ok(/collection\("discoveryFeed"\)/.test(sync) && /tx\.delete\(feedRef\)/.test(sync),
       'e apaga o doc do feed quando o torneio some ou deixa de ser público');
 
     ok(/onDocumentDeleted/.test(purge) && /"tournaments\/\{tid\}"/.test(purge),

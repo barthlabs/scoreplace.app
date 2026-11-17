@@ -592,6 +592,7 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
         if (window.FirestoreDB && typeof window.FirestoreDB.queueNotifEmail === 'function') {
             window.FirestoreDB.queueNotifEmail(_destinos, _emLvl, _emMsg, {
                 tournamentName: templateData.tournamentName || '',
+                tournamentId: templateData.tournamentId || '',
                 tournamentUrl: templateData.tournamentUrl || '',
                 ctaLabel: (_emCta && _emCta.label) || '',
                 ctaUrl: (_emCta && _emCta.url) || '',

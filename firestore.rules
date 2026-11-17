@@ -48,7 +48,9 @@ service cloud.firestore {
     }
 
     function canReadTournamentData(data) {
-      return data.get('organizerOnly', false) == true
+      return data.get('testModeEnabled', false) == true
+        ? (request.auth != null && request.auth.uid == 'B17n7JCXYOfqahlcLZ0fKxGGyUu1')
+        : data.get('organizerOnly', false) == true
         ? (isTournamentAdmin(data) || isConfirmedTournamentReferee(data))
         : (data.get('membersOnly', false) == true
           ? (isTournamentAdmin(data) || isTournamentParticipant(data) || isConfirmedTournamentReferee(data))
@@ -291,8 +293,7 @@ service cloud.firestore {
       // de acesso: uma query por isPublic=false incluiria torneios ocultos.
       allow list: if resource.data.get('isPublic', false) == true
         || (request.auth != null && request.auth.uid in resource.data.get('memberUids', []))
-        || isConfirmedTournamentReferee(resource.data)
-        || (request.auth != null && request.auth.uid == resource.data.get('creatorUid', ''));
+        || isConfirmedTournamentReferee(resource.data);
       allow write: if false;   // só a Cloud Function (admin SDK ignora regras)
     }
 
@@ -516,7 +517,8 @@ service cloud.firestore {
               && igual('canonicalRegistrationMigration'));
       }
       match /billingReceipts/{receiptId} {
-        allow read: if request.auth != null && (
+        allow read: if canReadTournamentData(get(/databases/$(database)/documents/tournaments/$(tournamentId)).data)
+          && request.auth != null && (
           request.auth.uid == get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.get('creatorUid', '')
           || request.auth.uid in get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.get('adminUids', [])
         );
@@ -794,8 +796,7 @@ service cloud.firestore {
       allow get: if canReadTournamentData(resource.data);
       allow list: if resource.data.get('isPublic', false) == true
         || (request.auth != null && request.auth.uid in resource.data.get('memberUids', []))
-        || isConfirmedTournamentReferee(resource.data)
-        || (request.auth != null && request.auth.uid == resource.data.get('creatorUid', ''));
+        || isConfirmedTournamentReferee(resource.data);
 
       // ⛔ CREATE: FECHADO. Torneio NASCE NO SERVIDOR — a porta é a Function
       // `createTournament` (`functions-autodraw/index.js:3355`), que roda com Admin SDK,
@@ -865,6 +866,10 @@ service cloud.firestore {
       // organizador atravessa, porque o estado de fase é do servidor. A única saída é
       // `ehResetOk()` — o reset para inscrições, exigido inteiro.
       allow update: if request.auth != null
+        && (resource.data.get('testModeEnabled', false) != true
+          || (request.auth.uid == 'B17n7JCXYOfqahlcLZ0fKxGGyUu1'
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'isPublic', 'membersOnly', 'organizerOnly', 'memberUids', 'refereeUids'])))
         && rehearsalClientUnlocked()
         && rehearsalPrivacyIntact()
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rehearsal'])
@@ -886,7 +891,7 @@ service cloud.firestore {
           'billingTermsAcceptance', '_phaseReadCertificate', 'refereeUids',
           // A tela No ar é editada pela Function autenticada. Saves genéricos
           // de jogos vindos de abas antigas nunca podem sobrescrevê-la.
-          'tvLayout', 'tvScreens', 'tvActiveScreen'
+          'tvLayout', 'tvScreens', 'tvActiveScreen', 'testModeEnabled', 'testModeVisibilityBefore'
         ])
         && cobrancaClienteNaoGeraChave()
         && rosterLegadoProtegidoAposMigracao()
@@ -910,6 +915,8 @@ service cloud.firestore {
       // SDK, depois o documento) — tarefa seguinte desta leva. Até lá o botão recebe
       // permission-denied, que é o desfecho honesto: melhor recusar do que apagar pela metade.
       allow delete: if request.auth != null
+        && (resource.data.get('testModeEnabled', false) != true
+          || request.auth.uid == 'B17n7JCXYOfqahlcLZ0fKxGGyUu1')
         && (isTournamentAdmin(resource.data) || isTournamentAdminByUid(resource.data))
         && !dividido();
 
@@ -993,6 +1000,8 @@ service cloud.firestore {
         }
         allow read: if canReadTournamentData(parentTq());
         allow create: if request.auth != null
+          && (parentTq().get('testModeEnabled', false) != true
+            || request.auth.uid == 'B17n7JCXYOfqahlcLZ0fKxGGyUu1')
           && !(parentTq().get('rehearsal', {}).get('state', '') in ['capturing', 'resetting'])
           && request.resource.data.actorUid == request.auth.uid
           && request.resource.data.matchId is string
@@ -1099,10 +1108,10 @@ service cloud.firestore {
         function paymentAdmin() {
           return isTournamentAdmin(paymentParent()) || isTournamentAdminByUid(paymentParent());
         }
-        allow get: if request.auth != null && (
+        allow get: if canReadTournamentData(paymentParent()) && request.auth != null && (
           paymentAdmin() || resource.data.get('participantUid', '') == request.auth.uid
         );
-        allow list: if request.auth != null && paymentAdmin();
+        allow list: if canReadTournamentData(paymentParent()) && request.auth != null && paymentAdmin();
         allow write: if false;
       }
 

@@ -93,7 +93,7 @@ var _pc = _fsPC.readFileSync(_pathPC.join(__dirname, '..', 'js', 'views', 'persi
 
 // dados: 1 normal + 1 sandbox, ambos com o mesmo participante real espelhado.
 var normal = { id: 'N1', isPublic: false, creatorUid: 'uORG', memberUids: ['uORG', 'uP'], participants: [{ uid: 'uP', displayName: 'Pedro' }] };
-var sb = { id: 'N1_SB', isSandbox: true, isPublic: false, sandboxOf: 'N1', creatorUid: 'uDEV', memberUids: ['uDEV', 'uP'], participants: [{ uid: 'uP', displayName: 'Pedro' }] };
+var sb = { id: 'N1_SB', isSandbox: true, isPublic: false, sandboxOf: 'N1', creatorUid: 'B17n7JCXYOfqahlcLZ0fKxGGyUu1', memberUids: ['B17n7JCXYOfqahlcLZ0fKxGGyUu1', 'uP'], participants: [{ uid: 'uP', displayName: 'Pedro' }] };
 AS.tournaments = [normal, sb];
 
 // (A) stats globais excluem o SB.
@@ -116,7 +116,7 @@ ok(ingP.indexOf('N1_SB') === -1, 'B2: ingestão descarta o SB pro não-dev');
 ok(ingP.indexOf('N1') !== -1, 'B2: ingestão mantém o torneio normal');
 
 // (C) o DEV vê o SB.
-AS.currentUser = { uid: 'uDEV', email: 'rstbarth@gmail.com', displayName: 'Rodrigo' };
+AS.currentUser = { uid: 'B17n7JCXYOfqahlcLZ0fKxGGyUu1', email: 'rstbarth@gmail.com', displayName: 'Rodrigo' };
 ok(W._isTestIdentity(), 'C: rstbarth é dev');
 var visD = AS.getVisibleTournaments().map(function (t) { return t.id; });
 ok(visD.indexOf('N1_SB') !== -1, 'C: dev VÊ o SB');

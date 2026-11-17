@@ -13,7 +13,7 @@ ok(body.includes('_amizadeLock.exigirAtivos(tx, db, [callerUid]'), 'inscrição 
 ok(body.includes('fingerprint: "native:" + tournamentId') && body.includes('registrationCount: 0'), 'primeira inscrição inaugura recibo canônico explícito');
 ok(body.includes('tx.get(tournamentRef.collection("registrations").limit(1))') && body.includes('sem recibo'), 'porta inaugural recusa registros órfãos sem varrer o elenco');
 ok(body.includes('_canonicalRegistrationBoundary.applyCreates(') && body.includes('enrollment.creates.forEach'), 'callable nova usa a mesma fronteira de recibo para decidir creates');
-ok(body.includes('tx.create(tournamentRef.collection("registrations")') && body.includes('memberUids: _canonicalRegistrationBoundary.memberUids') && !body.includes('participants:'), 'Function grava registro, recibo e membros juntos, sem dual-write no roster');
+ok(body.includes('tx.create(tournamentRef.collection("registrations")') && body.includes('memberUids: _testMode.memberUids(tournament, _canonicalRegistrationBoundary.memberUids') && !body.includes('participants:'), 'Function grava registro, recibo e membros juntos, sem dual-write no roster');
 const deenrollStart = source.indexOf('exports.deenrollParticipant = onCall');
 const deenrollEnd = source.indexOf('\nexports.', deenrollStart + 8);
 const deenroll = source.slice(deenrollStart, deenrollEnd < 0 ? source.length : deenrollEnd);

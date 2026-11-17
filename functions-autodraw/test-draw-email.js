@@ -41,6 +41,7 @@ function extractConst(name) {
 const written = [];
 const db = {
   collection: (name) => ({
+    doc: () => ({ get: async () => ({ exists: true, data: () => ({}) }) }),
     add: async (doc) => { if (name === 'notif_email_queue') written.push(doc); return { id: 'x' }; }
   })
 };

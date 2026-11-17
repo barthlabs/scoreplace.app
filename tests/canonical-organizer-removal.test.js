@@ -34,6 +34,7 @@ const ref = { path:'tournaments/test', collection:name => ({
   doc:id => ({ path:'tournaments/test/' + name + '/' + id })
 }) };
 const ctx = { _canonicalMutationTournament:(_, tournament) => tournament,
+  _testMode:require('../functions/test-mode-core'),
   _canonicalRegistrationBoundary:{ applyUpdates:(_t, registrations, updates) => ({
     tournament:_t, registrations:registrations.map(item => updates.find(update => update.registrationId === item.registrationId) || item)
   }), memberUids:() => [] },

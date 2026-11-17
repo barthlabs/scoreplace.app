@@ -32,6 +32,7 @@ const { FieldValue: _ResultFenceFieldValue } = require('firebase-admin/firestore
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 const _operationReceipt = require("./operation-receipt-core");
+const _testMode = require('./test-mode-core');
 const _operationProbeReply = () => ({
   ok: true,
   region: String(process.env.SP_OPERATION_REGION || ""),
@@ -1480,7 +1481,23 @@ exports.flushNotifEmailDigest = onSchedule(
       }
       const _agora = Date.now();
       const _corte = _semRepetidos(items, _jaSaiu, _agora, _JANELA_DO_JA_SAIU_MS);
-      const novos = _corte.vao;
+      const novos = [];
+      for (const item of _corte.vao) {
+        const tournamentId = _testMode.notificationTournamentId(item);
+        if (tournamentId) {
+          // O modo Teste pode ter sido ligado depois de o aviso entrar na fila.
+          // Sem confirmar a visibilidade, o aviso não pode sair. A limpeza da
+          // fila continua abaixo, inclusive quando a consulta falha.
+          try {
+            const tournamentSnap = await db.collection('tournaments').doc(tournamentId).get();
+            if (!tournamentSnap.exists || _testMode.active(tournamentSnap.data())) continue;
+          } catch (error) {
+            console.warn('[flushNotifEmailDigest] visibilidade ilegível:', tournamentId, error && error.message);
+            continue;
+          }
+        }
+        novos.push(item);
+      }
 
       try {
         // ⚠️ A FILA SEMPRE SE LIMPA, inclusive o que foi cortado por repetição — senão o
@@ -2768,6 +2785,8 @@ async function _avisarSegundaContaNoCadastro(db, uid, perfil, dup) {
 async function _avisarDuplicataSuspeita(db, alvoUid, tournamentId, tournamentName, dup) {
   try {
     if (!alvoUid || !dup) return false;
+    const tournamentSnap = await db.collection('tournaments').doc(String(tournamentId)).get();
+    if (!tournamentSnap.exists || _testMode.active(tournamentSnap.data())) return false;
     const prof = await db.collection("users").doc(alvoUid).get();
     if (!prof.exists) return false;
     const p = prof.data() || {};
@@ -3026,6 +3045,7 @@ exports.enrollParticipant = onCall(
     const _pre = await docRef.get();
     if (_pre.exists) {
       const _preTournament = _pre.data() || {};
+      if (!_testMode.canAccess(_preTournament, callerUid)) throw new HttpsError('not-found', 'torneio não existe');
       if (sandbox) await _sandboxAutorizado(db, _pre, callerUid, (sourceRef) => sourceRef.get());
       else if (_preTournament.isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
       const _preIsOrganizer = _isTournamentOrgCaller(_preTournament, callerUid);
@@ -3072,6 +3092,7 @@ exports.enrollParticipant = onCall(
       catch (error) { throw new HttpsError("aborted", error.message); }
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      if (!_testMode.canAccess(snap.data(), callerUid)) throw new HttpsError('not-found', 'torneio não existe');
       if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
       else if ((snap.data() || {}).isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
       const _dados = await _splitParts.hidratar(tx, docRef, snap.data());
@@ -4103,6 +4124,7 @@ exports.sendRelatedNotification = onCall(
     if (notification.tournamentId) {
       const tournament = await _lerTorneioComElenco(db, notification.tournamentId);
       if (!tournament) throw new HttpsError("not-found", "torneio não encontrado");
+      if (_testMode.active(tournament)) return { ok:true, delivered:false, reason:'tournament-test' };
       const members = new Set(_enrollCore.computeMemberUids(tournament));
       facts.callerOrganizer = _isTournamentOrgCaller(tournament, callerUid);
       facts.targetOrganizer = _isTournamentOrgCaller(tournament, targetUid);
@@ -4974,7 +4996,7 @@ function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registratio
   // ou esconder alguém recém-aceito/na espera.
   tx.update(tournamentRef, {
     ...(extraTournamentPatch || {}),
-    memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament || canonicalTournament, next.registrations),
+    memberUids: _testMode.memberUids(canonicalTournament, _canonicalRegistrationBoundary.memberUids(next.tournament || canonicalTournament, next.registrations)),
     updatedAt: _FV.serverTimestamp(),
   });
   return next;
@@ -4998,7 +5020,7 @@ function _writeCanonicalRosterCreates(tx, tournamentRef, tournament, registratio
   });
   const tournamentPatch = {
     canonicalRegistrationMigration: next.tournament.canonicalRegistrationMigration,
-    memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations),
+    memberUids: _testMode.memberUids(canonicalTournament, _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations)),
     updatedAt: _FV.serverTimestamp(),
   };
   if (Array.isArray(reservationsAfter)) tournamentPatch.placeholderReservations = reservationsAfter;
@@ -5057,7 +5079,7 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
   const reservedOrganizerPatch = _coHostCore.claimReservedOrganizer(tournament, changes, approvedOrganizerIdentity === true);
   tx.update(tournamentRef, Object.assign({
     canonicalRegistrationMigration: next.tournament.canonicalRegistrationMigration,
-    memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations),
+    memberUids: _testMode.memberUids(canonicalTournament, _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations)),
     updatedAt: _FV.serverTimestamp(),
   }, extraTournamentPatch || {}, reservedOrganizerPatch || {}));
   return next;
@@ -7015,7 +7037,7 @@ exports.requestCanonicalRegistration = onCall(
       });
       tx.update(tournamentRef, {
         canonicalRegistrationMigration: next.tournament.canonicalRegistrationMigration,
-        memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations),
+        memberUids: _testMode.memberUids(tournament, _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations)),
         updatedAt: _FV.serverTimestamp(),
       });
       return {
@@ -7077,6 +7099,7 @@ exports.getCanonicalTournamentRoster = onCall(
     const roster = await db.runTransaction(async (tx) => {
       const tournamentSnap = await tx.get(ref);
       const tournament = tournamentSnap.exists ? tournamentSnap.data() || {} : {};
+      if (!_testMode.canAccess(tournament, callerUid)) throw new HttpsError("not-found", "torneio não existe");
       const publicGeneral = !sandbox && tournamentSnap.exists && tournament.isPublic === true &&
         tournament.isSandbox !== true && tournament.organizerOnly !== true && tournament.membersOnly !== true;
       if (!callerUid && !publicGeneral) throw new HttpsError("not-found", "torneio não existe");
@@ -7847,10 +7870,10 @@ exports.manageTournamentReferee = onCall(
         const before = JSON.parse(JSON.stringify(t));
         _splitParts.gravar(tx, ref, before, {
           arbitros: outcome.arbitros,
-          refereeUids: _refereeRoster.sanitizeAll(outcome.arbitros).filter(entry => entry.status === 'confirmed').map(entry => entry.uid).sort(),
+          refereeUids: _testMode.refereeUids(t, _refereeRoster.sanitizeAll(outcome.arbitros).filter(entry => entry.status === 'confirmed').map(entry => entry.uid).sort()),
           updatedAt: new Date().toISOString()
         });
-        if (action === "invite" && !t.isSandbox) {
+        if (action === "invite" && !t.isSandbox && !_testMode.active(t)) {
           tx.set(noticeRef, {
             type: "referee_invite", inviteStatus: "pending", level: "important", tournamentId,
             tournamentName: String(t.name || "").slice(0, 240),
@@ -8761,7 +8784,7 @@ exports.claimTeamInvite = onCall(
         });
         if (result.changed) update = {
           arbitros: result.arbitros,
-          refereeUids: result.arbitros.filter((entry) => entry.status === "confirmed").map((entry) => entry.uid).sort()
+          refereeUids: _testMode.refereeUids(t, result.arbitros.filter((entry) => entry.status === "confirmed").map((entry) => entry.uid).sort())
         };
       } else throw new HttpsError("failed-precondition", "cargo do convite inválido");
       if (update) _splitParts.gravar(tx, tournamentRef, t, Object.assign(update, { updatedAt: new Date(now).toISOString() }));
@@ -8915,7 +8938,7 @@ exports.mutateHostOrganization = onCall(
       if (result.outcome === "invalidTarget") throw new HttpsError("failed-precondition", "participante inválido para organização");
       if (result.outcome !== "applied" || !result.updateData) return { ok: true, changed: false, tournamentName: t.name || "" };
       _splitParts.gravar(tx, ref, before, Object.assign({}, result.updateData, { updatedAt: new Date().toISOString() }));
-      if (inviteRef && action === "invite" && !sandbox && !t.isSandbox) {
+      if (inviteRef && action === "invite" && !sandbox && !t.isSandbox && !_testMode.active(t)) {
         const now = new Date().toISOString();
         const baseUrl = "https://scoreplace.app/#cohost/";
         tx.set(inviteRef, {
@@ -9008,7 +9031,7 @@ exports.sendOrgCommunication = onCall(
     };
 
     // Sandbox/killswitch: torneio com notificações mudas não dispara comunicado.
-    if (t && (t.isSandbox === true || t.notificationsMuted === true || t.organizerOnly === true)) {
+    if (t && (t.testModeEnabled === true || t.isSandbox === true || t.notificationsMuted === true || t.organizerOnly === true)) {
       return { ok: true, muted: true, sent: 0 };
     }
 
@@ -11558,6 +11581,7 @@ exports.sendTournamentInvite = onCall(
     const snap = await db.collection("tournaments").doc(tid).get();
     if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = snap.data() || {};
+    if (_testMode.active(t)) return { ok:false, motivo:'tournament-test' };
 
     /* ⭐ A RÉGUA É A CANÔNICA, não uma cópia. `_partesPerm.ehOrganizador` é a mesma que
      * `aplicarNoTorneio` usa — criador, adminUids ou co-host ativo/aceito. Escrever um
@@ -11621,6 +11645,7 @@ exports.sendPairInviteEmail = onCall(
 
     /* ⭐ A AUTORIZAÇÃO É O REGISTRO. Só existe e-mail se houver um convite gravado de QUEM
      * CHAMA para ESTE convidado. Adulterar `inviteeUid` não encontra registro nenhum. */
+    if (_testMode.active(t)) return { ok: false, motivo: 'tournament-test' };
     const req = _invEmail.achaConvitePar(t, callerUid, inviteeUid);
     if (!req) return { ok: false, motivo: "convite-inexistente" };
 
@@ -11674,6 +11699,7 @@ exports.sendCoHostInviteEmail = onCall(
     const snap = await db.collection("tournaments").doc(tid).get();
     if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = snap.data() || {};
+    if (_testMode.active(t)) return { ok: false, motivo: 'tournament-test' };
 
     /* ⭐ DUAS CONDIÇÕES, e a régua de quem convida é a CANÔNICA (`ehOrganizador`, a mesma
      * de `aplicarNoTorneio` e de `sendTournamentInvite`) — escrever um segundo critério é
@@ -13901,28 +13927,25 @@ exports.syncDiscoveryFeed = onDocumentWritten(
     if (await _blockedRehearsalRootEvent(event, tid)) return;
     const feedRef = admin.firestore().collection("discoveryFeed").doc(tid);
 
-    // Deletado OU deixou de ser público → remover do feed (se lá estava).
-    if (!after || after.isPublic !== true || after.organizerOnly === true) {
-      if (before && before.isPublic === true) {
-        await feedRef.delete().catch(() => {});
-        console.log(`[syncDiscoveryFeed] removed ${tid} (deleted/private)`);
-      }
-      return;
-    }
-
-    // É público. Só escreve se algo RELEVANTE à descoberta mudou.
-    const sa = _discoverySummary(after);
+    // O evento pode chegar fora de ordem. A transação decide pela raiz atual,
+    // inclusive quando o modo Teste foi ativado enquanto este gatilho aguardava.
+    const sa = after ? _discoverySummary(after) : null;
     const sb = before ? _discoverySummary(before) : null;
-    if (sb && JSON.stringify(sa) === JSON.stringify(sb)) {
+    if (after && after.testModeEnabled !== true && sb && JSON.stringify(sa) === JSON.stringify(sb)) {
       return; // mudança irrelevante (placar/presença/etc.) — não dispara fan-out
     }
-
-    sa.tid = tid;
-    sa.syncedAt = admin.firestore.FieldValue.serverTimestamp();
-    await feedRef.set(sa, { merge: true }).catch((e) => {
-      console.error(`[syncDiscoveryFeed] set error ${tid}:`, e);
+    await admin.firestore().runTransaction(async tx => {
+      const root = await tx.get(admin.firestore().collection('tournaments').doc(tid));
+      const current = root.exists ? (root.data() || {}) : null;
+      if (!current || current.testModeEnabled === true || current.isPublic !== true || current.organizerOnly === true) {
+        tx.delete(feedRef);
+        return;
+      }
+      const summary = _discoverySummary(current);
+      summary.tid = tid;
+      summary.syncedAt = admin.firestore.FieldValue.serverTimestamp();
+      tx.set(feedRef, summary, { merge: true });
     });
-    console.log(`[syncDiscoveryFeed] synced ${tid} status=${sa.status}`);
   }
 );
 
@@ -14020,14 +14043,19 @@ exports.syncMatchRosters = onDocumentWritten(
         const _jog = _sJog.docs.map((d) => Object.assign({ _id: d.id }, d.data()));
         const plano = _woReconcile.planejar(before, after, _ins, _jog);
         if (!plano.nada) {
-          const lote = _db2.batch();
-          plano.novosInscritos.forEach((n) => lote.set(_colIns.doc(n._id), { _k: n._k, _idx: n._idx, item: n.item }, { merge: true }));
-          plano.desativar.forEach((d) => lote.set(_colIns.doc(d._id), { _k: d._k, _idx: d._idx, item: d.item }, { merge: true }));
+          await _db2.runTransaction(async (tx) => {
+          // O evento pode ser anterior à ativação do modo Teste. Ler a raiz dentro
+          // da transação impede que um evento atrasado reabra o elenco público.
+          const currentSnap = await tx.get(_ref2);
+          if (!currentSnap.exists) return;
+          const current = currentSnap.data() || {};
+          plano.novosInscritos.forEach((n) => tx.set(_colIns.doc(n._id), { _k: n._k, _idx: n._idx, item: n.item }, { merge: true }));
+          plano.desativar.forEach((d) => tx.set(_colIns.doc(d._id), { _k: d._k, _idx: d._idx, item: d.item }, { merge: true }));
           plano.patchesDeJogo.forEach((p) => {
             // O plano veio de leitura anterior ao lote: atualizar o mapa `jogo`
             // inteiro apagaria replay/placar escritos nesse intervalo. Somente
             // campos do slot mudam; documento removido faz o batch falhar fechado.
-            lote.update(_colJog.doc(p._id), p.camposAlterados);
+            tx.update(_colJog.doc(p._id), p.camposAlterados);
           });
           /* ⛔ O MARCADOR TEM QUE ACOMPANHAR. `_nPartes.participants` é o que faz o app
            * decidir se busca o elenco; deixá-lo para trás depois de acrescentar gente
@@ -14039,15 +14067,15 @@ exports.syncMatchRosters = onDocumentWritten(
             _rootPatch._phaseReadCertificate = _FV.delete();
           }
           if (plano.novosInscritos.length) {
-            const _nP = Object.assign({}, after._nPartes || {}, { participants: _ins.length + plano.novosInscritos.length });
-            const _mem = after.organizerOnly === true
-              ? Array.from(new Set([after.creatorUid].concat(after.adminUids || []).filter(Boolean)))
-              : Array.from(new Set((after.memberUids || []).concat(plano.novosInscritos.map((n) => n.item.uid))));
+            const _nP = Object.assign({}, current._nPartes || {}, { participants: _ins.length + plano.novosInscritos.length });
+            const _mem = current.organizerOnly === true
+              ? Array.from(new Set([current.creatorUid].concat(current.adminUids || []).filter(Boolean)))
+              : Array.from(new Set((current.memberUids || []).concat(plano.novosInscritos.map((n) => n.item.uid))));
             _rootPatch._nPartes = _nP;
-            _rootPatch.memberUids = _mem;
+            _rootPatch.memberUids = _testMode.memberUids(current, _mem);
           }
-          if (Object.keys(_rootPatch).length) lote.update(_ref2, _rootPatch);
-          await lote.commit();
+          if (Object.keys(_rootPatch).length) tx.update(_ref2, _rootPatch);
+          });
           console.log("[wo-reconcilia] " + tid + " · " + plano.eventos + " evento(s) · +" +
             plano.novosInscritos.length + " inscrito(s) · " + plano.desativar.length + " desativado(s) · " +
             plano.patchesDeJogo.length + " jogo(s)" +
@@ -14376,6 +14404,7 @@ exports.getTournamentRosterContacts = onCall(
     const db = admin.firestore();
     const tournament = await _lerTorneioComElenco(db, tournamentId);
     if (!tournament) throw new HttpsError("not-found", "Torneio não encontrado");
+    if (!_testMode.canAccess(tournament, callerUid)) throw new HttpsError("not-found", "Torneio não encontrado");
     if (!_isTournamentOrgCaller(tournament, callerUid)) {
       throw new HttpsError("permission-denied", "Só a organização pode consultar o contato do elenco");
     }
@@ -14875,6 +14904,7 @@ exports.listDiscoverableUsers = onCall(
     const tournaments = await db.collection("tournaments").where("memberUids", "array-contains", uid).get();
     tournaments.forEach((doc) => {
       const t = doc.data() || {};
+      if (_testMode.active(t)) return;
       if (t.organizerOnly === true && !_isTournamentOrgCaller(t, uid)) return;
       (Array.isArray(t.memberUids) ? t.memberUids : []).forEach((id) => {
         if (id && id !== uid) eligible.add(String(id));
@@ -15051,7 +15081,7 @@ exports.setParticipantContactPhone = onCall(
     // A pessoa PRECISA saber. Sem este aviso, isto vira "mexeram no meu cadastro".
     // O opt-out do sininho é respeitado; o registro no perfil, não — ele é o fato.
     try {
-      if (alvo.notifyPlatform !== false && t.organizerOnly !== true) {
+      if (alvo.notifyPlatform !== false && t.organizerOnly !== true && !_testMode.active(t)) {
         const orgSnap = await db.collection("users").doc(callerUid).get();
         const orgNome = (orgSnap.exists && orgSnap.data() && orgSnap.data().displayName) || "O organizador";
         const aviso = _contactPhone.buildContactPhoneNotice({
@@ -15132,7 +15162,7 @@ exports.setParticipantLetzplay = onCall(
     // A pessoa PRECISA saber — mesma regra do celular: registro com procedência é
     // diferente de "mexeram no meu cadastro" exatamente porque ela fica sabendo.
     try {
-      if (alvo.notifyPlatform !== false && t.organizerOnly !== true) {
+      if (alvo.notifyPlatform !== false && t.organizerOnly !== true && !_testMode.active(t)) {
         const orgSnap = await db.collection("users").doc(callerUid).get();
         const orgNome = (orgSnap.exists && orgSnap.data() && orgSnap.data().displayName) || "O organizador";
         const aviso = _contactPhone.buildContactLetzplayNotice({

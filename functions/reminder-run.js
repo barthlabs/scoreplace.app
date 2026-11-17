@@ -21,7 +21,7 @@ async function runTournamentReminders(db, nowMs) {
   for (const doc of snap.docs) {
     const t = doc.data();
     if (!t || t.status === "finished") continue;
-    if (t.isSandbox === true || t.notificationsMuted === true) continue; // killswitch do Sandbox
+    if (t.isSandbox === true || t.notificationsMuted === true || t.testModeEnabled === true) continue;
     const win = _reminderCore.reminderWindowFor(t.startDate, nowMs);
     if (!win) continue;
     if (t.remindersSent && t.remindersSent[win.key]) continue; // dedup por torneio

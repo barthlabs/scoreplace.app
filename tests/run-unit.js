@@ -131,6 +131,7 @@ const SUITES = [
   'tests/native-release-candidate.test.js',
   'tests/format-intent-validation.test.js',
   'tests/test-mode-tournament.test.js',
+  'tests/test-mode-core.test.js',
   'tests/super8-game-duration-form-contract.test.js',
   'tests/tournament-titles.test.js',
   'tests/super-eight-core.test.js',

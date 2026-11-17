@@ -3478,7 +3478,7 @@ window._isSandboxRoute = function () {
 };
 // Notificações silenciadas? Sandbox OU killswitch explícito por torneio (t.notificationsMuted).
 window._tournamentNotificationsMuted = function (t) {
-  return !!(t && (t.notificationsMuted === true || t.isSandbox === true));
+  return !!(t && (t.notificationsMuted === true || t.isSandbox === true || t.testModeEnabled === true));
 };
 // CINTO de ingestão: tira os SB da lista pra quem não é o dev. Aplicado em TODO ponto onde
 // torneios entram no AppStore (listener, load, cache) — assim nenhum consumidor de
@@ -3486,15 +3486,15 @@ window._tournamentNotificationsMuted = function (t) {
 // memberUids só-dev, que impede o doc de sequer ser entregue. Ver project_sandbox_tournament.
 window._dropSandboxForNonDev = function (list) {
   var arr = Array.isArray(list) ? list : [];
-  if (window._isTestIdentity && window._isTestIdentity()) return arr;
-  return arr.filter(function (t) { return !(t && t.isSandbox === true); });
+  if (window._isDeveloperIdentity && window._isDeveloperIdentity()) return arr;
+  return arr.filter(function (t) { return !(t && (t.isSandbox === true || t.testModeEnabled === true)); });
 };
 // Lista de torneios elegível pra STATS GLOBAIS (perfil, troféus, pills, confrontos):
 // exclui os sandboxes — resultados do SB não vazam pra agregação nenhuma. Recebe a
 // lista base (default = AppStore.tournaments).
 window._statsEligibleTournaments = function (list) {
   var base = Array.isArray(list) ? list : ((window.AppStore && window.AppStore.tournaments) || []);
-  return base.filter(function (t) { return !(t && t.isSandbox === true); });
+  return base.filter(function (t) { return !(t && (t.isSandbox === true || t.testModeEnabled === true)); });
 };
 // Acha o SB de um torneio original (por sandboxOf) na lista local. null se não há.
 // (O link mora no SB, não no original — o dev pode não ter permissão de escrever o original.)

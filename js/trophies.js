@@ -445,18 +445,18 @@
       (function() {
         var _cMap = {};
         var _cUid = db.collection('tournaments')
-          .where('creatorUid', '==', uid)
+          .where('memberUids', 'array-contains', uid)
           .get()
-          .then(function(snap) { snap.forEach(function(doc) { _cMap[doc.id] = true; }); })
+          .then(function(snap) { snap.forEach(function(doc) { if (doc.data().creatorUid === uid) _cMap[doc.id] = true; }); })
           .catch(function() {});
         /* ⛔ POR UID (cânone do dono, 26/ago). Buscar por `organizerEmail` achava torneio
          * de quem TEVE aquele e-mail e NÃO achava nada de quem entrou por telefone —
          * essas pessoas simplesmente não ganhavam o troféu de organizador. */
         var _cEmail = (cu.uid)
           ? db.collection('tournaments')
-              .where('creatorUid', '==', cu.uid)
+              .where('memberUids', 'array-contains', cu.uid)
               .get()
-              .then(function(snap) { snap.forEach(function(doc) { _cMap[doc.id] = true; }); })
+              .then(function(snap) { snap.forEach(function(doc) { if (doc.data().creatorUid === cu.uid) _cMap[doc.id] = true; }); })
               .catch(function() {})
           : Promise.resolve();
         return Promise.all([_cUid, _cEmail]).then(function() {

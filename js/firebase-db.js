@@ -587,6 +587,7 @@ window.FirestoreDB = {
       var _newUids  = this._computeMemberUids(cleanData);
       var _prevUids = Array.isArray(tourData.memberUids) ? tourData.memberUids : [];
       cleanData.memberUids = window._mergeMemberUids(cleanData, _prevUids, _newUids);
+      if (cleanData.testModeEnabled === true) cleanData.refereeUids = [];
     }
     // v4.5.85 (ITEM 3 · Fase 4): SANITIZA identidade — não grava nome de quem tem uid
     // (resolve do perfil vivo); guest sem uid mantém o nome. Opera na CÓPIA (cleanData),
@@ -1799,6 +1800,7 @@ window.FirestoreDB = {
       self._apagarEmailDoDocPublico(data, { integral: true }); // set integral: remover antes de limpar/dividir
       data.adminUids    = self._computeAdminUids(data);
       data.memberUids   = window._mergeMemberUids(data, data.memberUids, self._computeMemberUids(data));
+      if (data.testModeEnabled === true) data.refereeUids = [];
       try {
         if (typeof window !== 'undefined' && typeof window._nextOwedDrawMs === 'function') {
           var owed = window._nextOwedDrawMs(data);
@@ -3810,6 +3812,7 @@ window.FirestoreDB = {
           level: level || 'all',
           message: message || '',
           tournamentName: opts.tournamentName || '',
+          tournamentId: opts.tournamentId || '',
           tournamentUrl: opts.tournamentUrl || '',
           ctaLabel: opts.ctaLabel || '',
           ctaUrl: opts.ctaUrl || '',

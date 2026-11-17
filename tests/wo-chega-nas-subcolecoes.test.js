@@ -120,15 +120,15 @@ ok(p4.desativar.some((d) => d.item.uid === 'ufIkpAo880X3LRWSxaOgXZS0Aph2'), '   
 console.log('\n⑤ guarda estática do batch de W.O.\n');
 const functionSource = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
 const batchStart = functionSource.indexOf('plano.patchesDeJogo.forEach((p) => {');
-const batchEnd = functionSource.indexOf('await lote.commit();', batchStart);
+const batchEnd = functionSource.indexOf('if (Object.keys(_rootPatch).length) tx.update(_ref2, _rootPatch);', batchStart) + 'if (Object.keys(_rootPatch).length) tx.update(_ref2, _rootPatch);'.length;
 const batchSource = batchStart >= 0 && batchEnd > batchStart ? functionSource.slice(batchStart, batchEnd) : '';
 ok(/const _rootPatch = \{\};[\s\S]*if \(plano\.patchesDeJogo\.length\) \{[\s\S]*_rootPatch\._phaseReadCertificate = _FV\.delete\(\)/.test(batchSource),
   'patch de jogo invalida certificado com a sentinela disponível no módulo, mesmo sem novo inscrito');
-ok((batchSource.match(/lote\.update\(_ref2,/g) || []).length === 1 &&
-   /if \(Object\.keys\(_rootPatch\)\.length\) lote\.update\(_ref2, _rootPatch\)/.test(batchSource),
-  'o batch tem no máximo um update da raiz, fora do condicional de novos inscritos');
-ok(/lote\.update\(_colJog\.doc\(p\._id\), p\.camposAlterados\)/.test(batchSource) &&
-  !/lote\.set\(_colJog\.doc\(p\._id\)/.test(batchSource),
+ok((batchSource.match(/tx\.update\(_ref2,/g) || []).length === 1 &&
+   /if \(Object\.keys\(_rootPatch\)\.length\) tx\.update\(_ref2, _rootPatch\)/.test(batchSource),
+  'a transação tem no máximo um update da raiz, fora do condicional de novos inscritos');
+ok(/tx\.update\(_colJog\.doc\(p\._id\), p\.camposAlterados\)/.test(batchSource) &&
+  !/tx\.set\(_colJog\.doc\(p\._id\)/.test(batchSource),
   '⛔ o batch atualiza caminhos do slot, sem recriar jogo removido nem sobrescrever o mapa');
 
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s) de ' + (pass + fail) : '✅ ' + pass + '/' + pass + ' ok') + '\n');
