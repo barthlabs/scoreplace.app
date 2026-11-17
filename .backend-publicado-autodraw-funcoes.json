@@ -2,14 +2,14 @@
   "schema": 1,
   "entries": {
     "drawRound": {
-      "backendCommit": "dc2bc3a00419522112b53ec029a58e9e2bf96918",
-      "deployedAt": "2026-11-16T19:45:23.758Z",
+      "backendCommit": "9faed05ce2b1bf1da0d1f05b7421e61c4dd5efba",
+      "deployedAt": "2026-11-17T01:44:17.336Z",
       "result": "success",
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "df2eac03bf79ea87968e0585d878a4fff896c26f",
-      "deployedAt": "2026-11-16T20:36:30.571Z",
+      "backendCommit": "9faed05ce2b1bf1da0d1f05b7421e61c4dd5efba",
+      "deployedAt": "2026-11-17T01:44:17.336Z",
       "result": "success",
       "mode": "only"
     },
@@ -146,8 +146,8 @@
       "mode": "only"
     },
     "resetTournamentToEnrollment": {
-      "backendCommit": "dc2bc3a00419522112b53ec029a58e9e2bf96918",
-      "deployedAt": "2026-11-16T19:45:23.758Z",
+      "backendCommit": "9faed05ce2b1bf1da0d1f05b7421e61c4dd5efba",
+      "deployedAt": "2026-11-17T01:44:17.336Z",
       "result": "success",
       "mode": "only"
     },
