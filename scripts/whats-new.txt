@@ -1,1 +1,1 @@
-Na operação Rei/Rainha, as setas percorrem os três jogos do quarteto e sua classificação. Torneios de um dia mostram apenas o horário dos jogos. Esta versão também inclui placares por set, chamadas para quadra, telas no ar por fase e integração atualizada com o Apple Watch.
+Melhorias no Super 8: sorteio das sete rodadas, classificação e lançamento de placares pelos participantes. Ajustamos a exibição das chaves, chamadas para quadra e horários dos jogos. Também corrigimos a inscrição sem categoria em torneios casuais.

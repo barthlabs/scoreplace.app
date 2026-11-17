@@ -1,1 +1,1 @@
-In King/Queen groups, arrows cycle through the quartet’s three games and standings. One-day tournaments show game times without repeating the date. This release also includes set-by-set scores, court call controls, phase-specific on-air screens, and updated Apple Watch integration.
+Super 8 improvements: drawing all seven rounds, standings, and scores entered by players. We refined brackets, court calls, and match times. We also fixed registration without a category in casual tournaments.
