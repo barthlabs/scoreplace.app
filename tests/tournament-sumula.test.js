@@ -510,7 +510,7 @@ assert(futureNonCamisBrackets.every(page => page.width < page.height &&
   'regra vertical e rodapé valem também para formatos futuros');
 function largeFutureBracket(firstRoundGames) {
   const matches = [];
-  for (let count=firstRoundGames, round=1; count>=1; count=Math.floor(count/2), round++) {
+  for (let count=firstRoundGames, round=1; count>=1; count=count===1 ? 0 : Math.ceil(count/2), round++) {
     for (let i=0;i<count;i++) matches.push({ id:'r'+round+'-'+i, round,
       p1:round === 1 ? 'Atleta '+(i*4+1)+' / Atleta '+(i*4+2) : 'A definir',
       p2:round === 1 ? 'Atleta '+(i*4+3)+' / Atleta '+(i*4+4) : 'A definir',
@@ -520,19 +520,46 @@ function largeFutureBracket(firstRoundGames) {
   return { ...futureNonCamis, showCategories:false,
     future:{ name:'Eliminatória', categories:[{ category:'Única', bracket:'main', matches }] } };
 }
+for (const count of [9,12,13]) {
+  const pages = core.makePages(largeFutureBracket(count));
+  assert(pages.length > 1 && pages.every(page => page.width === 595 && page.height === 842),
+    'chave com '+count+' jogos iniciais se divide em A4');
+  pages.forEach(page => page.commands.map(command =>
+    /^0\.3 G 0\.7 w 18 [\d.]+ [\d.]+ ([\d.]+) re S$/.exec(command))
+    .filter(Boolean).forEach(parts => assert(Number(parts[1]) >= 71.9,
+      'cartões iniciais da chave com '+count+' jogos mantêm altura CAMIS Ouro')));
+}
 for (const count of [32,64]) {
   const pages = core.makePages(largeFutureBracket(count));
-  assert.strictEqual(pages.length, 1, 'chave grande continua em uma folha por categoria');
-  const page = pages[0];
-  const cards = page.commands.map(command =>
-    /^0\.3 G 0\.7 w ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re S$/.exec(command))
-    .filter(Boolean).filter(parts => Number(parts[1]) === 18)
-    .map(parts => ({ top:page.height-Number(parts[2])-Number(parts[4]),
-      bottom:page.height-Number(parts[2]) })).sort((a,b) => a.top-b.top);
-  assert.strictEqual(cards.length, count, 'todos os jogos iniciais têm espaço de escrita');
-  assert(cards.every((card, i) => card.top >= 107 && card.bottom <= page.height-51 &&
-    (!i || card.top >= cards[i-1].bottom+4.9)),
-  'a chave de '+count+' jogos não sobrepõe cartões nem invade o rodapé');
+  assert.strictEqual(pages.length, count/8+1,
+    'chave grande é repartida em subchaves A4 e uma folha final');
+  assert(pages.every(page => page.width === 595 && page.height === 842),
+    'chave grande usa somente A4 vertical');
+  assert(!pages[0].commands.some(command => command.includes('(FINAL)')) &&
+    pages[pages.length-1].commands.some(command => command.includes('(FINAL)')),
+    'apenas a última folha identifica a final do torneio');
+  let cardCount = 0;
+  pages.forEach(page => {
+    const byColumn = new Map();
+    page.commands.map(command =>
+      /^0\.3 G 0\.7 w ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re S$/.exec(command))
+      .filter(Boolean).forEach(parts => {
+        const x = Number(parts[1]);
+        const card = { top:page.height-Number(parts[2])-Number(parts[4]),
+          bottom:page.height-Number(parts[2]), height:Number(parts[4]) };
+        if (!byColumn.has(x)) byColumn.set(x, []);
+        byColumn.get(x).push(card);
+        cardCount++;
+      });
+    byColumn.forEach(cards => {
+      cards.sort((a,b) => a.top-b.top);
+      assert(cards.every((card, i) => card.top >= 107 && card.bottom <= page.height-51 &&
+        card.height >= (cards === byColumn.get(18) ? 71.9 : 49.9) &&
+        (!i || card.top >= cards[i-1].bottom+4.9)),
+      'a chave de '+count+' jogos mantém o tamanho dos cartões sem invadir o rodapé');
+    });
+  });
+  assert.strictEqual(cardCount, count*2-1, 'cada jogo aparece uma única vez no conjunto de folhas');
 }
 const onlyFirstRound = core.collect({...camis, currentPhaseIndex:1},
   Array.from({ length:8 }, (_, i) => ({ id:'parcial-'+i, phaseIndex:1,
