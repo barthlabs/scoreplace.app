@@ -1,8 +1,10 @@
 {
   "schema": 1,
-  "backendCommit": "36a6b3ddae6427ee884ddbf9b7468986913872d3",
-  "scopeNote": "Participantes podem iniciar o controle regional antes de lançar o primeiro placar.",
+  "backendCommit": "9faed05ce2b1bf1da0d1f05b7421e61c4dd5efba",
+  "scopeNote": "Ordem canônica dos inscritos no sorteio e no reset; duração canônica da grade.",
   "functions": [
-    "tournamentOperationControl"
+    "drawRound",
+    "resetTournamentToEnrollment",
+    "updateTournamentConfiguration"
   ]
 }
