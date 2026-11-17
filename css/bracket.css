@@ -218,30 +218,29 @@
   pointer-events:none;
   z-index:-1;
 }
-/* Só o painel largo recebe filtros e abas na mesma linha. As larguras menores
-   preservam a busca inteira e a navegação em linhas separadas. */
-[data-bracket-tabs-root][data-bracket-toolbar-layout="wide"] {
+/* Controles primeiro; abas da chave em faixa própria, inclusive em TV. */
+[data-bracket-tabs-root][data-bracket-search-layout="inline"] > [data-bracket-tabs-primary] {
   display:grid!important;
   grid-template-columns:minmax(0,1fr) auto;
-  align-items:end;
+  grid-template-rows:auto auto;
 }
-[data-bracket-tabs-root][data-bracket-toolbar-layout="wide"] > [data-bracket-tabs-primary] {
-  width:auto!important;
-  grid-column:2;
-  grid-row:1;
-}
-[data-bracket-tabs-root][data-bracket-toolbar-layout="wide"] > [data-bracket-category-tabs] {
-  width:auto!important;
-  grid-column:1;
-  grid-row:1;
-  flex-wrap:nowrap!important;
-  padding-top:0!important;
-  white-space:nowrap;
-}
-[data-bracket-tabs-root][data-bracket-toolbar-layout="wide"] > [data-bracket-round-rail],
-[data-bracket-tabs-root][data-bracket-toolbar-layout="wide"] > [data-bracket-search-slot="stack"] {
+[data-bracket-tabs-root][data-bracket-search-layout="inline"] [data-bracket-search-slot="inline"] {
   grid-column:1 / -1;
+  grid-row:1;
+  margin:0!important;
+  max-width:none!important;
+  min-width:0!important;
+  padding-bottom:8px;
 }
+[data-bracket-tabs-root][data-bracket-search-layout="inline"] [data-bracket-main-tabs] {
+  grid-column:1;
+  grid-row:2;
+}
+[data-bracket-tabs-root][data-bracket-search-layout="inline"] [data-bracket-presentation-tabs] {
+  grid-column:2;
+  grid-row:2;
+}
+[data-bracket-tabs-root] > [data-bracket-category-tabs] { clear:both; }
 details[open] > summary .standings-toggle-show { display: none; }
 details[open] > summary .standings-toggle-hide { display: inline !important; }
 summary::-webkit-details-marker { display: none; }

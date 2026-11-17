@@ -446,6 +446,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._waGrpGroupChip = function (t, groupMatches) {
     try {
       if (!t || !Array.isArray(groupMatches) || !groupMatches.length) return '';
+      if (groupMatches.every(function (m) { return _matchHasOperationalSchedule(t, m); })) return '';
       var m0 = groupMatches.find(function (m) { return m && !m.isBye && !m.isSitOut; }) || groupMatches[0];
       if (!m0) return '';
       // Grupo encerrado também não ganha link novo. Caso já tenha sido criado,

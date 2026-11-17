@@ -13,6 +13,25 @@ function ok(c, m) { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } }
 console.log('\n== Rei/Rainha — saída observável ==');
 
 (function () {
+  const t = hydrateMonarchGroups(buildViaDraw('Liga', 16, { ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true }));
+  ['B2', 'A2', 'B1', 'A1'].forEach((code, i) => { t.groups[i].name = 'Grupo ' + code; });
+  t.groups.reverse();
+  t.groups.forEach((g, i) => g.matches.forEach((m) => {
+    m.scheduledAt = '2026-11-29T08:00:00-03:00';
+    m.court = 'Quadra ' + (i + 1);
+  }));
+  const previousWoChip = W._woClaimChip;
+  W._woClaimChip = (_t, ctx) => '<button data-test-wo="' + ctx.matchId + '">W.O.</button>';
+  const html = W._renderMonarchStage(t, true, false) || '';
+  W._woClaimChip = previousWoChip;
+  const groupCodes = [...html.matchAll(/data-group-code="([^"]+)"/g)].map((match) => match[1]);
+  ok(groupCodes.join(',') === 'A1,A2,B1,B2', 'grupos agendados aparecem na ordem A1, A2, B1, B2');
+  ok((html.match(/id="card-/g) || []).length === 12, 'cada grupo agendado mantém seus três cards de jogo');
+  ok((html.match(/data-test-wo=/g) || []).length === 12, 'cada jogo do grupo oferece W.O. conforme a permissão canônica');
+  ok(/max-width:380px/.test(html), 'grupo usa a largura do card operacional');
+})();
+
+(function () {
   const t = hydrateMonarchGroups(buildViaDraw('Liga', 8, { ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true }));
   const before = W._renderMonarchStage(t, false, false, { standingsOnly: true }) || '';
   const game = (t.groups[0].matches || [])[0];
@@ -221,7 +240,7 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
   ok((html.match(/data-group-box="1"/g) || []).length === 2, 'âncora de grupo (data-group-box) nos 2 grupos');
   ok(/data-my-match="1" data-my-pending="1"/.test(html), 'card pendente do usuário marcado (data-my-pending=1)');
 
-  // (b) ORGANIZADOR (não joga): W.O. em TODOS os grupos, nenhum Cheguei.
+  // (b) ORGANIZADOR (não joga): sem agenda operacional, W.O. no grupo inteiro.
   W.AppStore.currentUser = { uid: 'u-org', displayName: 'Organizador', email: 'org@x.z' };
   const prevMng = W._canManagePresence;
   W._canManagePresence = function () { return true; };

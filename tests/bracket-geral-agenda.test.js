@@ -696,6 +696,29 @@ function trecho(inicio, fim) {
   if (!tierMount.stillVisible || !tierMount.clicked || !tierMount.oneRoot) console.error('  diagnóstico linhas:', tierMount);
   ok(tierMount.stillVisible && tierMount.clicked && tierMount.oneRoot,
     'Ouro/Prata conserva a navegação fora da linha inativa e sem duplicação');
+  await page.addScriptTag({ content: trecho('_bracketTabsApply', '_bracketSyncRoundHeadingOffsets') });
+  const scheduledMonarch = await page.evaluate(() => {
+    const game = (id, category) => '<article id="card-' + id + '" class="sp-match-card" data-bracket-tab-category="' + category + '" data-bracket-tab-gender="fem" data-bracket-scheduled-at="1795942800000">Jogo ' + id + '</article>';
+    document.body.innerHTML = '<main id="view-container"><nav data-bracket-tabs-root="1" data-tournament-id="scheduled-monarch" data-bracket-team-schedule="1"></nav>' +
+      '<section id="inline-bracket-container"><div data-monarch-group="1" id="group-a2">' + [1, 2, 3].map(n => game('a2-' + n, 'Retinol')).join('') + '</div>' +
+      '<div data-monarch-group="1" id="group-b1">' + [1, 2, 3].map(n => game('b1-' + n, 'Colágeno')).join('') + '</div></section></main>';
+    const root = document.querySelector('[data-bracket-tabs-root]');
+    root._bracketTabsScope = document.getElementById('inline-bracket-container');
+    root._bracketCardsScope = root._bracketTabsScope;
+    window._currentBracketTournament = { id: 'scheduled-monarch', matches: [] };
+    window._bracketTabsRefreshRoundRail = () => {};
+    window._bracketLayoutEliminationTree = () => {};
+    _bracketTabsApply('scheduled-monarch', 'fem', 'Retinol', '');
+    return {
+      cardsInGroup: document.querySelectorAll('#group-a2 > .sp-match-card').length,
+      visible: document.querySelectorAll('#group-a2 > .sp-match-card:not([hidden])').length,
+      otherHidden: document.querySelectorAll('#group-b1 > .sp-match-card[hidden]').length,
+      moved: document.querySelectorAll('[data-bracket-general-view] .sp-match-card').length
+    };
+  });
+  ok(scheduledMonarch.cardsInGroup === 3 && scheduledMonarch.visible === 3 &&
+    scheduledMonarch.otherHidden === 3 && scheduledMonarch.moved === 0,
+    'categoria agendada conserva os três jogos dentro do grupo escolhido');
   const failedPaint = await page.evaluate(() => {
     document.body.innerHTML = '<main id="view-container"><nav data-bracket-tabs-root="1">Abas anteriores</nav>' +
       '<section id="inline-bracket-container"><article>Chave anterior</article></section></main>';

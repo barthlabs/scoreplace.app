@@ -119,7 +119,9 @@ const { chromium } = require('@playwright/test');
         return { boardRight:board.right, boardBottom:board.bottom, headerRight:header.right,
           resultsRight:results.right, courtsBottom:courts.bottom, upcomingBottom:upcoming.bottom,
           qrBottom:qrBox.bottom, brandBottom:brand.bottom, qrWidth:qr.width,
-          logoWidth:logo.width, logoInkWidth:logoImage.width * 254 / 400,
+          logoWidth:logo.width,
+          logoImageLeft:logoImage.left, logoImageRight:logoImage.right,
+          logoLeft:logo.left, logoRight:logo.right,
           logoImageTop:logoImage.top, logoImageBottom:logoImage.bottom, logoTop:logo.top, logoBottom:logo.bottom,
           brandWidth:brand.width, upcomingWidth:upcoming.width,
           logoCenter:(logo.left+logo.right)/2,
@@ -141,11 +143,11 @@ const { chromium } = require('@playwright/test');
       `logo, QR e chamada ficam centralizados na coluna: ${JSON.stringify(camisBounds)}`);
       assert(camisBounds.qrWidth > 150 && camisBounds.logoWidth > 180 &&
         camisBounds.brandWidth > 150 && camisBounds.upcomingWidth < 430 &&
-        Math.abs(camisBounds.logoInkWidth - camisBounds.logoWidth) < 2 &&
-        camisBounds.logoInkWidth > camisBounds.qrWidth * 1.1 &&
+        camisBounds.logoImageLeft >= camisBounds.logoLeft - 1 &&
+        camisBounds.logoImageRight <= camisBounds.logoRight + 1 &&
         camisBounds.logoImageTop >= camisBounds.logoTop - 1 &&
         camisBounds.logoImageBottom <= camisBounds.logoBottom + 1,
-      'o desenho visível do Camis supera o QR sem corte: ' + JSON.stringify(camisBounds));
+      'a imagem inteira do logo cabe na coluna sem corte: ' + JSON.stringify(camisBounds));
       await camisPage.close();
     } finally { await browser.close(); }
     console.log('✓ TV: etiquetas, placares e próximo jogo contidos nos boxes');

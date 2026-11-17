@@ -3529,6 +3529,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
         (!usesDateTabs || card.getAttribute('data-bracket-tab-day') === gender);
     });
   var isScheduledCategory = root.getAttribute('data-bracket-team-schedule') === '1' &&
+    !(root._bracketTabsScope && root._bracketTabsScope.querySelector('[data-monarch-group="1"]')) &&
     !forceCanonical && !isGeneral && !isUpcoming && root.getAttribute('data-bracket-line-tabs') !== '1' &&
     !_bracketIsEliminationTree(window._currentBracketTournament || {}) &&
     scheduledCategoryCards.length > 0 && scheduledCategoryCards.every(function (card) {
@@ -3905,7 +3906,7 @@ function _bracketTabsPlaceSearch(root, searchWrap, force) {
   var mode = _bracketTabsHostWidth(root) >= 760 ? 'inline' : 'stack';
   // A faixa de categorias divide a linha com a busca somente quando o painel
   // (não a viewport) comporta os dois blocos sem comprimir o campo de filtro.
-  root.setAttribute('data-bracket-toolbar-layout', _bracketTabsHostWidth(root) >= 1320 ? 'wide' : 'stack');
+  root.setAttribute('data-bracket-toolbar-layout', 'stack');
   var target = mode === 'inline' ? inlineSlot : stackSlot;
   var other = mode === 'inline' ? stackSlot : inlineSlot;
   inlineSlot.hidden = mode !== 'inline';
@@ -4218,8 +4219,8 @@ window._bracketCategoryTabsMount = function () {
   var presentationTabs = _bracketIsEliminationTree(currentTournament) ? _bracketPresentationControlHtml() : '';
   // Só as abas rolam em painéis estreitos; a linha inteira não pode ter
   // overflow porque também hospeda a busca e suas sugestões.
-  root.innerHTML = window._bracketPrimaryTabsHtml(genderHtml, presentationTabs)
-    + '<div data-bracket-search-slot="stack" hidden style="width:100%;min-width:0;padding:8px 4px 0;box-sizing:border-box;"></div>'
+  root.innerHTML = '<div data-bracket-search-slot="stack" hidden style="width:100%;min-width:0;padding:0 4px 8px;box-sizing:border-box;"></div>'
+    + window._bracketPrimaryTabsHtml(genderHtml, presentationTabs)
     + (isOnlyLines || !categoryHtml ? '' : '<div data-bracket-category-tabs style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;padding:9px 4px 0;border-bottom:1px solid rgba(129,140,248,.42);">' + categoryHtml + '</div>')
     + (roundHtml ? '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;border-top:1px solid rgba(255,255,255,.07);">' + roundHtml + '</div>' : '')
     + (isRoundBased ? '' : '<div data-bracket-round-rail aria-label="Rodadas da chave" hidden style="overflow-x:auto;overflow-y:hidden;max-width:100%;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);scrollbar-width:thin;"></div>');
@@ -10925,8 +10926,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   // v4.1.19 CANÔNICO: botão W.O. compacto no HEADER, à esquerda do "Ao Vivo" (substitui o
   // "⚠️ Faltou alguém?" largo que ficava embaixo do card). Mesmo gate do chip antigo.
-  var _woHeaderChip = (!_setsEdit && !_readOnly && typeof window._woClaimChip === 'function' &&
-    (_isConcentratedEvent || (typeof window._woIsKnockoutMatch === 'function' && window._woIsKnockoutMatch(t, m))))
+  var _hasOperationalMatchSlot = !!(m.scheduledAt && m.court &&
+    !(t && t.scheduleWindow && t.scheduleWindow.mode === 'participants'));
+  var _woHeaderChip = (!_setsEdit && !_readOnly && !isByeMatch && !m.isSitOut &&
+    typeof window._woClaimChip === 'function' &&
+    (_isConcentratedEvent || _hasOperationalMatchSlot ||
+      (typeof window._woIsKnockoutMatch === 'function' && window._woIsKnockoutMatch(t, m))))
     ? window._woClaimChip(t, { scope: 'match', matchId: m.id, compact: true })
     : '';
   var _courtReleased = window._bracketCourtReleased ? window._bracketCourtReleased(tId) : {};
@@ -11256,6 +11261,16 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     : subgroups.map(function(sg, i) { return { sg: sg, i: i, me: _sgHasMe(sg) ? 0 : 1 }; })
         .sort(function(a, b) { return (a.me - b.me) || (a.i - b.i); })
         .map(function(o) { return o.sg; });
+  // Na grade publicada, os quartetos são navegados pelo código visível.
+  // A agenda operacional continua ordenada por horário na sua própria faixa.
+  if (subgroups.length > 1 && (isOrg || _ordemDeOrganizador(t))) {
+    subgroups.sort(function (a, b) {
+      var ax = String(window._bracketMonarchGroupLabel(t, a) || '').match(/\bGrupo\s+([A-Z]+)(\d*)\b/i);
+      var bx = String(window._bracketMonarchGroupLabel(t, b) || '').match(/\bGrupo\s+([A-Z]+)(\d*)\b/i);
+      if (!ax || !bx) return 0;
+      return ax[1].localeCompare(bx[1], 'pt-BR') || Number(ax[2]) - Number(bx[2]);
+    });
+  }
 
   // O CAMIS e outros torneios extensos podem ter dezenas de quartetos. Todos
   // continuam no HTML; só evitamos colocar várias categorias simultâneas no
@@ -11478,8 +11493,8 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var _mineBadgeMon = _isMineMon && !_isSuperEightMon
       ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>'
       : '';
-    var _groupCodeMatch = String(window._bracketMonarchGroupLabel(t, sg)).toUpperCase().match(/\b([A-Z]{1,3}\d+)\b/);
-    html += '<div data-group-box="1" data-monarch-group="1"' + (_groupCodeMatch ? ' data-group-code="' + _groupCodeMatch[1] + '"' : '') + (_largeMonarch ? ' data-monarch-large="1" data-monarch-category="' + window._safeHtml(_monarchCategories[gi]) + '" hidden' : '') + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((opts && opts.showHistoricalFullStandings ? '#818cf8' : groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
+    var _groupCodeMatch = String(window._bracketMonarchGroupLabel(t, sg)).toUpperCase().match(/\bGRUPO\s+([A-Z]{1,3}\d*)\b/);
+    html += '<div data-group-box="1" data-monarch-group="1"' + (_groupCodeMatch ? ' data-group-code="' + _groupCodeMatch[1] + '"' : '') + (_largeMonarch ? ' data-monarch-large="1" data-monarch-category="' + window._safeHtml(_monarchCategories[gi]) + '" hidden' : '') + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="box-sizing:border-box;width:100%;max-width:380px;scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((opts && opts.showHistoricalFullStandings ? '#818cf8' : groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       /* DUAS LINHAS, NÃO TRÊS: título curto em cima, selos embaixo, botões à direita.
        * Antes era tudo numa linha só, com `flex:1` no <h3>: os dois botões grandes
        * comiam a largura, o título quebrava em três linhas e ERA ELE que esticava a

@@ -75,6 +75,10 @@ async function measure(page) {
       categoryTop: tr && Math.round(tr.top),
       sameToolbarRow: !!(pr && tr && Math.abs(pr.bottom - tr.bottom) <= 2),
       stackTop: sr && Math.round(sr.top),
+      stackBottom: sr && Math.round(sr.bottom),
+      inlineTop: inline && Math.round(inline.getBoundingClientRect().top),
+      mainTabsTop: root && root.querySelector('[data-bracket-main-tabs]') && Math.round(root.querySelector('[data-bracket-main-tabs]').getBoundingClientRect().top),
+      primaryTop: pr && Math.round(pr.top),
       cardTop: cr && Math.round(cr.top),
       surfaceOnTop: !!(topNode && topNode.closest && topNode.closest('[data-bracket-tabs-root]')),
       observer: !!(root && root._bracketTabsResizeObserver),
@@ -100,11 +104,12 @@ async function measure(page) {
       ok(width + 'px: só o slot ativo fica exposto', expected === 'inline'
         ? state.inputParent === 'inline' && !state.inlineHidden && state.stackHidden
         : state.inputParent === 'stack' && state.inlineHidden && !state.stackHidden, JSON.stringify(state));
-      ok(width + 'px: busca e abas não se sobrepõem', expected === 'inline' || state.stackTop >= state.primaryBottom, JSON.stringify(state));
+      ok(width + 'px: controles vêm antes das abas', expected === 'inline'
+        ? state.inlineTop < state.mainTabsTop
+        : state.stackBottom <= state.primaryTop, JSON.stringify(state));
       ok(width + 'px: camada fixa vence o card que tenta invadir', state.surfaceOnTop, JSON.stringify(state));
-      ok(width + 'px: categorias usam a mesma linha só quando cabem',
-        width >= 1320 ? state.toolbarLayout === 'wide' && state.sameToolbarRow
-          : state.toolbarLayout === 'stack' && !state.sameToolbarRow, JSON.stringify(state));
+      ok(width + 'px: categorias ficam em faixa separada',
+        state.toolbarLayout === 'stack' && !state.sameToolbarRow, JSON.stringify(state));
     }
 
     // A reprodução exata do defeito: viewport desktop, mas painel estreito.
