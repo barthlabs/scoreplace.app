@@ -502,6 +502,32 @@ assert.strictEqual(futureNonCamisBrackets.length, 2,
 assert(futureNonCamisBrackets.every(page => page.width < page.height &&
   page.commands.join('\n').includes('Em cada rodada, anote apenas quem avan')),
   'regra vertical e rodapé valem também para formatos futuros');
+function largeFutureBracket(firstRoundGames) {
+  const matches = [];
+  for (let count=firstRoundGames, round=1; count>=1; count=Math.floor(count/2), round++) {
+    for (let i=0;i<count;i++) matches.push({ id:'r'+round+'-'+i, round,
+      p1:round === 1 ? 'Atleta '+(i*4+1)+' / Atleta '+(i*4+2) : 'A definir',
+      p2:round === 1 ? 'Atleta '+(i*4+3)+' / Atleta '+(i*4+4) : 'A definir',
+      nextMatchId:count > 1 ? 'r'+(round+1)+'-'+Math.floor(i/2) : '',
+      nextSlot:i%2 ? 'p2' : 'p1' });
+  }
+  return { ...futureNonCamis, showCategories:false,
+    future:{ name:'Eliminatória', categories:[{ category:'Única', bracket:'main', matches }] } };
+}
+for (const count of [32,64]) {
+  const pages = core.makePages(largeFutureBracket(count));
+  assert.strictEqual(pages.length, 1, 'chave grande continua em uma folha por categoria');
+  const page = pages[0];
+  const cards = page.commands.map(command =>
+    /^0\.3 G 0\.7 w ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re S$/.exec(command))
+    .filter(Boolean).filter(parts => Number(parts[1]) === 18)
+    .map(parts => ({ top:page.height-Number(parts[2])-Number(parts[4]),
+      bottom:page.height-Number(parts[2]) })).sort((a,b) => a.top-b.top);
+  assert.strictEqual(cards.length, count, 'todos os jogos iniciais têm espaço de escrita');
+  assert(cards.every((card, i) => card.top >= 107 && card.bottom <= page.height-51 &&
+    (!i || card.top >= cards[i-1].bottom+4.9)),
+  'a chave de '+count+' jogos não sobrepõe cartões nem invade o rodapé');
+}
 const onlyFirstRound = core.collect({...camis, currentPhaseIndex:1},
   Array.from({ length:8 }, (_, i) => ({ id:'parcial-'+i, phaseIndex:1,
     category:'Diamante', round:1, scheduledGameNumber:40+i,

@@ -616,23 +616,28 @@
       return { bucket:bucket, rows:rows, main:rows.filter(function (r) { return !r.third; }) };
     }).filter(function (section) { return section.main.length; });
     if (!sections.length) return null;
-    var firstTotal = sections.reduce(function (sum, section) {
-      var first = Math.min.apply(null, section.main.map(function (r) { return Number(r.round) || 1; }));
-      return sum + section.main.filter(function (r) { return (Number(r.round) || 1) === first; }).length;
-    }, 0);
-    // Mais confrontos exigem papel maior para manter os quatro nomes legíveis
-    // na mesma folha, em vez de reduzir indefinidamente a fonte.
-    var p = firstTotal > 48 ? pdfPage(1684, 2384) :
-      firstTotal > 24 ? pdfPage(1191, 1684) :
-      firstTotal > 12 ? pdfPage(842, 1191) : pdfPage(595, 842);
-    var left = 18, right = p.width - 18, top = 107, bottom = p.height - 51;
+    // Reserve espaço real para cada confronto, inclusive os intervalos entre
+    // cartões e os títulos de chaves quando há dois caminhos na categoria.
     var sectionGap = sections.length > 1 ? 20 : 0;
+    var minimumSections = sections.map(function (section) {
+        var first = Math.min.apply(null, section.main.map(function (r) { return Number(r.round) || 1; }));
+        var count = section.main.filter(function (r) { return (Number(r.round) || 1) === first; }).length;
+        return (sections.length > 1 ? 15 : 0) + 44 + count * 46 + Math.max(0, count - 1) * 5;
+      });
+    var minimumHeight = 107 + 51 + sectionGap * (sections.length - 1) +
+      minimumSections.reduce(function (sum, height) { return sum + height; }, 0);
+    var paper = [[595,842],[842,1191],[1191,1684],[1684,2384]].find(function (size) {
+      return size[1] >= minimumHeight;
+    }) || [1684, Math.ceil(minimumHeight / 100) * 100];
+    var p = pdfPage(paper[0], paper[1]);
+    var left = 18, right = p.width - 18, top = 107, bottom = p.height - 51;
     var usable = bottom - top - sectionGap * (sections.length - 1);
     var weights = sections.map(function (section) {
       var rounds = Array.from(new Set(section.main.map(function (r) { return Number(r.round) || 1; })));
       return Math.max(1, section.main.filter(function (r) { return (Number(r.round) || 1) === Math.min.apply(null, rounds); }).length);
     });
     var weightSum = weights.reduce(function (sum, n) { return sum + n; }, 0);
+    var extraHeight = usable - minimumSections.reduce(function (sum, height) { return sum + height; }, 0);
     p.fillRect(0, 0, p.width, 76, '0.071 0.133 0.220');
     p.write(fitLabel(model.tournament, right-left-75, 12, true), left, 23, 12, true, null, '1 1 1');
     p.write(fitLabel('CHAVE ELIMINATÓRIA' + (model.showCategories ? '  |  ' + (buckets[0].category || 'Sem categoria') : ''),
@@ -643,7 +648,7 @@
     var sectionTop = top;
     sections.forEach(function (section, si) {
       var rows = section.rows, main = section.main;
-      var sectionHeight = usable * weights[si] / weightSum;
+      var sectionHeight = minimumSections[si] + extraHeight * weights[si] / weightSum;
       var rounds = Array.from(new Set(main.map(function (r) { return Number(r.round) || 1; }))).sort(function (a,b) { return a-b; });
       var byRound = rounds.map(function (round) {
         return main.filter(function (r) { return (Number(r.round) || 1) === round; });
@@ -655,7 +660,8 @@
       var gap = 10, colWidth = (right-left-gap*(rounds.length-1))/rounds.length;
       var positions = {};
       var firstCount = byRound[0].length;
-      var firstHeight = Math.min(72, (yBottom-yTop)/Math.max(1,firstCount)-3);
+      var firstHeight = Math.min(72,
+        (yBottom-yTop-5*Math.max(0,firstCount-1))/Math.max(1,firstCount));
       var laterHeight = Math.min(50, firstHeight * 0.86);
       byRound.forEach(function (group, col) {
         var x = left + col*(colWidth+gap);
