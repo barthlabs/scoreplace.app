@@ -608,131 +608,137 @@
         source2:source.p2 || originLabel(m.source2) };
     });
   }
-  // Cada ramo da chave ocupa uma folha A4 em paisagem, com espaço para os
-  // quatro nomes. A repetição do jogo de conexão liga visualmente as folhas.
-  function bracketPage(model, bucket, title, selectedRows) {
-    var rows = selectedRows || structuralRows(bucket), rounds = Array.from(new Set(rows.filter(function (r) {
-      return !r.third;
-    }).map(function (r) { return Number(r.round) || 1; }))).sort(function (a,b) { return a-b; });
-    if (!rounds.length) return null;
-    var firstCount = Math.max.apply(null, rounds.map(function (round) {
-      return rows.filter(function (r) { return !r.third && (Number(r.round) || 1) === round; }).length;
-    }));
-    var p = pdfPage(842, 595), left = 22, right = p.width-22;
-    var top = 122, usable = p.height-170, gap = 18;
-    var colWidth = (right-left-gap*(rounds.length-1))/rounds.length;
-    var cardHeight = Math.min(145, usable / firstCount - 5), positions = {};
-    var byRound = rounds.map(function (round) {
-      return rows.filter(function (r) { return !r.third && (Number(r.round) || 1) === round; });
+  // Uma página vertical por categoria. A primeira coluna identifica os jogos;
+  // as seguintes recebem só o atleta/dupla que avançou e o placar desse avanço.
+  function bracketPage(model, buckets, title) {
+    var sections = buckets.map(function (bucket) {
+      var rows = structuralRows(bucket);
+      return { bucket:bucket, rows:rows, main:rows.filter(function (r) { return !r.third; }) };
+    }).filter(function (section) { return section.main.length; });
+    if (!sections.length) return null;
+    var firstTotal = sections.reduce(function (sum, section) {
+      var first = Math.min.apply(null, section.main.map(function (r) { return Number(r.round) || 1; }));
+      return sum + section.main.filter(function (r) { return (Number(r.round) || 1) === first; }).length;
+    }, 0);
+    // Mais confrontos exigem papel maior para manter os quatro nomes legíveis
+    // na mesma folha, em vez de reduzir indefinidamente a fonte.
+    var p = firstTotal > 48 ? pdfPage(1684, 2384) :
+      firstTotal > 24 ? pdfPage(1191, 1684) :
+      firstTotal > 12 ? pdfPage(842, 1191) : pdfPage(595, 842);
+    var left = 18, right = p.width - 18, top = 107, bottom = p.height - 51;
+    var sectionGap = sections.length > 1 ? 20 : 0;
+    var usable = bottom - top - sectionGap * (sections.length - 1);
+    var weights = sections.map(function (section) {
+      var rounds = Array.from(new Set(section.main.map(function (r) { return Number(r.round) || 1; })));
+      return Math.max(1, section.main.filter(function (r) { return (Number(r.round) || 1) === Math.min.apply(null, rounds); }).length);
     });
-    p.fillRect(0, 0, p.width, 77, '0.071 0.133 0.220');
-    p.write(fitLabel(model.tournament, right-left-80, 13, true), left, 24, 13, true, null, '1 1 1');
-    p.write(fitLabel('CHAVE ELIMINATÓRIA' + (model.showCategories ? '  |  ' + (bucket.category || 'Sem categoria') : ''),
-      right-left-80, 10, true), left, 47, 10, true, null, '1 1 1');
-    p.write(fitLabel(title + (bucket.partial ? '  |  Estrutura parcial' : ''), right-left-80, 8),
-      left, 64, 8, false, null, '1 1 1');
-    p.logo(right-58, 8, 54);
-    byRound.forEach(function (group, col) {
-      var x = left + col*(colWidth+gap);
-      var heading = group.some(function (row) { return row.final; }) ? 'FINAL' : 'RODADA ' + rounds[col];
-      p.fillRect(x, 88, colWidth, 22, '0.90 0.94 0.97');
-      p.write(heading, x+7, 103, 8, true, null, '0.071 0.20 0.31');
-      group.forEach(function (row, i) {
-        var source = rows.filter(function (r) { return r.nextMatchId === row.id && positions[r.id]; });
-        var center = source.length >= 2
-          ? source.reduce(function (sum, r) { return sum+positions[r.id].cy; }, 0)/source.length
-          : source.length === 1 ? positions[source[0].id].cy
-          : top + usable*(i+0.5)/group.length;
-        positions[row.id] = { x:x, y:center-cardHeight/2, cy:center };
+    var weightSum = weights.reduce(function (sum, n) { return sum + n; }, 0);
+    p.fillRect(0, 0, p.width, 76, '0.071 0.133 0.220');
+    p.write(fitLabel(model.tournament, right-left-75, 12, true), left, 23, 12, true, null, '1 1 1');
+    p.write(fitLabel('CHAVE ELIMINATÓRIA' + (model.showCategories ? '  |  ' + (buckets[0].category || 'Sem categoria') : ''),
+      right-left-75, 10, true), left, 46, 10, true, null, '1 1 1');
+    p.write(fitLabel(title + (buckets.some(function (b) { return b.partial; }) ? '  |  Estrutura parcial' : ''),
+      right-left-75, 7.5), left, 64, 7.5, false, null, '1 1 1');
+    p.logo(right-54, 8, 50);
+    var sectionTop = top;
+    sections.forEach(function (section, si) {
+      var rows = section.rows, main = section.main;
+      var sectionHeight = usable * weights[si] / weightSum;
+      var rounds = Array.from(new Set(main.map(function (r) { return Number(r.round) || 1; }))).sort(function (a,b) { return a-b; });
+      var byRound = rounds.map(function (round) {
+        return main.filter(function (r) { return (Number(r.round) || 1) === round; });
       });
-      // Repescagens podem receber perdedores de outra coluna. Mesmo assim os
-      // quadros desta rodada precisam manter um vão legível entre si.
-      for (var i=1;i<group.length;i++) {
-        var previous = positions[group[i-1].id], current = positions[group[i].id];
-        current.cy = Math.max(current.cy, previous.cy+cardHeight+5);
-      }
-      if (group.length) {
-        var overflow = positions[group[group.length-1].id].cy - (top+usable-cardHeight/2);
-        if (overflow > 0) group.forEach(function (row) { positions[row.id].cy -= overflow; });
-        group.forEach(function (row) { positions[row.id].y = positions[row.id].cy-cardHeight/2; });
-      }
-    });
-    // Linhas entram em posições distintas para os dois lados do confronto.
-    rows.forEach(function (row) {
-      var from = positions[row.id], to = positions[row.nextMatchId];
-      if (!from || !to) return;
-      var tx = to.x, middle = from.x+colWidth+gap/2;
-      var entry = to.cy + (row.nextSlot === 'p2' ? 10 : -10);
-      p.line(from.x+colWidth, from.cy, middle, from.cy, 0.48);
-      p.line(middle, from.cy, middle, entry, 0.48);
-      p.line(middle, entry, tx, entry, 0.48);
-    });
-    function card(row, x, y) {
-      p.fillRect(x, y, colWidth, cardHeight, '0.97 0.98 0.99');
-      p.box(x, y, colWidth, cardHeight);
-      var scale = cardHeight / 145;
-      var heading = row.ref + (row.third && row.ref !== '3º LUGAR' ? ' · 3º LUGAR' :
-        row.final && row.ref !== 'FINAL' ? ' · FINAL' : '');
-      p.write(fitLabel(heading, colWidth-12, 10, true), x+6, y+13, 10, true, null, '0.06 0.33 0.51');
-      var side1 = members(row.p1), side2 = members(row.p2);
-      if (!side1.length) side1 = [];
-      if (!side2.length) side2 = [];
-      var fs = colWidth < 155 ? 8 : 10;
-      function pair(names, source, base) {
-        [names[0] || '', names[1] || ''].forEach(function (name, i) {
-            if (!name) p.line(x+7, y+(base+i*24)*scale+1, x+colWidth-7, y+(base+i*24)*scale+1, 0.6);
-            else p.write(fitLabel(name, colWidth-20, fs, true), x+7, y+(base+i*24)*scale,
-              fs, true);
-          });
-        p.write(fitLabel(source, colWidth-14, 7), x+7, y+(base+37)*scale, 7,
-          false, null, '0.28 0.36 0.43');
-      }
-      pair(side1, row.source1, 31);
-      p.line(x+5, y+73*scale, x+colWidth-5, y+73*scale, 0.76);
-      pair(side2, row.source2, 94);
-    }
-    byRound.forEach(function (group) { group.forEach(function (row) {
-      var pos = positions[row.id]; card(row, pos.x, pos.y);
-    }); });
-    var third = rows.find(function (row) { return row.third; });
-    if (third) {
-      var thirdX = left+(rounds.length-1)*(colWidth+gap), thirdY = p.height-30-cardHeight;
-      card(third, thirdX, thirdY);
-      rows.filter(function (row) { return row.loserNextMatchId === third.id && positions[row.id]; })
-        .forEach(function (row) {
-          var from = positions[row.id], middle = from.x+colWidth+gap/2;
-          p.line(from.x+colWidth, from.cy, middle, from.cy, 0.65);
-          p.line(middle, from.cy, middle, thirdY+cardHeight/2, 0.65);
-          p.line(middle, thirdY+cardHeight/2, thirdX, thirdY+cardHeight/2, 0.65);
+      var labelHeight = sections.length > 1 ? 15 : 0;
+      if (labelHeight) p.write(fitLabel((section.bucket.bracket || 'Chave').toUpperCase(),
+        right-left, 8, true), left, sectionTop + 9, 8, true);
+      var yTop = sectionTop + labelHeight + 21, yBottom = sectionTop + sectionHeight - 23;
+      var gap = 10, colWidth = (right-left-gap*(rounds.length-1))/rounds.length;
+      var positions = {};
+      var firstCount = byRound[0].length;
+      var firstHeight = Math.min(72, (yBottom-yTop)/Math.max(1,firstCount)-3);
+      var laterHeight = Math.min(50, firstHeight * 0.86);
+      byRound.forEach(function (group, col) {
+        var x = left + col*(colWidth+gap);
+        p.fillRect(x, sectionTop+labelHeight, colWidth, 18, '0.90 0.94 0.97');
+        p.write(group.some(function (r) { return r.final; }) ? 'FINAL' : 'RODADA ' + rounds[col],
+          x+4, sectionTop+labelHeight+12, 7, true);
+        group.forEach(function (row, index) {
+          var sources = main.filter(function (candidate) { return candidate.nextMatchId === row.id && positions[candidate.id]; });
+          var center = sources.length ? sources.reduce(function (sum, source) {
+            return sum + positions[source.id].cy;
+          }, 0) / sources.length : yTop + (yBottom-yTop)*(index+0.5)/group.length;
+          positions[row.id] = { x:x, cy:center };
         });
-    }
-    p.write('Cada quadro mostra as duas duplas. As linhas indicam o avanço do vencedor; a disputa de 3º lugar recebe os perdedores das semifinais.',
-      left, p.height-12, 7);
-    return p;
-  }
-  function bracketPages(model, bucket, title) {
-    var rows = structuralRows(bucket), main = rows.filter(function (r) { return !r.third; });
-    var rounds = Array.from(new Set(main.map(function (r) { return Number(r.round) || 1; }))).sort(function (a,b) { return a-b; });
-    var segments = [];
-    for (var ri=1;ri<rounds.length;ri++) {
-      main.filter(function (r) { return (Number(r.round) || 1) === rounds[ri]; }).forEach(function (dest) {
-        var sources = main.filter(function (r) { return r.nextMatchId === dest.id; });
-        if (!sources.length) return;
-        var segment = sources.concat(dest);
-        if (dest.final) segment = segment.concat(rows.filter(function (r) { return r.third; }));
-        segments.push(segment);
+        var h = col ? laterHeight : firstHeight;
+        for (var gi=1;gi<group.length;gi++) {
+          var previous = positions[group[gi-1].id], current = positions[group[gi].id];
+          current.cy = Math.max(current.cy, previous.cy+h+5);
+        }
+        if (group.length) {
+          var last = positions[group[group.length-1].id];
+          var excess = last.cy + h/2 - yBottom;
+          if (excess > 0) group.forEach(function (row) { positions[row.id].cy -= excess; });
+          var first = positions[group[0].id];
+          var deficit = yTop - (first.cy-h/2);
+          if (deficit > 0) group.forEach(function (row) { positions[row.id].cy += deficit; });
+        }
       });
-    }
-    if (!segments.length) segments = balancedChunks(rows, 3);
-    else {
-      var covered = new Set();
-      segments.forEach(function (segment) { segment.forEach(function (row) { covered.add(row.id); }); });
-      var remaining = rows.filter(function (row) { return !covered.has(row.id); });
-      if (remaining.length) segments = segments.concat(balancedChunks(remaining, 3));
-    }
-    return segments.map(function (segment, index) {
-      return bracketPage(model, bucket, title + (segments.length > 1 ? '  |  Folha ' + (index+1) + '/' + segments.length : ''), segment);
-    }).filter(Boolean);
+      rows.forEach(function (row) {
+        var from = positions[row.id], to = positions[row.nextMatchId];
+        if (!from || !to) return;
+        var mid = from.x + colWidth + gap/2;
+        var entry = to.cy + (row.nextSlot === 'p2' ? laterHeight*0.2 : -laterHeight*0.2);
+        p.line(from.x+colWidth, from.cy, mid, from.cy, 0.55);
+        p.line(mid, from.cy, mid, entry, 0.55);
+        p.line(mid, entry, to.x, entry, 0.55);
+      });
+      byRound.forEach(function (group, col) { group.forEach(function (row) {
+        var pos = positions[row.id], h = col ? laterHeight : firstHeight;
+        var y = pos.cy - h/2, x = pos.x;
+        p.fillRect(x, y, colWidth, h, '0.97 0.98 0.99');
+        p.box(x, y, colWidth, h);
+        p.write(fitLabel(row.ref, colWidth-8, 6.7, true), x+4, y+9, 6.7, true);
+        if (!col) {
+          var names = [members(row.p1), members(row.p2)];
+          [0,1].forEach(function (side) {
+            var yy = y + 19 + side*(h-18)/2;
+            var source = side ? row.source2 : row.source1;
+            var list = names[side];
+            if (list.length) list.slice(0,2).forEach(function (name, i) {
+              p.write(fitLabel(name, colWidth-8, 6.2, true), x+4, yy+i*7, 6.2, true);
+            });
+            else p.write(fitLabel(source || '________________', colWidth-8, 6.2, false), x+4, yy, 6.2);
+          });
+          p.line(x+4, y+h/2+4, x+colWidth-4, y+h/2+4, 0.82);
+        } else {
+          var slotHeight = (h-12)/2;
+          [0,1].forEach(function (side) {
+            var yy = y + 17 + side*slotHeight;
+            var names = members(side ? row.p2 : row.p1);
+            var label = names.length ? names.join(' / ') : '________________';
+            p.write(fitLabel(label, colWidth-8, 6.4, false), x+4, yy, 6.4);
+            p.write('___ x ___', x+4, yy+8, 5.7);
+          });
+        }
+      }); });
+      var final = main.find(function (r) { return r.final; });
+      if (final && positions[final.id]) {
+        var fx = positions[final.id].x, fy = Math.min(yBottom+7, sectionTop+sectionHeight-17);
+        p.write('CAMPEÃO: __________________  ___ x ___', fx, fy, 6.2, true);
+      }
+      var third = rows.find(function (r) { return r.third; });
+      if (third) {
+        var tx = left, ty = sectionTop+sectionHeight-13;
+        p.write(fitLabel((third.ref === '3º LUGAR' ? '' : '3º LUGAR  ') + third.ref +
+          '  __________________ x __________________  ___ x ___',
+          right-left, 6.2, true), tx, ty, 6.2, true);
+      }
+      sectionTop += sectionHeight + sectionGap;
+    });
+    p.write('Em cada rodada, anote apenas quem avança e o placar no espaço da rodada seguinte.',
+      left, p.height-18, 7);
+    p.write('scoreplace.app', right-75, p.height-18, 7);
+    return p;
   }
   function writingPage(model, title, subtitle, rows, part, total, orientation, kind) {
     var portrait = orientation === 'portrait', p = portrait ? pdfPage(595, 842) : pdfPage(842, 595);
@@ -876,7 +882,7 @@
       var byBracket = new Map();
       bucket.matches.forEach(function (m) {
         var key = m.bracket || 'main';
-        if (!byBracket.has(key)) byBracket.set(key, { category:bucket.category, partial:bucket.partial, matches:[] });
+        if (!byBracket.has(key)) byBracket.set(key, { category:bucket.category, bracket:key, partial:bucket.partial, matches:[] });
         byBracket.get(key).matches.push(m);
       });
       byBracket.forEach(function (part) {
@@ -909,16 +915,19 @@
           (model.showCategories ? (category || 'Sem categoria') + '  |  ' : '') + 'preencher o grupo se houver empate',
           rows, 1, 1, orientation, 'tiebreak'));
       }
-      appendScorePages(model.matches.filter(function (m) { return m.elimination && m.category === category; }),
-        unscheduled.filter(function (m) { return m.elimination && m.category === category; }));
+      var categoryBrackets = [];
+      var hasRealBracket = false;
       realBrackets.forEach(function (bucket) {
-        if (bucket.category === category) pages.push.apply(pages,
-          bracketPages(model, bucket, 'Confrontos da fase em andamento'));
+        if (bucket.category === category) { categoryBrackets.push(bucket); hasRealBracket = true; }
       });
       futureBrackets.forEach(function (bucket) {
-        if (bucket.category === category) pages.push.apply(pages,
-          bracketPages(model, bucket, 'ROTEIRO DA ' + (model.future.name || 'ELIMINATÓRIA')));
+        if (bucket.category === category) categoryBrackets.push(bucket);
       });
+      if (categoryBrackets.length) {
+        var page = bracketPage(model, categoryBrackets,
+          hasRealBracket ? 'Confrontos da fase em andamento' : 'ROTEIRO DA ' + (model.future.name || 'ELIMINATÓRIA'));
+        if (page) pages.push(page);
+      }
     });
     if (model.pending && model.pending.length) pages.push(writingPage(model, 'PENDÊNCIAS DA PROGRESSÃO',
       'Aguardando definição', model.pending.map(function (note, i) {
@@ -1025,8 +1034,12 @@
       if (typeof root.showNotification === 'function') root.showNotification('Súmula indisponível', 'Não há jogos ou chave disponíveis.', 'warning');
       return;
     }
-    var both = orientation === 'both' && !onlyAttendance;
-    orientation = orientation === 'portrait' ? 'portrait' : 'landscape';
+    var hasBracket = model.matches.concat(model.undated || []).some(function (m) { return m.elimination; }) ||
+      !!(model.future && model.future.categories && model.future.categories.some(function (bucket) {
+        return bucket.matches && bucket.matches.length;
+      }));
+    var both = orientation === 'both' && !onlyAttendance && !hasBracket;
+    orientation = hasBracket || orientation === 'portrait' ? 'portrait' : 'landscape';
     var bytes = both ? zipFiles(['landscape','portrait'].map(function (direction) {
       return { name:filename(model, direction, false), bytes:encodePdf(makePages(model, { orientation:direction })) };
     })) : encodePdf(onlyAttendance ? makeAttendancePages(model) : makePages(model, { orientation:orientation }));

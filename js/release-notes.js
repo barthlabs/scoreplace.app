@@ -1,3 +1,5 @@
+// 2.7.30 — Súmulas eliminatórias reúnem toda a chave de cada categoria em uma
+// folha vertical, com espaço para anotar quem avança e o placar.
 // 2.7.29 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.28 — Configuração de tempos em um só lugar; torneios de categoria única
 // ocultam seu rótulo nas fichas, chaves e súmulas. Súmulas e listas de chamada

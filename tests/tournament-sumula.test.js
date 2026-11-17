@@ -400,9 +400,9 @@ for (const orientation of ['landscape','portrait']) {
   assert(futureCommands.includes('(A1)') && futureCommands.includes('(H1)') &&
     !futureCommands.includes('Classificados do Grupo'),
     'a primeira rodada mostra só o código dos dois grupos de origem');
-  assert(futureCommands.includes(String.raw`Vencedor de A1 \327 H1`) &&
-    !futureCommands.includes('Vencedor do confronto C1'),
-    'rodadas seguintes identificam os grupos do confronto, sem inventar C1 como jogo');
+  assert(!futureCommands.includes('Vencedor de A1') &&
+    !futureCommands.includes('Vencedor do confronto C1') && futureCommands.includes('___ x ___'),
+    'rodadas seguintes reservam só o nome de quem avança e o placar');
   const printable = Buffer.from(core.encodePdf(pages)).toString('latin1');
   if (process.env.SP_SUMULA_FUTURE_SAMPLE && orientation === 'landscape')
     fs.writeFileSync(process.env.SP_SUMULA_FUTURE_SAMPLE, core.encodePdf(pages));
@@ -415,9 +415,11 @@ for (const orientation of ['landscape','portrait']) {
   const bracketPages = pages.filter(page => page.commands.some(command => command.includes('CHAVE ELIMINAT')));
   assert(pages.every(page => [page.width,page.height].sort((a,b) => a-b).join('x') === '595x842'),
     'todas as páginas da súmula usam papel A4');
-  assert.strictEqual(bracketPages.length, 16, 'as três chaves são repartidas em ramos legíveis no A4');
-  assert(bracketPages.every(page => page.width === 842 && page.height === 595),
-    'todas as folhas de chave são A4 horizontais, inclusive no pacote vertical');
+  assert.strictEqual(bracketPages.length, 3, 'cada categoria tem uma única folha de chave');
+  assert(bracketPages.every(page => page.width < page.height),
+    'todas as folhas de chave ficam em pé, em qualquer pacote');
+  assert(bracketPages.every(page => page.commands.join('\n').includes('Em cada rodada, anote apenas quem avan')),
+    'o rodapé orienta o preenchimento do avanço');
   assert(bracketPages.every(page => page.commands.some(command => command.includes(' l S'))),
     'as colunas são ligadas por caminhos vetoriais');
   const reserves = pages.map((page, index) => ({ page, index })).filter(item =>
@@ -453,23 +455,62 @@ const realized = core.collect({...camis, currentPhaseIndex:1}, [
 ]);
 const realizedBracket = core.makePages(realized, {orientation:'portrait'})
   .find(page => page.commands.some(command => command.includes('CHAVE ELIMINAT')));
-assert(realizedBracket && realizedBracket.width === 842,
-  'jogos eliminatórios materializados têm chave horizontal mesmo no PDF vertical');
+assert(realizedBracket && realizedBracket.width === 595,
+  'jogos eliminatórios materializados têm chave vertical');
 const realizedCommands = realizedBracket.commands.join('\n');
 for (const athlete of ['Tatiana Rossi DAmico','Fernanda Gomes','Joana Granato',
   'Bianca Vicintin Abud','Cris Spina','Luciana Campos',String.raw`Fl\341via Fabbrocini Sanches`,'Fabrizia Frank'])
   assert(realizedCommands.includes(athlete), 'cada nome das duplas cabe na chave: ' + athlete);
 assert(realizedCommands.includes('JOGO 37') && realizedCommands.includes('JOGO 39') &&
-  realizedCommands.includes('Vencedor do JOGO 37'), 'a chave liga o número real do jogo à final');
+  realizedCommands.includes('CAMPE'), 'a chave liga o número real do jogo à final');
+const doubleBracket = {
+  ...realized, future:null, pending:[], tiebreakGroups:[], groupStandings:[], days:[],
+  matches:[
+    { id:'main-1', phaseIndex:1, category:'Diamante', bracket:'main', round:1,
+      number:1, p1:'A / B', p2:'C / D', nextMatchId:'main-final', nextSlot:'p1', elimination:true },
+    { id:'main-final', phaseIndex:1, category:'Diamante', bracket:'main', round:2,
+      number:2, p1:'A definir', p2:'A definir', elimination:true },
+    { id:'lower-1', phaseIndex:1, category:'Diamante', bracket:'lower', round:1,
+      number:3, p1:'E / F', p2:'G / H', nextMatchId:'lower-final', nextSlot:'p1', elimination:true },
+    { id:'lower-final', phaseIndex:1, category:'Diamante', bracket:'lower', round:2,
+      number:4, p1:'A definir', p2:'A definir', elimination:true }
+  ], undated:[]
+};
+const doublePages = core.makePages(doubleBracket).filter(page =>
+  page.commands.some(command => command.includes('CHAVE ELIMINAT')));
+assert.strictEqual(doublePages.length, 1, 'chaves principal e inferior da mesma categoria dividem uma folha vertical');
+assert(doublePages[0].commands.join('\n').includes('(MAIN)') &&
+  doublePages[0].commands.join('\n').includes('(LOWER)'),
+  'ambos os caminhos ficam identificados na folha');
+const futureNonCamis = {
+  ...doubleBracket, tournament:'Evento futuro', showCategories:true,
+  matches:[], future:{ name:'Eliminatória', categories:[
+    { category:'Feminino', bracket:'main', matches:[
+      { id:'f-semi', round:1, p1:'A definir', p2:'A definir', nextMatchId:'f-final', nextSlot:'p1' },
+      { id:'f-final', round:2, p1:'A definir', p2:'A definir' }
+    ] },
+    { category:'Masculino', bracket:'main', matches:[
+      { id:'m-semi', round:1, p1:'A definir', p2:'A definir', nextMatchId:'m-final', nextSlot:'p1' },
+      { id:'m-final', round:2, p1:'A definir', p2:'A definir' }
+    ] }
+  ] }
+};
+const futureNonCamisBrackets = core.makePages(futureNonCamis).filter(page =>
+  page.commands.some(command => command.includes('CHAVE ELIMINAT')));
+assert.strictEqual(futureNonCamisBrackets.length, 2,
+  'torneio futuro sem dados CAMIS gera uma folha eliminatória por categoria');
+assert(futureNonCamisBrackets.every(page => page.width < page.height &&
+  page.commands.join('\n').includes('Em cada rodada, anote apenas quem avan')),
+  'regra vertical e rodapé valem também para formatos futuros');
 const onlyFirstRound = core.collect({...camis, currentPhaseIndex:1},
   Array.from({ length:8 }, (_, i) => ({ id:'parcial-'+i, phaseIndex:1,
     category:'Diamante', round:1, scheduledGameNumber:40+i,
     p1:'Dupla '+i+' / Parceira '+i, p2:'Rival '+i+' / Outra '+i })));
 const partialBrackets = core.makePages(onlyFirstRound).filter(page =>
   page.commands.some(command => command.includes('CHAVE ELIMINAT')));
-assert.strictEqual(partialBrackets.length, 3,
-  'oito jogos materializados da primeira rodada cabem em três folhas A4, sem folha de jogo único');
-assert(partialBrackets.every(page => page.width === 842 && page.height === 595 &&
+assert.strictEqual(partialBrackets.length, 1,
+  'oito jogos materializados da primeira rodada cabem em uma folha vertical');
+assert(partialBrackets.every(page => page.width === 595 && page.height === 842 &&
   !page.commands.join('\n').includes(' · FINAL')),
   'folhas parciais preservam A4 e não anunciam finais inexistentes');
 if (process.env.SP_SUMULA_REAL_SAMPLE)
