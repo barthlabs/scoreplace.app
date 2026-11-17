@@ -1,3 +1,4 @@
+// 2.7.31 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.30 — Súmulas eliminatórias mostram a chave de cada categoria em folhas
 // A4 verticais, dividindo chaves grandes sem reduzir o espaço de anotação.
 // Em cada rodada, registra-se quem avança e o placar.
