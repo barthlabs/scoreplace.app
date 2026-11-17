@@ -4488,6 +4488,7 @@ function renderTournaments(container, tournamentId = null) {
                   ${window._safeHtml(t.name)}
                 </h4>
                 ${tournamentId && t.venuePlaceId && !(dateCardHtml && !window._tourLogoSrc(t)) ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="width:clamp(42px,6vw,64px);aspect-ratio:1/1;display:none;margin-top:10px;"></span>' : ''}
+                ${tournamentId && dateCardHtml && window._tourLogoSrc(t) ? `<div id="sp-tournament-detail-date" class="sp-tournament-date-stack">${calendarDateHtml(dateCardHtml)}</div>` : ''}
               </div>
               ${/* v2.7.36: coração de favorito SEMPRE à direita, alinhado à 1ª linha do nome
                     (align-self:flex-start + margin-top centra na primeira linha do h4). */ ''}
@@ -4499,7 +4500,7 @@ function renderTournaments(container, tournamentId = null) {
             ${/* v2.3.96: rede de segurança — sorteio em revisão (só organizador) */ ''}
             ${(typeof window._renderPendingDrawBanner === 'function') ? window._renderPendingDrawBanner(t) : ''}
             ${/* Na ficha, pódio e classificação vêm depois da visão geral do evento. */ ''}
-            ${tournamentId ? `<div class="sp-tournament-date-actions"><div class="sp-tournament-actions">
+            ${tournamentId ? `<div class="sp-tournament-date-actions${dateCardHtml && window._tourLogoSrc(t) ? ' sp-tournament-date-actions--logo' : ''}"><div class="sp-tournament-actions">
               ${(tournamentId && isOrg && typeof window._devWhatsAppBtnHtml === 'function') ? window._devWhatsAppBtnHtml({ twoLine: true, extra: 'min-height:44px;padding:4px 10px;font-size:0.75rem;' }) : ''}
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               ${/* Grupo do torneio no WhatsApp — BOTÃO ÚNICO (1.8.31). Ele mora à esquerda de
@@ -4511,7 +4512,7 @@ function renderTournaments(container, tournamentId = null) {
                     saiu na 1.8.30, ele ficava sem NENHUM acesso ao grupo (era o estado do
                     Confra). Criar/trocar/abrir agora vivem no painel que este botão abre. */ ''}
               ${(!_waChipJuntoDoEnroll && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
-            </div>${dateCardHtml && window._tourLogoSrc(t) ? `<div class="sp-tournament-date-stack">${calendarDateHtml(dateCardHtml)}</div>` : ''}</div>` : ''}
+            </div></div>` : ''}
 
             <!-- Sem card visual de data, a data textual permanece sob a identidade. -->
             <div style="display:${dateCardHtml ? 'none' : 'flex'};align-items:center;gap:12px;min-width:0;">

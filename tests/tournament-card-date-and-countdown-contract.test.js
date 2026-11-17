@@ -16,24 +16,46 @@ const dateColors = require('../functions-autodraw/date-card-colors-core.js');
 let failed = 0;
 function ok(value, label) { console.log((value ? '✓ ' : '✗ ') + label); if (!value) failed++; }
 const titleAt = detail.indexOf('Middle Left: Nome + Logo + Favorito');
-const datesAt = detail.indexOf('sp-tournament-date-actions', titleAt);
+const slotAt = detail.indexOf('sp-tournament-title-slot', titleAt);
+const datesAt = detail.indexOf('sp-tournament-date-stack', slotAt);
+const actionsAt = detail.indexOf('sp-tournament-date-actions', datesAt);
 const countdownAt = detail.indexOf('Evento concentrado: a janela publicada manda no relógio');
 const detailSlotAt = detail.indexOf('data-vlogo-pid', titleAt);
 const overviewAt = detail.indexOf('class="sp-overview-stats"', datesAt);
 const podiumAt = detail.indexOf('tournamentId ? podiumHtml', overviewAt);
-ok(titleAt >= 0 && detailSlotAt > titleAt && detailSlotAt < datesAt, 'logo do local fica junto do título na ficha');
+ok(titleAt >= 0 && slotAt > titleAt && detailSlotAt > slotAt && detailSlotAt < datesAt && datesAt < actionsAt,
+  'logo do local e data ficam na coluna do título, antes das ações');
 ok(detail.includes('!tournamentId && !dateCardHtml && t.venuePlaceId'),
   'cards da lista conservam o logo do local ao lado da data textual');
-ok(datesAt > detailSlotAt && overviewAt > datesAt && podiumAt > overviewAt && podiumAt < countdownAt,
+ok(datesAt > detailSlotAt && actionsAt > datesAt && overviewAt > actionsAt && podiumAt > overviewAt && podiumAt < countdownAt,
   'data e contagem de inscritos por categoria vêm antes do pódio e da classificação');
 ok(detail.includes('var _detailOverviewAtTop = !!tournamentId;'), 'ordem da ficha vale para todo torneio');
 ok(detail.includes('class="sp-tournament-logo"') &&
   detail.includes('sp-tournament-date-stack sp-tournament-identity-date') &&
   componentsCss.includes('.sp-tournament-identity-row .sp-tournament-identity-date'),
   'sem logo, a data ocupa a linha de identidade ao lado do título');
-ok(componentsCss.includes('min-width:var(--sp-date-one-day-width)') &&
-  componentsCss.includes('padding-right:calc(var(--sp-date-one-day-width) + 24px)'),
-  'largura do cartão e reserva para ações usam a mesma medida');
+ok(detail.includes('id="sp-tournament-detail-date"') && detail.includes('sp-tournament-date-actions--logo') &&
+  !componentsCss.includes('.sp-tournament-date-actions:has(.sp-date-card') &&
+  !componentsCss.includes('.sp-tournament-date-actions:has(:is(.sp-date-card'),
+  'data com logo aparece uma vez dentro da identidade e não ocupa a linha de ações');
+ok(componentsCss.includes('#sp-tournament-detail-date .sp-date-card-trigger { width:100%;') &&
+  componentsCss.includes('#sp-tournament-detail-date .sp-date-card { width:min(100%,clamp(150px,18vw,270px));') &&
+  componentsCss.includes('#sp-tournament-detail-date :is(.sp-date-card--one-day, .sp-date-card--start-only) { min-width:0; min-height:0;') &&
+  componentsCss.includes('#sp-tournament-detail-date .sp-date-card--cross-month { width:min(100%,clamp(180px,19vw,270px));') &&
+  componentsCss.includes('#sp-tournament-detail-date .sp-date-card { min-width:0; max-width:100%;') &&
+  componentsCss.includes('#sp-tournament-detail-date :is(.sp-date-card--one-day, .sp-date-card--start-only) { width:min(100%,var(--sp-date-one-day-width));'),
+  'larguras do cartão respeitam a coluna do título no desktop e celular');
+ok(['.sp-date-days', '.sp-date-month', '.sp-date-time']
+  .every(selector => componentsCss.includes('#sp-tournament-detail-date :is(.sp-date-card--one-day, .sp-date-card--start-only) ' + selector)) &&
+  componentsCss.includes('#sp-tournament-detail-date .sp-date-cross-item .sp-date-day') &&
+  componentsCss.includes('#sp-tournament-detail-date .sp-date-cross-item .sp-date-month') &&
+  componentsCss.includes('clamp(20px,2.8vw,32px) * var(--sp-date-month-scale, 1)') &&
+  componentsCss.includes('clamp(16px,4.7vw,22px) * var(--sp-date-month-scale, 1)'),
+  'fontes responsivas preservam a escala do organizador');
+const dashboardLogoAt = dashboard.indexOf('sp-dashboard-logo-date');
+const dashboardSlotAt = dashboard.indexOf('sp-tournament-title-slot', dashboardLogoAt);
+ok(dashboardLogoAt >= 0 && dashboardSlotAt > dashboardLogoAt && !dashboard.includes('sp-tournament-date-stack'),
+  'cartão do dashboard permanece fora da coluna de título');
 const dashboardDatesAt = dashboard.indexOf('Quando há logo do torneio, o logo do local continua ao lado da data.');
 const dashboardCountdownAt = dashboard.indexOf('if (isFinished) return \'\';', dashboardDatesAt);
 const dashboardDateBlock = dashboard.slice(dashboardDatesAt, dashboardCountdownAt);
