@@ -1119,7 +1119,7 @@ body.hamburger-open #header-notif-bell { display: none !important; }
   .sp-header-copy { flex: 0 1 auto; min-width: 0; gap: 12px; }
   .sp-header-copy h1 { flex: 0 1 auto; min-width: 0; }
   .sp-header-wordmark { width: clamp(126px, calc(100vw - 202px), 292px); max-width: 100%; margin-left: -8px; }
-  .sp-header-version { flex: none; margin-bottom: clamp(6px, calc((100vw - 212px) * 0.055), 15px); }
+  .sp-header-version { flex: none; margin-bottom: 0; }
   .topbar-right-icons { flex: none; }
 }
 .page-title {

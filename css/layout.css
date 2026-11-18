@@ -195,12 +195,12 @@ html.sp-native .modal-overlay.active .modal-header {
   height: 48px !important;
   flex-shrink: 0;
 }
-.sp-header-brand { gap: 6px; }
+.sp-header-brand { gap: 6px; align-items: flex-end; }
 .sp-header-symbol { display: block; flex: none; width: clamp(38px, 7vw, 52px); height: auto; }
 .sp-header-copy { display: flex; align-items: flex-end; gap: 5px; min-width: 0; }
 .sp-header-copy h1 { margin: 0; line-height: 1; }
-.sp-header-wordmark { display: block; width: clamp(136px, calc(100vw - 184px), 292px); height: auto; transform: translateY(7%); }
-.sp-header-version { display: block; color: var(--text-muted); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.3px; line-height: 1.15; white-space: nowrap; margin-bottom: clamp(7px, calc((100vw - 190px) * 0.055), 15px); }
+.sp-header-wordmark { display: block; width: clamp(136px, calc(100vw - 184px), 292px); height: auto; transform: translateY(18%); }
+.sp-header-version { display: block; color: var(--text-muted); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.3px; line-height: 1.15; white-space: nowrap; margin-bottom: 0; }
 /* Em janelas estreitas, símbolo e assinatura devem reduzir juntos: a barra de
    retorno fica logo abaixo do cabeçalho e cobria a versão e a base do símbolo. */
 @media (max-width: 1199px) {
