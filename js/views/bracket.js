@@ -11290,7 +11290,10 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
   var _isSuperEightMon = t.superEight === true || (t.phases || []).some(function(phase) { return phase && phase.superEight === true; });
   var _gamesPrimaryMonarch = t.rankingPrimary === 'games_diff';
   var _superEightTieBreakers = _isSuperEightMon && _gamesPrimaryMonarch && Array.isArray(t.tiebreakers)
-    ? t.tiebreakers.filter(function (key) { return typeof key === 'string' && key !== 'saldo_games' && key !== 'aproveitamento'; }) : [];
+    ? t.tiebreakers.filter(function (key) {
+      return typeof key === 'string' && key !== 'saldo_games' && key !== 'aproveitamento' &&
+        key !== 'vitorias' && key !== 'sorteio';
+    }) : [];
   var _superEightTbLabels = {
     pontos_avancados:'Pontos avançados', confronto_direto:'Confronto direto', saldo_pontos:'Saldo de pontos',
     saldo_sets:'Saldo de sets', saldo_games:'Saldo de games', sets_vencidos:'Sets vencidos',
