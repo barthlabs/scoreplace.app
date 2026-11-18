@@ -1335,6 +1335,10 @@ function _aplicaRascunhoDoSorteioInicial(t, draft) {
 
 function _phaseBracketSignature(t, phaseIndex) {
   const eng = drawWindow && drawWindow._phasesEngine;
+  if (!eng || typeof eng.projectPhaseCfg !== 'function' ||
+      typeof eng.prevPhaseGroups !== 'function' || typeof eng.bracketPhaseGroups !== 'function') {
+    throw new HttpsError('failed-precondition', 'Motor de classificação da chave indisponível.');
+  }
   const cfg = eng && typeof eng.projectPhaseCfg === 'function'
     ? eng.projectPhaseCfg(t.phases[phaseIndex], t, phaseIndex) : {};
   const phaseGeometry = {

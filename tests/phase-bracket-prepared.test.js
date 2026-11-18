@@ -103,6 +103,16 @@ const invalid = structuredClone(t);
 invalid.phaseBracketPlanV1 = null;
 assert.throws(() => operation.reconcile(invalid, invalid, {}), /chave planejada.*ausente/i,
   'marcador sem plano falha fechado');
+const unavailableEngine = structuredClone(t);
+const operationWithoutEngine = vm.runInNewContext(source.slice(start, end) + '\n({reconcile:_reconcileOfficialPhasePlan})', {
+  drawWindow:{}, phaseStandingsFn:() => [], HttpsError:class HttpsError extends Error {
+    constructor(code, message) { super(message); this.code = code; }
+  },
+  createHash, Buffer, console
+});
+assert.throws(() => operationWithoutEngine.reconcile(unavailableEngine, unavailableEngine, {}),
+  /Motor de classificação da chave indisponível/,
+  'motor ausente falha com precondition controlada ao validar o plano salvo');
 const locked = structuredClone(t);
 locked.matches.find(m => m.id === first.id).courtCalledAt = calledAt;
 locked.groups[0].rows = locked.groups[0].rows.slice().reverse();
