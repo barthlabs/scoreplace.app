@@ -117,7 +117,9 @@ NODE
       SP_JSON="$(describe_fn "$name")" SP_OLD="$backup" SP_NAME="$name" SP_PRE="$pre_file" node - <<'NODE'
 const fs=require('fs'),f=JSON.parse(process.env.SP_JSON),m=JSON.parse(fs.readFileSync(process.env.SP_OLD));
 const old=m.normal.find(x=>x.name===process.env.SP_NAME);
-const alreadyDeployed=new Set(['applyMatchResult','applyQueuedResult','assignMatchCourt']);
+// Recibos de lotes autodraw confirmam também as duas callables atualizadas
+// pela mesma publicação do fluxo de chamada/encerramento.
+const alreadyDeployed=new Set(['applyMatchResult','applyQueuedResult','assignMatchCourt','setTournamentPresenceWithWOSubstitution','endMatchOnCourt']);
 if((f.updateTime!==old.updateTime&&!alreadyDeployed.has(old.name))||f.state!=='ACTIVE'||f.buildConfig?.entryPoint!==old.name)throw Error('função normal mudou antes do refresh: '+old.name);
 if(f.updateTime!==old.updateTime){
   const receipt=JSON.parse(fs.readFileSync('.backend-publicado-autodraw-funcoes.json'));
