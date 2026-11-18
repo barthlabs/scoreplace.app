@@ -186,6 +186,8 @@ public final class WearMatchSession {
         cfg.countingType = sc.optString("countingType", "numeric");
         cfg.deuceRule = sc.optBoolean("deuceRule", false);
         cfg.twoPointAdvantage = sc.optBoolean("twoPointAdvantage", true);
+        cfg.setTwoPointAdvantage = sc.has("setTwoPointAdvantage") ? sc.optBoolean("setTwoPointAdvantage") : null;
+        cfg.tiebreakTwoPointAdvantage = sc.has("tiebreakTwoPointAdvantage") ? sc.optBoolean("tiebreakTwoPointAdvantage") : null;
         cfg.tieRule = sc.isNull("tieRule") ? null : sc.optString("tieRule", null);
         cfg.fixedSet = sc.optBoolean("fixedSet", false);
         cfg.fixedSetGames = sc.optInt("fixedSetGames", 0);
@@ -217,6 +219,7 @@ public final class WearMatchSession {
         if (!arrEq(a.optJSONArray("games"), b.optJSONArray("games"))) return false;
         if (!arrEq(a.optJSONArray("sets"), b.optJSONArray("sets"))) return false;
         if (a.optBoolean("isTiebreak") != b.optBoolean("isTiebreak")) return false;
+        if (a.optBoolean("isSuperTiebreak") != b.optBoolean("isSuperTiebreak")) return false;
         if (a.optBoolean("isFinished") != b.optBoolean("isFinished")) return false;
         if (a.optInt("winner", -1) != b.optInt("winner", -1)) return false;
         if (a.optBoolean("tieRulePending") != b.optBoolean("tieRulePending")) return false;

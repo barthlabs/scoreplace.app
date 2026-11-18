@@ -11,13 +11,20 @@
   "type": "sets",
   "setsToWin": 1,
   "gamesPerSet": 6,
+  "tieAtGames": 5,
   "tiebreakEnabled": true,
   "tiebreakPoints": 7,
   "tiebreakMargin": 2,
   "superTiebreak": false,
   "superTiebreakPoints": 10,
   "countingType": "tennis",
-  "advantageRule": false
+  "deuceRule": false,
+  "twoPointAdvantage": true,
+  "setTwoPointAdvantage": true,
+  "tiebreakTwoPointAdvantage": true,
+  "tieRule": "ask",
+  "fixedSet": false,
+  "fixedSetGames": 0
  },
  "steps": [
   {
@@ -38,6 +45,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": null,
     "teams": {
@@ -119,6 +127,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": null,
     "teams": {
@@ -198,6 +207,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -281,6 +291,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -364,6 +375,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -447,6 +459,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -530,6 +543,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 2,
@@ -604,6 +618,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 2,
@@ -676,6 +691,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -749,6 +765,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -822,6 +839,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -895,6 +913,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -968,6 +987,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1029,6 +1049,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1102,6 +1123,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1164,6 +1186,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1226,6 +1249,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1288,6 +1312,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1350,6 +1375,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1412,6 +1438,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1474,6 +1501,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1536,6 +1564,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1598,6 +1627,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1660,6 +1690,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1722,6 +1753,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1784,6 +1816,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1846,6 +1879,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1908,6 +1942,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1970,6 +2005,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2032,6 +2068,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2094,6 +2131,7 @@
      3
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2156,6 +2194,7 @@
      3
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2218,6 +2257,7 @@
      3
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2280,6 +2320,7 @@
      3
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2342,6 +2383,7 @@
      3
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2404,6 +2446,7 @@
      3
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2466,6 +2509,7 @@
      3
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2528,6 +2572,7 @@
      3
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2590,6 +2635,7 @@
      4
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2652,6 +2698,7 @@
      4
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2714,6 +2761,7 @@
      4
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2776,6 +2824,7 @@
      4
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2838,6 +2887,7 @@
      4
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2900,6 +2950,7 @@
      4
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2962,6 +3013,7 @@
      4
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -3024,6 +3076,7 @@
      4
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -3086,6 +3139,7 @@
      5
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 1,
@@ -3147,6 +3201,7 @@
      5
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 1,
@@ -3209,6 +3264,7 @@
      5
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 1,

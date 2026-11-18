@@ -147,8 +147,18 @@ ok(/sort\(function/.test(trecho) && /seenEvents\[/.test(trecho),
 const UI = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket-ui.js'), 'utf8');
 ok(/matchEpoch: _liveMatchEpoch/.test(UI),
    '🔒 o snapshot leva `matchEpoch` — identidade da partida, o que carimba o diário do relógio');
-ok(/scoring: \{[\s\S]{0,400}countingType: state\.countingType/.test(UI),
+const scoringSnapshot = UI.slice(UI.indexOf('      scoring: {', UI.indexOf('window._getLiveScoreState')),
+  UI.indexOf('\n      }', UI.indexOf('      scoring: {', UI.indexOf('window._getLiveScoreState'))));
+ok(/countingType: state\.countingType/.test(scoringSnapshot)
+   && /tieAtGames: state\.tieAtGames \|\| Math\.max/.test(scoringSnapshot)
+   && /setTwoPointAdvantage: state\.twoPointAdvantage/.test(scoringSnapshot)
+   && /tiebreakTwoPointAdvantage: state\.tiebreakTwoPointAdvantage/.test(scoringSnapshot),
    '🔒 o snapshot leva a `scoring` RESOLVIDA (de `state`, os valores efetivos) — é com ela que o motor nativo conta');
+const savedScoring = UI.slice(UI.indexOf('countingType: (state.countingType'), UI.indexOf('so: (state.serveSkipped'));
+ok(/tieAtGames: state\.tieAtGames/.test(savedScoring)
+   && /setTwoPointAdvantage: state\.twoPointAdvantage/.test(savedScoring)
+   && /tiebreakTwoPointAdvantage: state\.tiebreakTwoPointAdvantage/.test(savedScoring),
+   '🔒 o registro de replay preserva empate configurado e margens independentes');
 const epochResets = (UI.match(/_newMatchEpoch\(\)/g) || []).length;
 ok(epochResets >= 5,
    'a época é renovada em TODO recomeço de partida (4 pontos + a definição) — senão o diário da partida velha contaminaria a nova · achado: ' + epochResets);

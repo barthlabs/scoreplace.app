@@ -434,7 +434,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ((typeof window._tieAtToggleHtml === 'function' && eff)
         ? window._tieAtToggleHtml({ games: (eff && eff.gamesPerSet) || 6, at: _elimTieAtAtual(e),
             rule: eff.tieRule || (eff.tiebreakEnabled !== false ? 'tiebreak' : 'extend'),
-            cor: '251,191,36', pfx: 'f2elim', onGames: 'window._f2ElimSetGames', onRule: 'window._f2ElimSetRule', phaseIndex: 1 })
+            setTwoPointAdvantage: eff.setTwoPointAdvantage !== undefined ? eff.setTwoPointAdvantage : (eff.twoPointAdvantage !== undefined ? eff.twoPointAdvantage : Number(eff.tiebreakMargin || 2) >= 2),
+            tiebreakTwoPointAdvantage: eff.tiebreakTwoPointAdvantage !== undefined ? eff.tiebreakTwoPointAdvantage : (eff.twoPointAdvantage !== undefined ? eff.twoPointAdvantage : Number(eff.tiebreakMargin || 2) >= 2),
+            cor: '251,191,36', pfx: 'f2elim', onGames: 'window._f2ElimSetGames', onRule: 'window._f2ElimSetRule', onTieAt: 'window._f2ElimSetTieAt', onSetTwoPoint: 'window._f2ElimSetTwoPoint', onTbTwoPoint: 'window._f2ElimSetTbTwoPoint', phaseIndex: 1 })
         : '') +
       (resumo
         ? ('<div style="font-size:0.8rem;color:var(--text-muted);margin-top:10px;line-height:1.5;padding:8px 12px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border-radius:8px;">' +
@@ -1935,6 +1937,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (hasTiebreak) {
         sc.tieRule = current.tieRule || (current.tiebreakEnabled === false ? 'extend' : 'tiebreak');
         sc.tiebreakEnabled = sc.tieRule === 'tiebreak';
+        sc.setTwoPointAdvantage = current.setTwoPointAdvantage != null ? current.setTwoPointAdvantage : current.twoPointAdvantage;
+        sc.tiebreakTwoPointAdvantage = current.tiebreakTwoPointAdvantage != null ? current.tiebreakTwoPointAdvantage : current.twoPointAdvantage;
+        sc.tiebreakMargin = current.tiebreakMargin;
       }
     }
     S.cfg.eliminatoria.scoring = sc || null;
@@ -1946,7 +1951,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!a || !b) return false;
     var campos = ['setsToWin', 'gamesPerSet', 'tiebreakPoints', 'tiebreakMargin',
                   'superTiebreakPoints'];
-    var bools = ['tiebreakEnabled', 'superTiebreak', 'advantageRule', 'fixedSet'];
+    var bools = ['tiebreakEnabled', 'twoPointAdvantage', 'setTwoPointAdvantage', 'tiebreakTwoPointAdvantage', 'superTiebreak', 'advantageRule', 'fixedSet'];
     for (var i = 0; i < campos.length; i++) {
       if ((parseInt(a[campos[i]], 10) || 0) !== (parseInt(b[campos[i]], 10) || 0)) return false;
     }
@@ -1962,7 +1967,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!S) return;
     var base = _elimEffScoring(S.cfg.eliminatoria);
     if (!base) return;
-    var sc = Object.assign({}, base, patch, { tiebreakAt: 'g-1' });
+    var sc = Object.assign({}, base, patch);
+    if (!Object.prototype.hasOwnProperty.call(patch, 'tiebreakAt') && !base.tiebreakAt) sc.tiebreakAt = 'g-1';
     sc.type = 'sets';
     var ini = (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
     window._f2SetElimScoring(ini && _mesmoFormato(sc, ini) ? null : sc);
@@ -1971,13 +1977,27 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var n = Number(raw);
     if (!Number.isInteger(n) || n < 1 || (typeof window._scoringPhaseHasResult === 'function' && window._scoringPhaseHasResult(1))) { _rerender(); return; }
     _setElimGameRule(n === 1
-      ? { gamesPerSet: n, fixedSet: false, tieRule: 'decider', tiebreakEnabled: false, tiebreakAt: '' }
+      ? { gamesPerSet: n, fixedSet: false, tieRule: 'extend', tiebreakEnabled: false, tiebreakAt: '' }
       : { gamesPerSet: n, fixedSet: false });
   };
+  window._f2ElimSetTieAt = function (raw) {
+    var n = Number(raw), base = _elimEffScoring(S && S.cfg.eliminatoria);
+    if (!Number.isInteger(n) || n < 1 || n > 99 || !base || Number(base.gamesPerSet || 6) <= 1 ||
+        (typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(1))) { _rerender(); return; }
+    _setElimGameRule({ tiebreakAt: String(n) });
+  };
   window._f2ElimSetRule = function (rule) {
-    if (['tiebreak', 'decider', 'extend'].indexOf(rule) === -1) return;
+    if (['tiebreak', 'extend'].indexOf(rule) === -1) return;
     if (typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(1)) { _rerender(); return; }
     _setElimGameRule({ tieRule: rule, tiebreakEnabled: rule === 'tiebreak' });
+  };
+  window._f2ElimSetTwoPoint = function (enabled) {
+    if (typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(1)) { _rerender(); return; }
+    _setElimGameRule({ setTwoPointAdvantage: !!enabled, twoPointAdvantage: !!enabled });
+  };
+  window._f2ElimSetTbTwoPoint = function (enabled) {
+    if (typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(1)) { _rerender(); return; }
+    _setElimGameRule({ tiebreakTwoPointAdvantage: !!enabled, tiebreakMargin: enabled ? 2 : 1 });
   };
   window._f2ElimScoringPreset = function (key) {
     if (!S) return;

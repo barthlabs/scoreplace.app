@@ -26,6 +26,7 @@ public struct EngineConfig {
     public var type: String = "sets"
     public var setsToWin = 1
     public var gamesPerSet = 6
+    public var tieAtGames: Int? = nil
     public var tiebreakEnabled = true
     public var tiebreakPoints = 7
     public var tiebreakMargin = 2
@@ -35,6 +36,8 @@ public struct EngineConfig {
     public var advantageRule = false
     public var deuceRule: Bool? = nil          // explícito vence o legado advantageRule
     public var twoPointAdvantage: Bool? = nil  // default ON
+    public var setTwoPointAdvantage: Bool? = nil
+    public var tiebreakTwoPointAdvantage: Bool? = nil
     public var tieRule: String? = nil          // casual sem regra → 'ask'
     public var fixedSet = false
     public var fixedSetGames: Int? = nil
@@ -45,6 +48,7 @@ public struct EngineConfig {
         type = (json["type"] as? String) ?? ""
         setsToWin = (json["setsToWin"] as? Int) ?? 1
         gamesPerSet = (json["gamesPerSet"] as? Int) ?? 6
+        tieAtGames = json["tieAtGames"] as? Int
         tiebreakEnabled = (json["tiebreakEnabled"] as? Bool) ?? true
         tiebreakPoints = (json["tiebreakPoints"] as? Int) ?? 7
         tiebreakMargin = (json["tiebreakMargin"] as? Int) ?? 2
@@ -54,6 +58,8 @@ public struct EngineConfig {
         advantageRule = (json["advantageRule"] as? Bool) ?? false
         deuceRule = json["deuceRule"] as? Bool
         twoPointAdvantage = json["twoPointAdvantage"] as? Bool
+        setTwoPointAdvantage = json["setTwoPointAdvantage"] as? Bool
+        tiebreakTwoPointAdvantage = json["tiebreakTwoPointAdvantage"] as? Bool
         tieRule = json["tieRule"] as? String
         fixedSet = (json["fixedSet"] as? Bool) ?? false
         fixedSetGames = json["fixedSetGames"] as? Int
@@ -94,6 +100,7 @@ public final class ScoreEngine {
     let useSets: Bool
     let setsToWin: Int
     let gamesPerSet: Int
+    let tieAtGames: Int
     let tiebreakEnabled: Bool
     let tiebreakMargin: Int
     let superTiebreak: Bool
@@ -151,13 +158,15 @@ public final class ScoreEngine {
         self.useSets = config.type == "sets"
         self.setsToWin = useSets ? max(config.setsToWin, 1) : 1
         self.gamesPerSet = useSets ? max(config.gamesPerSet, 1) : 1
+        self.tieAtGames = useSets ? max(config.tieAtGames ?? (config.gamesPerSet - 1), 1) : 0
         self.tiebreakEnabled = useSets ? config.tiebreakEnabled : false
-        self.tiebreakMargin = useSets ? max(config.tiebreakMargin, 1) : 2
+        let legacyTwoPoint = config.twoPointAdvantage ?? (config.tiebreakMargin >= 2)
+        self.tiebreakMargin = useSets ? ((config.tiebreakTwoPointAdvantage ?? legacyTwoPoint) ? 2 : 1) : 2
         self.superTiebreak = useSets ? config.superTiebreak : false
         self.superTiebreakPoints = useSets ? config.superTiebreakPoints : 10
         self.countingType = useSets ? config.countingType : "numeric"
         self.deuceRule = useSets ? (config.deuceRule ?? config.advantageRule) : false
-        self.twoPointAdvantage = useSets ? (config.twoPointAdvantage ?? true) : false
+        self.twoPointAdvantage = useSets ? (config.setTwoPointAdvantage ?? legacyTwoPoint) : false
         self.isFixedSet = useSets && config.fixedSet
         self.fixedSetGames = isFixedSet ? (config.fixedSetGames ?? config.gamesPerSet) : 0
 
@@ -351,12 +360,17 @@ public final class ScoreEngine {
         let g = gamesPerSet
         if isFixedSet { return 0 }
         if isDecidingSet() { return 0 }
-        if !twoPointAdvantage {
+        if g <= 1 {
+            if cs.gamesP1 >= 1 { return 1 }
+            if cs.gamesP2 >= 1 { return 2 }
+            return 0
+        }
+        if !twoPointAdvantage && (state.tieRule == nil || state.tieRule == "extend") {
             if cs.gamesP1 >= g { return 1 }
             if cs.gamesP2 >= g { return 2 }
             return 0
         }
-        if let rule = state.tieRule, cs.gamesP1 == cs.gamesP2 && cs.gamesP1 >= g - 1 {
+        if let rule = state.tieRule, cs.gamesP1 == cs.gamesP2 && cs.gamesP1 >= tieAtGames {
             if rule == "ask" && !state.tieRulePending {
                 state.tieRulePending = true
                 return -2
@@ -381,14 +395,15 @@ public final class ScoreEngine {
             if cs.gamesP2 >= g && cs.gamesP2 - cs.gamesP1 >= 2 { return 2 }
             return 0
         }
+        if state.tieRule == "decider" {
+            if cs.gamesP1 >= g && cs.gamesP1 - cs.gamesP2 >= 2 { return 1 }
+            if cs.gamesP2 >= g && cs.gamesP2 - cs.gamesP1 >= 2 { return 2 }
+            if cs.gamesP1 == tieAtGames + 1 && cs.gamesP2 == tieAtGames { return 1 }
+            if cs.gamesP2 == tieAtGames + 1 && cs.gamesP1 == tieAtGames { return 2 }
+            return 0
+        }
         if cs.gamesP1 >= g && cs.gamesP1 - cs.gamesP2 >= 2 { return 1 }
         if cs.gamesP2 >= g && cs.gamesP2 - cs.gamesP1 >= 2 { return 2 }
-        if tiebreakEnabled && cs.gamesP1 == g - 1 && cs.gamesP2 == g - 1 {
-            state.isTiebreak = true
-            state.currentGameP1 = 0
-            state.currentGameP2 = 0
-            return -1
-        }
         return 0
     }
 
@@ -563,11 +578,12 @@ public final class ScoreEngine {
             "v": 1,
             "type": "state",
             "active": !state.isFinished,
-            "setLabel": "Set \(state.sets.count)",
-            "points": [formatGamePoint(state.currentGameP1, state.currentGameP2, isTb: state.isTiebreak),
-                       formatGamePoint(state.currentGameP2, state.currentGameP1, isTb: state.isTiebreak)],
+            "setLabel": isDecidingSet() ? "Super tie-break" : "Set \(state.sets.count)",
+            "points": [formatGamePoint(state.currentGameP1, state.currentGameP2, isTb: state.isTiebreak || isDecidingSet()),
+                       formatGamePoint(state.currentGameP2, state.currentGameP1, isTb: state.isTiebreak || isDecidingSet())],
             "games": [cs.gamesP1, cs.gamesP2],
             "isTiebreak": state.isTiebreak,
+            "isSuperTiebreak": isDecidingSet(),
             "courtLeft": courtLeft,
             "teams": ["1": ["players": p1Players.map(wn)],
                       "2": ["players": p2Players.map(wn)]],

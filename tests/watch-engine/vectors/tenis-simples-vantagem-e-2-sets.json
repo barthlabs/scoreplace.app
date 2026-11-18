@@ -11,13 +11,20 @@
   "type": "sets",
   "setsToWin": 2,
   "gamesPerSet": 6,
+  "tieAtGames": 6,
   "tiebreakEnabled": true,
   "tiebreakPoints": 7,
   "tiebreakMargin": 2,
   "superTiebreak": true,
   "superTiebreakPoints": 10,
   "countingType": "tennis",
-  "advantageRule": true
+  "deuceRule": true,
+  "twoPointAdvantage": true,
+  "setTwoPointAdvantage": true,
+  "tiebreakTwoPointAdvantage": true,
+  "tieRule": "ask",
+  "fixedSet": false,
+  "fixedSetGames": 0
  },
  "steps": [
   {
@@ -38,6 +45,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": null,
     "teams": {
@@ -96,6 +104,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": null,
     "teams": {
@@ -152,6 +161,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -212,6 +222,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -272,6 +283,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -332,6 +344,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -392,6 +405,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -452,6 +466,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -512,6 +527,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -572,6 +588,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -632,6 +649,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -692,6 +710,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -752,6 +771,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -812,6 +832,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -872,6 +893,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -932,6 +954,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -992,6 +1015,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1052,6 +1076,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1112,6 +1137,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1172,6 +1198,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1232,6 +1259,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1292,6 +1320,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1352,6 +1381,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1412,6 +1442,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1472,6 +1503,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1532,6 +1564,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1592,6 +1625,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1652,6 +1686,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -1712,6 +1747,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1772,6 +1808,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1832,6 +1869,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1892,6 +1930,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -1952,6 +1991,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2012,6 +2052,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2072,6 +2113,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2132,6 +2174,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2192,6 +2235,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2252,6 +2296,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2312,6 +2357,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2372,6 +2418,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2432,6 +2479,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": null,
     "teams": {
@@ -2490,6 +2538,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": null,
     "teams": {
@@ -2546,6 +2595,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2606,6 +2656,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2666,6 +2717,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2726,6 +2778,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -2786,6 +2839,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2846,6 +2900,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2906,6 +2961,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -2966,6 +3022,7 @@
      1
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -3026,6 +3083,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -3086,6 +3144,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -3146,6 +3205,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -3206,6 +3266,7 @@
      2
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -3266,6 +3327,7 @@
      3
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -3326,6 +3388,7 @@
      3
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -3386,6 +3449,7 @@
      3
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -3446,6 +3510,7 @@
      3
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -3506,6 +3571,7 @@
      4
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -3566,6 +3632,7 @@
      4
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -3626,6 +3693,7 @@
      4
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -3686,6 +3754,7 @@
      4
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 2,
     "server": {
      "team": 2,
@@ -3746,6 +3815,7 @@
      5
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -3806,6 +3876,7 @@
      5
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -3866,6 +3937,7 @@
      5
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -3926,6 +3998,7 @@
      5
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": false,
     "courtLeft": 1,
     "server": {
      "team": 1,
@@ -3976,7 +4049,7 @@
     "v": 1,
     "type": "state",
     "active": true,
-    "setLabel": "Set 3",
+    "setLabel": "Super tie-break",
     "points": [
      "0",
      "0"
@@ -3986,6 +4059,7 @@
      0
     ],
     "isTiebreak": false,
+    "isSuperTiebreak": true,
     "courtLeft": 1,
     "server": null,
     "teams": {
@@ -4017,6 +4091,308 @@
     "serveEligible": [],
     "servePickPhase": -1,
     "servePickOpen": true,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "serveSelect",
+    "team": 1,
+    "idx": 0
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Super tie-break",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "isSuperTiebreak": true,
+    "courtLeft": 1,
+    "server": null,
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     1
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": true,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "serveConfirm"
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Super tie-break",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "isSuperTiebreak": true,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     1
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Super tie-break",
+    "points": [
+     "1",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "isSuperTiebreak": true,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     1
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Super tie-break",
+    "points": [
+     "2",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "isSuperTiebreak": true,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     1
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Super tie-break",
+    "points": [
+     "2",
+     "1"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "isSuperTiebreak": true,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     1
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
     "servePickCurrent": "Ana",
     "isFinished": false,
     "winner": null,

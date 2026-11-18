@@ -28,6 +28,9 @@ const nodes = {
   'gsm-tiebreakEnabled': { value: 'true' },
   'gsm-tiebreakPoints': { value: '7' },
   'gsm-tiebreakMargin': { value: '2' },
+  'gsm-twoPointAdvantage': { value: 'true' },
+  'gsm-setTwoPointAdvantage': { value: 'true' },
+  'gsm-tiebreakTwoPointAdvantage': { value: 'true' },
   'gsm-superTiebreak': { value: 'false' },
   'gsm-superTiebreakPoints': { value: '10' },
   'gsm-advantageRule': { value: 'false' },
@@ -75,31 +78,30 @@ win._gsmSetGamesInline('4');
 ok(nodes['gsm-gamesPerSet'].value === '4' && /3-3/.test(nodes['gsm-tieat-inline'].innerHTML),
   '4 games atualiza o campo salvo e o empate exibido');
 win._gsmSetTieRuleInline('decider');
-ok(nodes['gsm-tieRule'].value === 'decider' && nodes['gsm-tiebreakEnabled'].value === 'false',
-  'game decisivo é gravado sem habilitar tie-break');
-ok(/aria-pressed="true"[^>]*>Próximo game vence/.test(nodes['gsm-tieat-inline'].innerHTML),
-  'a opção gravada fica selecionada');
+ok(nodes['gsm-tieRule'].value === 'tiebreak' && nodes['gsm-tiebreakEnabled'].value === 'true',
+  'a opção legada "game decisivo" não altera a regra atual');
 win._gsmSetTieRuleInline('extend');
 ok(nodes['gsm-tieRule'].value === 'extend', 'vantagem de dois games é gravada');
 win._gsmSetGamesInline('4.5');
 ok(nodes['gsm-gamesPerSet'].value === '4', 'fração inválida não altera a meta');
 
-nodes['gsm-tiebreakAt'].value = 'g';
+nodes['gsm-tiebreakAt'].value = '6';
 win._gsmRenderTieAt();
-ok(/4-4/.test(nodes['gsm-tieat-inline'].innerHTML), 'torneio antigo com empate em g-g é preservado');
+ok(/6-6/.test(nodes['gsm-tieat-inline'].innerHTML), 'torneio antigo com empate em g-g é preservado');
 win._gsmSetTieRuleInline('tiebreak');
-ok(nodes['gsm-tiebreakAt'].value === 'g-1', 'edição explícita adota o empate um game abaixo');
-win._gsmSetTieRuleInline('decider');
+ok(nodes['gsm-tiebreakAt'].value === '6', 'mudar a regra preserva o empate definido pelo organizador');
+win._gsmSetTieRuleInline('extend');
 win._gsmSelectPreset('best3');
-ok(nodes['gsm-tieRule'].value === 'decider' && nodes['gsm-tiebreakEnabled'].value === 'false',
-  'trocar o formato para melhor de 3 preserva o game decisivo');
+ok(nodes['gsm-tieRule'].value === 'extend' && nodes['gsm-tiebreakEnabled'].value === 'false',
+  'trocar o formato para melhor de 3 preserva a regra de prorrogação');
 ok(win._gsmDetectPreset() === 'best3', 'o preset continua reconhecido com regra de empate própria');
 
 ok(/_tieAtToggleHtml\(/.test(f2) && /_f2ElimSetGames/.test(f2) && /_f2ElimSetRule/.test(f2),
   'a fase eliminatória usa o mesmo controle e tem gravadores próprios');
 ok(/_mesmoFormato\(sc, ini\) \? null : sc/.test(f2),
   'a eliminatória volta a herdar quando a regra coincide com a fase inicial');
-ok(/s\.tieRule === 'decider'/.test(format), 'normalização da fase preserva game decisivo');
+ok(/s\.setTwoPointAdvantage/.test(format) && /s\.tiebreakTwoPointAdvantage/.test(format),
+  'normalização da fase preserva margens independentes para set e tie-break');
 
 console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
 if (fail) process.exit(1);

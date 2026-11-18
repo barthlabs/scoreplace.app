@@ -1514,6 +1514,7 @@ window._tbLoserGames = function (scoring, sport) {
   // ponto de empate — o card, o lançamento manual e agora o motor ao vivo saem todos daqui.
   if (at === 'g-1') return Math.max(1, gp - 1);
   if (at === 'g+1') return gp + 1;
+  if (/^\d+$/.test(String(at)) && parseInt(at, 10) >= 1) return parseInt(at, 10);
   return gp;
 };
 
@@ -4758,14 +4759,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
     gamesPerSet: useSets ? (sc.gamesPerSet || 6) : 1,
     tiebreakEnabled: useSets ? (sc.tiebreakEnabled !== false) : false,
     tiebreakPoints: useSets ? (sc.tiebreakPoints || 7) : 7,
-    tiebreakMargin: useSets ? (sc.tiebreakMargin || 2) : 2,
+    tiebreakMargin: useSets ? (sc.tiebreakTwoPointAdvantage === false || (sc.tiebreakTwoPointAdvantage === undefined && sc.twoPointAdvantage === false) || (sc.tiebreakTwoPointAdvantage === undefined && sc.twoPointAdvantage === undefined && Number(sc.tiebreakMargin) === 1) ? 1 : 2) : 2,
     superTiebreak: useSets ? (sc.superTiebreak === true) : false,
     superTiebreakPoints: useSets ? (sc.superTiebreakPoints || 10) : 10,
     countingType: useSets ? (sc.countingType || 'numeric') : 'numeric',
     // deuceRule: game-level 40-40 → AD. Prefer explicit deuceRule; fall back to legacy advantageRule.
     deuceRule: useSets ? (sc.deuceRule !== undefined ? sc.deuceRule === true : sc.advantageRule === true) : false,
     // twoPointAdvantage: set-level 2-game lead. Default ON.
-    twoPointAdvantage: useSets ? (sc.twoPointAdvantage !== false) : false,
+    // Margens separadas: games do set e pontos de tie-break têm controles próprios.
+    twoPointAdvantage: useSets ? (sc.setTwoPointAdvantage !== undefined ? sc.setTwoPointAdvantage === true : (sc.twoPointAdvantage !== undefined ? sc.twoPointAdvantage === true : Number(sc.tiebreakMargin || 2) >= 2)) : false,
+    setTwoPointAdvantage: useSets ? (sc.setTwoPointAdvantage !== undefined ? sc.setTwoPointAdvantage === true : (sc.twoPointAdvantage !== undefined ? sc.twoPointAdvantage === true : Number(sc.tiebreakMargin || 2) >= 2)) : false,
+    tiebreakTwoPointAdvantage: useSets ? (sc.tiebreakTwoPointAdvantage !== undefined ? sc.tiebreakTwoPointAdvantage === true : (sc.twoPointAdvantage !== undefined ? sc.twoPointAdvantage === true : Number(sc.tiebreakMargin || 2) >= 2)) : true,
     isFixedSet: useSets && sc.fixedSet === true,
     fixedSetGames: useSets && sc.fixedSet ? (sc.fixedSetGames || sc.gamesPerSet || 6) : 0,
     // 'extend'|'tiebreak'|'ask'.
@@ -4959,7 +4963,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (state.isTiebreak || _isDecidingSet()) {
       // Tiebreak rules
       var tbPts = _isDecidingSet() ? state.superTiebreakPoints : state.tiebreakPoints;
-      var margin = state.tiebreakMargin || 2;
+      var margin = state.tiebreakTwoPointAdvantage ? 2 : 1;
       if (p1 >= tbPts && p1 - p2 >= margin) return 1;
       if (p2 >= tbPts && p2 - p1 >= margin) return 2;
       return 0;
@@ -5001,10 +5005,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
     if (state.isFixedSet) return 0; // Handled in _checkGameWon
     if (_isDecidingSet()) return 0; // handled by tiebreak game
+    if (g <= 1) {
+      if (cs.gamesP1 >= 1) return 1;
+      if (cs.gamesP2 >= 1) return 2;
+      return 0;
+    }
 
     // twoPointAdvantage OFF: set ends as soon as someone reaches g games —
     // e.g. a 6-game set ends at 5-6 with no extension, no tiebreak.
-    if (state.twoPointAdvantage === false && !state.tieRule) {
+    if (state.twoPointAdvantage === false && (!state.tieRule || state.tieRule === 'extend')) {
       if (cs.gamesP1 >= g) return 1;
       if (cs.gamesP2 >= g) return 2;
       return 0;
@@ -5681,8 +5690,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
         scoring: {
           type: useSets ? 'sets' : 'simple',
           setsToWin: state.setsToWin, gamesPerSet: state.gamesPerSet,
+          tieAtGames: state.tieAtGames || Math.max(1, state.gamesPerSet - 1),
           tiebreakEnabled: !!state.tiebreakEnabled, tiebreakPoints: state.tiebreakPoints,
-          tiebreakMargin: state.tiebreakMargin,
+          tiebreakMargin: state.tiebreakTwoPointAdvantage ? 2 : 1,
+          setTwoPointAdvantage: state.twoPointAdvantage !== false,
+          tiebreakTwoPointAdvantage: state.tiebreakTwoPointAdvantage !== false,
           superTiebreak: !!state.superTiebreak, superTiebreakPoints: state.superTiebreakPoints,
           countingType: state.countingType,
           deuceRule: !!state.deuceRule, twoPointAdvantage: !!state.twoPointAdvantage,
@@ -8575,6 +8587,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       currentGameP1: state.currentGameP1,
       currentGameP2: state.currentGameP2,
       isTiebreak: state.isTiebreak,
+      // O super tie-break é numerado em pontos como um tie-break, embora não
+      // altere o flag `isTiebreak` usado pelo fluxo normal de games.
+      isSuperTiebreak: _isDecidingSet(),
       isFinished: state.isFinished,
       winner: state.winner,
       tieRulePending: state.tieRulePending,
@@ -9274,13 +9289,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
       v: 1,
       type: 'state',
       active: !state.isFinished,
-      setLabel: 'Set ' + state.sets.length,
+      setLabel: _isDecidingSet() ? 'Super tie-break' : 'Set ' + state.sets.length,
       points: [
-        _formatGamePoint(state.currentGameP1, state.currentGameP2, state.isTiebreak),
-        _formatGamePoint(state.currentGameP2, state.currentGameP1, state.isTiebreak)
+        _formatGamePoint(state.currentGameP1, state.currentGameP2, state.isTiebreak || _isDecidingSet()),
+        _formatGamePoint(state.currentGameP2, state.currentGameP1, state.isTiebreak || _isDecidingSet())
       ],
       games: cs ? [cs.gamesP1, cs.gamesP2] : [0, 0],
       isTiebreak: !!state.isTiebreak,
+      isSuperTiebreak: _isDecidingSet(),
       courtLeft: _courtLeft,
       server: srv ? { team: srv.team, name: _wn(srv.name) } : null,
       teams: {
@@ -9364,14 +9380,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
         type: useSets ? 'sets' : 'simple',
         setsToWin: state.setsToWin,
         gamesPerSet: state.gamesPerSet,
+        tieAtGames: state.tieAtGames || Math.max(1, state.gamesPerSet - 1),
         tiebreakEnabled: !!state.tiebreakEnabled,
         tiebreakPoints: state.tiebreakPoints,
-        tiebreakMargin: state.tiebreakMargin,
+        tiebreakMargin: state.tiebreakTwoPointAdvantage ? 2 : 1,
         superTiebreak: !!state.superTiebreak,
         superTiebreakPoints: state.superTiebreakPoints,
         countingType: state.countingType,
         deuceRule: !!state.deuceRule,
         twoPointAdvantage: state.twoPointAdvantage !== false,
+        setTwoPointAdvantage: state.twoPointAdvantage !== false,
+        tiebreakTwoPointAdvantage: state.tiebreakTwoPointAdvantage !== false,
         tieRule: state.tieRule || null,
         fixedSet: !!state.isFixedSet,
         fixedSetGames: state.fixedSetGames || 0

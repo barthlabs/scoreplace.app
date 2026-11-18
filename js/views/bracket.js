@@ -9901,7 +9901,7 @@ window._bracketPaintLiveMatchScores = function (scores, root) {
     var scoring = entry.scoring || {};
     var cfg = { countingType:scoring.countingType, isFixedSet:!!scoring.fixedSet, deuceRule:scoring.deuceRule };
     var fmt = typeof window._formatGamePoint === 'function' ? window._formatGamePoint : function (n) { return String(n); };
-    var shown = [fmt(points[0], points[1], !!state.isTiebreak, cfg), fmt(points[1], points[0], !!state.isTiebreak, cfg)];
+    var shown = [fmt(points[0], points[1], !!(state.isTiebreak || state.isSuperTiebreak), cfg), fmt(points[1], points[0], !!(state.isTiebreak || state.isSuperTiebreak), cfg)];
     cells.forEach(function (cell, side) {
       if (!_bracketLiveScoreOriginal.has(cell)) _bracketLiveScoreOriginal.set(cell, cell.innerHTML);
       var html = '<span class="sp-live-card-games" title="Games no set">' + games[side] + '</span>' +

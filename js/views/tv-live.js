@@ -580,7 +580,7 @@
         var p1 = Number(liveState.currentGameP1) || 0, p2 = Number(liveState.currentGameP2) || 0;
         var cfg = { countingType: scoring.countingType, isFixedSet: !!scoring.fixedSet, deuceRule:scoring.deuceRule };
         var fmt = typeof window._formatGamePoint === 'function' ? window._formatGamePoint : function (value) { return String(value); };
-        livePoints = [fmt(p1, p2, !!liveState.isTiebreak, cfg), fmt(p2, p1, !!liveState.isTiebreak, cfg)];
+        livePoints = [fmt(p1, p2, !!(liveState.isTiebreak || liveState.isSuperTiebreak), cfg), fmt(p2, p1, !!(liveState.isTiebreak || liveState.isSuperTiebreak), cfg)];
       }
       selectedMatches[id] = { number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '',
         category: String(m.category || m.tierLabel || ''), bracket: String(m.bracket || ''),

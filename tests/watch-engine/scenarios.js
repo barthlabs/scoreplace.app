@@ -95,9 +95,9 @@ module.exports = [
       // set 1: Ana precisa de 6 games: já tem 5 do bloco acima? (1º game foi do Caio)
       game(1),              // fecha o set 1
       serve(2, 0),          // set 2 pergunta novamente quem abre o saque
-      games('222222')       // Caio leva o set 2 6-0 → 1-1... continua? setsToWin 2
-      // ⚠️ o cenário TERMINA com a partida ABERTA de propósito: vetor também
-      // cobre estado intermediário estável (1 set a 1, super TB à frente).
+      games('222222'),      // Caio leva o set 2 6-0 → 1-1 e abre o set decisivo
+      serve(1, 0),           // inicia o super tie-break decisivo
+      pts(1, 2), pt(2)        // regressão: o snapshot deve mostrar 2-1, nunca 30-15
     )
   },
   {
@@ -111,6 +111,60 @@ module.exports = [
       pt(1),                 // segundo sacador do set 2 pendente, ponto bloqueado
       serve(1, 1), games('22222')
     )
+  },
+  {
+    name: 'tenis-personalizado-4-games-tiebreak-em-3-3',
+    sport: 'Tênis', players: SIMPLES,
+    config: {
+      type: 'sets', setsToWin: 1, gamesPerSet: 4, tiebreakAt: 'g-1',
+      tiebreakEnabled: true, tiebreakPoints: 7, tiebreakMargin: 2,
+      superTiebreak: false, countingType: 'tennis', deuceRule: false,
+      twoPointAdvantage: true, tieRule: 'tiebreak'
+    },
+    note: 'Config personalizada do organizador: set a 4 games, tie-break em 3-3; o telefone e os motores nativos entram no mesmo tie-break numérico.',
+    events: flat(
+      serve(1, 0), games('121212'),
+      pts(1, 2), pt(2), pts(1, 5)
+    )
+  },
+  {
+    name: 'tenis-personalizado-4-games-vantagem-de-dois',
+    sport: 'Tênis', players: SIMPLES,
+    config: {
+      type: 'sets', setsToWin: 1, gamesPerSet: 4, tiebreakAt: 'g-1',
+      tiebreakEnabled: false, tiebreakPoints: 7, tiebreakMargin: 2,
+      superTiebreak: false, countingType: 'tennis', deuceRule: false,
+      twoPointAdvantage: true, tieRule: 'extend'
+    },
+    note: 'Config personalizada do organizador: set a 4 games, sem tie-break em 3-3 e com dois games de vantagem para fechar o set.',
+    events: flat(
+      serve(1, 0), games('121212'), game(2), game(1), game(2), game(2)
+    )
+  },
+  {
+    name: 'tenis-set-sem-vantagem-tiebreak-com-dois-pontos',
+    sport: 'Tênis', players: SIMPLES,
+    config: {
+      type: 'sets', setsToWin: 1, gamesPerSet: 4, tiebreakAt: 'g-1',
+      tiebreakEnabled: true, tiebreakPoints: 5, tiebreakMargin: 2,
+      setTwoPointAdvantage: false, tiebreakTwoPointAdvantage: true,
+      twoPointAdvantage: false, superTiebreak: false, countingType: 'tennis',
+      deuceRule: false, tieRule: 'tiebreak'
+    },
+    note: 'Regras independentes: set pode fechar sem dois games de vantagem; tie-break (inclusive super tie-break) exige dois pontos de diferença.',
+    events: flat(serve(1, 0), games('121212'), pts(1, 5), pts(2, 4), pts(1, 2))
+  },
+  {
+    name: 'tenis-set-de-um-game',
+    sport: 'Tênis', players: SIMPLES,
+    config: {
+      type: 'sets', setsToWin: 1, gamesPerSet: 1, tiebreakAt: 'g-1',
+      tiebreakEnabled: false, setTwoPointAdvantage: true,
+      tiebreakTwoPointAdvantage: false, twoPointAdvantage: true,
+      superTiebreak: false, countingType: 'tennis', deuceRule: false, tieRule: 'extend'
+    },
+    note: 'O organizador pode definir um game para vencer o set; o empate não se aplica e o primeiro game encerra o set.',
+    events: flat(serve(1, 0), game(1))
   },
   {
     name: 'undo-atravessa-game-e-set',

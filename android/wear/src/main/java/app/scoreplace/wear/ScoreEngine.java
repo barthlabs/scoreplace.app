@@ -32,6 +32,7 @@ public final class ScoreEngine {
         public String type = "sets";
         public int setsToWin = 1;
         public int gamesPerSet = 6;
+        public Integer tieAtGames = null;
         public boolean tiebreakEnabled = true;
         public int tiebreakPoints = 7;
         public int tiebreakMargin = 2;
@@ -41,6 +42,8 @@ public final class ScoreEngine {
         public boolean advantageRule = false;
         public Boolean deuceRule = null;          // explícito vence o legado advantageRule
         public Boolean twoPointAdvantage = null;  // default ON
+        public Boolean setTwoPointAdvantage = null;
+        public Boolean tiebreakTwoPointAdvantage = null;
         public String tieRule = null;             // casual sem regra → 'ask'
         public boolean fixedSet = false;
         public Integer fixedSetGames = null;
@@ -90,7 +93,7 @@ public final class ScoreEngine {
 
     // config imutável
     final boolean useSets;
-    final int setsToWin, gamesPerSet, tiebreakMargin, superTiebreakPoints, fixedSetGames;
+    final int setsToWin, gamesPerSet, tieAtGames, tiebreakMargin, superTiebreakPoints, fixedSetGames;
     final boolean tiebreakEnabled, superTiebreak, deuceRule, twoPointAdvantage, isFixedSet;
     final String countingType;
 
@@ -122,13 +125,15 @@ public final class ScoreEngine {
         useSets = "sets".equals(cfg.type);
         setsToWin = useSets ? Math.max(cfg.setsToWin, 1) : 1;
         gamesPerSet = useSets ? Math.max(cfg.gamesPerSet, 1) : 1;
+        tieAtGames = useSets ? Math.max(cfg.tieAtGames != null ? cfg.tieAtGames : cfg.gamesPerSet - 1, 1) : 0;
         tiebreakEnabled = useSets && cfg.tiebreakEnabled;
-        tiebreakMargin = useSets ? Math.max(cfg.tiebreakMargin, 1) : 2;
+        boolean legacyTwoPoint = cfg.twoPointAdvantage != null ? cfg.twoPointAdvantage : cfg.tiebreakMargin >= 2;
+        tiebreakMargin = useSets ? ((cfg.tiebreakTwoPointAdvantage != null ? cfg.tiebreakTwoPointAdvantage : legacyTwoPoint) ? 2 : 1) : 2;
         superTiebreak = useSets && cfg.superTiebreak;
         superTiebreakPoints = useSets ? cfg.superTiebreakPoints : 10;
         countingType = useSets ? cfg.countingType : "numeric";
         deuceRule = useSets && (cfg.deuceRule != null ? cfg.deuceRule : cfg.advantageRule);
-        twoPointAdvantage = useSets && (cfg.twoPointAdvantage == null || cfg.twoPointAdvantage);
+        twoPointAdvantage = useSets && (cfg.setTwoPointAdvantage != null ? cfg.setTwoPointAdvantage : legacyTwoPoint);
         isFixedSet = useSets && cfg.fixedSet;
         fixedSetGames = isFixedSet ? (cfg.fixedSetGames != null ? cfg.fixedSetGames : cfg.gamesPerSet) : 0;
 
@@ -290,8 +295,9 @@ public final class ScoreEngine {
         int p1 = state.currentGameP1, p2 = state.currentGameP2;
         if (state.isTiebreak || isDecidingSet()) {
             int tbPts = isDecidingSet() ? superTiebreakPoints : state.tiebreakPoints;
-            if (p1 >= tbPts && p1 - p2 >= tiebreakMargin) return 1;
-            if (p2 >= tbPts && p2 - p1 >= tiebreakMargin) return 2;
+            int margin = tiebreakMargin;
+            if (p1 >= tbPts && p1 - p2 >= margin) return 1;
+            if (p2 >= tbPts && p2 - p1 >= margin) return 2;
             return 0;
         }
         if (isFixedSet) {
@@ -319,13 +325,18 @@ public final class ScoreEngine {
         int g = gamesPerSet;
         if (isFixedSet) return 0;
         if (isDecidingSet()) return 0;
-        if (!twoPointAdvantage) {
+        if (g <= 1) {
+            if (cs.gamesP1 >= 1) return 1;
+            if (cs.gamesP2 >= 1) return 2;
+            return 0;
+        }
+        if (!twoPointAdvantage && (state.tieRule == null || "extend".equals(state.tieRule))) {
             if (cs.gamesP1 >= g) return 1;
             if (cs.gamesP2 >= g) return 2;
             return 0;
         }
         String rule = state.tieRule;
-        if (rule != null && cs.gamesP1 == cs.gamesP2 && cs.gamesP1 >= g - 1) {
+        if (rule != null && cs.gamesP1 == cs.gamesP2 && cs.gamesP1 >= tieAtGames) {
             if ("ask".equals(rule) && !state.tieRulePending) {
                 state.tieRulePending = true;
                 return -2;
@@ -350,14 +361,15 @@ public final class ScoreEngine {
             if (cs.gamesP2 >= g && cs.gamesP2 - cs.gamesP1 >= 2) return 2;
             return 0;
         }
+        if ("decider".equals(state.tieRule)) {
+            if (cs.gamesP1 >= g && cs.gamesP1 - cs.gamesP2 >= 2) return 1;
+            if (cs.gamesP2 >= g && cs.gamesP2 - cs.gamesP1 >= 2) return 2;
+            if (cs.gamesP1 == tieAtGames + 1 && cs.gamesP2 == tieAtGames) return 1;
+            if (cs.gamesP2 == tieAtGames + 1 && cs.gamesP1 == tieAtGames) return 2;
+            return 0;
+        }
         if (cs.gamesP1 >= g && cs.gamesP1 - cs.gamesP2 >= 2) return 1;
         if (cs.gamesP2 >= g && cs.gamesP2 - cs.gamesP1 >= 2) return 2;
-        if (tiebreakEnabled && cs.gamesP1 == g - 1 && cs.gamesP2 == g - 1) {
-            state.isTiebreak = true;
-            state.currentGameP1 = 0;
-            state.currentGameP2 = 0;
-            return -1;
-        }
         return 0;
     }
 
@@ -534,11 +546,12 @@ public final class ScoreEngine {
         m.put("v", "1");
         m.put("type", str("state"));
         m.put("active", bool(!state.isFinished));
-        m.put("setLabel", str("Set " + state.sets.size()));
-        m.put("points", "[" + str(formatGamePoint(state.currentGameP1, state.currentGameP2, state.isTiebreak))
-                + "," + str(formatGamePoint(state.currentGameP2, state.currentGameP1, state.isTiebreak)) + "]");
+        m.put("setLabel", str(isDecidingSet() ? "Super tie-break" : "Set " + state.sets.size()));
+        m.put("points", "[" + str(formatGamePoint(state.currentGameP1, state.currentGameP2, state.isTiebreak || isDecidingSet()))
+                + "," + str(formatGamePoint(state.currentGameP2, state.currentGameP1, state.isTiebreak || isDecidingSet())) + "]");
         m.put("games", "[" + cs.gamesP1 + "," + cs.gamesP2 + "]");
         m.put("isTiebreak", bool(state.isTiebreak));
+        m.put("isSuperTiebreak", bool(isDecidingSet()));
         m.put("courtLeft", String.valueOf(courtLeft));
         m.put("server", srv == null ? "null"
                 : "{" + str("name") + ":" + str(wn(wnMap, srv.name)) + "," + str("team") + ":" + srv.team + "}");

@@ -30,7 +30,7 @@ async function runScenario(page, sc) {
   await page.goto('file://' + path.join(__dirname, 'harness.html'));
   return await page.evaluate((s) => {
     // resolve a config REAL do esporte pelo resolvedor canônico (sport-rules.js)
-    const cfg = window._resolveLiveScoring({}, s.sport);
+    const cfg = window._resolveLiveScoring(s.config || {}, s.sport);
     window._openLiveScoring(null, null, {
       casual: true,
       p1Name: s.players.p1Name,
@@ -39,6 +39,7 @@ async function runScenario(page, sc) {
       scoring: cfg,
       sportName: s.sport
     });
+    const effectiveConfig = window._getLiveScoreState().scoring || cfg;
     // ⚠️ CAMPOS DE TRANSPORTE SAEM DO VETOR, e isso é decisão, não descuido:
     //  · `matchEpoch` é IDENTIDADE DE SESSÃO (novo a cada abertura/recomeço) —
     //    dentro do vetor ele destruiria o determinismo, que é o que dá valor a
@@ -75,7 +76,9 @@ async function runScenario(page, sc) {
       }
       steps.push({ event: ev, state: snap() });
     }
-    return { config: cfg, steps: steps };
+    // A configuração passada aos motores nativos deve ser a mesma configuração
+    // EFETIVA que o GSM já resolveu (inclusive tieAtGames), não só a entrada bruta.
+    return { config: effectiveConfig, steps: steps };
   }, sc);
 }
 

@@ -80,6 +80,18 @@ e em resposta a `hello`.
   "points": ["40", "30"],    // strings de exibição, [time1, time2]
   "sets":   [0, 0],
   "isTiebreak": false,
+  "isSuperTiebreak": false,   // set decisivo em pontos; não é o tie-break comum
+  "scoring": {                // regra efetiva, resolvida no celular para esta partida
+    "setsToWin": 2,
+    "gamesPerSet": 6,
+    "tieAtGames": 5,
+    "setTwoPointAdvantage": true,
+    "tiebreakTwoPointAdvantage": true,
+    "tieRule": "tiebreak",
+    "tiebreakPoints": 7,
+    "superTiebreak": true,
+    "superTiebreakPoints": 10
+  },
   "courtLeft": 1,            // qual time está à esquerda (espelha _courtLeft/fixSides)
   "server": { "team": 1, "name": "Rodrigo" },
   "teams": {

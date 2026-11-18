@@ -53,6 +53,8 @@ public final class ParityMain {
                         case "type": cfg.type = v; break;
                         case "setsToWin": cfg.setsToWin = Integer.parseInt(v); break;
                         case "gamesPerSet": cfg.gamesPerSet = Integer.parseInt(v); break;
+                        case "tieAtGames": cfg.tieAtGames = Integer.parseInt(v); break;
+                        case "tiebreakAt": break; // já normalizado em tieAtGames pelo GSM do celular
                         case "tiebreakEnabled": cfg.tiebreakEnabled = Boolean.parseBoolean(v); break;
                         case "tiebreakPoints": cfg.tiebreakPoints = Integer.parseInt(v); break;
                         case "tiebreakMargin": cfg.tiebreakMargin = Integer.parseInt(v); break;
@@ -62,6 +64,8 @@ public final class ParityMain {
                         case "advantageRule": cfg.advantageRule = Boolean.parseBoolean(v); break;
                         case "deuceRule": cfg.deuceRule = Boolean.parseBoolean(v); break;
                         case "twoPointAdvantage": cfg.twoPointAdvantage = Boolean.parseBoolean(v); break;
+                        case "setTwoPointAdvantage": cfg.setTwoPointAdvantage = Boolean.parseBoolean(v); break;
+                        case "tiebreakTwoPointAdvantage": cfg.tiebreakTwoPointAdvantage = Boolean.parseBoolean(v); break;
                         case "tieRule": cfg.tieRule = v; break;
                         case "fixedSet": cfg.fixedSet = Boolean.parseBoolean(v); break;
                         case "fixedSetGames": cfg.fixedSetGames = Integer.parseInt(v); break;

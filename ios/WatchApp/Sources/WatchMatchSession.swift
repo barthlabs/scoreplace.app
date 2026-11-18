@@ -141,6 +141,7 @@ final class WatchMatchSession {
         cfg.type = sc.type
         cfg.setsToWin = sc.setsToWin
         cfg.gamesPerSet = sc.gamesPerSet
+        cfg.tieAtGames = sc.tieAtGames
         cfg.tiebreakEnabled = sc.tiebreakEnabled
         cfg.tiebreakPoints = sc.tiebreakPoints
         cfg.tiebreakMargin = sc.tiebreakMargin
@@ -149,6 +150,8 @@ final class WatchMatchSession {
         cfg.countingType = sc.countingType
         cfg.deuceRule = sc.deuceRule
         cfg.twoPointAdvantage = sc.twoPointAdvantage
+        cfg.setTwoPointAdvantage = sc.setTwoPointAdvantage
+        cfg.tiebreakTwoPointAdvantage = sc.tiebreakTwoPointAdvantage
         cfg.tieRule = sc.tieRule
         cfg.fixedSet = sc.fixedSet
         cfg.fixedSetGames = sc.fixedSetGames
@@ -224,7 +227,8 @@ final class WatchMatchSession {
     /// que nada do jogo tenha mudado).
     static func sameScore(_ a: ScoreState, _ b: ScoreState) -> Bool {
         return a.points == b.points && a.games == b.games && a.sets == b.sets
-            && a.isTiebreak == b.isTiebreak && a.isFinished == b.isFinished
+            && a.isTiebreak == b.isTiebreak && a.isSuperTiebreak == b.isSuperTiebreak
+            && a.isFinished == b.isFinished
             && a.winner == b.winner && a.tieRulePending == b.tieRulePending
             && a.servePickOpen == b.servePickOpen && a.courtLeft == b.courtLeft
             && (a.server?.team) == (b.server?.team) && (a.server?.name) == (b.server?.name)

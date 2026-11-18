@@ -86,7 +86,7 @@ const VEC_DIR = path.join(__dirname, 'watch-engine', 'vectors');
     const pts = ten.steps.map(s => JSON.stringify(s.state.points));
     ok(pts.indexOf('["AD","40"]') !== -1 && pts.indexOf('["40","AD"]') !== -1,
        'tênis: o ciclo deuce→AD→deuce→AD está no vetor (advantageRule real)');
-    ok(ten.config.advantageRule === true && ten.config.setsToWin === 2, 'config do tênis veio REAL do sport-rules.js');
+    ok(ten.config.deuceRule === true && ten.config.setsToWin === 2, 'config do tênis veio REAL do sport-rules.js');
   } else ok(false, 'cenário tenis-simples-vantagem-e-2-sets existe');
 
   const setsDoubles = by['tenis-duplas-saque-por-set'];

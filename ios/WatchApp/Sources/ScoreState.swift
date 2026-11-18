@@ -17,6 +17,7 @@ struct ScoreState: Decodable {
     var points: [String] = ["–", "–"]   // [time1, time2]
     var games: [Int] = [0, 0]           // [time1, time2]
     var isTiebreak: Bool = false
+    var isSuperTiebreak: Bool = false
     var courtLeft: Int = 1              // qual TIME está à esquerda
     var server: Server? = nil
     var teams: [String: Team] = [:]     // "1"/"2" → jogadores
@@ -104,6 +105,7 @@ struct ScoreState: Decodable {
         var type: String = "sets"
         var setsToWin: Int = 1
         var gamesPerSet: Int = 6
+        var tieAtGames: Int? = nil
         var tiebreakEnabled: Bool = true
         var tiebreakPoints: Int = 7
         var tiebreakMargin: Int = 2
@@ -112,6 +114,8 @@ struct ScoreState: Decodable {
         var countingType: String = "numeric"
         var deuceRule: Bool = false
         var twoPointAdvantage: Bool = true
+        var setTwoPointAdvantage: Bool? = nil
+        var tiebreakTwoPointAdvantage: Bool? = nil
         var tieRule: String? = nil
         var fixedSet: Bool = false
         var fixedSetGames: Int = 0
@@ -120,7 +124,7 @@ struct ScoreState: Decodable {
     // Decoding tolerante: o snapshot sempre traz as chaves-base, mas `server` e
     // `winner` podem vir null e chaves opcionais (sets/matchId) podem faltar.
     enum CodingKeys: String, CodingKey {
-        case v, seq, epoch, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isCasual, isDoubles, isFinished, winner, tieRulePending, tiedAt
+        case v, seq, epoch, active, setLabel, points, games, isTiebreak, isSuperTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isCasual, isDoubles, isFinished, winner, tieRulePending, tiedAt
         case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent, servePickOpen
         case reiRainha, rrRound, rrStandings, rrSuggest, hrMax, hrDebug
         case shuffleOn, mixedOn, canMix
@@ -137,6 +141,7 @@ struct ScoreState: Decodable {
         points     = (try? c.decodeIfPresent([String].self, forKey: .points)) ?? ["–", "–"]
         games      = (try? c.decodeIfPresent([Int].self, forKey: .games)) ?? [0, 0]
         isTiebreak = (try? c.decodeIfPresent(Bool.self, forKey: .isTiebreak)) ?? false
+        isSuperTiebreak = (try? c.decodeIfPresent(Bool.self, forKey: .isSuperTiebreak)) ?? false
         courtLeft  = (try? c.decodeIfPresent(Int.self, forKey: .courtLeft)) ?? 1
         server     = (try? c.decodeIfPresent(Server.self, forKey: .server)) ?? nil
         teams      = (try? c.decodeIfPresent([String: Team].self, forKey: .teams)) ?? [:]

@@ -40,8 +40,8 @@ ok(!/state\.tiebreakEnabled && cs\.gamesP1 === g - 1 && cs\.gamesP2 === g - 1/.t
   'e o gatilho CRAVADO em (g-1)-(g-1) — a 2ª porta, que ignorava a escolha — foi removido');
 
 // ── 3. Torneio ANTIGO não muda de comportamento ─────────────────────────────
-ok(/tieRule: sc\.tieRule \|\| \(isCasual \? 'ask' : \(\(sc\.tiebreakEnabled === false\) \? 'extend' : 'tiebreak'\)\)/.test(ui),
-  'sem tieRule gravado, deriva do toggle antigo: ligado=tie-break, desligado=prorrogar');
+ok(/tieRule: sc\.tieRule/.test(ui) && /setTwoPointAdvantage/.test(ui) && /tiebreakTwoPointAdvantage/.test(ui),
+  'o placar resolve tie-break e margens separadas de set e tie-break');
 
 // ── 4. E agora ALGUÉM ESCREVE o tieRule ─────────────────────────────────────
 ok(/out\.tieRule = /.test(ct), 'o "Personalizado" grava tieRule (antes o motor lia um campo que ninguém escrevia)');
@@ -52,9 +52,11 @@ ok(/id="gsm-tieRule"/.test(ct), 'e têm campo próprio no formulário (senão n�
 // "na verdade um toggle 5-5/6-6 que ativado faz virar 5-5 por default. isso resolve. e fica
 // claro visualmente." O 'g+1' continua LEGÍVEL pelo motor (torneio já gravado assim segue
 // jogando 7-7), só deixou de ser oferecido — não é a mesma coisa que deixar de existir.
-ok(/window\._tieAtToggleHtml = function/.test(ct), 'o gatilho do empate é um toggle, um desenho só');
-ok(/Games para vencer o set/.test(ct) && /Próximo game vence/.test(ct) && /Vantagem de 2 games/.test(ct),
-  'o toggle foi substituído por número de games e três decisões possíveis');
+ok(/window\._tieAtToggleHtml = function/.test(ct), 'a regra do set usa um controle comum às fases');
+ok(/Games para vencer o set/.test(ct) && /Empate em games para ativar a regra/.test(ct)
+   && /Tie-break no empate em/.test(ct) && /Exigir 2 games de diferença no set/.test(ct)
+   && /Exigir 2 pontos de diferença no tie-break/.test(ct),
+  'a sequência expõe alvo do set, empate que ativa tie-break e margens distintas');
 ok(/'g\+1'/.test(ui), 'o motor continua entendendo o 7-7 já gravado (não some do lançamento)');
 ok(!/gsm-tbat-seg/.test(ct), '⛔ o segmento antigo não sobrou em lugar nenhum do formulário');
 
@@ -64,18 +66,20 @@ ok(!/gsm-tbat-seg/.test(ct), '⛔ o segmento antigo não sobrou em lugar nenhum 
   const end = ui.indexOf('  // Dialog shown when tieRule', start);
   const source = ui.slice(start, end);
   function check(sc, a, b) {
-    const state = Object.assign({ gamesPerSet: 4, tieAtGames: 3, twoPointAdvantage: true,
+  const state = Object.assign({ gamesPerSet: 4, tieAtGames: 3, twoPointAdvantage: true,
       isFixedSet: false, tieRulePending: false, isTiebreak: false }, sc);
     const run = new Function('state', '_currentSet', '_isDecidingSet', '_showTieRuleDialog',
       source + '\nreturn _checkSetWon();');
     return { result: run(state, () => ({ gamesP1: a, gamesP2: b }), () => false, () => {}), state };
   }
-  ok(check({ tieRule: 'decider' }, 3, 3).result === 0, '3-3 aguarda o game decisivo');
-  ok(check({ tieRule: 'decider' }, 4, 3).result === 1, '4-3 fecha o set curto');
-  ok(check({ gamesPerSet: 6, tieAtGames: 6, tieRule: 'decider' }, 6, 5).result === 0,
-    'torneio antigo com empate em 6-6 não termina em 6-5');
-  ok(check({ gamesPerSet: 6, tieAtGames: 6, tieRule: 'decider' }, 7, 6).result === 1,
-    'torneio antigo fecha no game decisivo em 7-6');
+  ok(check({ tieRule: 'extend', twoPointAdvantage: false }, 3, 3).result === 0, '3-3 aguarda o quarto game');
+  ok(check({ tieRule: 'extend', twoPointAdvantage: false }, 4, 3).result === 1, '4-3 fecha sem exigir vantagem');
+  ok(check({ gamesPerSet: 6, tieAtGames: 6, tieRule: 'extend', twoPointAdvantage: false }, 6, 5).result === 1,
+    'ao desligar a margem do set, fecha ao atingir seis games');
+  ok(check({ gamesPerSet: 6, tieAtGames: 6, tieRule: 'extend', twoPointAdvantage: true }, 6, 5).result === 0,
+    'com margem ativa, 6-5 não fecha');
+  ok(check({ gamesPerSet: 6, tieAtGames: 6, tieRule: 'extend', twoPointAdvantage: true }, 7, 5).result === 1,
+    'com margem ativa, 7-5 fecha');
   ok(check({ tieRule: 'extend' }, 4, 3).result === 0, 'vantagem de 2 não fecha em 4-3');
   ok(check({ tieRule: 'extend' }, 5, 3).result === 1, 'vantagem de 2 fecha em 5-3');
   const tb = check({ tieRule: 'tiebreak' }, 3, 3);
@@ -83,7 +87,8 @@ ok(!/gsm-tbat-seg/.test(ct), '⛔ o segmento antigo não sobrou em lugar nenhum 
 })();
 
 // ── 5. O RESUMO conta as duas saídas, com a conta certa ─────────────────────
-ok(/gsmExtendDetail/.test(ct), 'o resumo diz o que acontece quando é PRORROGAR (antes ficava mudo)');
+ok(/gsmExtendDetail/.test(ct) || /Sem tie-break; o set segue até cumprir/.test(ct),
+  'o resumo explica que o set segue quando tie-break fica desligado');
 ok(/tbPts - tbMargin \+ 1/.test(ct),
   'e a conta do "segue até abrir N" é pts-margem+1 — em 5-5 o tie-break de 7 AINDA fecha (7-5)');
 ok(!/var _tbDraw = tbPts - tbMargin;/.test(ct), 'o off-by-one antigo não voltou');

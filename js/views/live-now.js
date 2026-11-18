@@ -267,8 +267,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return {
       s1: sets.map(function (x) { return Math.max(0, Number(x.gamesP1 != null ? x.gamesP1 : x.p1) || 0); }),
       s2: sets.map(function (x) { return Math.max(0, Number(x.gamesP2 != null ? x.gamesP2 : x.p2) || 0); }),
-      pt1: fmt(p1, p2, !!st.isTiebreak, { countingType:cfg.countingType, isFixedSet:!!cfg.fixedSet, deuceRule:cfg.deuceRule }),
-      pt2: fmt(p2, p1, !!st.isTiebreak, { countingType:cfg.countingType, isFixedSet:!!cfg.fixedSet, deuceRule:cfg.deuceRule }),
+      pt1: fmt(p1, p2, !!(st.isTiebreak || st.isSuperTiebreak), { countingType:cfg.countingType, isFixedSet:!!cfg.fixedSet, deuceRule:cfg.deuceRule }),
+      pt2: fmt(p2, p1, !!(st.isTiebreak || st.isSuperTiebreak), { countingType:cfg.countingType, isFixedSet:!!cfg.fixedSet, deuceRule:cfg.deuceRule }),
       saca: srv ? srv.team : 0,
       fim: !!st.isFinished
     };
