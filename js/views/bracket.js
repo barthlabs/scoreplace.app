@@ -11649,6 +11649,11 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>'
       : '';
     var _groupCodeMatch = String(window._bracketMonarchGroupLabel(t, sg)).toUpperCase().match(/\bGRUPO\s+([A-Z]{1,3}\d*)\b/);
+    var _eightLettersHtml = _isSuperEightMon && Array.isArray(sg.superEightLetters)
+      ? '<div aria-label="Sorteio das letras do grupo" style="display:flex;flex-wrap:wrap;gap:5px;margin:5px 0 8px;">' +
+        sg.superEightLetters.map(function (entry) {
+          return '<span style="padding:3px 7px;border-radius:6px;background:rgba(99,102,241,.12);font-size:.7rem;color:var(--text-main);"><b>' + window._safeHtml(entry.letter) + '</b> · ' + window._safeHtml(entry.name) + '</span>';
+        }).join('') + '</div>' : '';
     html += '<div data-group-box="1" data-monarch-group="1"' + (_isSuperEightMon ? ' data-super-eight-round="1"' : '') + (_groupCodeMatch ? ' data-group-code="' + _groupCodeMatch[1] + '"' : '') + (_largeMonarch ? ' data-monarch-large="1" data-monarch-category="' + window._safeHtml(_monarchCategories[gi]) + '" hidden' : '') + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="box-sizing:border-box;width:100%;' + (_isSuperEightMon ? 'max-width:none;' : 'max-width:380px;') + 'scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((opts && opts.showHistoricalFullStandings ? '#818cf8' : groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       /* DUAS LINHAS, NÃO TRÊS: título curto em cima, selos embaixo, botões à direita.
        * Antes era tudo numa linha só, com `flex:1` no <h3>: os dois botões grandes
@@ -11669,6 +11674,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         '</div>') +
         _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
       '</div>' +
+      _eightLettersHtml +
       // v4.3.12 (pedido do dono): a tabela de classificação do grupo fica SEMPRE ACIMA das
       // chaves (mesmo padrão de renderGroupStage). Antes vinha depois dos cards de jogo.
       '<div class="standings-scroll">' + standingsTable + '</div>' +
@@ -11978,6 +11984,12 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     var _woGsPlayers = (sg.players && sg.players.length) ? sg.players : sorted.map(function (s) { return s.name; });
     var _woGsChip = (!_isTeamScheduleGS && typeof window._woClaimChip === 'function')
       ? window._woClaimChip(t, { scope: 'group', roundIndex: (t.currentPhaseIndex || 0), groupName: sg.name, players: _woGsPlayers, matches: _woGsMatches }) : '';
+    const _rotationLetters = sg.superEightLetters || (groups[gi] && groups[gi].superEightLetters) ||
+      (sg.matches && sg.matches[0] && sg.matches[0].groupLetterAssignments) ||
+      (groups[gi] && groups[gi].matches && groups[gi].matches[0] && groups[gi].matches[0].groupLetterAssignments) || [];
+    const rotationLettersHtml = _rotationLetters.length
+      ? '<div aria-label="Sorteio das letras do grupo" style="display:flex;flex-wrap:wrap;gap:5px;margin:-4px 0 10px;">' +
+        _rotationLetters.map(function(entry) { return '<span style="padding:3px 7px;border-radius:6px;background:rgba(99,102,241,.12);font-size:.7rem;color:var(--text-main);"><b>' + window._safeHtml(entry.letter) + '</b> · ' + window._safeHtml(entry.name) + '</span>'; }).join('') + '</div>' : '';
     // A agenda concentrada tem um grupo técnico para cálculo, não uma entidade
     // exibível. Esta guarda é deliberadamente separada do estilo do container:
     // o título "Grupo A" não pode voltar por regressão. [[regression_neon_hides_technical_group_header]]
@@ -12012,6 +12024,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     return `
       <div class="${groupShellClass}" id="group-section-${gi}" data-group-box="1"${isMyGroupGS ? ' data-my-group="1"' : ''} data-group-label="${window._safeHtml(window._grpKey(sg.name))}" style="${groupShellStyle}">
         ${groupHeader}
+        ${rotationLettersHtml}
         ${_groupKeysFirst && matchesHtml ? `
           <div style="border-top:1px solid var(--border-color);padding-top:1rem;margin-bottom:1rem;">
             ${matchesHtml}

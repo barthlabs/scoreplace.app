@@ -157,6 +157,22 @@ function matchesFor(tie, idPrefix, baseNumber, suffixOffset) {
   }));
 }
 
+function drawTwo(players, randomInt) {
+  if (!Array.isArray(players) || players.length < 2) throw new Error('sorteio exige dois atletas empatados');
+  const pick = max => {
+    if (typeof randomInt === 'function') {
+      const value = Number(randomInt(max));
+      if (!Number.isInteger(value) || value < 0 || value >= max) throw new Error('sorteio de atletas inválido');
+      return value;
+    }
+    return Math.floor(Math.random() * max);
+  };
+  const pool = players.slice();
+  const first = pool.splice(pick(pool.length), 1)[0];
+  const second = pool.splice(pick(pool.length), 1)[0];
+  return [first, second];
+}
+
 function scoreMatch(match, sets, setsToWin, pointsToWin, pointMargin) {
   if (!match || !Array.isArray(sets) || !sets.length) throw new Error('placar da simples ausente');
   const target = Number.isInteger(setsToWin) && setsToWin >= 1 && setsToWin <= 5 ? setsToWin : 1;
@@ -243,7 +259,9 @@ function archivePoolDecisions(t, phaseIndex, poolId, nowIso) {
 // administrativa; a classificação e os atletas sempre vêm do documento fresco.
 function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, action, setsToWin, autoDraw, numberForPool, nowIso, options) {
   const opts = options || {};
-  const automaticSingles = opts.autoPlay === true && t.fmt2 && t.fmt2.tieResolution === 'singles_then_draw';
+  const tieRule = t.fmt2 && t.fmt2.tieResolution;
+  const automaticDrawTwo = tieRule === 'singles_draw_two';
+  const automaticSingles = (opts.autoPlay === true && tieRule === 'singles_then_draw') || automaticDrawTwo;
   const automaticDraw = autoDraw && (!t.fmt2 || t.fmt2.tieResolution !== 'singles_then_draw');
   const book = t.phaseTieDecisions || {};
   const phaseBook = book[String(phaseIndex)] || {};
@@ -302,20 +320,25 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
         }
         if (action) usedAction = true;
         if (type !== 'play' && type !== 'draw') throw new Error('escolha de desempate inválida');
-        if (type === 'play' && ![2, 3].includes(keys.length)) throw new Error('simples disponível só para dois ou três atletas');
+        if (type === 'play' && !(automaticDrawTwo ? keys.length >= 2 : [2, 3].includes(keys.length))) throw new Error('simples disponível só para dois ou três atletas');
+        const selectedPair = type === 'play' && automaticDrawTwo ? drawTwo(tie.players, opts.randomInt) : null;
+        const tieIdPrefix = 'tie-' + phaseIndex + '-' + decisionId.replace(/[^a-zA-Z0-9_-]/g, '-');
+        const initialMatches = type !== 'play' ? [] : automaticDrawTwo
+          ? [matchesFor({ players: selectedPair }, tieIdPrefix, baseNumber, suffixOffset)[0]]
+          : matchesFor(tie, tieIdPrefix, baseNumber, suffixOffset).slice(0, keys.length === 3 ? 1 : undefined);
         decision = { contenders: keys, players: tie.players.map(p => ({ key: p.key, name: p.name })),
           groupName: pool.group && pool.group.name || null,
           category:pool.group && pool.group.category || null, cutRank: tie.cut,
           createdAt: String(nowIso || new Date().toISOString()),
           qualifierSlots: tie.cut - tie.from,
-          tieMode: type === 'play' && keys.length === 3 ? 'three_player_playoff' : null,
+          tieMode: type === 'play' && automaticDrawTwo ? 'draw_two_then_repeat'
+            : type === 'play' && keys.length === 3 ? 'three_player_playoff' : null,
           baseGameNumber: baseNumber,
           originalOrder: keys.slice(), choice: type,
           status: type === 'draw' ? 'complete' : 'pending',
           order: type === 'draw' ? keys.slice() : null,
-          matches: type === 'play' ? matchesFor(tie,
-            'tie-' + phaseIndex + '-' + decisionId.replace(/[^a-zA-Z0-9_-]/g, '-'), baseNumber, suffixOffset)
-            .slice(0, keys.length === 3 ? 1 : undefined) : [],
+          matches: initialMatches,
+          drawnPair: selectedPair ? selectedPair.map(player => player.key) : null,
           setsToWin: 1,
           pointsToWin: Number.isInteger(Number(t.fmt2 && t.fmt2.tieSinglesPoints)) &&
             Number(t.fmt2 && t.fmt2.tieSinglesPoints) >= 1 && Number(t.fmt2 && t.fmt2.tieSinglesPoints) <= 99
@@ -472,7 +495,7 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
             decision.corrections = Array.isArray(decision.corrections) ? decision.corrections : [];
             decision.corrections.push({ matchId: previous.id, previousSets: previous.sets,
               previousWinnerKey: previous.winnerKey, at: String(action.at || '') });
-            if (decision.tieMode === 'three_player_playoff' && matchIndex < decision.matches.length - 1) {
+            if (['three_player_playoff', 'draw_two_then_repeat'].includes(decision.tieMode) && matchIndex < decision.matches.length - 1) {
               decision.corrections[decision.corrections.length - 1].invalidatedMatches =
                 decision.matches.slice(matchIndex + 1);
               decision.matches.length = matchIndex + 1;
@@ -481,7 +504,31 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
           decision.matches[matchIndex] = scored;
           changed = true;
           if (decision.matches.every(m => m.winnerKey)) {
-            if (decision.tieMode === 'three_player_playoff') {
+            if (decision.tieMode === 'draw_two_then_repeat') {
+              const ranked = [];
+              decision.matches.forEach(m => { if (m && m.winnerKey && !ranked.includes(m.winnerKey)) ranked.push(m.winnerKey); });
+              const remaining = tie.players.filter(player => !ranked.includes(player.key));
+              const needed = Math.min(Math.max(1, Number(decision.qualifierSlots) || 1), Math.max(0, tie.players.length - 1));
+              decision.rankedKeys = ranked.slice();
+              decision.remainingKeys = remaining.map(player => player.key);
+              if (ranked.length < needed && remaining.length >= 2) {
+                const nextPair = drawTwo(remaining, opts.randomInt);
+                const suffixKey = String(phaseIndex) + ':' + String(decision.baseGameNumber);
+                const suffix = Number((t.phaseTieNextSuffix || {})[suffixKey] || decision.matches.length);
+                const prefix = decision.matches[0].id.replace(/-0$/, '') + '-extra-' + suffix;
+                const nextMatch = matchesFor({ players: nextPair }, prefix, decision.baseGameNumber, suffix)[0];
+                decision.matches.push(nextMatch);
+                decision.drawnPair = nextPair.map(player => player.key);
+                t.phaseTieNextSuffix = t.phaseTieNextSuffix || {};
+                t.phaseTieNextSuffix[suffixKey] = suffix + 1;
+                decision.status = 'pending';
+                delete decision.confirmedAt;
+              } else {
+                decision.order = ranked.concat(remaining.map(player => player.key));
+                decision.status = 'complete';
+                decision.confirmedAt = String(action.at || nowIso || new Date().toISOString());
+              }
+            } else if (decision.tieMode === 'three_player_playoff') {
               const first = decision.matches[0];
               const firstWinner = tie.players.find(p => p.key === first.winnerKey);
               const firstLoser = tie.players.find(p => p.key !== first.winnerKey && p.key !== tie.players[2].key);
@@ -561,5 +608,5 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
 }
 
 module.exports = { key, canonicalizeTieFallback, originalDrawMatches, baseGameNumber, letterIndex,
-  drawPosition, rankInitialRows, findBoundaryTie, allBoundaryTies, boundariesFor, matchesFor,
+  drawPosition, rankInitialRows, findBoundaryTie, allBoundaryTies, boundariesFor, matchesFor, drawTwo,
   scoreMatch, rankPlayers, applyOrder, archivePoolDecisions, resolvePhaseTies };

@@ -1512,7 +1512,10 @@
     pool = pool || [];
     if (!pool.length) return { matches: [], groups: [] };
 
-    var nGroups = parseInt(phaseCfg && phaseCfg.gruposCount, 10) || 4;
+    var rotationCfg = phaseCfg && phaseCfg.classification && phaseCfg.classification.partnerRotation === 'unique_8'
+      ? phaseCfg.classification : null;
+    var nGroups = rotationCfg ? Math.ceil(pool.length / 8) : (parseInt(phaseCfg && phaseCfg.gruposCount, 10) || 4);
+    if (rotationCfg && pool.length % 8 !== 0) throw new Error('O rodízio de parceiros exige grupos completos de oito atletas em cada categoria.');
     if (nGroups < 1) nGroups = 1;
     // v1.3.88: NUNCA mais grupos que floor(N/2) — senão sobra grupo de 1 time (0 jogos → storePhase
     // 'no-entrants' → "diz que sorteou mas não mostra chave"). O bug apareceu no sweep com o default
@@ -1565,6 +1568,12 @@
     }
     // Serpentina: ida 0..n-1, volta n-1..0 — cabeças (pool já ordenado por força) caem
     // em grupos distintos e o equilíbrio fica melhor que blocos contíguos.
+    if (rotationCfg) {
+      for (var ri = _placePool.length - 1; ri > 0; ri--) {
+        var rj = Math.floor(Math.random() * (ri + 1));
+        var rs = _placePool[ri]; _placePool[ri] = _placePool[rj]; _placePool[rj] = rs;
+      }
+    }
     _placePool.forEach(function (tm, i) {
       var round = Math.floor(i / nGroups);
       var pos = i % nGroups;
@@ -1587,6 +1596,46 @@
     var _teamCompetitionCore = (typeof window !== 'undefined') && window.ScoreplaceTeamCompetition;
     if (!_teamCompetitionCore && typeof module !== 'undefined' && module.exports) {
       try { _teamCompetitionCore = require('../domain/team-competition.js'); } catch (e) { _teamCompetitionCore = null; }
+    }
+    if (rotationCfg) {
+      var rotationCore = (typeof window !== 'undefined') && window.ScoreplaceSuperEight;
+      if (!rotationCore && typeof module !== 'undefined' && module.exports) {
+        try { rotationCore = require('./super-eight-core.js'); } catch (e) { rotationCore = null; }
+      }
+      if (!rotationCore || typeof rotationCore.build !== 'function') throw new Error('Motor de rodízio para grupos de oito indisponível.');
+      var rotationRounds = Math.max(1, Math.min(7, parseInt(rotationCfg.rotationRounds, 10) || 5));
+      var entryName = function (entry) { return typeof entry === 'string' ? entry : (entry.displayName || entry.name || ''); };
+      var entryUid = function (entry) { return entry && typeof entry === 'object' ? (entry.uid || null) : null; };
+      groups.forEach(function (g) {
+        if (g.players.length !== 8) throw new Error('Cada grupo de rodízio precisa ter exatamente oito atletas.');
+        var plan = rotationCore.build(g.players, rotationRounds);
+        g.superEightLetters = g.players.map(function (entry, index) {
+          return { letter: String.fromCharCode(65 + index), name: entryName(entry), uid: entryUid(entry) };
+        });
+        plan.rounds.forEach(function (round, roundIndex) {
+          round.forEach(function (game, gameIndex) {
+            var left = game[0], right = game[1];
+            var leftNames = left.map(entryName), rightNames = right.map(entryName);
+            var match = {
+              id: mkId(), phaseIndex: Number(phaseCfg.phaseIndex) || 0,
+              round: roundIndex + 1, roundIndex: roundIndex,
+              bracket: 'group', groupIdx: g.groupIdx, groupName: g.name,
+              p1: leftNames.join(' / '), p2: rightNames.join(' / '),
+              team1: leftNames, team2: rightNames,
+              team1Uids: left.map(entryUid), team2Uids: right.map(entryUid),
+              winner: null, scoreP1: null, scoreP2: null, isMonarch: true,
+              monarchGroup: g.groupIdx,
+              groupLetterAssignments: g.superEightLetters,
+              label: g.name + ' • Rodada ' + (roundIndex + 1) + ' • Jogo ' + (gameIndex + 1)
+            };
+            if (phaseCfg.category) match.category = phaseCfg.category;
+            g.matches.push(match); allMatches.push(match);
+          });
+        });
+      });
+      var rotationResult = { matches: allMatches, groups: groups };
+      if (_waitlist.length) rotationResult.waitlist = _waitlist;
+      return rotationResult;
     }
     // Grade parcial da competição por times. Estruturado usa a permutação aleatória
     // criada para ESTE sorteio; assim Light/Power/Extreme repetem os adversários na
@@ -2181,9 +2230,11 @@
         LT.rounds = []; LT.status = 'active';
         window._generateNextRound(LT);
         if (LT.superEight === true && LT.superEightDrawMode === 'single') {
-          // Sorteio único materializa os 14 confrontos agora. O resultado das
-          // partidas não altera as parcerias; cada atleta joga as sete rodadas.
-          for (var eightRound = 2; eightRound <= 7; eightRound++) {
+          // Sorteio único materializa somente as rodadas configuradas. O resultado
+          // não altera as parcerias; cada atleta joga uma vez em cada rodada.
+          var plannedEightRounds = Math.max(1, Math.min(7, parseInt(LT.superEightRounds, 10) ||
+            ((LT.phases || []).find(function (phase) { return phase && phase.superEight === true; }) || {}).superEightRounds || 7));
+          for (var eightRound = 2; eightRound <= plannedEightRounds; eightRound++) {
             window._generateNextRound(LT);
           }
         }

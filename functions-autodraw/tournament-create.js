@@ -120,7 +120,7 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       if (snap.exists) fail('already-exists', 'Este identificador já pertence a outro torneio.');
       const t = Object.assign({}, config);
       if (config.fmt2) {
-        const out = compile(config.fmt2, { sport: t.sport, resultEntry: t.resultEntry || ['organizer'], lateEnrollment: t.lateEnrollment, newMatchups: t.newMatchups });
+        const out = compile(config.fmt2, { sport: t.sport, categories: config.combinedCategories || [], resultEntry: t.resultEntry || ['organizer'], lateEnrollment: t.lateEnrollment, newMatchups: t.newMatchups });
         Object.assign(t, out.topLevel);
         t.phases = out.phases; t.fmt2 = out.cfg;
         // Só torneios criados depois deste contrato recebem títulos derivados

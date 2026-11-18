@@ -5,6 +5,7 @@ const format = draw._window.FORMAT2;
 const cfg = format.defaultConfig('beach_tennis');
 cfg.parceria = 'super_eight'; cfg.eliminatoria.ativa = false;
 cfg.superEightDrawMode = 'single'; // o formulário seleciona sorteio único ao escolher Super 8
+cfg.rodadas.n = 7; // seleção inicial mantém o ciclo tradicional completo
 const compiled = format.compileToPhases(cfg, { sport: 'beach_tennis' });
 assert.equal(compiled.topLevel.superEight, true);
 assert.equal(compiled.phases[0].superEight, true);
@@ -13,6 +14,45 @@ assert.equal(compiled.phases.length, 1);
 assert.equal(draw._window._requiresMonarchPreDrawReview({ superEight:true, phases:compiled.phases,
   scheduleWindow:{ mode:'organizer', days:[] } }), false,
   'Super 8 não exige grade de horários nem categorias para abrir o sorteio');
+cfg.rodadas.n = 5; // opção configurável para a rotação curta
+const five = format.compileToPhases(cfg, { sport: 'beach_tennis' });
+assert.equal(five.topLevel.superEightRounds, 5);
+assert.equal(five.phases[0].rounds, 5);
+assert.equal(five.phases.length, 1);
+cfg.rodadas.n = 7;
+const rotationCfg = format.defaultConfig('beach_tennis');
+rotationCfg.parceria = 'rotation_groups_8'; rotationCfg.rodadas.n = 5; rotationCfg.classificados = 2;
+const rotationCompiled = format.compileToPhases(rotationCfg, { sport: 'beach_tennis' });
+assert.equal(rotationCompiled.phases.length, 2);
+assert.equal(rotationCompiled.phases[0].classification.partnerRotation, 'unique_8');
+assert.equal(rotationCompiled.phases[0].classification.rotationRounds, 5);
+draw._window.ScoreplaceSuperEight = require('./vendor/super-eight-core.js');
+const rotationPool = Array.from({ length: 16 }, (_, i) => ({ uid: 'r' + i, displayName: 'Rotação ' + i }));
+const rotationGroups = draw._window._phasesEngine.genGroupsFromPool(rotationPool, {
+  gruposCount: 1, classification: { partnerRotation: 'unique_8', rotationRounds: 5 }
+}, 'rotation-test');
+assert.equal(rotationGroups.groups.length, 2, '16 atletas geram dois grupos de oito');
+assert.equal(rotationGroups.matches.length, 20, 'cinco rodadas geram dez jogos por grupo');
+rotationGroups.groups.forEach(group => {
+  assert.equal(group.players.length, 8);
+  assert.equal(group.matches.length, 10);
+  assert.equal(group.superEightLetters.length, 8);
+  assert.deepEqual(group.superEightLetters.map(row => row.letter).sort(), ['A','B','C','D','E','F','G','H']);
+  const partnerPairs = new Set(), appearances = new Map(group.players.map(player => [player.uid, 0]));
+  group.matches.forEach(match => {
+    for (const playerUid of match.team1Uids.concat(match.team2Uids)) appearances.set(playerUid, appearances.get(playerUid) + 1);
+    for (const side of [match.team1Uids, match.team2Uids]) {
+      const key = side.slice().sort().join(':');
+      assert.equal(partnerPairs.has(key), false, 'parceiros não repetem dentro do grupo');
+      partnerPairs.add(key);
+    }
+  });
+  assert.deepEqual(Array.from(appearances.values()), Array(8).fill(5));
+});
+assert.throws(() => draw._window._phasesEngine.genGroupsFromPool(rotationPool.slice(0, 10), {
+  gruposCount: 1, classification: { partnerRotation: 'unique_8', rotationRounds: 5 }
+}, 'rotation-invalid'), /grupos completos de oito/);
+console.log('✓ rodízio configurável: 16 atletas separados por categoria em dois grupos, cinco partidas e letras A–H');
 cfg.superEightDrawMode = 'single';
 const single = format.compileToPhases(cfg, { sport: 'beach_tennis' });
 assert.equal(single.topLevel.superEightDrawMode, 'single');

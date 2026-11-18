@@ -6,7 +6,7 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue, FieldPath } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { getStorage } = require('firebase-admin/storage');
-const { randomUUID, createHash } = require('crypto');
+const { randomUUID, randomInt, createHash } = require('crypto');
 const _operationReceipt = require('./operation-receipt-core');
 const _rehearsal = require('./tournament-rehearsal');
 const _operationDay = require('./operation-day');
@@ -2796,7 +2796,7 @@ exports.generateExtraTournamentRound = onCall(async (request) => {
     const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização gera rodada extra.',{tId,uid});
     if(t.superEight === true && t.superEightDrawMode === 'single') {
-      throw new HttpsError('failed-precondition','O Super 8 de sorteio único tem exatamente sete rodadas.');
+      throw new HttpsError('failed-precondition','O sorteio único já preparou todas as rodadas configuradas.');
     }
     const max=(t.rounds||[]).reduce((n,r)=>Math.max(n,Number(r&&r.round)||0),0);
     if(max>=expectedRound) return {ok:true,changed:false};
@@ -3169,7 +3169,7 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     const _courtSeriesEligible = _courtSourceBefore && _courtSourceBefore.isMonarch === true &&
       _courtSourceBefore.court && _courtSourceBefore.courtCalledAt &&
       !_courtOccupancy.isFinished(_courtSourceBefore);
-    const _courtState = (_courtSeriesEligible || (t.fmt2 && t.fmt2.tieResolution === 'singles_then_draw'))
+    const _courtState = (_courtSeriesEligible || (t.fmt2 && ['singles_then_draw', 'singles_draw_two'].includes(t.fmt2.tieResolution)))
       ? await tx.get(ref.collection('courtState').doc('main')) : null;
     const _releasedCourts = _courtState && _courtState.exists
       ? (_courtState.data().released || {}) : {};
@@ -5881,7 +5881,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
   'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','coverGradientBalance','coverGradientBlend','titleColor','dateCardColors','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
   'courtNames','courtOrder','callTime','warmupTime','gameDuration','scoring','swissRounds',
-  'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','superEight','superEightDrawMode','setupScope','superEightSetupScope','temporada','equilibrado',
+  'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','superEight','superEightDrawMode','superEightRounds','partnerRotation','rotationRounds','setupScope','superEightSetupScope','temporada','equilibrado',
   'clusterSize','balanceBy','genderRatio','genderRatioDisabled','wlGroupBalance','ligaNewPlayerScore',
   'ligaInactivity','ligaInactivityX','allowSelfDeactivation','ligaOpenEnrollment',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy','rankingSitOutScoring',
@@ -5909,7 +5909,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
  * de rodadas da fase e, se não bater, DESCARTA o arranjo e volta pra divisão igual.
  * Os demais campos desta lista continuam onde estavam — esses sim redesenham a chave. */
 const _CONFIG_ESTRUTURAL = new Set([
-  'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds','superEight','superEightDrawMode','registrationSettings','genderRatioDisabled',
+  'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds','superEight','superEightDrawMode','superEightRounds','partnerRotation','rotationRounds','registrationSettings','genderRatioDisabled',
   'gruposCount','gruposClassified','gruposEqualOnly','gruposSeedVip','gruposSeedCategory',
   'teamCompetition','categorySchedule','turnos','categoryDefinitions',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy','rankingSitOutScoring','monarchAdvanceToElim',
@@ -6820,7 +6820,7 @@ function _buildPhaseTieRuntime(t, current, sourceGroups, currentCfg, phaseEngine
   const originalDrawMatches = typeof phaseEngine.phaseGames === 'function'
     ? _phaseTieCore.originalDrawMatches(phaseEngine.phaseGames(t, current)) : [];
   let numberedPhaseGames = [];
-  if (tieRule === 'singles_then_draw') {
+  if (['singles_then_draw', 'singles_draw_two'].includes(tieRule)) {
     if (typeof drawWindow._assignGlobalGameNumbers !== 'function' ||
         typeof phaseEngine.phaseGames !== 'function') {
       throw new HttpsError('failed-precondition', 'Numeração canônica dos jogos indisponível.');
@@ -6884,7 +6884,7 @@ function _buildPhaseTieRuntime(t, current, sourceGroups, currentCfg, phaseEngine
 // O mesmo motor de desempate usado no avanço roda quando o último placar do
 // quarteto é confirmado. Nenhum horário ou quadra é reservado no sorteio.
 function _refreshAutomaticPhaseTies(t, matchId, nowIso) {
-  if (!t || !t.fmt2 || t.fmt2.tieResolution !== 'singles_then_draw' ||
+  if (!t || !t.fmt2 || !['singles_then_draw', 'singles_draw_two'].includes(t.fmt2.tieResolution) ||
       !Array.isArray(t.phases)) return;
   const sourceMatch = t.phaseBracketPlanVersion === 1 && drawWindow &&
     typeof drawWindow._findMatch === 'function' ? drawWindow._findMatch(t, matchId) : null;
@@ -6964,8 +6964,9 @@ function _refreshAutomaticPhaseTies(t, matchId, nowIso) {
       birthByName: typeof drawWindow._tbBirthByName === 'function' ? drawWindow._tbBirthByName(t) : {} };
     const calculateStandings = g => current > 0 && Array.isArray(g.rankingRows)
       ? g.rankingRows : phaseStandingsFn(g, t, tbOpts, hasMonarch);
+    const tieRule = t.fmt2.tieResolution;
     const runtime = _buildPhaseTieRuntime(t, current, sourceGroups, currentCfg,
-      phaseEngine, calculateStandings, tbOpts, 'singles_then_draw');
+      phaseEngine, calculateStandings, tbOpts, tieRule);
     const pools = overall ? runtime.pools : runtime.pools.filter(pool => pool.id === poolId);
     if (!pools.length) {
       delete t.phaseTieAutoError;
@@ -6973,7 +6974,8 @@ function _refreshAutomaticPhaseTies(t, matchId, nowIso) {
     }
     _phaseTieCore.resolvePhaseTies(t, current, pools, runtime.nextCfg,
       runtime.compareForPool, null, 1, false, runtime.numberForPool, nowIso,
-      { autoPlay: true, retainOtherDecisions: !overall });
+      { autoPlay: tieRule === 'singles_then_draw', retainOtherDecisions: !overall,
+        randomInt: max => randomInt(0, max) });
     delete t.phaseTieAutoError;
   } catch (err) {
     if (before.decisions) t.phaseTieDecisions = before.decisions; else delete t.phaseTieDecisions;
@@ -7172,8 +7174,8 @@ exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) =
     let phaseTieOrder = null;
     const tieRule = t.fmt2 && t.fmt2.tieResolution;
     const tieRuleEnabled = !!(currentCfg && currentCfg.kind === 'classification') &&
-      (tieRule === 'singles_then_draw' || tieRule === 'draw_order');
-    if (request.data && request.data.tieAction && (!tieRuleEnabled || tieRule !== 'singles_then_draw')) {
+      (tieRule === 'singles_then_draw' || tieRule === 'singles_draw_two' || tieRule === 'draw_order');
+    if (request.data && request.data.tieAction && (!tieRuleEnabled || tieRule === 'draw_order')) {
       throw new HttpsError('failed-precondition', 'Este torneio não prevê partidas extras de desempate.');
     }
     if (tieRuleEnabled) {
@@ -7235,8 +7237,9 @@ exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) =
         tieFlow = _phaseTieCore.resolvePhaseTies(t, current, actionPools, nextCfg,
           compareForPool, requestedTieAction && String(requestedTieAction.decisionId || '').startsWith('wildcards:')
             ? null : requestedTieAction, setsToWin,
-          tieRule === 'draw_order', tieRule === 'singles_then_draw' ? numberForPool : null, agoraIso,
-          { autoPlay: tieRule === 'singles_then_draw', retainOtherDecisions: !!requestedTieAction });
+          tieRule === 'draw_order', ['singles_then_draw', 'singles_draw_two'].includes(tieRule) ? numberForPool : null, agoraIso,
+          { autoPlay: tieRule === 'singles_then_draw', retainOtherDecisions: !!requestedTieAction,
+            randomInt: max => randomInt(0, max) });
       } catch (err) {
         throw new HttpsError('failed-precondition', 'Desempate não aplicado: ' + String(err.message || err));
       }
@@ -7312,7 +7315,8 @@ exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) =
             [{ id: 'wildcards', rows: wildcardRows }], wildcardNext, () => wildcardCompare,
             requestedTieAction && String(requestedTieAction.decisionId || '').startsWith('wildcards:')
               ? requestedTieAction : null, Number(((currentCfg && currentCfg.scoring) || t.scoring || {}).setsToWin) || 1,
-            tieRule === 'draw_order', tieRule === 'singles_then_draw' ? numberForPool : null, agoraIso);
+            tieRule === 'draw_order', ['singles_then_draw', 'singles_draw_two'].includes(tieRule) ? numberForPool : null, agoraIso,
+            { randomInt: max => randomInt(0, max) });
         } catch (err) {
           throw new HttpsError('failed-precondition', 'Desempate das vagas extras não aplicado: ' + String(err.message || err));
         }
@@ -8036,7 +8040,7 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
     return true;
   };
   if (!phase || phase.kind !== 'classification' || current !== t.phases.length - 1 ||
-      !['draw_order', 'singles_then_draw'].includes(rule)) {
+      !['draw_order', 'singles_then_draw', 'singles_draw_two'].includes(rule)) {
     if (action) throw new HttpsError('failed-precondition', 'Este torneio não prevê desempate extra no encerramento.');
     return { status: 'ready', changed: phase && phase.kind === 'classification' &&
       current === t.phases.length - 1 ? archiveObsoleteFinalTies() : false };
@@ -8183,7 +8187,8 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
   try {
     return _phaseTieCore.resolvePhaseTies(t, current, pools, next, compareForPool,
       action || null, Number((phase.scoring || t.scoring || {}).setsToWin) || 1,
-      useDrawOrder, !useDrawOrder ? numberForPool : null, nowIso);
+      useDrawOrder, !useDrawOrder ? numberForPool : null, nowIso,
+      { randomInt: max => randomInt(0, max) });
   } catch (error) {
     throw new HttpsError('failed-precondition', 'Desempate do título não aplicado: ' + String(error.message || error));
   }

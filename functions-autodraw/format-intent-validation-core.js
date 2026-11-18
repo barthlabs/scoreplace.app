@@ -10,7 +10,7 @@ const ENUMS = [
   ['formacaoDupla', ['manual', 'sorteio']],
   ['manualPairingPolicy', ['organizer_only', 'athletes_only', 'open']],
   ['classifScope', ['overall', 'per_group']],
-  ['tieResolution', ['draw_order', 'singles_then_draw']],
+  ['tieResolution', ['draw_order', 'singles_then_draw', 'singles_draw_two']],
   ['tieSinglesMargin', [1, 2]],
   ['rodadas.modo', ['todos', 'fixo']],
   ['rodadas.turnos', ['ida', 'ida_volta']],

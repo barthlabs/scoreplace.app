@@ -5,6 +5,15 @@ const vm = require('node:vm');
 const { createHash } = require('node:crypto');
 const { window: W, E } = require('./headless');
 
+const compiledOfficial = W.FORMAT2.compileToPhases({
+  disputa:'dupla', grupos:2, parceria:'rotation_groups_8',
+  rodadas:{ modo:'fixo', n:5 }, classifAtiva:true, classificados:1,
+  classifScope:'per_group', eliminatoria:{ ativa:true, linhas:1, origem:'formar' }
+}, { sport:'Beach Tennis', categories:['Fem A', 'Fem B', 'Masc A'] });
+assert.deepEqual(compiledOfficial.phases[1].officialGroupBracketOrder,
+  ['Fem A', 'Fem B', 'Masc A'],
+  'o compilador persiste a ordem oficial das categorias na chave por vencedores de grupo');
+
 const phases = W.FORMAT2.compileToPhases({ disputa:'dupla', grupos:1, classifAtiva:false,
   eliminatoria:{ ativa:true, openReiRainha:true, reiRainhaCut:2,
     formacao:'performance', linhas:1, dupla:false, terceiro:true } },

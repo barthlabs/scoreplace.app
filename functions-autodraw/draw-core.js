@@ -1363,10 +1363,11 @@ function closeRoundCore(t, roundIdx, resultCtx) {
   const win = g.window;
   if (!t) return { ok: false, reason: 'no-tournament' };
   if (t.superEight === true && t.superEightDrawMode === 'single' && t.storageCanonico === true) {
-    const rounds = Array.from({ length: 7 }, (_, index) =>
+    const plannedRounds = Math.max(1, Math.min(7, Number(t.superEightRounds) || 7));
+    const rounds = Array.from({ length: plannedRounds }, (_, index) =>
       (t.matches || []).filter(m => m && Number(m.round) === index + 1 &&
         (m.phaseIndex || 0) === (t.currentPhaseIndex || 0) && !m.isBye && !m.isSitOut));
-    if (rounds.some(matches => matches.length !== 2) || roundIdx < 0 || roundIdx > 6) {
+    if (rounds.some(matches => matches.length !== 2) || roundIdx < 0 || roundIdx >= plannedRounds) {
       return { ok: false, reason: 'incomplete-super-eight-draw' };
     }
     const closed = Array.isArray(t.superEightClosedRounds) ? t.superEightClosedRounds : [];
@@ -1383,9 +1384,11 @@ function closeRoundCore(t, roundIdx, resultCtx) {
     const unfinished = rounds[roundIdx].filter(m => !m.winner);
     if (unfinished.length) return { ok: false, reason: 'round-incomplete', unfinished: unfinished.length };
     t.superEightClosedRounds = closed.concat(roundIdx + 1);
-    if (roundIdx === 6) t.status = 'finished';
+    const hasFollowingPhase = Array.isArray(t.phases) && t.phases.length > (Number(t.currentPhaseIndex) || 0) + 1;
+    if (roundIdx === plannedRounds - 1 && !hasFollowingPhase) t.status = 'finished';
     t.updatedAt = new Date().toISOString();
-    return { ok: true, branch: roundIdx === 6 ? 'classificationFinished' : 'nextRound' };
+    return { ok: true, branch: roundIdx === plannedRounds - 1
+      ? (hasFollowingPhase ? 'phaseComplete' : 'classificationFinished') : 'nextRound' };
   }
   const rounds = Array.isArray(t.rounds) ? t.rounds : [];
   const round = rounds[roundIdx];

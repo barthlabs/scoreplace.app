@@ -1203,6 +1203,7 @@ function setupCreateTournamentModal() {
                   <div style="font-size:0.7rem; color:var(--sp-c-a855f7,#a855f7); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.catPreview')}</div>
                   <div id="category-preview-list" style="display:flex; flex-direction:column; gap:6px; font-size:0.8rem;"></div>
                 </div>
+                <input type="hidden" id="tourn-excluded-categories" value="">
                 <!-- ⛔ LIMITE POR CATEGORIA É A FONTE DO TOTAL (29/set/2026).
                      Com categorias definidas, o organizador informa vagas por categoria;
                      maxParticipants é sempre a multiplicação mostrada abaixo. Não deixe
@@ -7362,16 +7363,17 @@ window._saveTournamentClickHandler = async function() {
           var _endSuper8 = new Date(_endSuper8Date + 'T' + _endSuper8Time);
           var _intervalSuper8 = parseInt(_f2cfg.rodadas.drawIntervalDays, 10);
           if (!(_intervalSuper8 >= 1) || isNaN(_firstSuper8.getTime()) || isNaN(_endSuper8.getTime()) ||
-              _firstSuper8.getTime() + 6 * _intervalSuper8 * 86400000 >= _endSuper8.getTime()) {
+              _firstSuper8.getTime() + Math.max(0, _f2cfg.rodadas.n - 1) * _intervalSuper8 * 86400000 >= _endSuper8.getTime()) {
             showAlertDialog('Agenda do Super 8',
-              'Sete sorteios automáticos exigem que o último aconteça antes do fim da fase. Para um torneio de um dia, escolha sorteio único ou marque “Sortear manualmente”.',
+              _f2cfg.rodadas.n + ' sorteios automáticos exigem que o último aconteça antes do fim da fase. Para um torneio de um dia, escolha sorteio único ou marque “Sortear manualmente”.',
               null, { type:'warning' });
             return;
           }
         }
         try {
           var _f2sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || tourData.sport;
-          var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry, lateEnrollment: tourData.lateEnrollment, newMatchups: tourData.newMatchups });
+          var _f2categories = (window._getCreateFormCategoryData && window._getCreateFormCategoryData().combinedCategories) || tourData.combinedCategories || [];
+          var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, categories: _f2categories, resultEntry: tourData.resultEntry, lateEnrollment: tourData.lateEnrollment, newMatchups: tourData.newMatchups });
           /* ⛔ A TRAVA DE "não muda depois do sorteio" MORA NO SERVIDOR, não aqui.
            * Eu a tinha escrito neste ponto, lendo `tourData` — que é o objeto NOVO do formulário, não
            * o torneio gravado. Ela nunca via que já existia chave, e ainda seria contornável: trava de
@@ -7382,6 +7384,7 @@ window._saveTournamentClickHandler = async function() {
           else if (window._editingTournament && window._editingTournament.superEight === true) {
             tourData.superEight = false;
             tourData.superEightDrawMode = null;
+            tourData.superEightRounds = null;
           }
           tourData.phases = _f2out.phases;
           // O compilador recria phases[]. Preserva os limites que pertencem à
@@ -8005,11 +8008,17 @@ window._gsmPresets = {
   'set1': { label: '1 Set', icon: '⚡', setsToWin: 1, gamesPerSet: 6, tiebreakEnabled: true, tiebreakPoints: 7, tiebreakMargin: 2, superTiebreak: false, superTiebreakPoints: 10, countingType: 'tennis', advantageRule: false, fixedSet: false },
   'best3': { label: 'Melhor de 3', icon: '🏆', setsToWin: 2, gamesPerSet: 6, tiebreakEnabled: true, tiebreakPoints: 7, tiebreakMargin: 2, superTiebreak: true, superTiebreakPoints: 10, countingType: 'tennis', advantageRule: false, fixedSet: false },
   'best5': { label: 'Melhor de 5', icon: '🎯', setsToWin: 3, gamesPerSet: 6, tiebreakEnabled: true, tiebreakPoints: 7, tiebreakMargin: 2, superTiebreak: true, superTiebreakPoints: 10, countingType: 'tennis', advantageRule: false, fixedSet: false },
+  'fixedGames': { label: 'Games totais fixos', icon: '🎾', setsToWin: 1, gamesPerSet: 6, tiebreakEnabled: true, tiebreakPoints: 7, tiebreakMargin: 1, superTiebreak: false, superTiebreakPoints: 10, countingType: 'tennis', advantageRule: false, fixedSet: true },
   'custom': { label: 'Personalizado', icon: '⚙️', setsToWin: 1, gamesPerSet: 6, tiebreakEnabled: true, tiebreakPoints: 7, tiebreakMargin: 2, superTiebreak: false, superTiebreakPoints: 10, countingType: 'tennis', advantageRule: false, fixedSet: false }
 };
 
 // Build dynamic description from config values
 window._gsmBuildPresetDesc = function(key, cfg) {
+  if (key === 'fixedGames') {
+    var fixedGames = parseInt((document.getElementById('gsm-fixedSetGames') || {}).value, 10) ||
+      parseInt((document.getElementById('gsm-gamesPerSet') || {}).value, 10) || cfg.gamesPerSet || 6;
+    return fixedGames + ' games jogados; vence quem ganhar mais';
+  }
   if (key === 'custom') {
     // Read current hidden field values for live description
     var hS = document.getElementById('gsm-setsToWin');
@@ -8107,7 +8116,9 @@ window._gsmSelectPreset = function(key) {
   var p = presets[key];
   if (!p) return;
   var currentGames = parseInt((document.getElementById('gsm-gamesPerSet') || {}).value, 10) || 6;
-  if (p.gamesPerSet !== currentGames && window._scoringPhaseHasResult && window._scoringPhaseHasResult(0)) {
+  var fixedGames = parseInt((document.getElementById('gsm-fixedSetGames') || {}).value, 10) || currentGames;
+  var targetGames = key === 'fixedGames' ? fixedGames : p.gamesPerSet;
+  if (targetGames !== currentGames && window._scoringPhaseHasResult && window._scoringPhaseHasResult(0)) {
     if (typeof showNotification !== 'undefined') showNotification('Games por set bloqueados', 'A fase já tem placar lançado; os games para vencer não podem mais mudar.', 'warning');
     return;
   }
@@ -8118,8 +8129,8 @@ window._gsmSelectPreset = function(key) {
   if (key !== 'custom') {
     // Apply preset values to hidden fields
     document.getElementById('gsm-type').value = 'sets';
-    document.getElementById('gsm-setsToWin').value = String(p.setsToWin);
-    document.getElementById('gsm-gamesPerSet').value = String(p.gamesPerSet);
+    document.getElementById('gsm-setsToWin').value = String(key === 'fixedGames' ? 1 : p.setsToWin);
+    document.getElementById('gsm-gamesPerSet').value = String(targetGames);
     // O preset escolhe a quantidade de sets; a regra do empate é um controle da fase.
     var currentRule = (document.getElementById('gsm-tieRule') || {}).value;
     if (!currentRule && typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(0)) {
@@ -8128,19 +8139,23 @@ window._gsmSelectPreset = function(key) {
     document.getElementById('gsm-tiebreakEnabled').value = currentRule
       ? (currentRule === 'tiebreak' ? 'true' : 'false')
       : (p.tiebreakEnabled ? 'true' : 'false');
+    if (key === 'fixedGames' && targetGames % 2 === 0) {
+      document.getElementById('gsm-tieRule').value = 'tiebreak';
+      document.getElementById('gsm-tiebreakEnabled').value = 'true';
+    }
     document.getElementById('gsm-tiebreakPoints').value = String(p.tiebreakPoints);
-    document.getElementById('gsm-tiebreakMargin').value = String(p.tiebreakMargin);
+    document.getElementById('gsm-tiebreakMargin').value = String(key === 'fixedGames' ? 1 : p.tiebreakMargin);
     document.getElementById('gsm-twoPointAdvantage').value = 'true';
     document.getElementById('gsm-setTwoPointAdvantage').value = 'true';
     document.getElementById('gsm-tiebreakTwoPointAdvantage').value = 'true';
-    document.getElementById('gsm-superTiebreak').value = p.superTiebreak ? 'true' : 'false';
+    document.getElementById('gsm-superTiebreak').value = key !== 'fixedGames' && p.superTiebreak ? 'true' : 'false';
     document.getElementById('gsm-superTiebreakPoints').value = String(p.superTiebreakPoints);
     document.getElementById('gsm-countingType').value = p.countingType;
     // Advantage: use sport-specific logic
     var advVal = window._gsmGetAdvantageForSport();
     document.getElementById('gsm-advantageRule').value = advVal ? 'true' : 'false';
-    document.getElementById('gsm-fixedSet').value = 'false';
-    document.getElementById('gsm-fixedSetGames').value = '6';
+    document.getElementById('gsm-fixedSet').value = key === 'fixedGames' ? 'true' : 'false';
+    document.getElementById('gsm-fixedSetGames').value = key === 'fixedGames' ? String(targetGames) : '6';
   }
 
   // Re-render presets to show selection
@@ -8248,7 +8263,7 @@ window._gsmDetectPreset = function() {
   var stb = document.getElementById('gsm-superTiebreak').value === 'true';
   var stbPts = parseInt(document.getElementById('gsm-superTiebreakPoints').value) || 10;
   var fs = document.getElementById('gsm-fixedSet').value === 'true';
-  if (fs) return 'custom';
+  if (fs) return 'fixedGames';
   var presets = window._gsmPresets;
   var keys = ['set1', 'best3', 'best5'];
   for (var i = 0; i < keys.length; i++) {
@@ -8453,29 +8468,32 @@ window._tieAtToggleHtml = function (o) {
   // O empate que dispara a regra é sempre o anterior à vitória: com 6 games,
   // 5–5; com 4, 3–3. Não há um segundo valor independente para configurar.
   var at = Math.max(1, g - 1);
-  var rule = o.rule === 'tiebreak' ? 'tiebreak' : 'extend';
+  var rule = o.rule === 'tiebreak' || (o.fixedGames === true && g % 2 === 0) ? 'tiebreak' : 'extend';
   var setTwoPoint = o.setTwoPointAdvantage !== false;
   var tbTwoPoint = o.tiebreakTwoPointAdvantage !== false;
   var cor = o.cor || '168,85,247';
   var pfx = o.pfx || 'gsm';
+  var fixedGames = o.fixedGames === true;
+  var fixedTieRequired = fixedGames && g % 2 === 0;
   var phaseIndex = o.phaseIndex || 0;
   var locked = !!o.locked || (typeof window._scoringPhaseHasResult === 'function' && window._scoringPhaseHasResult(phaseIndex));
   var tieLocked = typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(phaseIndex);
   return '<div id="' + pfx + '-tieat-box" style="margin-top:10px;padding:12px;border-radius:10px;border:1px solid rgba(' + cor + ',0.28);background:rgba(' + cor + ',0.07);">' +
-    '<label for="' + pfx + '-games-target" style="display:block;font-size:0.82rem;font-weight:700;color:var(--text-color);margin-bottom:5px;">Games para vencer o set</label>' +
+    '<label for="' + pfx + '-games-target" style="display:block;font-size:0.82rem;font-weight:700;color:var(--text-color);margin-bottom:5px;">' + (fixedGames ? 'Total de games jogados na partida' : 'Games para vencer o set') + '</label>' +
     '<input type="number" inputmode="numeric" min="1" step="1" id="' + pfx + '-games-target" class="form-control" value="' + g + '" onchange="' + o.onGames + '(this.value)" style="max-width:110px;font-size:0.9rem;"' + (locked ? ' disabled title="O primeiro placar desta fase já foi lançado."' : '') + '>' +
-    (locked ? '<small style="display:block;color:var(--text-muted);margin-top:6px;">Games para vencer bloqueados: já existe resultado nesta fase.</small>' : '') +
-    (g <= 1 ? '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px;">Com 1 game para vencer, o primeiro game encerra o set; empate não se aplica.</div>' : '') +
-    (g <= 1 ? '' : '<div class="toggle-row" style="padding:6px 0;">' +
-      '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">Tie-break no empate</span><div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">' + (rule === 'tiebreak' ? 'Ativa quando faltar um game para vencer o set (' + at + '-' + at + ').' : 'Desativado; o set segue até cumprir a diferença configurada.') + '</div></div>' +
-      '<label class="toggle-switch toggle-sm"><input type="checkbox" aria-label="Ativar tie-break no empate" ' + (rule === 'tiebreak' ? 'checked ' : '') + (tieLocked ? 'disabled title="Um tie-break já foi registrado nesta fase." ' : '') + 'onchange="' + o.onRule + '(this.checked ? \'tiebreak\' : \'extend\')"><span class="toggle-slider"></span></label></div>' +
-      '<div class="toggle-row" style="padding:6px 0;">' +
+    (fixedGames ? '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px;">Todos jogam o total indicado; vence quem ganhar mais games.' + (g % 2 === 0 ? ' Se terminar empatado (' + (g / 2) + '–' + (g / 2) + '), o tie-break decide.' : ' Como o total é ímpar, não há empate no placar de games.') + '</div>' : '') +
+    (locked ? '<small style="display:block;color:var(--text-muted);margin-top:6px;">Games bloqueados: já existe resultado nesta fase.</small>' : '') +
+    (g <= 1 && !fixedGames ? '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px;">Com 1 game para vencer, o primeiro game encerra o set; empate não se aplica.</div>' : '') +
+    (g <= 1 && !fixedGames ? '' : (!fixedGames || g % 2 === 0 ? '<div class="toggle-row" style="padding:6px 0;">' +
+    '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">' + (fixedGames ? 'Tie-break se os games terminarem empatados' : 'Tie-break no empate') + '</span><div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">' + (fixedGames ? (rule === 'tiebreak' ? 'Depois dos ' + g + ' games; em ' + (g / 2) + '–' + (g / 2) + ', a simples decide.' : 'Empate após os games fixos não terá vencedor.') : (rule === 'tiebreak' ? 'Ativa quando faltar um game para vencer o set (' + at + '-' + at + ').' : 'Desativado; o set segue até cumprir a diferença configurada.')) + '</div></div>' +
+      '<label class="toggle-switch toggle-sm"><input type="checkbox" aria-label="Ativar tie-break no empate" ' + (rule === 'tiebreak' || fixedTieRequired ? 'checked ' : '') + (tieLocked || fixedTieRequired ? 'disabled title="' + (fixedTieRequired ? 'Necessário para decidir um empate no total par de games.' : 'Um tie-break já foi registrado nesta fase.') + '" ' : '') + 'onchange="' + o.onRule + '(this.checked ? \'tiebreak\' : \'extend\')"><span class="toggle-slider"></span></label></div>' +
+      (!fixedGames ? '<div class="toggle-row" style="padding:6px 0;">' +
       '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">Exigir 2 games de diferença no set</span><div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">Desative para encerrar ao atingir o total de games para vencer.</div></div>' +
-      '<label class="toggle-switch toggle-sm"><input type="checkbox" aria-label="Exigir dois games de diferença no set" ' + (setTwoPoint ? 'checked ' : '') + (tieLocked ? 'disabled title="Um tie-break já foi registrado nesta fase." ' : '') + 'onchange="' + o.onSetTwoPoint + '(this.checked)"><span class="toggle-slider"></span></label></div>' +
+      '<label class="toggle-switch toggle-sm"><input type="checkbox" aria-label="Exigir dois games de diferença no set" ' + (setTwoPoint ? 'checked ' : '') + (tieLocked ? 'disabled title="Um tie-break já foi registrado nesta fase." ' : '') + 'onchange="' + o.onSetTwoPoint + '(this.checked)"><span class="toggle-slider"></span></label></div>' : '') +
       '<div class="toggle-row" style="padding:6px 0;">' +
       '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">Exigir 2 pontos de diferença no tie-break</span><div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">Vale também para o super tie-break.</div></div>' +
       '<label class="toggle-switch toggle-sm"><input type="checkbox" aria-label="Exigir dois pontos de diferença no tie-break" ' + (tbTwoPoint ? 'checked ' : '') + (tieLocked ? 'disabled title="Um tie-break já foi registrado nesta fase." ' : '') + 'onchange="' + o.onTbTwoPoint + '(this.checked)"><span class="toggle-slider"></span></label></div>' +
-      (tieLocked ? '<small style="display:block;color:var(--text-muted);margin-top:6px;">Regras de empate bloqueadas: já foi registrado um tie-break nesta fase.</small>' : '')) +
+      (tieLocked ? '<small style="display:block;color:var(--text-muted);margin-top:6px;">Regras de empate bloqueadas: já foi registrado um tie-break nesta fase.</small>' : '') : '')) +
     (o.at && o.at !== 'g-1' ? '<small style="display:block;color:var(--text-muted);margin-top:6px;">Regra anterior preservada. Ao editar este campo, o empate passa a ocorrer um game abaixo.</small>' : '') +
   '</div>';
 };
@@ -8509,7 +8527,7 @@ window._gsmRenderTieAt = function () {
   var ruleEl = document.getElementById('gsm-tieRule');
   var rule = (ruleEl && ruleEl.value) || (_cfg.tiebreakEnabled ? 'tiebreak' : 'extend');
   box.innerHTML = window._tieAtToggleHtml({
-    games: g, at: window._gsmTieAtAtual(), rule: rule, cor: '168,85,247', pfx: 'gsm',
+    games: g, at: window._gsmTieAtAtual(), rule: rule, fixedGames: (document.getElementById('gsm-fixedSet') || {}).value === 'true', cor: '168,85,247', pfx: 'gsm',
     rule: rule,
     setTwoPointAdvantage: (document.getElementById('gsm-setTwoPointAdvantage') || {}).value !== 'false',
     tiebreakTwoPointAdvantage: (document.getElementById('gsm-tiebreakTwoPointAdvantage') || {}).value !== 'false',
@@ -8522,15 +8540,20 @@ window._gsmSetGamesInline = function (raw) {
   if (!Number.isInteger(n) || n < 1 || (typeof window._scoringPhaseHasResult === 'function' && window._scoringPhaseHasResult(0))) { window._gsmRenderTieAt(); return; }
   document.getElementById('gsm-type').value = 'sets';
   document.getElementById('gsm-countingType').value = 'tennis';
-  document.getElementById('gsm-fixedSet').value = 'false';
+  var fixedGames = document.getElementById('gsm-fixedSet').value === 'true';
   document.getElementById('gsm-gamesPerSet').value = String(n);
+  document.getElementById('gsm-fixedSetGames').value = fixedGames ? String(n) : '6';
+  if (fixedGames && n % 2 === 0) {
+    document.getElementById('gsm-tieRule').value = 'tiebreak';
+    document.getElementById('gsm-tiebreakEnabled').value = 'true';
+  }
   document.getElementById('gsm-tiebreakAt').value = n === 1 ? '' : 'g-1';
   if (n === 1) {
     document.getElementById('gsm-tieRule').value = 'extend';
     document.getElementById('gsm-tiebreakEnabled').value = 'false';
   }
   window._gsmForcedCustom = true;
-  window._gsmSelectedPreset = 'custom';
+  window._gsmSelectedPreset = fixedGames ? 'fixedGames' : 'custom';
   if (typeof window._gsmRenderPresets === 'function') window._gsmRenderPresets();
   if (typeof window._gsmUpdateMainSummary === 'function') window._gsmUpdateMainSummary();
 };
@@ -8545,6 +8568,9 @@ window._gsmSetTieAtInline = function (raw) {
 };
 window._gsmSetTieRuleInline = function (rule) {
   if (['tiebreak', 'extend'].indexOf(rule) === -1) return;
+  var fixedGames = document.getElementById('gsm-fixedSet').value === 'true';
+  var totalGames = Number(document.getElementById('gsm-fixedSetGames').value || document.getElementById('gsm-gamesPerSet').value || 6);
+  if (rule === 'extend' && fixedGames && totalGames % 2 === 0) { window._gsmRenderTieAt(); return; }
   if (typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(0)) { window._gsmRenderTieAt(); return; }
   document.getElementById('gsm-type').value = 'sets';
   document.getElementById('gsm-tieRule').value = rule;
@@ -8742,6 +8768,7 @@ window._gsmReadConfigOverlay = function () {
   // ainda lê ele; a fonte é o tieRule.
   var _segR = document.getElementById('gsm-tierule-seg');
   out.tieRule = (_segR && _segR.dataset.tierule) ? _segR.dataset.tierule : (out.tiebreakEnabled ? 'tiebreak' : 'extend');
+  if (fsOn && games % 2 === 0) out.tieRule = 'tiebreak';
   out.tiebreakEnabled = (out.tieRule === 'tiebreak');
   return out;
 };
@@ -8780,6 +8807,7 @@ window._gsmSaveConfig = function() {
     if (typeof showNotification !== 'undefined') showNotification('Games por set bloqueados', 'A fase já tem placar lançado; os games para vencer não podem mais mudar.', 'warning');
     window._gsmCloseConfig(); return;
   }
+  if (_cfgOv.fixedSet) window._gsmForcedCustom = false;
   document.getElementById('gsm-setsToWin').value = String(_cfgOv.setsToWin);
   document.getElementById('gsm-gamesPerSet').value = String(_cfgOv.gamesPerSet);
   document.getElementById('gsm-tiebreakEnabled').value = _cfgOv.tiebreakEnabled ? 'true' : 'false';
@@ -8919,7 +8947,7 @@ window._f2TemplateCopy = function(fmt2Bruto) {
     });
     return out;
   };
-  var out = pick(raw, ['disputa', 'grupos', 'parceria', 'superEightDrawMode', 'formacaoDupla', 'manualPairingOpen', 'manualPairingPolicy',
+  var out = pick(raw, ['disputa', 'grupos', 'parceria', 'superEightDrawMode', 'superEightRounds', 'formacaoDupla', 'manualPairingOpen', 'manualPairingPolicy',
     'classifAtiva', 'classificados', 'classifScope', '_scoreBy', 'historicalSinglesOverride',
     'rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution', 'tieSinglesPoints', 'tieSinglesMargin']);
   if (raw.rodadas) {

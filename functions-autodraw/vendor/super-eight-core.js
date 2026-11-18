@@ -2,8 +2,12 @@
  * dos pares em jogos minimiza reencontros como adversários no ciclo inteiro. */
 (function (root) {
   'use strict';
-  function build(ids) {
-    if (!Array.isArray(ids) || ids.length !== 8 || new Set(ids.map(String)).size !== 8) {
+  function identity(value) {
+    if (value && typeof value === 'object') return String(value.uid || value.id || value.displayName || value.name || '');
+    return String(value);
+  }
+  function build(ids, roundsCount) {
+    if (!Array.isArray(ids) || ids.length !== 8 || new Set(ids.map(identity)).size !== 8 || ids.some(function (id) { return !identity(id); })) {
       throw new Error('O ciclo individual exige oito atletas distintos.');
     }
     var ring = [0, 1, 2, 3, 4, 5, 6, 7], rounds = [];
@@ -32,11 +36,12 @@
         best = digits; bestScore = score; bestMax = max;
       }
     }
-    return { rounds: rounds.map(function (pairs, ri) {
+    var totalRounds = Math.max(1, Math.min(7, Math.floor(Number(roundsCount) || 7)));
+    return { rounds: rounds.slice(0, totalRounds).map(function (pairs, ri) {
       return layouts[best[ri]].map(function (duel) {
         return duel.map(function (pi) { return pairs[pi].map(function (i) { return ids[i]; }); });
       });
-    }), opponentRepeatScore: bestScore, maxOpponents: bestMax };
+    }), roundsCount: totalRounds, opponentRepeatScore: bestScore, maxOpponents: bestMax };
   }
   var api = { build: build };
   root.ScoreplaceSuperEight = api;

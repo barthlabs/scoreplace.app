@@ -23,4 +23,22 @@ assert.equal(opponents.size, 27);
 assert.equal(plan.opponentRepeatScore, 28);
 assert.equal(Math.max(...opponents.values()), plan.maxOpponents);
 assert.throws(() => core.build(people.slice(0, 7)));
+const fiveRounds = core.build(people, 5);
+assert.equal(fiveRounds.rounds.length, 5);
+const fiveRoundPartners = new Set(), appearances = new Map(people.map((id) => [id, 0]));
+for (const round of fiveRounds.rounds) {
+  assert.equal(round.length, 2);
+  assert.deepEqual(round.flat(2).slice().sort(), people);
+  for (const [left, right] of round) {
+    for (const player of left.concat(right)) appearances.set(player, appearances.get(player) + 1);
+    for (const side of [left, right]) {
+      const key = side.slice().sort().join(':');
+      assert.equal(fiveRoundPartners.has(key), false);
+      fiveRoundPartners.add(key);
+    }
+  }
+}
+assert.deepEqual(Array.from(appearances.values()), Array(8).fill(5));
+assert.equal(fiveRoundPartners.size, 20);
 console.log('✓ oito atletas, sete rodadas, 28 parcerias únicas e escolha de confrontos calculada');
+console.log('✓ cinco rodadas: todos jogam cinco vezes e nenhum parceiro se repete');

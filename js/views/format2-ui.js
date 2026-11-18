@@ -256,15 +256,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return;
     }
     var singles = cfg.tieResolution === 'singles_then_draw';
+    var drawTwo = cfg.tieResolution === 'singles_draw_two';
     var criteria = document.getElementById('tiebreaker-criteria-section');
     if (criteria) criteria.style.display = singles ? 'none' : '';
     el.innerHTML = '<section style="padding:12px;margin:8px 0 14px;border:1px solid var(--sp-b-255-255-255-016,rgba(255,255,255,.16));border-radius:10px;background:var(--sp-g-255-255-255-005,rgba(255,255,255,.05));">' +
       '<h4 style="margin:0 0 5px;color:var(--text-main);">Empate na classificação</h4>' +
       '<p style="margin:0 0 10px;font-size:.8rem;color:var(--text-muted);">Escolha como resolver um empate que afete a classificação.</p>' +
       '<div class="sp-tie-mode-choices" role="group" aria-label="Como desempatar a classificação">' +
-      _pill(singles, "window._f2TieResolution('singles_then_draw')", 'Simples de desempate') +
-      _pill(!singles, "window._f2TieResolution('draw_order')", 'Critérios de desempate') + '</div>' +
-      (singles ? '<p style="margin:6px 0 2px;font-size:.76rem;color:var(--text-muted);">Se não houver tempo, a organização pode dispensar as partidas e usar a ordem original do sorteio.</p>' + _tieSinglesControls(cfg) : '') +
+      _pill(singles, "window._f2TieResolution('singles_then_draw')", 'Simples / triangular') +
+      _pill(drawTwo, "window._f2TieResolution('singles_draw_two')", 'Sortear 2 e jogar simples') +
+      _pill(!singles && !drawTwo, "window._f2TieResolution('draw_order')", 'Critérios de desempate') + '</div>' +
+      (singles ? '<p style="margin:6px 0 2px;font-size:.76rem;color:var(--text-muted);">Para dois, uma simples; para três, disputa triangular. Se não houver tempo, a organização pode dispensar as partidas e usar a ordem original do sorteio.</p>' + _tieSinglesControls(cfg) : '') +
+      (drawTwo ? '<p style="margin:6px 0 2px;font-size:.76rem;color:var(--text-muted);">Com três ou mais empatados, o sistema sorteia dois atletas para uma simples; se outra posição relevante continuar empatada, sorteia dois entre os restantes. A quantidade de pontos e a vantagem da simples são configuráveis abaixo.</p>' + _tieSinglesControls(cfg) : '') +
       '</section>';
     _lockDrawnStandings();
   }
@@ -353,7 +356,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _elimPresetKey(sc) {
     var P = window._gsmPresets || {};
     if (!sc) return null;
-    if (sc.fixedSet) return 'custom';
+    if (sc.fixedSet) return 'fixedGames';
     var keys = ['set1', 'best3', 'best5'];
     for (var i = 0; i < keys.length; i++) {
       var p = P[keys[i]];
@@ -408,10 +411,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var eff = _elimEffScoring(e);
     var selKey = _elimSelKey(e);
     var grid = '';
-    ['set1', 'best3', 'best5', 'custom'].forEach(function (k) {
+    ['set1', 'best3', 'best5', 'fixedGames', 'custom'].forEach(function (k) {
       var p = P[k]; if (!p) return;
       var active = (selKey === k);
-      var desc = (k === 'custom')
+      var desc = (k === 'fixedGames')
+        ? ((Number(eff && eff.fixedSetGames) || Number(eff && eff.gamesPerSet) || 6) + ' games jogados; vence quem ganhar mais')
+        : (k === 'custom')
         ? (active ? (_elimScoringDesc(eff) || 'Configure manualmente') : 'Configure manualmente')
         : (typeof window._gsmBuildDescFromValues === 'function'
           // o preset da fase 2 desenha com o GATILHO da fase 2 — cada fase tem o seu
@@ -433,7 +438,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">' + grid + '</div>' +
       // A eliminatória pode herdar ou escolher seus próprios games e regra de empate.
       ((typeof window._tieAtToggleHtml === 'function' && eff)
-        ? window._tieAtToggleHtml({ games: (eff && eff.gamesPerSet) || 6, at: _elimTieAtAtual(e),
+        ? window._tieAtToggleHtml({ games: (eff && eff.fixedSet ? (eff.fixedSetGames || eff.gamesPerSet) : eff.gamesPerSet) || 6, fixedGames: !!eff.fixedSet, at: _elimTieAtAtual(e),
             rule: eff.tieRule || (eff.tiebreakEnabled !== false ? 'tiebreak' : 'extend'),
             setTwoPointAdvantage: eff.setTwoPointAdvantage !== undefined ? eff.setTwoPointAdvantage : (eff.twoPointAdvantage !== undefined ? eff.twoPointAdvantage : Number(eff.tiebreakMargin || 2) >= 2),
             tiebreakTwoPointAdvantage: eff.tiebreakTwoPointAdvantage !== undefined ? eff.tiebreakTwoPointAdvantage : (eff.twoPointAdvantage !== undefined ? eff.twoPointAdvantage : Number(eff.tiebreakMargin || 2) >= 2),
@@ -630,7 +635,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       (S.t.matches || []).reduce(function (max, match) {
         return match && Number(match.phaseIndex || 0) === 0 ? Math.max(max, Number(match.round) || 0) : max;
       }, 0), 1) : 1;
-    var rounds = fld('Nº de rodadas', '<input id="f2-sched-n" type="number" min="' + alreadyDrawn + '" max="' + (S.cfg.parceria === 'super_eight' ? 7 : 30) + '" value="' + (r.n || '') + '" placeholder="—" onchange="window._f2Rn(this.value)"' + (singleLocked ? ' disabled title="Rodadas definidas pelo sorteio único"' : '') + ' style="' + inp + 'width:90px;text-align:center;">');
+    var roundsLabel = S.cfg.parceria === 'super_eight' ? 'Partidas por atleta no grupo' : 'Nº de rodadas';
+    var rounds = fld(roundsLabel, '<input id="f2-sched-n" type="number" min="' + alreadyDrawn + '" max="' + (S.cfg.parceria === 'super_eight' ? 7 : 30) + '" value="' + (r.n || '') + '" placeholder="—" onchange="window._f2Rn(this.value)"' + (singleLocked ? ' disabled title="Rodadas definidas pelo sorteio único"' : '') + ' style="' + inp + 'width:90px;text-align:center;">');
+    if (S.cfg.parceria === 'super_eight') {
+      rounds = fld(roundsLabel, '<input id="f2-sched-n" type="number" min="' + (drawn ? alreadyDrawn : 1) + '" max="7" value="' + (r.n || 7) + '" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;">') +
+        '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;">Cada rodada tem 2 jogos: cada atleta joga uma vez e recebe um parceiro diferente. Sorteio único prepara todas as rodadas escolhidas.</div>';
+    }
     var maxPeople = Number((document.getElementById('tourn-max-participants') || {}).value) ||
       (S.t ? _peopleCount(S.t) : 0);
     var eligible = S.cfg.disputa === 'dupla' && S.cfg.grupos === 1 &&
@@ -732,15 +742,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var perP = units > 0 ? (isDupla ? (small * 2 + (rem ? '–' + big * 2 : '')) : perU) : '—';
     return { t: t, people: people, isDupla: isDupla, units: units, ng: ng, base: base, rem: rem, perU: perU, perP: perP, assessment: assessment };
   }
+  function _effectiveGroupCount(cfg, gi) {
+    return cfg && cfg.parceria === 'rotation_groups_8'
+      ? Math.ceil(Math.max(0, Number(gi && gi.units) || 0) / 8)
+      : Math.max(1, Number(cfg && cfg.grupos) || 1);
+  }
   // Linha de estimativa (inscritos + tempo de jogos).
   function _estimateLine(cfg) {
     var gi = _groupInfo(cfg);
     if (!gi.people) return '<div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);">Sem inscritos ainda — a divisão dos grupos e o tempo aparecem quando houver gente inscrita.</div>';
     if (cfg.parceria === 'super_eight' && gi.people !== 8) return '<div role="status" style="margin-top:8px;font-size:0.72rem;color:var(--sp-c-fbbf24,#fbbf24);">Super 8 individual exige exatamente oito atletas ativos; inscritos agora: ' + gi.people + '.</div>';
-    var groupGames = cfg.parceria === 'super_eight' ? 14 : gi.assessment.matches;
+    var groupGames = cfg.parceria === 'super_eight' ? 14 : cfg.parceria === 'rotation_groups_8'
+      ? _effectiveGroupCount(cfg, gi) * Math.max(1, parseInt(cfg.rodadas.n, 10) || 5) * 2 : gi.assessment.matches;
     var elimGames = 0;
     if (cfg.eliminatoria.ativa) {
-      var q = (cfg.grupos > 1) ? cfg.grupos * cfg.classificados : cfg.classificados;
+      var q = _effectiveGroupCount(cfg, gi) > 1 ? _effectiveGroupCount(cfg, gi) * cfg.classificados : cfg.classificados;
       q = Math.min(q, gi.units);
       if (q >= 2) elimGames = (q - 1) + (q >= 4 ? 1 : 0);   // 3º lugar sempre (≥4 tem 2 semis)
     }
@@ -763,7 +779,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!cfg.eliminatoria || !cfg.eliminatoria.ativa) return '';
     var gi = _groupInfo(cfg);
     var isDupla = cfg.disputa === 'dupla';
-    var perGroupScope = cfg.grupos > 1 && cfg.classifScope !== 'overall';
+    var effectiveGroups = _effectiveGroupCount(cfg, gi);
+    var perGroupScope = (effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8') && cfg.classifScope !== 'overall';
     // v4.4.40: "Todos" → o total é o nº REAL de inscritos (não o classificados). Sem inscritos,
     // não dá pra saber quantos "todos" são → mensagem em vez de número fixo.
     if (cfg.eliminatoria.qualifyAll) {
@@ -775,7 +792,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var available = rankedIndividuals ? gi.people : gi.units;
     var extras = (!cfg.eliminatoria.qualifyAll && perGroupScope && cfg.eliminatoria.bestNextByGroup)
       ? Number(cfg.eliminatoria.bestNextByGroup.count || 0) : 0;
-    var q = cfg.eliminatoria.qualifyAll ? available : (perGroupScope ? cfg.grupos * cfg.classificados : cfg.classificados) + extras;
+    var q = cfg.eliminatoria.qualifyAll ? available : (perGroupScope ? effectiveGroups * cfg.classificados : cfg.classificados) + extras;
     if (available > 0) q = Math.min(q, available);
     var teams = Math.max(0, rankedIndividuals ? Math.floor(q / 2) : q);
     var people = rankedIndividuals ? q : teams * (isDupla ? 2 : 1);
@@ -945,7 +962,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var allowsS = window.FORMAT2.allowsSingles(sport);
     var isDupla = cfg.disputa === 'dupla';
     var um = cfg.grupos === 1;
-    var rotativo = isDupla && (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada' || cfg.parceria === 'super_eight');
+    var rotativo = isDupla && (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada' || cfg.parceria === 'super_eight' || cfg.parceria === 'rotation_groups_8');
     var scoreInd = cfg._scoreBy === 'individual';
     var entryControls = '', formationControls = '', teamChoiceControls = '', scoringControls = '', structureControls = '';
     // v4.5.49: o AGENDAMENTO (Rodadas: repetição + nº de rodadas) e as DATAS/Inscrições da fase
@@ -970,10 +987,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     entryControls += _binaryChoice('Simples', 'Duplas', isDupla,
       "window._f2Disputa(this.checked?'dupla':'individual')", 'Disputa em simples ou duplas');
 
-    structureControls += _sec('Estrutura — nº de grupos',
-      '<div style="display:flex;align-items:center;gap:12px;">' +
-      '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="window._f2GruposLive(this.value)" onchange="window._f2Grupos(this.value)" style="flex:1;accent-color:#818cf8;">' +
-      '<span id="f2-grupos-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:var(--sp-c-c7d2fe,#c7d2fe);">' + cfg.grupos + '</span></div>');
+    structureControls += _sec('Estrutura — nº de grupos', cfg.parceria === 'rotation_groups_8'
+      ? '<div style="font-size:.78rem;color:var(--text-muted);">Gerados automaticamente por categoria: um grupo a cada oito atletas.</div>'
+      : '<div style="display:flex;align-items:center;gap:12px;">' +
+        '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="window._f2GruposLive(this.value)" onchange="window._f2Grupos(this.value)" style="flex:1;accent-color:#818cf8;">' +
+        '<span id="f2-grupos-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:var(--sp-c-c7d2fe,#c7d2fe);">' + cfg.grupos + '</span></div>');
 
     // (A FORMAÇÃO das duplas — participantes montam × organizador, + times sorteados vs
     //  montados — fica nos toggles detalhados da seção "Formação de Duplas" abaixo do form.)
@@ -994,6 +1012,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       } else {
         fBtns += _sec('Como serão formados os confrontos na classificatória',
           _pill(isSorteio, "window._f2TeamForm('sorteio')", 'Parceiros sorteados') +
+          _pill(pr === 'rotation_groups_8', "window._f2TeamForm('rotation_groups_8')", 'Grupos de 8 · rodízio') +
           (um ? _pill(pr === 'rei_rainha', "window._f2TeamForm('rei_rainha')", 'Rodada Rei/Rainha') : ''));
       }
       // v4.4.30: Sorteio + 1 grupo → toggle "Novo parceiro a cada rodada" (ON por padrão).
@@ -1084,7 +1103,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
     var rModo = cfg.rodadas.modo;
     var rInner;
-    if (rotativo) {
+    if (cfg.parceria === 'rotation_groups_8') {
+      var rotationCount = Math.max(1, Math.min(7, parseInt(cfg.rodadas.n, 10) || 5));
+      rInner = '<label style="display:block;font-size:.74rem;color:var(--text-muted);margin-bottom:6px;">Partidas por atleta em cada grupo</label>' +
+        '<input type="number" min="1" max="7" value="' + rotationCount + '" onchange="window._f2RotationRounds(this.value)" style="width:82px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);">' +
+        '<div style="font-size:.72rem;color:var(--text-muted);margin-top:7px;line-height:1.45;">Cada grupo tem 8 atletas. O sorteio atribui A–H; cada rodada tem 2 jogos e cada atleta joga uma vez com parceiro diferente. Os grupos são separados por categoria.</div>';
+    } else if (rotativo) {
       // Rei/Rainha (ou sorteio a cada rodada): SEMPRE nº de rodadas + agendamento (rotativo por
       // rodada). "Todos contra todos" não se aplica — mas o Nº de rodadas FICA (pedido do dono).
       rInner = _schedBlock(cfg.rodadas);
@@ -1140,13 +1164,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     if (S.mode !== 'form' && cfg._scoreBy === 'individual' && !(tc && tc.enabled)) classifSchedule += _sec('Empate após os critérios de desempate',
       '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;">Quando atletas empatados seguiriam para destinos diferentes:</div>' +
-      _pill(cfg.tieResolution !== 'singles_then_draw', "window._f2TieResolution('draw_order')", '🎲 Ordem do sorteio original') +
-      _pill(cfg.tieResolution === 'singles_then_draw', "window._f2TieResolution('singles_then_draw')", '🎾 Simples / triangular; sorteio original se dispensado') +
+      _pill(cfg.tieResolution === 'draw_order', "window._f2TieResolution('draw_order')", '🎲 Ordem do sorteio original') +
+      _pill(cfg.tieResolution === 'singles_then_draw', "window._f2TieResolution('singles_then_draw')", '🎾 Simples / triangular') +
+      _pill(cfg.tieResolution === 'singles_draw_two', "window._f2TieResolution('singles_draw_two')", '🎾 Sortear 2 e jogar simples') +
       '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' +
       (cfg.tieResolution === 'singles_then_draw'
         ? 'A regra prevê 1 simples para 2 empatados ou 3 simples em triangular para 3. Na hora do avanço, a organização pode dispensar os jogos por falta de tempo; nesse caso vale a ordem do sorteio original, sem novo sorteio.'
+        : cfg.tieResolution === 'singles_draw_two'
+          ? 'Com 3 ou mais empatados, sorteiam-se 2 para a simples; se houver outra posição relevante, o sorteio e a simples se repetem entre os restantes.'
         : 'Após os critérios estatísticos, vale a ordem definida no sorteio original. Nenhuma nova partida é criada.') + '</div>' +
-      (cfg.tieResolution === 'singles_then_draw'
+      (['singles_then_draw', 'singles_draw_two'].includes(cfg.tieResolution)
         ? _tieSinglesControls(cfg)
         : ''));
 
@@ -1168,8 +1195,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         eb += '<div style="font-size:0.74rem;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.08);border-radius:8px;padding:8px 10px;margin-bottom:12px;">Sem fase classificatória — todos os inscritos entram direto na eliminatória.</div>';
       } else {
         // COM classificatória: escopo (2+ grupos) + Nº de classificados + resumo.
-        var perGroupScope = cfg.grupos > 1 && cfg.classifScope !== 'overall';
-        if (cfg.grupos > 1) {
+        var effectiveGroups = _effectiveGroupCount(cfg, _groupInfo(cfg));
+        var perGroupScope = (effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8') && cfg.classifScope !== 'overall';
+        if (effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8') {
           eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Classificação dos participantes</div>' +
             _pill(perGroupScope, 'window._f2ClassScope(\'per_group\')', '🗂️ Por grupos') +
             _pill(!perGroupScope, 'window._f2ClassScope(\'overall\')', '📊 Geral') +
@@ -1276,8 +1304,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
        * Só aparece na eliminatória SIMPLES: na dupla, a "repescagem" é o próprio formato (todo mundo
        * precisa perder duas vezes), não tratamento de resto — oferecer a escolha ali seria oferecer
        * um botão que não muda nada. A conta e as fórmulas de cada desenho estão em `chaves.js`. */
+      var _effectiveGroups = _effectiveGroupCount(cfg, _groupInfo(cfg));
       var _knownCount = cfg.classifAtiva && !e.qualifyAll
-        ? (cfg.classifScope === 'per_group' && cfg.grupos > 1 ? cfg.grupos * cfg.classificados : cfg.classificados)
+        ? (cfg.classifScope === 'per_group' && (_effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8') ? _effectiveGroups * cfg.classificados : cfg.classificados)
         : (_peopleCount(S.t) || Number((document.getElementById('tourn-max-participants') || {}).value) || 0);
       if (cfg.disputa === 'dupla' && !cfg.classifAtiva && !e.openReiRainha) _knownCount = Math.floor(_knownCount / 2);
       if (cfg.disputa === 'dupla' && e.openReiRainha) _knownCount = Math.floor(_knownCount / 2);
@@ -1440,7 +1469,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ? 'Saída escolhida: entrada direta na eliminatória.'
       : (e.ativa ? 'Saída escolhida: a classificatória seleciona participantes para a eliminatória.'
         : 'Saída escolhida: classificação final de ' + _titleUnit + ', sem eliminatória.');
-    var eliminationStep = cfg.parceria === 'super_eight' ? '' : _phaseBlock('3. 🏆 Fase Eliminatória', '#fbbf24', e.ativa ? elimInner : '',
+    var eliminationStep = _phaseBlock('3. 🏆 Fase Eliminatória', '#fbbf24', e.ativa ? elimInner : '',
       _hdrRight(_elimLocked,
         _toggleRight('Ativa', e.ativa, 'window._f2Elim(this.checked)',
           _elimLocked || (e.ativa && !cfg.classifAtiva))));
@@ -1462,7 +1491,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     S.cfg.manualPairingOpen = policy !== 'organizer_only';
     _norm(); _rerender();
   };
-  window._f2TieResolution = function (v) { if (!S) return; S.cfg.tieResolution = v; _norm(); _rerender(); };
+  window._f2TieResolution = function (v) {
+    if (!S || !['draw_order', 'singles_then_draw', 'singles_draw_two'].includes(v)) return;
+    S.cfg.tieResolution = v;
+    if (v === 'singles_draw_two') {
+      if (!(Number(S.cfg.tieSinglesPoints) >= 1)) S.cfg.tieSinglesPoints = 7;
+      if (![1, 2].includes(Number(S.cfg.tieSinglesMargin))) S.cfg.tieSinglesMargin = 1;
+    }
+    _norm(); _rerender();
+  };
   window._f2TieSinglesPoints = function (v) { if (!S) return; S.cfg.tieSinglesPoints = v; _norm(); _rerender(); };
   window._f2TieSinglesMargin = function (v) { if (!S) return; S.cfg.tieSinglesMargin = v; _norm(); _rerender(); };
   window._f2SitOutScoring = function (mode) {
@@ -1569,10 +1606,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     else if (v === 'rei_rainha') { S.cfg.parceria = 'rei_rainha'; S.cfg.formacaoDupla = 'sorteio'; }
     else if (v === 'super_eight') {
+      if (S.cfg.parceria !== 'super_eight') S.cfg.rodadas.n = 7;
       S.cfg.parceria = 'super_eight'; S.cfg.formacaoDupla = 'sorteio'; S.cfg.superEightDrawMode = 'single';
       if (!S.cfg.rodadas.drawFirstDate) S.cfg.rodadas.drawManual = true;
     }
+    else if (v === 'rotation_groups_8') {
+      S.cfg.parceria = 'rotation_groups_8'; S.cfg.formacaoDupla = 'sorteio';
+      if (!Number.isInteger(Number(S.cfg.rodadas.n)) || Number(S.cfg.rodadas.n) < 1) S.cfg.rodadas.n = 5;
+    }
     _norm(); _rerender();
+  };
+  window._f2RotationRounds = function (value) {
+    if (!S || S.cfg.parceria !== 'rotation_groups_8') return;
+    var n = Math.max(1, Math.min(7, parseInt(value, 10) || 5));
+    S.cfg.rodadas.n = n; _norm(); _rerender();
   };
   // v4.4.30: toggle "Novo parceiro a cada rodada" dentro do Sorteio. ON = sorteio_rodada
   // (rotativo); OFF = dupla sorteada 1× e fixa (fixa+sorteio).
@@ -1598,20 +1645,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var n = parseInt(v, 10);
     if (!(n >= 1)) { return; } // vazio → mantém tudo (repetir intacto), sem re-render
     if (_hasDrawnGames()) {
-      if (S.cfg.parceria === 'super_eight' && S.cfg.superEightDrawMode === 'single') return;
+      if (S.cfg.parceria === 'super_eight' && S.cfg.superEightDrawMode === 'single') {
+        if (n < S.cfg.rodadas.n || n > 7) { _rerender(); return; }
+      }
       var drawn = Math.max((S.t.rounds || []).length, (S.t.swissRoundsData || []).length,
         (S.t.matches || []).reduce(function (max, match) {
           return match && Number(match.phaseIndex || 0) === 0 ? Math.max(max, Number(match.round) || 0) : max;
         }, 0), 1);
       if (n < drawn) { _rerender(); return; }
-      if (S.cfg.parceria === 'super_eight' && n > 7) { _rerender(); return; }
     }
-    if (S.cfg.parceria === 'super_eight' && n !== 7 && !_hasDrawnGames()) S.cfg.parceria = 'sorteio_rodada';
     S.cfg.rodadas.n = n;
     _norm(); _rerender();
   };
   window._f2UniquePartner = function (checked) {
     if (!S) return;
+    if (checked && S.cfg.parceria !== 'super_eight') S.cfg.rodadas.n = 7;
     S.cfg.parceria = checked ? 'super_eight' : 'sorteio_rodada';
     if (checked) { S.cfg.formacaoDupla = 'sorteio'; S.cfg.superEightDrawMode = 'single'; }
     _norm(); _rerender();
@@ -1722,7 +1770,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var n = Math.max(1, parseInt(v, 10) || 1);
     // v4.4.41: chegar no total de inscritos (geral) = TODOS → some a barra, botão vira Todos.
     var units = _groupInfo(S.cfg).units;
-    var perGroupScope = S.cfg.grupos > 1 && S.cfg.classifScope !== 'overall';
+    var perGroupScope = (_effectiveGroupCount(S.cfg, _groupInfo(S.cfg)) > 1 || S.cfg.parceria === 'rotation_groups_8') && S.cfg.classifScope !== 'overall';
     if (!perGroupScope && units > 1 && n >= units) { S.cfg.eliminatoria.qualifyAll = true; }
     else { S.cfg.classificados = n; }
     _norm(); _rerender();
@@ -1990,9 +2038,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2ElimSetGames = function (raw) {
     var n = Number(raw);
     if (!Number.isInteger(n) || n < 1 || (typeof window._scoringPhaseHasResult === 'function' && window._scoringPhaseHasResult(1))) { _rerender(); return; }
-    _setElimGameRule(n === 1
+    var current = _elimEffScoring(S && S.cfg.eliminatoria);
+    var fixed = !!(current && current.fixedSet);
+    _setElimGameRule(n === 1 && !fixed
       ? { gamesPerSet: n, fixedSet: false, tieRule: 'extend', tiebreakEnabled: false, tiebreakAt: '' }
-      : { gamesPerSet: n, fixedSet: false });
+      : { gamesPerSet: n, fixedSet: fixed, fixedSetGames: fixed ? n : 6,
+          ...(fixed && n % 2 === 0 ? { tieRule: 'tiebreak', tiebreakEnabled: true } : {}) });
   };
   window._f2ElimSetTieAt = function (raw) {
     var n = Number(raw), base = _elimEffScoring(S && S.cfg.eliminatoria);
@@ -2002,6 +2053,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
   window._f2ElimSetRule = function (rule) {
     if (['tiebreak', 'extend'].indexOf(rule) === -1) return;
+    var current = _elimEffScoring(S && S.cfg.eliminatoria);
+    if (rule === 'extend' && current && current.fixedSet && Number(current.fixedSetGames || current.gamesPerSet || 6) % 2 === 0) { _rerender(); return; }
     if (typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(1)) { _rerender(); return; }
     _setElimGameRule({ tieRule: rule, tiebreakEnabled: rule === 'tiebreak' });
   };
@@ -2021,6 +2074,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var sc = Object.assign({ type: 'sets' }, p);
     delete sc.label; delete sc.icon;
     var current = _elimEffScoring(S.cfg.eliminatoria) || {};
+    if (key === 'fixedGames') {
+      sc.gamesPerSet = Number(current.fixedSetGames || current.gamesPerSet) || 6;
+      sc.fixedSetGames = sc.gamesPerSet;
+      if (sc.gamesPerSet % 2 === 0) { sc.tieRule = 'tiebreak'; sc.tiebreakEnabled = true; }
+    }
     if (Number(current.gamesPerSet || 6) !== Number(sc.gamesPerSet || 6) &&
         typeof window._scoringPhaseHasResult === 'function' && window._scoringPhaseHasResult(1)) {
       if (typeof showNotification !== 'undefined') showNotification('Games por set bloqueados', 'A fase já tem placar lançado; os games para vencer não podem mais mudar.', 'warning');
@@ -2028,6 +2086,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     sc.tiebreakAt = current.tiebreakAt || 'g-1';
     sc.tieRule = current.tieRule || (current.tiebreakEnabled === false ? 'extend' : 'tiebreak');
+    if (key === 'fixedGames' && Number(sc.gamesPerSet) % 2 === 0) sc.tieRule = 'tiebreak';
     sc.tiebreakEnabled = sc.tieRule === 'tiebreak';
     // Vantagem (deuce) é DERIVADA do esporte, nunca do preset — mesma regra do form.
     sc.advantageRule = (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : false;

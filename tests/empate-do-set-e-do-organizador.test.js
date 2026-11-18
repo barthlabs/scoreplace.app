@@ -52,7 +52,7 @@ ok(/id="gsm-tieRule"/.test(ct), 'e têm campo próprio no formulário (senão n�
 // O organizador só escolhe ligar/desligar o tie-break, sem um segundo campo redundante.
 ok(/window\._tieAtToggleHtml = function/.test(ct), 'a regra do set usa um controle comum às fases');
 ok(/Games para vencer o set/.test(ct) && /var at = Math\.max\(1, g - 1\)/.test(ct)
-   && /Tie-break no empate</.test(ct) && !/tieat-games/.test(ct) && /Exigir 2 games de diferença no set/.test(ct)
+   && /Tie-break no empate/.test(ct) && !/tieat-games/.test(ct) && /Exigir 2 games de diferença no set/.test(ct)
    && /Exigir 2 pontos de diferença no tie-break/.test(ct),
   'o tie-break usa um game abaixo do alvo; a sequência expõe margens distintas sem campo redundante');
 ok(/'g\+1'/.test(ui), 'o motor continua entendendo o 7-7 já gravado (não some do lançamento)');

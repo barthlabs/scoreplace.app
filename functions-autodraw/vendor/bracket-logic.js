@@ -4853,7 +4853,8 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
       return m && Number(m.round) === roundIdx + 1 && (m.phaseIndex || 0) === (t.currentPhaseIndex || 0) && !m.isBye && !m.isSitOut;
     });
     const closed = Array.isArray(t.superEightClosedRounds) ? t.superEightClosedRounds : [];
-    if (matches.length !== 2 || roundIdx < 0 || roundIdx > 6 || closed.indexOf(roundIdx + 1) >= 0 ||
+    var plannedEightRounds = Math.max(1, Math.min(7, Number(t.superEightRounds) || 7));
+    if (matches.length !== 2 || roundIdx < 0 || roundIdx >= plannedEightRounds || closed.indexOf(roundIdx + 1) >= 0 ||
         (roundIdx > 0 && closed.indexOf(roundIdx) < 0) || matches.some(function (m) { return !m.winner; })) return;
   }
   // Guard: only close the most recent round. A stale call (from a duplicate
@@ -6412,6 +6413,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   if (t.superEight === true) {
     var core = window.ScoreplaceSuperEight;
     if (!core || typeof core.build !== 'function') throw new Error('Motor de oito atletas indisponível.');
+    var maxEightRounds = Math.max(1, Math.min(7, parseInt(t.superEightRounds, 10) || 7));
     // As reservas manuais podem ter sido criadas depois da inscrição de uma
     // pessoa real. O nome antigo "Jogador 01" não é a posição dela na fila.
     // Use a mesma ordem canônica exibida nos cards também nos confrontos.
@@ -6431,7 +6433,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     if (players.length !== 8 || new Set(players).size !== 8) {
       throw new Error('Esta configuração exige exatamente oito atletas ativos e identificáveis por nome.');
     }
-    if (roundNum > 7) throw new Error('O ciclo de oito atletas já terminou.');
+    if (roundNum > maxEightRounds) throw new Error('A agenda configurada para este grupo já terminou.');
     var nameToUid = _buildNameToUid(t);
     if (!t.superEightOrders) t.superEightOrders = {};
     var eightKey = category || '_default_';
@@ -6461,13 +6463,14 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
       if (!t.superEightRoundOrder) t.superEightRoundOrder = {};
       var chosen = t.superEightRoundOrder[eightKey] || (t.superEightRoundOrder[eightKey] = []);
       if (chosen[scheduleIndex] == null) {
-        var available = [0, 1, 2, 3, 4, 5, 6].filter(function (i) { return chosen.indexOf(i) < 0; });
+        var available = Array.from({ length: maxEightRounds }, function (_, index) { return index; })
+          .filter(function (i) { return chosen.indexOf(i) < 0; });
         var random = det && typeof det.rnd === 'function' ? det.rnd : Math.random;
         chosen[scheduleIndex] = available[Math.floor(random() * available.length)];
       }
       scheduleIndex = chosen[scheduleIndex];
     }
-    var scheduled = core.build(ordered).rounds[scheduleIndex];
+    var scheduled = core.build(ordered, maxEightRounds).rounds[scheduleIndex];
     // Os dois confrontos são jogos da MESMA chave de oito atletas. Um quarteto
     // por jogo não é um grupo classificatório separado.
     var eightMatches = scheduled.map(function (duel, gi) {
@@ -6481,6 +6484,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     });
     var eightGroup = { name: 'Super 8', players: ordered.slice(),
       playersUids: ordered.map(function (name) { return nameToUid[name] || null; }),
+      superEightLetters: ordered.map(function (name, index) { return { letter: String.fromCharCode(65 + index), name: name, uid: nameToUid[name] || null }; }),
       matches: eightMatches };
     window._appendCanonicalColumn(t, { phase: 'monarch', round: roundNum, status: 'active',
       format: 'rei_rainha', matches: eightMatches, monarchGroups: [eightGroup] });
