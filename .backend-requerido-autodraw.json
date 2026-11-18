@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "a7a1d247da88ab7d645ed16b50bc1145f0bad87b",
-  "scopeNote": "Chave oficial por grupos e criação de torneios com o escopo de configuração de jogos.",
+  "backendCommit": "6116d60d9",
+  "scopeNote": "Chave oficial por grupos, preparação de fases e criação de torneios com regras configuráveis de games e desempate.",
   "functions": [
     "acceptLigaSubstitutionInvite",
     "addTournamentPlaceholders",
