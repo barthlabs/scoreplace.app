@@ -3,7 +3,8 @@
 // decisivo ou vantagem de dois games. Torneios antigos com empate configurado
 // em 6–6 preservam esse gatilho no placar ao vivo e no lançamento manual.
 // Modelos salvos aparecem como atalhos abaixo do nome do torneio e restauram
-// essas regras ao serem aplicados.
+// essas regras ao serem aplicados. A eliminatória continua herdando o formato
+// inicial quando o organizador escolhe a mesma configuração nas duas fases.
 // 2.7.31 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.30 — Súmulas eliminatórias mostram a chave de cada categoria em folhas
 // A4 verticais, dividindo chaves grandes sem reduzir o espaço de anotação.

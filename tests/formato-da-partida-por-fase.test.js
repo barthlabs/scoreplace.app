@@ -191,8 +191,20 @@ ok(/hasEliminationPhase/.test(src) && /hasRoundRobinPhase/.test(src),
   ok(!/_f2ElimScoringOwn/.test(ui), 'NÃO há toggle "Formato próprio nesta fase" (o bloco espelha o do form)');
   ok(/_elimEffScoring/.test(ui) && /_gsmReadHidden/.test(ui),
     'sem formato próprio, o bloco acende o formato HERDADO da fase inicial (não fica vazio)');
-  ok(/_initPresetKey\(\) === key[\s\S]{0,80}_f2SetElimScoring\(null\)/.test(ui),
+  const sameStart = ui.indexOf('  function _mesmoFormato(a, b) {');
+  const sameEnd = ui.indexOf('  function _setElimGameRule(', sameStart);
+  const same = new Function(ui.slice(sameStart, sameEnd) + '\nreturn _mesmoFormato;')();
+  const initial = { setsToWin: 1, gamesPerSet: 6, tiebreakPoints: 7,
+    tiebreakMargin: 2, superTiebreakPoints: 10, fixedSet: false, fixedSetGames: 6,
+    tiebreakEnabled: true, superTiebreak: false, advantageRule: false,
+    tiebreakAt: 'g-1', tieRule: 'tiebreak' };
+  const preset = { ...initial };
+  delete preset.fixedSetGames; // o preset real não inclui o campo oculto do formulário
+  ok(same(preset, initial) && /_mesmoFormato\(sc, ini\) \? null : sc/.test(ui),
     'escolher o MESMO formato da fase inicial volta a HERDAR (null), em vez de congelar uma cópia');
+  ok(!same({ ...preset, gamesPerSet: 4 }, initial) &&
+    !same({ ...preset, tieRule: 'decider' }, initial),
+    'games ou regra diferentes mantêm formato próprio na eliminatória');
   ok(/_gsmDetectPreset/.test(ui),
     'e quem diz qual preset acende é a MESMA função do bloco do form (sem 2º critério)');
   ok(/window\._openGSMConfig\('elim'\)/.test(ui), '"Personalizado" abre o modal com alvo na eliminatória');

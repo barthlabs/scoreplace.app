@@ -1926,12 +1926,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _mesmoFormato(a, b) {
     if (!a || !b) return false;
     var campos = ['setsToWin', 'gamesPerSet', 'tiebreakPoints', 'tiebreakMargin',
-                  'superTiebreakPoints', 'fixedSetGames'];
+                  'superTiebreakPoints'];
     var bools = ['tiebreakEnabled', 'superTiebreak', 'advantageRule', 'fixedSet'];
     for (var i = 0; i < campos.length; i++) {
       if ((parseInt(a[campos[i]], 10) || 0) !== (parseInt(b[campos[i]], 10) || 0)) return false;
     }
     for (var j = 0; j < bools.length; j++) { if (!!a[bools[j]] !== !!b[bools[j]]) return false; }
+    // Presets não trazem fixedSetGames; com "Games fixos" desligado ele não afeta o jogo.
+    if (a.fixedSet && (parseInt(a.fixedSetGames, 10) || 0) !== (parseInt(b.fixedSetGames, 10) || 0)) return false;
     var atA = a.tiebreakAt || '', atB = b.tiebreakAt || '';
     var ruleA = a.tieRule || (a.tiebreakEnabled === false ? 'extend' : 'tiebreak');
     var ruleB = b.tieRule || (b.tiebreakEnabled === false ? 'extend' : 'tiebreak');
