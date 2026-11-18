@@ -72,6 +72,9 @@
       mount.innerHTML = ''; return;
     }
     if (!state || !state.plan || !model || !state.tiles.length) {
+      // Depois do sorteio, a agenda já é a grade publicada. Não ofereça novamente
+      // a ação de propor outra grade na tela de edição do torneio.
+      if (state && state.locked) { mount.innerHTML = ''; return; }
       mount.innerHTML = '<div class="phase-grid-editor"><h3>Grade de fases e quadras</h3>' +
         '<p>Gere uma proposta com as vagas, quadras e durações configuradas. Depois ajuste os blocos na tela ampla.</p>' +
         '<div class="phase-grid-proposal"><button type="button" class="btn btn-secondary" onclick="window._phaseGridSuggest()">Gerar proposta de grade</button></div>' +

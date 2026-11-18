@@ -1,3 +1,9 @@
+// 2.7.34 — A organização pode definir de 1 a 6+ games para vencer um set em
+// cada fase; seis é o padrão e o valor trava após o primeiro placar da fase.
+// A estimativa do Super 8 mostra sete rodadas e dois jogos simultâneos, sem
+// confundir a conta com grupos de quatro. Após o sorteio, a tela não oferece
+// uma nova proposta de grade. A classificação põe o saldo de games primeiro,
+// seguido de V/D e dos desempates escolhidos, com percentual informativo.
 // 2.7.33 — Super 8 organiza as 14 partidas em sete rodadas de dois jogos; a
 // rodada seguinte só abre depois dos dois resultados, e os cards ocupam a largura
 // disponível. A numeração dos jogos segue contínua. Manifesto e ícones do PWA

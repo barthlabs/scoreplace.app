@@ -430,10 +430,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<p style="margin:0 0 10px 0;font-size:0.8rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;text-transform:uppercase;letter-spacing:1px;">\uD83C\uDFBE Formato da Partida</p>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">' + grid + '</div>' +
       // A eliminatória pode herdar ou escolher seus próprios games e regra de empate.
-      ((typeof window._tieAtToggleHtml === 'function' && eff && !eff.fixedSet && eff.countingType !== 'numeric')
+      ((typeof window._tieAtToggleHtml === 'function' && eff)
         ? window._tieAtToggleHtml({ games: (eff && eff.gamesPerSet) || 6, at: _elimTieAtAtual(e),
             rule: eff.tieRule || (eff.tiebreakEnabled !== false ? 'tiebreak' : 'extend'),
-            cor: '251,191,36', pfx: 'f2elim', onGames: 'window._f2ElimSetGames', onRule: 'window._f2ElimSetRule' })
+            cor: '251,191,36', pfx: 'f2elim', onGames: 'window._f2ElimSetGames', onRule: 'window._f2ElimSetRule', phaseIndex: 1 })
         : '') +
       (resumo
         ? ('<div style="font-size:0.8rem;color:var(--text-muted);margin-top:10px;line-height:1.5;padding:8px 12px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border-radius:8px;">' +
@@ -1950,8 +1950,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   window._f2ElimSetGames = function (raw) {
     var n = Number(raw);
-    if (!Number.isInteger(n) || n < 2) { _rerender(); return; }
-    _setElimGameRule({ gamesPerSet: n });
+    if (!Number.isInteger(n) || n < 1 || (typeof window._scoringPhaseHasResult === 'function' && window._scoringPhaseHasResult(1))) { _rerender(); return; }
+    _setElimGameRule(n === 1
+      ? { gamesPerSet: n, fixedSet: false, tieRule: 'decider', tiebreakEnabled: false, tiebreakAt: '' }
+      : { gamesPerSet: n, fixedSet: false });
   };
   window._f2ElimSetRule = function (rule) {
     if (['tiebreak', 'decider', 'extend'].indexOf(rule) === -1) return;
@@ -1965,6 +1967,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var sc = Object.assign({ type: 'sets' }, p);
     delete sc.label; delete sc.icon;
     var current = _elimEffScoring(S.cfg.eliminatoria) || {};
+    if (Number(current.gamesPerSet || 6) !== Number(sc.gamesPerSet || 6) &&
+        typeof window._scoringPhaseHasResult === 'function' && window._scoringPhaseHasResult(1)) {
+      if (typeof showNotification !== 'undefined') showNotification('Games por set bloqueados', 'A fase já tem placar lançado; os games para vencer não podem mais mudar.', 'warning');
+      return;
+    }
     sc.tiebreakAt = current.tiebreakAt || 'g-1';
     sc.tieRule = current.tieRule || (current.tiebreakEnabled === false ? 'extend' : 'tiebreak');
     sc.tiebreakEnabled = sc.tieRule === 'tiebreak';
