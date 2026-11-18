@@ -1,4 +1,4 @@
-// 2.7.40 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.7.40 — A chave eliminatória e a súmula são preparadas desde o sorteio para todas as categorias, com cruzamentos oficiais e vagas pendentes que recebem os classificados conforme os grupos se definem. A chamada do último jogo classificatório aciona a próxima fase no momento previsto para torneios concentrados ou intercalados. A tela de controle reúne categorias na aba Geral, mantém placares pendentes de jogos encerrados e preserva o contexto da quadra; a chave vem antes das ferramentas administrativas. A linha de operação não duplica após atualizações. A TV espelha os dois lados e solicita tela cheia ao abrir, respeitando a ativação exigida pelo navegador.
 // 2.7.39 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.38 — O organizador configura a pontuação em sequência em cada fase: sets, games
 // para vencer, empate que ativa tie-break, pontos do tie-break e margens independentes
