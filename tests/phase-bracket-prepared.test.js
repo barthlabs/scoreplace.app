@@ -76,6 +76,12 @@ operation.prepare(t, 1);
 assert.equal(t.phaseBracketPlanVersion, 1);
 assert.equal(t.phaseBracketPlanV1.matches.length, plan.matches.length);
 const originalIds = t.phaseBracketPlanV1.matches.map(m => m.id);
+const beforeInitialDraw = structuredClone(t);
+beforeInitialDraw.matches = [];
+beforeInitialDraw.groups = [];
+operation.reconcile(t, beforeInitialDraw, {});
+assert.deepEqual(t.phaseBracketPlanV1.matches.map(m => m.id), originalIds,
+  'reconciliar a gravação do sorteio não prepara nem substitui a chave uma segunda vez');
 const calledAt = '2026-11-18T12:00:00Z';
 groups.filter(g => g.category === 'Feminino').flatMap(g => g.matches).forEach(m => {
   m.courtCalledAt = calledAt;

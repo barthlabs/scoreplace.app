@@ -53,6 +53,17 @@ const refresh = vm.runInNewContext(source.slice(from, to) + '\n_refreshAutomatic
   HttpsError: class extends Error {}
 });
 
+// Com plano oficial, um ID que não existe na chave nunca pode cair na fase
+// corrente por fallback e criar desempate no grupo errado.
+drawWindow._findMatch = () => null;
+const missingSourceMatch = { fmt2:tournament.fmt2, phases:tournament.phases,
+  currentPhaseIndex:0, phaseBracketPlanVersion:1, groups:[group], rounds:[] };
+refresh(missingSourceMatch, 'missing-match', '2026-11-07T14:59:00Z');
+assert.match(missingSourceMatch.phaseTieAutoError.message, /não encontrada na chave oficial/);
+assert.equal(missingSourceMatch.phaseTieDecisions, undefined,
+  'a ausência do jogo-fonte falha de forma explícita sem escolher outra fase');
+delete drawWindow._findMatch;
+
 refresh(tournament, 'm2', '2026-11-07T15:00:00Z');
 assert(!tournament.phaseTieDecisions, 'placar antes do fechamento não cria simples');
 group.matches[2].winner = 'A';

@@ -2154,7 +2154,7 @@ exports.drawRound = onCall(async (request) => {
     // continuam intocadas pelo núcleo (_schAplicarGrade preserva origem humana).
     const estimatedScheduleApplied = (drawWindow && typeof drawWindow._schAplicarGrade === 'function')
       ? (Number(drawWindow._schAplicarGrade(t)) || 0) : 0;
-    _prepareOfficialPhasePlan(t, 1);
+    if (!t.phaseBracketPlanV1) _prepareOfficialPhasePlan(t, 1);
 
     // Histórico do sorteio: quem GRAVA o sorteio grava a entrada. No cliente ela só
     // persistia carona no delta do _commitInitialDraw (logAction só mexe na memória) —
@@ -6888,6 +6888,11 @@ function _refreshAutomaticPhaseTies(t, matchId, nowIso) {
       !Array.isArray(t.phases)) return;
   const sourceMatch = t.phaseBracketPlanVersion === 1 && drawWindow &&
     typeof drawWindow._findMatch === 'function' ? drawWindow._findMatch(t, matchId) : null;
+  if (t.phaseBracketPlanVersion === 1 && !sourceMatch) {
+    t.phaseTieAutoError = { phaseIndex:Number(t.currentPhaseIndex || 0),
+      message:'Partida do desempate não encontrada na chave oficial.', at:nowIso };
+    return;
+  }
   const current = sourceMatch ? Number(sourceMatch.phaseIndex || 0) : Number(t.currentPhaseIndex || 0);
   if (!t.phases[current + 1]) {
     delete t.phaseTieAutoError;
