@@ -135,6 +135,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       _mountElimRoundBounds();
       _renderTieResolution();
       _lockDrawnStandings();
+      if (typeof window._updateRankingRecommendations === 'function') window._updateRankingRecommendations();
     } else {
       var c = document.getElementById('view-container');
       if (c) window.renderFormatoPage(c);

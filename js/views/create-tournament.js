@@ -1520,6 +1520,11 @@ function setupCreateTournamentModal() {
                 <div id="tiebreaker-criteria-section">
                 <p style="margin: .85rem 0 0.5rem; font-size: 0.8rem; color: var(--sp-c-58a6ff,#58a6ff); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.tiebreakerSection')}</p>
                 <small class="text-muted" style="display:block;margin-bottom:0.5rem;">${_t('create.tiebreakerDesc')}</small>
+                <div id="ranking-recommendations" role="status" style="margin:0 0 .75rem;padding:.7rem .8rem;border:1px solid rgba(52,211,153,.28);border-radius:10px;background:rgba(52,211,153,.06);font-size:.78rem;line-height:1.45;color:var(--text-main);">
+                  <div style="font-weight:700;color:var(--sp-c-34d399,#34d399);margin-bottom:.2rem;">💡 Recomendação Scoreplace</div>
+                  <div id="ranking-recommendations-copy">A recomendação será atualizada conforme o critério principal escolhido.</div>
+                  <button id="ranking-recommendations-apply" type="button" class="btn btn-secondary btn-sm" onclick="window._applyRankingRecommendations()" style="display:none;margin-top:.55rem;">Aplicar sugestão</button>
+                </div>
                 <div style="display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-bottom:0.6rem;"><button type="button" class="btn btn-secondary btn-sm" onclick="window._tbExcludeAll()">${_t('create.tbExcludeAll')}</button><button type="button" onclick="window._resetTiebreakers()" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(88,166,255,0.35);background:rgba(88,166,255,0.1);color:var(--sp-c-58a6ff,#58a6ff);font-size:0.74rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">↺ ${_t('create.tbResetBtn')}</button></div>
                 <ul id="tiebreaker-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">
                   <li draggable="true" data-tb="pontos_avancados" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 💯 ${_t('create.tbAdvancedPoints')} <small style="color:var(--text-muted); font-size:0.65rem;">${_t('create.tbAdvancedPointsNote')} <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('pontos_avancados')" style="cursor:pointer;font-size:1.2em;opacity:1;padding:0 1px;" title="${_t('create.tbInfoBtn')}">ℹ️</span></small></span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
@@ -1639,6 +1644,7 @@ function setupCreateTournamentModal() {
         : value === 'wins' ? 'create.rankingPrimaryWinsDesc'
         : enabled ? 'create.rankingPrimaryAdvancedDesc' : 'create.rankingPrimaryPointsDesc';
       if (desc) desc.textContent = _t(detailKey);
+      if (typeof window._updateRankingRecommendations === 'function') window._updateRankingRecommendations();
     };
     window._setRankingPrimary('games_diff');
     window._updateRankingPrimaryModeLabel();
@@ -1700,7 +1706,64 @@ function setupCreateTournamentModal() {
           if (key === 'antiguidade' || key === 'juventude') window._tbNormalizeAge(key);
         }
         window._tbUpdateRowControls(li);
+        if (typeof window._updateRankingRecommendations === 'function') window._updateRankingRecommendations();
       };
+
+      // Sugere apenas redundâncias exatas com o critério principal. Critérios correlatos
+      // (por exemplo, saldo de games e vitórias) continuam disponíveis para desempatar.
+      var _rankingRedundancy = {
+        games_diff: { key: 'saldo_games', label: 'Saldo de games' },
+        wins: { key: 'vitorias', label: 'Vitórias' },
+        points: { key: 'pontos_avancados', label: 'Pontos avançados (PA)' }
+      };
+      window._updateRankingRecommendations = function() {
+        var copy = document.getElementById('ranking-recommendations-copy');
+        var apply = document.getElementById('ranking-recommendations-apply');
+        var primaryInput = document.getElementById('ranking-primary');
+        if (!copy || !apply || !primaryInput) return;
+        var primary = primaryInput.value || 'games_diff';
+        var duplicate = _rankingRedundancy[primary];
+        if (!duplicate) {
+          copy.textContent = 'Não há redundância exata identificada nesta configuração. Os critérios são usados em sequência: cada um só desempata quem continuar empatado nos anteriores.';
+          apply.style.display = 'none';
+          return;
+        }
+        var activeList = document.getElementById('tiebreaker-list');
+        var excludedList = document.getElementById('tiebreaker-excluded-list');
+        var activeDuplicate = activeList && activeList.querySelector('li[data-tb="' + duplicate.key + '"]');
+        var excludedDuplicate = excludedList && excludedList.querySelector('li[data-tb="' + duplicate.key + '"]');
+        var primaryLabel = primary === 'games_diff' ? 'saldo de games' : primary === 'wins' ? 'vitórias' : 'pontos avançados';
+        var formatNote = '';
+        try {
+          var cfg = typeof window._f2GetConfig === 'function' ? window._f2GetConfig() : null;
+          if (cfg && cfg.classifAtiva === true && cfg.parceria === 'super_eight' && Number(cfg.rodadas && cfg.rodadas.n) === 7) {
+            formatNote = ' No Super 8 com oito atletas, todos fazem sete partidas; aproveitamento é apenas vitórias divididas por sete e não acrescenta um desempate.';
+          }
+        } catch (e) {}
+        if (activeDuplicate) {
+          copy.textContent = 'Como ' + primaryLabel + ' já é o critério principal, “' + duplicate.label + '” repete a mesma medida e não desempata ninguém. Os demais critérios continuam na ordem escolhida.' + formatNote;
+          apply.style.display = '';
+        } else if (excludedDuplicate) {
+          copy.textContent = '“' + duplicate.label + '” mede a mesma coisa que o critério principal (' + primaryLabel + ') e já está fora da ordem. Os demais critérios só atuam quando os anteriores mantêm o empate.' + formatNote;
+          apply.style.display = 'none';
+        } else {
+          copy.textContent = 'O critério principal é ' + primaryLabel + '. Nesta lista não há uma cópia exata dele; os critérios escolhidos só são aplicados se os anteriores mantiverem o empate.' + formatNote;
+          apply.style.display = 'none';
+        }
+      };
+      window._applyRankingRecommendations = function() {
+        var primaryInput = document.getElementById('ranking-primary');
+        var duplicate = primaryInput && _rankingRedundancy[primaryInput.value];
+        var activeList = document.getElementById('tiebreaker-list');
+        var excludedList = document.getElementById('tiebreaker-excluded-list');
+        var li = duplicate && activeList && activeList.querySelector('li[data-tb="' + duplicate.key + '"]');
+        if (li && excludedList) {
+          excludedList.appendChild(li);
+          window._tbUpdateRowControls(li);
+        }
+        window._updateRankingRecommendations();
+      };
+      window._updateRankingRecommendations();
 
       window._tbExcludeAll = function() {
         var active = document.getElementById('tiebreaker-list');
@@ -1738,6 +1801,7 @@ function setupCreateTournamentModal() {
           if (li) { excluded.appendChild(li); if (window._tbUpdateRowControls) window._tbUpdateRowControls(li); }
         });
         if (window.showNotification) window.showNotification('🎯 ' + T('create.tbResetBtn'), T('create.tbResetToast'), 'success');
+        if (typeof window._updateRankingRecommendations === 'function') window._updateRankingRecommendations();
       };
 
       let dragItem = null;
@@ -2227,6 +2291,7 @@ function setupCreateTournamentModal() {
     // v4.4.x (Camada 2): torneio NOVO a partir de template — inicia da config do template.
     if (!initCfg && window._f2PendingTemplateCfg) { initCfg = window._f2PendingTemplateCfg; window._f2PendingTemplateCfg = null; }
     window._f2MountInForm(mount, sport, initCfg, tourn);
+    if (typeof window._updateRankingRecommendations === 'function') window._updateRankingRecommendations();
     // O format2 posiciona a pontuação avançada antes do critério principal na fase.
     try {
       var _advSec = document.getElementById('adv-scoring-section');
