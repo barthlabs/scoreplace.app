@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "613637f14329c7e164ac99f54ac9f145faa771b8",
-  "scopeNote": "Guardar a chave oficial sem substituição no sorteio e impedir desempate na fase errada quando o jogo-fonte não é localizado.",
+  "backendCommit": "be2deb107dba5fc0d1621afc9d6f3fb2474f29df",
+  "scopeNote": "Preparar a chave oficial na chamada também para torneios já sorteados antes da versão atual.",
   "functions": [
     "drawRound",
     "applyMatchResult",
