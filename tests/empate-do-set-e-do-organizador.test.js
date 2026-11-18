@@ -53,9 +53,30 @@ ok(/id="gsm-tieRule"/.test(ct), 'e têm campo próprio no formulário (senão n�
 // claro visualmente." O 'g+1' continua LEGÍVEL pelo motor (torneio já gravado assim segue
 // jogando 7-7), só deixou de ser oferecido — não é a mesma coisa que deixar de existir.
 ok(/window\._tieAtToggleHtml = function/.test(ct), 'o gatilho do empate é um toggle, um desenho só');
-ok(/curto \? 'g-1' : 'g'/.test(ct), 'ligado = 5-5 (set curto), desligado = 6-6 (padrão)');
+ok(/Games para vencer o set/.test(ct) && /Próximo game vence/.test(ct) && /Vantagem de 2 games/.test(ct),
+  'o toggle foi substituído por número de games e três decisões possíveis');
 ok(/'g\+1'/.test(ui), 'o motor continua entendendo o 7-7 já gravado (não some do lançamento)');
 ok(!/gsm-tbat-seg/.test(ct), '⛔ o segmento antigo não sobrou em lugar nenhum do formulário');
+
+// O motor ao vivo precisa encerrar o set de acordo com a decisão por fase.
+(function () {
+  const start = ui.indexOf('  function _checkSetWon() {');
+  const end = ui.indexOf('  // Dialog shown when tieRule', start);
+  const source = ui.slice(start, end);
+  function check(sc, a, b) {
+    const state = Object.assign({ gamesPerSet: 4, tieAtGames: 3, twoPointAdvantage: true,
+      isFixedSet: false, tieRulePending: false, isTiebreak: false }, sc);
+    const run = new Function('state', '_currentSet', '_isDecidingSet', '_showTieRuleDialog',
+      source + '\nreturn _checkSetWon();');
+    return { result: run(state, () => ({ gamesP1: a, gamesP2: b }), () => false, () => {}), state };
+  }
+  ok(check({ tieRule: 'decider' }, 3, 3).result === 0, '3-3 aguarda o game decisivo');
+  ok(check({ tieRule: 'decider' }, 4, 3).result === 1, '4-3 fecha o set curto');
+  ok(check({ tieRule: 'extend' }, 4, 3).result === 0, 'vantagem de 2 não fecha em 4-3');
+  ok(check({ tieRule: 'extend' }, 5, 3).result === 1, 'vantagem de 2 fecha em 5-3');
+  const tb = check({ tieRule: 'tiebreak' }, 3, 3);
+  ok(tb.result === -1 && tb.state.isTiebreak, 'tie-break abre exatamente em 3-3');
+})();
 
 // ── 5. O RESUMO conta as duas saídas, com a conta certa ─────────────────────
 ok(/gsmExtendDetail/.test(ct), 'o resumo diz o que acontece quando é PRORROGAR (antes ficava mudo)');

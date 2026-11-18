@@ -848,11 +848,14 @@ window._translations['en'] = {
   'rules.scoringTiebreak': 'Tie-break',
   'rules.scoringTbEnabled': 'Played at {trigger}, up to {points} points (win-by-{margin})',
   'rules.scoringTbDisabled': 'No tie-break',
+  'rules.scoringDecider': 'Deciding game at {trigger}',
+  'rules.scoringExtend': 'Win by 2 games',
   'rules.scoringSuperTb': 'Super tie-break',
   'rules.scoringSuperTbEnabled': 'In the deciding set, up to {points} points (win-by-2)',
   'rules.scoringHowTitle': 'How to enter the score manually',
   'rules.scoringHowManualTb': 'When entering a result directly in the bracket (without live-scoring), type each team\'s games. To record a set decided on a tie-break, type {trigger} (the team with more games won the tie-break). Two smaller fields will appear next to the scores for you to enter each team\'s tie-break points (e.g., {points} to {points} minus {margin}, respecting the win-by-{margin} rule). The team with more games must have more tie-break points. Click Confirm.',
   'rules.scoringHowManualNoTb': 'When entering a result directly in the bracket (without live-scoring), type each team\'s games. Since this tournament does not use tie-breaks, a set is only decided when a team reaches the minimum games with the required margin — ties at the limit continue to play.',
+  'rules.scoringHowManualDecider': 'When entering a result directly in the bracket, type each team\'s games. At the deciding tie, the next game ends the set at {trigger}.',
 
   // Enrollment
   'enroll.tournamentFinished': 'Tournament Finished',

@@ -1547,18 +1547,20 @@ window._validateNormalSetScore = function (scoring, sport, a, b) {
   if (a === b) return { ok: false, detail: 'Um set não pode terminar empatado.' };
   var gp = parseInt(scoring && scoring.gamesPerSet, 10) || 6;
   var high = Math.max(a, b), low = Math.min(a, b);
-  var hasTb = !scoring || scoring.tiebreakEnabled !== false;
+  var rule = scoring && scoring.tieRule || ((!scoring || scoring.tiebreakEnabled !== false) ? 'tiebreak' : 'extend');
+  var hasTb = rule === 'tiebreak';
   var trigger = window._tbLoserGames(scoring, sport);
   // Com tie-break em 6×6, 7×5 encerra o set antes do empate; 7×6 usa o TB.
   // A mesma regra cobre prorrogações configuradas para 7×7 (8×6).
   var regular = high >= gp && high - low >= 2 &&
     (!hasTb || (high <= trigger + 1 && low < trigger));
   var byTb = hasTb && high === trigger + 1 && low === trigger;
-  var extended = !hasTb && high >= gp && high - low >= 2;
-  if (regular || byTb || extended) return { ok: true };
+  var decider = rule === 'decider' && high === gp && low === gp - 1;
+  var extended = rule === 'extend' && high >= gp && high - low >= 2;
+  if (regular || byTb || decider || extended) return { ok: true };
   return { ok: false, detail: (high >= 20 || low >= 20)
     ? 'Placar ' + a + '×' + b + ' inválido: confira o número de games digitado neste set.'
-    : 'Placar ' + a + '×' + b + ' inválido. Confira a regra deste set: ' + gp + ' games' + (hasTb ? ', tie-break em ' + trigger + '×' + trigger : ', sem tie-break') + '.' };
+    : 'Placar ' + a + '×' + b + ' inválido. Confira a regra deste set: ' + gp + ' games' + (hasTb ? ', tie-break em ' + trigger + '×' + trigger : rule === 'decider' ? ', game decisivo em ' + trigger + '×' + trigger : ', vantagem de 2 games') + '.' };
 };
 function _showSetScoreProblem(problem) {
   showAlertDialog('Placar de set inválido', (problem && problem.detail) || 'Confira o placar informado.', null, { type: 'warning' });
@@ -4992,7 +4994,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
     // twoPointAdvantage OFF: set ends as soon as someone reaches g games —
     // e.g. a 6-game set ends at 5-6 with no extension, no tiebreak.
-    if (state.twoPointAdvantage === false) {
+    if (state.twoPointAdvantage === false && !state.tieRule) {
       if (cs.gamesP1 >= g) return 1;
       if (cs.gamesP2 >= g) return 2;
       return 0;
@@ -5032,6 +5034,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (state.tieRule === 'extend') {
       if (cs.gamesP1 >= g && cs.gamesP1 - cs.gamesP2 >= 2) return 1;
       if (cs.gamesP2 >= g && cs.gamesP2 - cs.gamesP1 >= 2) return 2;
+      return 0;
+    }
+    if (state.tieRule === 'decider') {
+      if (cs.gamesP1 >= g && cs.gamesP1 > cs.gamesP2) return 1;
+      if (cs.gamesP2 >= g && cs.gamesP2 > cs.gamesP1) return 2;
       return 0;
     }
 
@@ -12577,7 +12584,7 @@ window._openCasualMatch = function(restoreOpts) {
     return _defaults;
   }
 
-  var _tieRuleLabels = { 'ask': 'Perguntar no jogo', 'extend': 'Prorrogar (vantagem de 2)', 'tiebreak': 'Tie-break 7pts', 'supertiebreak': 'Super tie-break 10pts' };
+  var _tieRuleLabels = { 'ask': 'Perguntar no jogo', 'extend': 'Prorrogar (vantagem de 2)', 'decider': 'Próximo game vence', 'tiebreak': 'Tie-break 7pts', 'supertiebreak': 'Super tie-break 10pts' };
 
   function _configSummary() {
     var cfg = _getConfig();

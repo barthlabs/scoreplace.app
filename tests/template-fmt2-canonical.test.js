@@ -77,6 +77,12 @@ const resetChoice = formatWindow.FORMAT2.defaultConfig('Beach Tennis');
 resetChoice.eliminatoria.grandFinalReset = true;
 assert.strictEqual(formatWindow.FORMAT2.normalize(copy(resetChoice), 'Beach Tennis').eliminatoria.grandFinalReset,
   true, 'final de uma partida preserva o reset permitido');
+const shortSet = formatWindow.FORMAT2.defaultConfig('Beach Tennis');
+shortSet.eliminatoria.scoring = { type: 'sets', setsToWin: 1, gamesPerSet: 4,
+  tiebreakAt: 'g-1', tieRule: 'decider', tiebreakEnabled: false, countingType: 'tennis' };
+const shortSetNormalized = formatWindow.FORMAT2.normalize(shortSet, 'Beach Tennis');
+assert.strictEqual(shortSetNormalized.eliminatoria.scoring.tieRule, 'decider',
+  'a regra da eliminatória sobrevive à normalização');
 assert.strictEqual(copied.rodadas.drawFirstDate, '');
 assert.strictEqual(copied.rodadas.drawFirstTime, '20:30');
 assert.strictEqual(copied.rodadas.drawIntervalDays, 3);
@@ -199,6 +205,29 @@ async function integration() {
   assert.strictEqual(formSaved.fmt2.rodadas.drawFirstDate, '');
   assert.strictEqual(formSaved.fmt2.eliminatoria.endDate, '');
 }
+
+// Atalhos dos modelos aparecem logo após o nome e reutilizam a ação de aplicar.
+const nameField = create.indexOf('id="tourn-name"');
+const shortcutHost = create.indexOf('id="tournament-template-shortcuts"');
+const sportField = create.indexOf('id="select-sport"');
+assert(nameField >= 0 && nameField < shortcutHost && shortcutHost < sportField,
+  'atalhos ficam diretamente entre nome e modalidade');
+const host = { style: {}, innerHTML: '' };
+const shortcutWindow = {
+  _templateCache: [{ name: 'Super 8' }, { name: '<Outro>' }],
+  _getTemplates() { return this._templateCache; },
+  _safeHtml(s) { return String(s).replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+};
+vm.runInNewContext(functionBlock(create, 'window._renderTemplateShortcuts = function()',
+  'window._showTemplatePickerInCreate = function()'), {
+  window: shortcutWindow,
+  document: { getElementById: id => id === 'tournament-template-shortcuts' ? host : null }
+});
+shortcutWindow._renderTemplateShortcuts();
+assert.strictEqual(host.style.display, 'flex');
+assert(host.innerHTML.includes('_applyTemplateInCreate(0)') && host.innerHTML.includes('_applyTemplateInCreate(1)'),
+  'cada botão aplica seu modelo existente');
+assert(host.innerHTML.includes('&lt;Outro&gt;'), 'nomes dos modelos são escapados');
 
 integration().then(() => console.log('template-fmt2-canonical: ok'))
   .catch(err => { console.error(err); process.exitCode = 1; });

@@ -603,7 +603,7 @@
     // O `out` é uma lista FECHADA de campos — campo novo que não entre aqui é SILENCIOSAMENTE
     // DESCARTADO na compilação das fases, e a fase acabaria jogando com a regra do torneio em
     // vez da sua. Mesmo motivo pelo qual `tiebreakAt` já estava na linha de cima.
-    if (s.tieRule === 'extend' || s.tieRule === 'tiebreak') out.tieRule = s.tieRule;
+    if (s.tieRule === 'extend' || s.tieRule === 'tiebreak' || s.tieRule === 'decider') out.tieRule = s.tieRule;
     return out;
   }
 

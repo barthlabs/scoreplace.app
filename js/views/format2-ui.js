@@ -344,7 +344,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!sc) return '';
     if (typeof window._gsmBuildDescFromValues !== 'function') return '';
     return window._gsmBuildDescFromValues(sc.setsToWin, sc.gamesPerSet, sc.tiebreakEnabled,
-      sc.tiebreakPoints, sc.superTiebreak, sc.superTiebreakPoints, sc.tiebreakAt);
+      sc.tiebreakPoints, sc.superTiebreak, sc.superTiebreakPoints, sc.tiebreakAt, sc.tieRule);
   }
   // Qual preset o scoring atual representa (pra acender o botão certo). 'custom' quando não
   // bate com nenhum — é o mesmo critério de igualdade que o form usa nos campos ocultos.
@@ -413,7 +413,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         ? (active ? (_elimScoringDesc(eff) || 'Configure manualmente') : 'Configure manualmente')
         : (typeof window._gsmBuildDescFromValues === 'function'
           // o preset da fase 2 desenha com o GATILHO da fase 2 — cada fase tem o seu
-          ? window._gsmBuildDescFromValues(p.setsToWin, p.gamesPerSet, p.tiebreakEnabled, p.tiebreakPoints, p.superTiebreak, p.superTiebreakPoints, _elimTieAtAtual(e))
+          ? window._gsmBuildDescFromValues(p.setsToWin, p.gamesPerSet, p.tiebreakEnabled, p.tiebreakPoints, p.superTiebreak, p.superTiebreakPoints, _elimTieAtAtual(e), eff && eff.tieRule)
           : '');
       grid += '<button type="button" onclick="window._f2ElimScoringPreset(\'' + k + '\')" style="' +
         'display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px;border-radius:12px;cursor:pointer;transition:all 0.2s;' +
@@ -429,12 +429,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:12px;padding:1rem;margin-top:14px;">' +
       '<p style="margin:0 0 10px 0;font-size:0.8rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;text-transform:uppercase;letter-spacing:1px;">\uD83C\uDFBE Formato da Partida</p>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">' + grid + '</div>' +
-      // O empate do set, à parte dos botões — o MESMO desenho da fase inicial, em âmbar.
-      // Só aparece onde há set com tie-break; num formato sem set não há o que empatar.
-      ((typeof window._tieAtToggleHtml === 'function' && eff && eff.tiebreakEnabled !== false &&
+      // A eliminatória pode herdar ou escolher seus próprios games e regra de empate.
+      ((typeof window._tieAtToggleHtml === 'function' && eff && !eff.fixedSet && eff.countingType !== 'numeric' &&
         (typeof window._scoringUsesSets !== 'function' || window._scoringUsesSets(eff)))
         ? window._tieAtToggleHtml({ games: (eff && eff.gamesPerSet) || 6, at: _elimTieAtAtual(e),
-            cor: '251,191,36', pfx: 'f2elim', onToggle: 'window._f2ElimTieAt' })
+            rule: eff.tieRule || (eff.tiebreakEnabled !== false ? 'tiebreak' : 'extend'),
+            cor: '251,191,36', pfx: 'f2elim', onGames: 'window._f2ElimSetGames', onRule: 'window._f2ElimSetRule' })
         : '') +
       (resumo
         ? ('<div style="font-size:0.8rem;color:var(--text-muted);margin-top:10px;line-height:1.5;padding:8px 12px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border-radius:8px;">' +
@@ -1934,32 +1934,27 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     for (var j = 0; j < bools.length; j++) { if (!!a[bools[j]] !== !!b[bools[j]]) return false; }
     var atA = a.tiebreakAt || '', atB = b.tiebreakAt || '';
-    return atA === atB;
+    var ruleA = a.tieRule || (a.tiebreakEnabled === false ? 'extend' : 'tiebreak');
+    var ruleB = b.tieRule || (b.tiebreakEnabled === false ? 'extend' : 'tiebreak');
+    return atA === atB && ruleA === ruleB;
   }
-  window._f2ElimTieAt = function (curto) {
+  function _setElimGameRule(patch) {
     if (!S) return;
-    var e = S.cfg.eliminatoria;
-    var novo = curto ? 'g-1' : 'g';
-    if (e.scoring && e.scoring.type) {
-      e.scoring.tiebreakAt = novo;
-      // Se o formato voltou a ser IGUALZINHO ao da classificatória, volta a HERDAR. Sem isto
-      // a fase ficava com uma cópia congelada e parava de acompanhar a fase anterior — o
-      // mesmo cuidado que _f2ElimScoringPreset já tem. [[feedback_unify_dual_entry_points]]
-      var ini = (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
-      if (ini && _mesmoFormato(e.scoring, ini)) { window._f2SetElimScoring(null); return; }
-      _norm(); _rerender(); return;
-    }
-    // HERDANDO: se a escolha bate com a da classificatória, continua herdando — congelar uma
-    // cópia faria a eliminatória parar de acompanhar mudanças da fase anterior, que é
-    // justamente o que _f2ElimScoringPreset evita.
-    var herdado = (typeof window._gsmTieAtAtual === 'function') ? window._gsmTieAtAtual() : 'g';
-    if (novo === herdado) { _rerender(); return; }
-    var base = _elimEffScoring(e);
+    var base = _elimEffScoring(S.cfg.eliminatoria);
     if (!base) return;
-    var sc = Object.assign({}, base);
-    sc.tiebreakAt = novo;
+    var sc = Object.assign({}, base, patch, { tiebreakAt: 'g-1' });
     if (!sc.type) sc.type = 'sets';
-    window._f2SetElimScoring(sc);
+    var ini = (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
+    window._f2SetElimScoring(ini && _mesmoFormato(sc, ini) ? null : sc);
+  }
+  window._f2ElimSetGames = function (raw) {
+    var n = Number(raw);
+    if (!Number.isInteger(n) || n < 2) { _rerender(); return; }
+    _setElimGameRule({ gamesPerSet: n });
+  };
+  window._f2ElimSetRule = function (rule) {
+    if (['tiebreak', 'decider', 'extend'].indexOf(rule) === -1) return;
+    _setElimGameRule({ tieRule: rule, tiebreakEnabled: rule === 'tiebreak' });
   };
   window._f2ElimScoringPreset = function (key) {
     if (!S) return;
@@ -1968,13 +1963,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!p) return;
     var sc = Object.assign({ type: 'sets' }, p);
     delete sc.label; delete sc.icon;
+    var current = _elimEffScoring(S.cfg.eliminatoria) || {};
+    sc.tiebreakAt = current.tiebreakAt || 'g-1';
+    sc.tieRule = current.tieRule || (current.tiebreakEnabled === false ? 'extend' : 'tiebreak');
+    sc.tiebreakEnabled = sc.tieRule === 'tiebreak';
     // Vantagem (deuce) é DERIVADA do esporte, nunca do preset — mesma regra do form.
     sc.advantageRule = (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : false;
     // Escolher o MESMO formato da fase inicial = voltar a HERDAR (scoring null), não congelar
     // uma cópia: assim a eliminatória continua acompanhando se a classificatória mudar depois.
     // É também o que o cânone pede — duas fontes pro mesmo jogo é o bug que este trabalho evita.
-    if (_initPresetKey() === key) { window._f2SetElimScoring(null); return; }
-    window._f2SetElimScoring(sc);
+    var ini = (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
+    window._f2SetElimScoring(ini && _mesmoFormato(sc, ini) ? null : sc);
   };
 
   window._f2GrandFinal = function (checked) { if (!S) return; S.cfg.eliminatoria.grandFinal = !!checked; _norm(); _rerender(); };

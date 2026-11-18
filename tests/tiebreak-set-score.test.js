@@ -89,6 +89,16 @@ ok(W._validateNormalSetScore(scoring, 'Beach Tennis', 7, 5).ok === false,
   'tie-break em 5×5 continua encerrando em 6×5');
 ok(W._validateNormalSetScore(scoring, 'Beach Tennis', 65, 1).ok === false,
   '65×1 é rejeitado');
+const decider = { type: 'sets', gamesPerSet: 4, tiebreakAt: 'g-1', tieRule: 'decider', tiebreakEnabled: false };
+ok(W._validateNormalSetScore(decider, 'Beach Tennis', 4, 3).ok === true,
+  'game decisivo em 3×3 permite fechar 4×3');
+ok(W._validateNormalSetScore(decider, 'Beach Tennis', 5, 4).ok === false,
+  'game decisivo não prolonga o set até 5×4');
+const extend = { type: 'sets', gamesPerSet: 4, tiebreakAt: 'g-1', tieRule: 'extend', tiebreakEnabled: false };
+ok(W._validateNormalSetScore(extend, 'Beach Tennis', 4, 3).ok === false,
+  'vantagem de 2 games não permite fechar 4×3');
+ok(W._validateNormalSetScore(extend, 'Beach Tennis', 5, 3).ok === true,
+  'vantagem de 2 games permite fechar 5×3');
 ok(W._normalSetGameInputCap(scoring, 'Beach Tennis') === 6,
   'set de 6 games com tie-break em 5×5 limita o campo a 6');
 ok(W._normalSetGameInputCap({ type: 'sets', gamesPerSet: 11, tiebreakEnabled: false, countingType: 'numeric' }, 'Pickleball') === null,

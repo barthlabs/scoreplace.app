@@ -526,6 +526,7 @@ function setupCreateTournamentModal() {
                   </span>
                   <span id="tourn-test-mode-state">Teste desativado · produção</span>
                 </label>
+                <div id="tournament-template-shortcuts" aria-label="Modelos de torneio salvos" style="display:none;gap:8px;flex-wrap:wrap;align-items:center;"></div>
                 <div class="form-group full-width">
                   <label class="form-label">${_t('create.sportLabel')}</label>
                   <!-- Hidden select for backward compatibility -->
@@ -1103,7 +1104,7 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="gsm-tiebreakEnabled" value="true">
                 <input type="hidden" id="gsm-tiebreakPoints" value="7">
                 <input type="hidden" id="gsm-tiebreakMargin" value="2">
-                <input type="hidden" id="gsm-tiebreakAt" value="">
+                <input type="hidden" id="gsm-tiebreakAt" value="g-1">
                 <!-- 2.0.2: 'extend' (prorrogar até 2 games) | 'tiebreak'. Vazio = deriva do
                      tiebreakEnabled, que é como todo torneio criado até aqui está gravado. -->
                 <input type="hidden" id="gsm-tieRule" value="">
@@ -7912,13 +7913,13 @@ window._gsmBuildPresetDesc = function(key, cfg) {
       var cstb = hStb && hStb.value === 'true', cstbP = parseInt(hStbP ? hStbP.value : 10) || 10;
       // Only show dynamic desc if selected
       if (window._gsmSelectedPreset === 'custom') {
-        return window._gsmBuildDescFromValues(cs, cg, ctb, ctbP, cstb, cstbP, window._gsmTieAtAtual());
+        return window._gsmBuildDescFromValues(cs, cg, ctb, ctbP, cstb, cstbP, window._gsmTieAtAtual(), (document.getElementById('gsm-tieRule') || {}).value);
       }
     }
     return 'Configure manualmente';
   }
   // O preset diz quantos sets/games; o GATILHO do empate é escolha à parte, e vale pros dois.
-  return window._gsmBuildDescFromValues(cfg.setsToWin, cfg.gamesPerSet, cfg.tiebreakEnabled, cfg.tiebreakPoints, cfg.superTiebreak, cfg.superTiebreakPoints, window._gsmTieAtAtual());
+  return window._gsmBuildDescFromValues(cfg.setsToWin, cfg.gamesPerSet, cfg.tiebreakEnabled, cfg.tiebreakPoints, cfg.superTiebreak, cfg.superTiebreakPoints, window._gsmTieAtAtual(), (document.getElementById('gsm-tieRule') || {}).value);
 };
 
 // ⭐ FONTE ÚNICA do texto do formato — o bloco da fase classificatória E o da eliminatória
@@ -7932,7 +7933,7 @@ window._gsmBuildPresetDesc = function(key, cfg) {
 // Não brigam, e agora o texto diz onde cada um vale:
 //   • tie-break ......... nos sets NORMAIS, quando o set empata (ex. 5-5)
 //   • super tie-break ... só quando os SETS empatam (1-1 no melhor de 3), no lugar do decisivo
-window._gsmBuildDescFromValues = function(s, g, tb, tbP, stb, stbP, at) {
+window._gsmBuildDescFromValues = function(s, g, tb, tbP, stb, stbP, at, rule) {
   // ⭐ 2.1: o gatilho do tie-break vem da CONFIG, não de `g-1` cravado. O dono pediu que o
   // controle de 5-5 / 6-6 viva na seção do formato e "reflita nos botões e nas regras" — este
   // texto É o botão. Quem resolve o gatilho é _tbLoserGames, o MESMO que o lançamento de
@@ -7941,12 +7942,14 @@ window._gsmBuildDescFromValues = function(s, g, tb, tbP, stb, stbP, at) {
     ? window._tbLoserGames({ gamesPerSet: g, tiebreakEnabled: tb, tiebreakAt: at || '' },
         (typeof window._currentSportName === 'function') ? window._currentSportName() : '')
     : (g - 1);
-  if (s === 1) {
-    return g + ' games' + (tb ? ' + TB' + tbP + ' em ' + tie + '-' + tie : '');
-  }
+  rule = rule || (tb ? 'tiebreak' : 'extend');
+  var decision = rule === 'tiebreak' ? 'TB' + tbP + ' em ' + tie + '-' + tie
+    : rule === 'decider' ? 'game decisivo em ' + tie + '-' + tie
+    : '2 games de vantagem';
+  if (s === 1) return g + ' games · ' + decision;
   var totalSets = s * 2 - 1;
   var normalSets = totalSets - (stb ? 1 : 0);
-  var base = normalSets + ' sets de ' + g + ' games' + (tb ? ' (TB' + tbP + ' em ' + tie + '-' + tie + ')' : '');
+  var base = normalSets + ' sets de ' + g + ' games (' + decision + ')';
   // "se ficar 1-1" diz QUANDO ele acontece; "no 3º set" dizia só ONDE, e ninguém lê um
   // número de set como "empate". O empate é sempre (s-1)-(s-1): 1-1 no melhor de 3, 2-2 no de 5.
   if (stb) return base + ' + Super TB ' + stbP + ' se ficar ' + (s - 1) + '-' + (s - 1);
@@ -8002,7 +8005,11 @@ window._gsmSelectPreset = function(key) {
     document.getElementById('gsm-type').value = 'sets';
     document.getElementById('gsm-setsToWin').value = String(p.setsToWin);
     document.getElementById('gsm-gamesPerSet').value = String(p.gamesPerSet);
-    document.getElementById('gsm-tiebreakEnabled').value = p.tiebreakEnabled ? 'true' : 'false';
+    // O preset escolhe a quantidade de sets; a regra do empate é um controle da fase.
+    var currentRule = (document.getElementById('gsm-tieRule') || {}).value;
+    document.getElementById('gsm-tiebreakEnabled').value = currentRule
+      ? (currentRule === 'tiebreak' ? 'true' : 'false')
+      : (p.tiebreakEnabled ? 'true' : 'false');
     document.getElementById('gsm-tiebreakPoints').value = String(p.tiebreakPoints);
     document.getElementById('gsm-tiebreakMargin').value = String(p.tiebreakMargin);
     document.getElementById('gsm-superTiebreak').value = p.superTiebreak ? 'true' : 'false';
@@ -8072,6 +8079,7 @@ window._gsmUpdateMainSummary = function() {
   var tbMargin = parseInt(document.getElementById('gsm-tiebreakMargin').value) || 2;
   var fsOn = document.getElementById('gsm-fixedSet').value === 'true';
   var fsGames = parseInt(document.getElementById('gsm-fixedSetGames').value) || 6;
+  var rule = (document.getElementById('gsm-tieRule') || {}).value || (tbOn ? 'tiebreak' : 'extend');
 
   var lines = [];
   if (fsOn && counting !== 'numeric') {
@@ -8093,6 +8101,8 @@ window._gsmUpdateMainSummary = function() {
       else if (tbOn) lines.push(_t('create.gsmTb', { pts: tbPts, tie: tie }));
     }
     if (advOn) lines.push(_t('create.gsmAdvantage'));
+    if (rule === 'decider') lines.push('Próximo game vence em ' + (g - 1) + '-' + (g - 1));
+    else if (rule === 'extend') lines.push('Vantagem de 2 games');
   }
 
   summaryEl.style.display = lines.length > 0 ? 'block' : 'none';
@@ -8105,7 +8115,6 @@ window._gsmDetectPreset = function() {
   if (window._gsmForcedCustom) return 'custom';
   var s = parseInt(document.getElementById('gsm-setsToWin').value) || 1;
   var g = parseInt(document.getElementById('gsm-gamesPerSet').value) || 6;
-  var tbOn = document.getElementById('gsm-tiebreakEnabled').value === 'true';
   var tbPts = parseInt(document.getElementById('gsm-tiebreakPoints').value) || 7;
   var tbMargin = parseInt(document.getElementById('gsm-tiebreakMargin').value) || 2;
   var stb = document.getElementById('gsm-superTiebreak').value === 'true';
@@ -8116,7 +8125,7 @@ window._gsmDetectPreset = function() {
   var keys = ['set1', 'best3', 'best5'];
   for (var i = 0; i < keys.length; i++) {
     var p = presets[keys[i]];
-    if (p.setsToWin === s && p.gamesPerSet === g && p.tiebreakEnabled === tbOn &&
+    if (p.setsToWin === s && p.gamesPerSet === g &&
         p.tiebreakPoints === tbPts && p.tiebreakMargin === tbMargin &&
         p.superTiebreak === stb && p.superTiebreakPoints === stbPts) {
       return keys[i];
@@ -8158,6 +8167,8 @@ window._openGSMConfig = function(targetPhase) {
   var _hTbAt = document.getElementById('gsm-tiebreakAt');
   var _sport = (typeof window._currentSportName === 'function') ? window._currentSportName() : '';
   var tbAt = (_ps && _ps.tiebreakAt) || (!_ps && _hTbAt && _hTbAt.value) || ((typeof window._sportTiebreakAt === 'function') ? window._sportTiebreakAt(_sport) : 'g');
+  var tieRule = (_ps && _ps.tieRule) || (!_ps && (document.getElementById('gsm-tieRule') || {}).value) || (tbEnabled ? 'tiebreak' : 'extend');
+  tbEnabled = tieRule === 'tiebreak';
   var _gm1 = (parseInt(gamesPerSet) || 6) - 1, _gg = (parseInt(gamesPerSet) || 6);
 
   var existing = document.getElementById('gsm-config-overlay');
@@ -8187,10 +8198,7 @@ window._openGSMConfig = function(targetPhase) {
               '<option value="3"' + (setsToWin==='3'?' selected':'') + '>3</option>' +
             '</select>' +
           '</div>' +
-          '<div style="flex:1;min-width:120px;">' +
-            '<label style="font-size:0.75rem;color:var(--text-muted);font-weight:600;display:block;margin-bottom:4px;">Games por set</label>' +
-            '<input type="number" id="gsm-cfg-gamesPerSet" class="form-control" min="1" max="99" value="' + gamesPerSet + '" style="font-size:0.85rem;" oninput="window._gsmUpdateSummary()">' +
-          '</div>' +
+          '<input type="hidden" id="gsm-cfg-gamesPerSet" value="' + gamesPerSet + '">' +
         '</div>' +
         // Fixed set toggle
         '<div class="toggle-row" style="padding:6px 0;">' +
@@ -8198,28 +8206,11 @@ window._openGSMConfig = function(targetPhase) {
           '<label class="toggle-switch toggle-sm"><input type="checkbox" id="gsm-cfg-fixedSet" ' + (fixedSet ? 'checked' : '') + ' onchange="window._gsmToggleFixedSet()"><span class="toggle-slider"></span></label>' +
         '</div>' +
         // Vantagem (deuce 40-40): NÃO é escolha manual — derivada do esporte (só Tênis). Sem toggle.
-        // Tiebreak
-        // ⭐ 2.0.2 — UMA DECISÃO, DOIS PASSOS (ordem do dono: "pode prorrogar em 5-5 ou 6-6,
-        // 7-7... decisao do organizador. ou pode aplicar o tie-break em 5-5 ou 6-6 de novo
-        // decisao do organizador"). Antes havia um toggle liga/desliga do tie-break e, ESCONDIDO
-        // dentro dele, a escolha do empate — e "desligado" nunca dizia o que aconteceria no
-        // empate. Agora as duas perguntas ficam à vista, na ordem em que se pensa nelas:
-        //   1. em QUE empate a coisa acontece (5-5 · 6-6 · 7-7)
-        //   2. o QUE acontece ali (prorrogar até 2 games · tie-break)
-        // O toggle antigo (#gsm-cfg-tiebreak) continua no DOM, oculto, porque muito código lê
-        // `tiebreakEnabled` — ele passa a ser ESPELHO da escolha, nunca a fonte.
+        // Games e regra de empate são editados na seção de cada fase. Aqui permanecem
+        // apenas os detalhes do tie-break e os campos de compatibilidade lidos pelo save.
         '<div id="gsm-tb-section" style="border-top:1px solid var(--border-color);padding-top:1rem;">' +
           '<input type="checkbox" id="gsm-cfg-tiebreak" ' + (tbEnabled ? 'checked' : '') + ' style="display:none;">' +
-          // ⛔ 2.1: o "em que placar o set empata" SAIU daqui. Ele é o toggle "Set curto" da
-          // própria seção de Formato da Partida — e cada fase tem o seu. Ordem do dono: "não
-          // pode ter em 2 lugares na mesma fase". O overlay guarda o valor vigente e devolve
-          // intacto no Aplicar (ver _gsmReadConfigOverlay), então abrir o Personalizado nunca
-          // apaga a escolha feita no toggle.
-          '<label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:5px;">O que acontece nesse empate</label>' +
-          '<div id="gsm-tierule-seg" data-tierule="' + (tbEnabled ? 'tiebreak' : 'extend') + '" style="display:flex;gap:6px;">' +
-            _gsmTieRuleBtn('extend', tbEnabled, '\u23F1\uFE0F Prorrogar', 'segue at\u00e9 abrir 2 games') +
-            _gsmTieRuleBtn('tiebreak', tbEnabled, '\u26A1 Tie-break', 'de ' + tbPoints + ' pontos') +
-          '</div>' +
+          '<div id="gsm-tierule-seg" data-tierule="' + tieRule + '" style="display:none;"></div>' +
           '<div id="gsm-tb-details" style="display:' + (tbEnabled ? 'flex' : 'none') + ';gap:12px;flex-wrap:wrap;margin-top:10px;padding-left:2px;">' +
             '<div><label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">Pontos</label><input type="number" id="gsm-cfg-tbPoints" class="form-control" min="5" max="15" value="' + tbPoints + '" style="font-size:0.82rem;width:70px;" oninput="window._gsmUpdateSummary()"></div>' +
             '<div><label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">Diferen\u00e7a m\u00edn.</label><input type="number" id="gsm-cfg-tbMargin" class="form-control" min="1" max="5" value="' + tbMargin + '" style="font-size:0.82rem;width:70px;" oninput="window._gsmUpdateSummary()"></div>' +
@@ -8282,50 +8273,28 @@ window._gsmToggleTiebreak = function() {
   window._gsmUpdateSummary();
 };
 
-// Regra do tie-break: 'g-1' (empate em (g-1)-(g-1) → set curto, ex. 6-5) ou 'g' (empate g-g,
-// ex. 7-6). Grava no segmento (data-tbat), atualiza pills + label. _gsmSaveConfig lê e persiste.
-// Botões dos dois segmentos do empate. Existem como função pra o MESMO estilo valer nos
-// dois (e pra o markup acima caber numa linha por opção).
-/* ⭐ 2.1 — ONDE O SET EMPATA: UM TOGGLE SÓ, USADO PELAS DUAS FASES.
- *
- * Ordem do dono (22/ago/2026), em três passos até chegar aqui: primeiro _"vamos colocar esse
- * controle de tie-break em 5-5 ou 6-6 na sessão do formato da partida, mas podendo ser
- * configurado fora dos botões (reflete nos botões e nas regras) ... isso nas duas fases
- * possíveis do torneio"_, depois _"na verdade um toggle 5-5/6-6 que ativado faz virar 5-5 por
- * default. isso resolve. e fica claro visualmente."_
- *
- * O gatilho é À PARTE do preset de propósito: 1 set de 6 games com tie em 5-5 OU em 6-6;
- * melhor de 3 com tie em 5-5 OU 6-6 e super tie-break no 3º. O preset diz quantos sets e
- * quantos games; onde o set empata é a outra pergunta, e trocar uma não apaga a outra.
- *
- * DESLIGADO = padrão do tênis (empata em g-g, set fecha g+1 × g).
- * LIGADO    = set curto (empata em (g-1)-(g-1), set fecha g × g-1).
- *
- * `cor` = a cor da fase (roxo na inicial, âmbar na eliminatória — é como o dono separa as duas).
- * `pfx` = prefixo dos ids, pras duas fases coexistirem na mesma tela.
- */
+// Componente compartilhado pelas duas fases. Novas escolhas decidem em (N-1)-(N-1);
+// o campo `at` mantém a visualização fiel dos torneios antigos gravados em N-N.
 window._tieAtToggleHtml = function (o) {
   o = o || {};
   var g = parseInt(o.games, 10) || 6;
-  var curto = (o.at === 'g-1');
+  var at = o.at === 'g' ? g : o.at === 'g+1' ? g + 1 : Math.max(1, g - 1);
+  var rule = ['tiebreak', 'decider', 'extend'].indexOf(o.rule) !== -1 ? o.rule : 'tiebreak';
   var cor = o.cor || '168,85,247';
   var pfx = o.pfx || 'gsm';
-  return '<div id="' + pfx + '-tieat-box" class="toggle-row" data-tbat="' + (curto ? 'g-1' : 'g') + '" ' +
-    'style="margin-top:10px;padding:9px 12px;border-radius:10px;border:1px solid rgba(' + cor + ',0.28);background:rgba(' + cor + ',0.07);">' +
-    '<div class="toggle-row-label"><div>' +
-      '<span style="font-size:0.84rem;font-weight:600;color:var(--text-color);">Set curto — tie-break em ' + (g - 1) + '-' + (g - 1) + '</span>' +
-      '<div class="toggle-desc" id="' + pfx + '-tieat-desc" style="font-size:0.7rem;margin-top:2px;line-height:1.4;">' +
-        window._tieAtDesc(g, curto) + '</div>' +
-    '</div></div>' +
-    '<label class="toggle-switch"><input type="checkbox" id="' + pfx + '-tieat-toggle"' + (curto ? ' checked' : '') +
-      ' onchange="' + o.onToggle + '(this.checked)"><span class="toggle-slider"></span></label>' +
+  var options = [['tiebreak', 'Tie-break'], ['decider', 'Próximo game vence'], ['extend', 'Vantagem de 2 games']];
+  return '<div id="' + pfx + '-tieat-box" style="margin-top:10px;padding:12px;border-radius:10px;border:1px solid rgba(' + cor + ',0.28);background:rgba(' + cor + ',0.07);">' +
+    '<label for="' + pfx + '-games-target" style="display:block;font-size:0.82rem;font-weight:700;color:var(--text-color);margin-bottom:5px;">Games para vencer o set</label>' +
+    '<input type="number" inputmode="numeric" min="2" step="1" id="' + pfx + '-games-target" class="form-control" value="' + g + '" onchange="' + o.onGames + '(this.value)" style="max-width:110px;font-size:0.9rem;">' +
+    '<div style="font-size:0.74rem;color:var(--text-muted);margin:9px 0 6px;">No empate em <strong>' + at + '-' + at + '</strong>, como decidir?</div>' +
+    '<div role="group" aria-label="Regra para o empate do set" style="display:flex;gap:6px;flex-wrap:wrap;">' +
+      options.map(function (item) {
+        var active = rule === item[0];
+        return '<button type="button" aria-pressed="' + active + '" onclick="' + o.onRule + '(\'' + item[0] + '\')" style="flex:1 1 140px;padding:8px;border-radius:8px;cursor:pointer;font-size:0.73rem;font-weight:700;border:2px solid ' + (active ? 'rgba(' + cor + ',0.9)' : 'rgba(255,255,255,0.14)') + ';background:' + (active ? 'rgba(' + cor + ',0.18)' : 'transparent') + ';color:var(--text-bright);">' + item[1] + '</button>';
+      }).join('') +
+    '</div>' +
+    (o.at && o.at !== 'g-1' ? '<small style="display:block;color:var(--text-muted);margin-top:6px;">Regra anterior preservada. Ao editar este campo, o empate passa a ocorrer um game abaixo.</small>' : '') +
   '</div>';
-};
-// O texto também é um só — é ele que deixa "claro visualmente" o que muda no placar.
-window._tieAtDesc = function (g, curto) {
-  return curto
-    ? ('Empata em ' + (g - 1) + '-' + (g - 1) + ' e o set fecha em ' + g + '-' + (g - 1) + '.')
-    : ('Padrão: empata em ' + g + '-' + g + ' e o set fecha em ' + (g + 1) + '-' + g + '.');
 };
 
 // O gatilho do ALVO aberto no ⚙️ Personalizado: a eliminatória tem o seu; sem formato próprio,
@@ -8345,7 +8314,7 @@ window._gsmTieAtAtual = function () {
     ? window._sportTiebreakAt((typeof window._currentSportName === 'function') ? window._currentSportName() : '')
     : 'g';
 };
-// Desenha o toggle DENTRO da seção de formato da fase inicial.
+// Desenha a regra do set DENTRO da seção de formato da fase inicial.
 window._gsmRenderTieAt = function () {
   var box = document.getElementById('gsm-tieat-inline');
   if (!box) return;
@@ -8353,19 +8322,34 @@ window._gsmRenderTieAt = function () {
   var _cfg = { type: (document.getElementById('gsm-type') || {}).value || '',
                tiebreakEnabled: (document.getElementById('gsm-tiebreakEnabled') || {}).value === 'true',
                gamesPerSet: g };
-  // Só existe onde existe SET com tie-break. A pergunta vem da fonte canônica, a mesma do placar.
+  // A escolha é por fase e só faz sentido nos esportes que contam games dentro do set.
   var usaSets = (typeof window._scoringUsesSets === 'function')
     ? window._scoringUsesSets(_cfg) : (!_cfg.type || _cfg.type === 'sets');
-  if (!usaSets || !_cfg.tiebreakEnabled) { box.innerHTML = ''; return; }
+  if (!usaSets || (document.getElementById('gsm-countingType') || {}).value === 'numeric' ||
+      (document.getElementById('gsm-fixedSet') || {}).value === 'true') { box.innerHTML = ''; return; }
+  var ruleEl = document.getElementById('gsm-tieRule');
+  var rule = (ruleEl && ruleEl.value) || (_cfg.tiebreakEnabled ? 'tiebreak' : 'extend');
   box.innerHTML = window._tieAtToggleHtml({
-    games: g, at: window._gsmTieAtAtual(), cor: '168,85,247', pfx: 'gsm',
-    onToggle: 'window._gsmSetTieAtInline'
+    games: g, at: window._gsmTieAtAtual(), rule: rule, cor: '168,85,247', pfx: 'gsm',
+    onGames: 'window._gsmSetGamesInline', onRule: 'window._gsmSetTieRuleInline'
   });
 };
-window._gsmSetTieAtInline = function (curto) {
-  var h = document.getElementById('gsm-tiebreakAt');
-  if (h) h.value = curto ? 'g-1' : 'g';
-  // "reflete nos botões e nas regras": os presets se redesenham com o gatilho novo.
+window._gsmSetGamesInline = function (raw) {
+  var n = Number(raw);
+  if (!Number.isInteger(n) || n < 2) { window._gsmRenderTieAt(); return; }
+  document.getElementById('gsm-gamesPerSet').value = String(n);
+  document.getElementById('gsm-tiebreakAt').value = 'g-1';
+  window._gsmForcedCustom = true;
+  window._gsmSelectedPreset = 'custom';
+  if (typeof window._gsmRenderPresets === 'function') window._gsmRenderPresets();
+  if (typeof window._gsmUpdateMainSummary === 'function') window._gsmUpdateMainSummary();
+};
+window._gsmSetTieRuleInline = function (rule) {
+  if (['tiebreak', 'decider', 'extend'].indexOf(rule) === -1) return;
+  document.getElementById('gsm-tieRule').value = rule;
+  document.getElementById('gsm-tiebreakEnabled').value = rule === 'tiebreak' ? 'true' : 'false';
+  document.getElementById('gsm-tiebreakAt').value = 'g-1';
+  window._gsmRenderTieAt();
   if (typeof window._gsmRenderPresets === 'function') window._gsmRenderPresets();
   if (typeof window._gsmUpdateMainSummary === 'function') window._gsmUpdateMainSummary();
 };
@@ -8463,7 +8447,10 @@ window._gsmUpdateSummary = function() {
     } else {
       // "Prorrogar" nunca teve linha no resumo — desligar o tie-break deixava o resumo MUDO
       // sobre o que acontece no empate, que é justamente a pergunta que o organizador faz.
-      lines.push(_t('create.gsmExtendDetail', { tie: _tbTie }));
+      var _rule = (document.getElementById('gsm-tierule-seg') || {}).dataset;
+      lines.push(_rule && _rule.tierule === 'decider'
+        ? ('Em ' + _tbTie + '-' + _tbTie + ', o próximo game decide o set.')
+        : _t('create.gsmExtendDetail', { tie: _tbTie }));
     }
     if (stbOn && sets > 1) {
       var _stbDraw = stbPts - tbMargin + 1;   // mesmo off-by-one: num super TB de 10, é 9-9
@@ -8568,6 +8555,7 @@ window._gsmSaveConfig = function() {
   document.getElementById('gsm-tiebreakPoints').value = String(_cfgOv.tiebreakPoints);
   document.getElementById('gsm-tiebreakMargin').value = String(_cfgOv.tiebreakMargin);
   document.getElementById('gsm-tiebreakAt').value = _cfgOv.tiebreakAt || '';
+  document.getElementById('gsm-tieRule').value = _cfgOv.tieRule || '';
   document.getElementById('gsm-superTiebreak').value = _cfgOv.superTiebreak ? 'true' : 'false';
   document.getElementById('gsm-superTiebreakPoints').value = String(_cfgOv.superTiebreakPoints);
   document.getElementById('gsm-advantageRule').value = _cfgOv.advantageRule ? 'true' : 'false';
@@ -8590,6 +8578,8 @@ window._gsmSaveConfig = function() {
         tiebreakEnabled: document.getElementById('gsm-tiebreakEnabled').value,
         tiebreakPoints: document.getElementById('gsm-tiebreakPoints').value,
         tiebreakMargin: document.getElementById('gsm-tiebreakMargin').value,
+        tiebreakAt: document.getElementById('gsm-tiebreakAt').value,
+        tieRule: document.getElementById('gsm-tieRule').value,
         superTiebreak: document.getElementById('gsm-superTiebreak').value,
         superTiebreakPoints: document.getElementById('gsm-superTiebreakPoints').value,
         countingType: document.getElementById('gsm-countingType').value,
@@ -8656,6 +8646,8 @@ window._onSportChange = function() {
   document.getElementById('gsm-superTiebreakPoints').value = String(config.superTiebreakPoints || 10);
   document.getElementById('gsm-countingType').value = config.countingType || 'numeric';
   document.getElementById('gsm-advantageRule').value = config.advantageRule ? 'true' : 'false';
+  document.getElementById('gsm-tiebreakAt').value = config.tiebreakAt || 'g-1';
+  document.getElementById('gsm-tieRule').value = config.tieRule || (config.tiebreakEnabled ? 'tiebreak' : 'extend');
 
   // Reset advantage user choice on sport change so defaults apply
   window._gsmAdvantageUserSet = false;
@@ -9159,6 +9151,7 @@ window.renderCreateTournamentPage = function (container, editId) {
     if (typeof window._f2MountInEditForm === 'function') { try { window._f2MountInEditForm(); } catch (e) {} }
     if (typeof window._gsmInitPresets === 'function') window._gsmInitPresets();
     else if (typeof window._updateGSMSummaryFromHidden === 'function') window._updateGSMSummaryFromHidden();
+    if (typeof window._renderTemplateShortcuts === 'function') window._renderTemplateShortcuts();
     if (typeof window._initPlacesAutocomplete === 'function') window._initPlacesAutocomplete();
     if (typeof window._autoShowVenueMap === 'function') window._autoShowVenueMap();
     if (typeof window._hydrateVenuePrefChips === 'function') window._hydrateVenuePrefChips();
@@ -9465,6 +9458,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       window._saveTemplate(template).then(function(result) {
         if (result === 'ok') {
           if (typeof showNotification === 'function') showNotification(_t('template.saved') || 'Template salvo', template.name, 'success');
+          if (typeof window._renderTemplateShortcuts === 'function') window._renderTemplateShortcuts();
         } else if (result === 'limit') {
           if (typeof showNotification === 'function') showNotification(_t('template.limitFree') || 'Limite de templates atingido', '', 'warning');
         } else {
@@ -9508,7 +9502,27 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
 // ─── Template picker inside create-tournament modal ───────────────────────
 // Show/hide the "Template" button based on template availability
 window._refreshTemplateBtn = function() {
-  // Buttons are always visible now — no-op kept for backward compat
+  if (typeof window._renderTemplateShortcuts === 'function') window._renderTemplateShortcuts();
+};
+
+window._renderTemplateShortcuts = function() {
+  var host = document.getElementById('tournament-template-shortcuts');
+  if (!host) return;
+  if (window._templateCache === null && typeof window._loadTemplates === 'function') {
+    host.style.display = 'none';
+    window._loadTemplates().then(function() { window._renderTemplateShortcuts(); });
+    return;
+  }
+  var templates = typeof window._getTemplates === 'function' ? window._getTemplates() : [];
+  host.style.display = templates.length ? 'flex' : 'none';
+  host.innerHTML = templates.length
+    ? '<span style="flex-basis:100%;font-size:0.72rem;color:var(--text-muted);">Usar modelo salvo</span>' +
+      templates.map(function(tpl, index) {
+        return '<button type="button" class="btn btn-sm" onclick="window._applyTemplateInCreate(' + index + ')" ' +
+          'title="Aplicar modelo ' + window._safeHtml(tpl.name || '') + '" style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid rgba(99,102,241,0.45);background:rgba(99,102,241,0.12);color:var(--text-bright);">' +
+          '⭐ ' + window._safeHtml(tpl.name || 'Modelo') + '</button>';
+      }).join('')
+    : '';
 };
 
 window._showTemplatePickerInCreate = function() {

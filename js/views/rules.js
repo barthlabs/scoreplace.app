@@ -82,13 +82,15 @@ function renderRules(container, tournamentId) {
     const gamesPerSet = sc.gamesPerSet || 6;
     const counting = sc.countingType === 'tennis' ? _t('rules.scoringCountingTennis') : _t('rules.scoringCountingNumeric');
     const adv = sc.advantageRule ? _t('rules.scoringAdvantageDeuce') : _t('rules.scoringAdvantageSudden');
-    const tbEnabled = sc.tiebreakEnabled;
+    const tieRule = sc.tieRule || (sc.tiebreakEnabled === false ? 'extend' : 'tiebreak');
+    const tbEnabled = tieRule === 'tiebreak';
     const tbPoints = sc.tiebreakPoints || 7;
     const tbMargin = sc.tiebreakMargin || 2;
     // TB is played when games tie at (gamesPerSet - 1) (e.g. 5-5); the final set
     // score after TB is gamesPerSet-(gamesPerSet-1) (e.g. 6-5).
-    const tbStart = (gamesPerSet - 1) + '-' + (gamesPerSet - 1);
-    const tbFinal = gamesPerSet + '-' + (gamesPerSet - 1);
+    const tieAt = typeof window._tbLoserGames === 'function' ? window._tbLoserGames(sc, t.sport) : gamesPerSet - 1;
+    const tbStart = tieAt + '-' + tieAt;
+    const tbFinal = (tieAt + 1) + '-' + tieAt;
     const superTb = sc.superTiebreak;
     const superTbPts = sc.superTiebreakPoints || 10;
     const rows = [
@@ -97,7 +99,8 @@ function renderRules(container, tournamentId) {
       [_t('rules.scoringGamesPerSet'), String(gamesPerSet)],
       [_t('rules.scoringCounting'), counting],
       [_t('rules.scoringAdvantage'), adv],
-      [_t('rules.scoringTiebreak'), tbEnabled ? _t('rules.scoringTbEnabled', { trigger: tbStart, points: tbPoints, margin: tbMargin }) : _t('rules.scoringTbDisabled')],
+      [_t('rules.scoringTiebreak'), tbEnabled ? _t('rules.scoringTbEnabled', { trigger: tbStart, points: tbPoints, margin: tbMargin })
+        : tieRule === 'decider' ? _t('rules.scoringDecider', { trigger: tbStart }) : _t('rules.scoringExtend')],
     ];
     if (superTb) rows.push([_t('rules.scoringSuperTb'), _t('rules.scoringSuperTbEnabled', { points: superTbPts })]);
     const listHtml = rows.map(([label, value]) => `
@@ -112,7 +115,7 @@ function renderRules(container, tournamentId) {
         </div>`
       : `<div style="margin-top:1rem;padding:0.9rem 1rem;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:10px;">
           <div style="font-size:0.8rem;font-weight:700;color:var(--sp-c-93c5fd,#93c5fd);margin-bottom:6px;">💡 ${_t('rules.scoringHowTitle')}</div>
-          <div style="font-size:0.82rem;color:var(--text-main);line-height:1.5;">${_t('rules.scoringHowManualNoTb')}</div>
+          <div style="font-size:0.82rem;color:var(--text-main);line-height:1.5;">${tieRule === 'decider' ? _t('rules.scoringHowManualDecider', { trigger: tbFinal }) : _t('rules.scoringHowManualNoTb')}</div>
         </div>`;
     return `<ul style="list-style:none;padding:0;margin:0;">${listHtml}</ul>${howToHtml}`;
   })();
@@ -130,7 +133,7 @@ function renderRules(container, tournamentId) {
     const desc = (sc) => {
       if (typeof window._gsmBuildDescFromValues === 'function') {
         return window._gsmBuildDescFromValues(sc.setsToWin || 1, sc.gamesPerSet || 6, sc.tiebreakEnabled,
-          sc.tiebreakPoints || 7, sc.superTiebreak, sc.superTiebreakPoints || 10, sc.tiebreakAt);
+          sc.tiebreakPoints || 7, sc.superTiebreak, sc.superTiebreakPoints || 10, sc.tiebreakAt, sc.tieRule);
       }
       const s = sc.setsToWin || 1, g = sc.gamesPerSet || 6;
       return (s === 1) ? (g + ' games') : ((s * 2 - 1) + ' sets de ' + g + ' games');

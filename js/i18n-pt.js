@@ -864,11 +864,14 @@ window._translations['pt'] = {
   'rules.scoringTiebreak': 'Tie-break',
   'rules.scoringTbEnabled': 'Disputado em {trigger}, até {points} pontos (diferença mínima de {margin})',
   'rules.scoringTbDisabled': 'Sem tie-break',
+  'rules.scoringDecider': 'Game decisivo em {trigger}',
+  'rules.scoringExtend': 'Vantagem de 2 games',
   'rules.scoringSuperTb': 'Super tie-break',
   'rules.scoringSuperTbEnabled': 'No set decisivo, até {points} pontos (diferença mínima de 2)',
   'rules.scoringHowTitle': 'Como lançar o placar manualmente',
   'rules.scoringHowManualTb': 'Ao lançar um resultado direto na chave (sem live-scoring), digite os games de cada time. Para registrar um set decidido no tie-break, digite {trigger} (o time com mais games venceu o tie-break). Dois campos menores aparecerão ao lado dos placares para você informar os pontos que cada time fez no tie-break (ex: {points} a {points} menos {margin}, respeitando a diferença mínima de {margin}). O time com mais games precisa ter mais pontos no tie-break. Clique em Confirmar.',
   'rules.scoringHowManualNoTb': 'Ao lançar um resultado direto na chave (sem live-scoring), digite os games de cada time. Como este torneio não usa tie-break, um set só é decidido quando um dos times alcança o mínimo de games com a diferença exigida — empates no limite continuam em jogo.',
+  'rules.scoringHowManualDecider': 'Ao lançar o resultado direto na chave, digite os games de cada time. No empate decisivo, o próximo game fecha o set em {trigger}.',
 
   // Enrollment
   'enroll.tournamentFinished': 'Torneio Encerrado',
