@@ -2154,8 +2154,6 @@ exports.drawRound = onCall(async (request) => {
     // continuam intocadas pelo núcleo (_schAplicarGrade preserva origem humana).
     const estimatedScheduleApplied = (drawWindow && typeof drawWindow._schAplicarGrade === 'function')
       ? (Number(drawWindow._schAplicarGrade(t)) || 0) : 0;
-    if (!t.phaseBracketPlanV1) _prepareOfficialPhasePlan(t, 1);
-
     // Histórico do sorteio: quem GRAVA o sorteio grava a entrada. No cliente ela só
     // persistia carona no delta do _commitInitialDraw (logAction só mexe na memória) —
     // com a gravação aqui, ela se perderia. Mesmo texto do cliente (tournaments-draw.js).

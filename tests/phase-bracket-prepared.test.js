@@ -93,16 +93,15 @@ const operation = vm.runInNewContext(source.slice(start, end) + '\n({prepare:_pr
     constructor(code, message) { super(message); this.code = code; }
   }
 });
-operation.prepare(t, 1);
-assert.equal(t.phaseBracketPlanVersion, 1);
-assert.equal(t.phaseBracketPlanV1.matches.length, plan.matches.length);
-const originalIds = t.phaseBracketPlanV1.matches.map(m => m.id);
 const beforeInitialDraw = structuredClone(t);
 beforeInitialDraw.matches = [];
 beforeInitialDraw.groups = [];
 operation.reconcile(t, beforeInitialDraw, {});
+assert.equal(t.phaseBracketPlanVersion, 1);
+assert.equal(t.phaseBracketPlanV1.matches.length, plan.matches.length);
+const originalIds = t.phaseBracketPlanV1.matches.map(m => m.id);
 assert.deepEqual(t.phaseBracketPlanV1.matches.map(m => m.id), originalIds,
-  'reconciliar a gravação do sorteio não prepara nem substitui a chave uma segunda vez');
+  'a fronteira da gravação prepara a chave uma vez e mantém os IDs oficiais');
 const calledAt = '2026-11-18T12:00:00Z';
 groups.filter(g => g.category === 'Feminino').flatMap(g => g.matches).forEach(m => {
   m.courtCalledAt = calledAt;
