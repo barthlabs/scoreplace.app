@@ -57,6 +57,7 @@ const context = {
   _drawFail: (code, message) => new HttpsError(code, message),
   _courtOccupancy: require('../js/domain/court-occupancy.js'),
   _phaseCallOrder: require('../js/domain/phase-call-order.js'),
+  _activateOfficialPhasePlanOnCall: () => [],
   ScoreplaceRefereeRoster: { sanitizeAll: value => value || [] },
   FieldValue: { increment: n => n, delete: () => deleted },
   FieldPath: class { constructor(...segments) { this.segments = segments; } },

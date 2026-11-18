@@ -23,6 +23,7 @@ const snapshots = new WeakMap();
 const phaseReadProofs = new WeakMap();
 const context = {
   _TX_LEITURA:reader, _billingSnapshots:snapshots, _phaseReadProofs:phaseReadProofs, createHash,
+  _reconcileOfficialPhasePlan:() => {},
   _visibilityFence:{ read:async () => ({ exists:false }) },
   _tSplit:{ montarDoBanco:async t => ({ ...t }), partesDe:() => [] },
   _tournamentBilling:require('../js/domain/tournament-billing-core.js'),

@@ -450,6 +450,10 @@ window.FirestoreDB = {
     if (!this.db) return;
     var docId = String(tourData.id);
     var cleanData = this._cleanUndefined(tourData);
+    // A topologia oficial pertence ao sorteio do servidor. Merge preserva os
+    // campos existentes mesmo em uma edição feita por uma loja antiga.
+    delete cleanData.phaseBracketPlanV1;
+    delete cleanData.phaseBracketPlanVersion;
     // Toda escrita legítima também promove o metadado de fases legado. A função é
     // lossless: preserva jogos/rodadas/placares e só substitui a descrição antiga
     // (Liga/Grupos) pelo contrato kind + classificação/eliminatória atual.

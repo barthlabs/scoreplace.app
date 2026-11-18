@@ -1011,6 +1011,7 @@ const SUITES = [
   'tests/monarch-predraw-grid.test.js',
   'tests/phase-call-order.test.js',
   'tests/camis-category-advance.test.js',
+  'tests/phase-bracket-prepared.test.js',
   'tests/rr-format-reuse.test.js',
   'tests/camis-large-monarch-visibility.test.js',
   'tests/propor-datas-organizador-ve-todos-os-grupos.test.js',

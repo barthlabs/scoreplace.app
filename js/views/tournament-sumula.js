@@ -46,6 +46,7 @@
     return Number.isFinite(n) && n > 0 ? n : null;
   }
   function originGroupForSide(t, m, slot) {
+    if (m && m[slot + 'GroupSource']) return 'Vencedor do Grupo ' + text(m[slot + 'GroupSource']);
     var side = slot === 'p1' ? 'team1Obj' : 'team2Obj';
     var team = m[side] || {};
     var raw = Array.isArray(team.participants) && team.participants.length

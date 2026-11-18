@@ -5638,12 +5638,6 @@ function renderTournaments(container, tournamentId = null) {
       ${gridHtml}
     </div>
 
-    ${tournamentId && typeof window._meuCardNoTopo === 'function' ? window._meuCardNoTopo(visible[0]) : ''}
-    ${tournamentId ? _organizersHtml : ''}
-    ${tournamentId ? _refereesHtml : ''}
-
-    ${tournamentId ? detailParticipantsHtml : ''}
-
     ${hasDrawn ? `
       <div class="mt-5">
          <h3 style="margin-bottom: 1.5rem; font-size: 1.3rem; color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; display: flex; align-items: center; gap: 8px;">
@@ -5661,6 +5655,11 @@ function renderTournaments(container, tournamentId = null) {
             Quem emite aqui é esta tela; o renderBracket inline não emite (senão duplicaria). */''}
       <div id="inline-bracket-container"></div>
     ` : ''}
+
+    ${tournamentId && typeof window._meuCardNoTopo === 'function' ? window._meuCardNoTopo(visible[0]) : ''}
+    ${tournamentId ? _organizersHtml : ''}
+    ${tournamentId ? _refereesHtml : ''}
+    ${tournamentId ? detailParticipantsHtml : ''}
 
     ${tournamentId ? `<div id="activity-log-section"></div>` : ''}
   `;

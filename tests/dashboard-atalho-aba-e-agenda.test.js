@@ -116,8 +116,8 @@ ok(bracket.includes('regression_grupos_chaves_antes_classificacao') &&
   'o caminho de grupos também mantém as chaves antes das classificações durante os jogos');
 ok(bracket.includes('regression_team_standings_before_canonical_key') &&
   bracket.includes('var phase0 = window._renderPhaseBracket(t, canEnterResult, standbyHtml)') &&
-  bracket.includes('if (!hasInterleaved) return _competitionTeamStandingsHtml + phase0') &&
-  bracket.includes('return _competitionTeamStandingsHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml'),
+  bracket.includes('if (!hasInterleaved) return _competitionTeamStandingsHtml + preparedPhaseHtml() + phase0') &&
+  bracket.includes('return _competitionTeamStandingsHtml + preparedPhaseHtml() + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml'),
   'Neon eleva a classificação geral dos times antes das chaves, por decisão do organizador');
 ok(bracket.includes('class="bracket-round-heading"') &&
   bracket.includes('_bracketUpdateRoundHeadingPortal') &&

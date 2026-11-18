@@ -24,5 +24,14 @@ try{
   await assertSucceeds(env.authenticatedContext('org').firestore().doc(id).update({
     updatedAt:'2026-11-01T00:00:00Z'
   }));
+  const prepared='tournaments/e15-prepared';
+  await env.withSecurityRulesDisabled(async context=>context.firestore().doc(prepared).set({
+    id:'e15-prepared',creatorUid:'org',memberUids:['org'],status:'active',
+    phaseBracketPlanVersion:1,phaseBracketPlanV1:{schema:1,matches:[]}
+  }));
+  const admin=env.authenticatedContext('org').firestore().doc(prepared);
+  await assertFails(admin.update({phaseBracketPlanVersion:2}));
+  await assertFails(admin.update({phaseBracketPlanV1:{schema:1,matches:[{id:'falso'}]}}));
+  await assertSucceeds(admin.update({updatedAt:'2026-11-01T00:00:01Z'}));
   console.log('✓ E15 Rules: cliente antigo não escreve espera canônica; atualização independente permitida');
 }finally{await env.cleanup();}

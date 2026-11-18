@@ -1425,6 +1425,25 @@ window._sumulaUpcomingBracket = function (t, phaseIdx) {
   var eng = window._phasesEngine;
   if (!t || !Array.isArray(t.phases) || !eng ||
       typeof eng.projectPhaseCfg !== 'function' || typeof eng.buildCategorizedPhaseBrackets !== 'function') return null;
+  var saved = t.phaseBracketPlanVersion === 1 && t.phaseBracketPlanV1;
+  if (saved && saved.phaseIndex === phaseIdx && Array.isArray(saved.matches)) {
+    var categories = [];
+    saved.matches.forEach(function (m) {
+      if (!m || m.isBye || m.isSitOut) return;
+      var category = String(m.category || '');
+      var bucket = categories.find(function (b) { return b.category === category; });
+      if (!bucket) { bucket = { category:category, matches:[] }; categories.push(bucket); }
+      bucket.matches.push({ id:m.id, round:m.round, bracket:m.bracket,
+        isThirdPlace:!!m.isThirdPlace, p1:m.p1 && m.p1 !== 'TBD' ? m.p1 : '',
+        p2:m.p2 && m.p2 !== 'TBD' ? m.p2 : '',
+        source1:m.p1GroupSource ? 'Vencedor do Grupo ' + m.p1GroupSource : '',
+        source2:m.p2GroupSource ? 'Vencedor do Grupo ' + m.p2GroupSource : '',
+        nextMatchId:m.nextMatchId, nextSlot:m.nextSlot,
+        loserNextMatchId:m.loserNextMatchId, loserNextSlot:m.loserNextSlot,
+        repFill:Array.isArray(m.repFill) ? m.repFill : [] });
+    });
+    return { phaseIndex:phaseIdx, name:t.phases[phaseIdx].name || 'Eliminatória', categories:categories };
+  }
   try {
     var groups = _phaseGroupsForProjection(t, phaseIdx, eng);
     if (!groups || !groups.length) return null;

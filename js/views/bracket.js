@@ -5550,6 +5550,41 @@ function renderBracket(container, tournamentId, isInline) {
   // Waitlist panel — shown at the end of every bracket view (Liga/Suíço/Grupos/Monarch/Elim)
   const standbyHtml = _renderStandbyPanel(t, isOrg);
 
+  function preparedPhaseHtml() {
+    var plan = t && t.phaseBracketPlanVersion === 1 && t.phaseBracketPlanV1;
+    if (!plan || !Array.isArray(plan.matches) || (t.currentPhaseIndex || 0) >= plan.phaseIndex) return '';
+    var esc = window._safeHtml || function (value) { return String(value); };
+    var categories = Array.from(new Set(plan.matches.map(function (m) { return String(m.category || ''); })));
+    var body = categories.filter(function (cat) {
+      return !(plan.operationalAtByCategory && plan.operationalAtByCategory[cat]);
+    }).map(function (cat) {
+      var matches = plan.matches.filter(function (m) { return String(m.category || '') === cat && !m.isBye; });
+      var rounds = Array.from(new Set(matches.map(function (m) { return Number(m.round || 0); }))).sort(function (a, b) { return a - b; });
+      var columns = rounds.map(function (round) {
+        var cards = matches.filter(function (m) { return Number(m.round || 0) === round; }).map(function (m) {
+          function side(slot) {
+            var value = String(m[slot] || 'TBD');
+            if (value && value !== 'TBD') return esc(value);
+            var group = m[slot + 'GroupSource'];
+            if (group) return esc('Vencedor do Grupo ' + group);
+            var source = matches.find(function (prior) { return prior.nextMatchId === m.id && prior.nextSlot === slot; });
+            return source ? esc('Vencedor do confronto ' + String(source.id).split('-').slice(-1)[0]) : 'A definir';
+          }
+          return '<div class="sp-match-card" data-planned-match="' + esc(m.id) + '" style="padding:10px 12px;margin:8px 0;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-card);font-size:.82rem;">' +
+            '<div style="font-weight:700;line-height:1.4;">' + side('p1') + '</div>' +
+            '<div style="color:var(--text-muted);font-size:.72rem;margin:3px 0;">×</div>' +
+            '<div style="font-weight:700;line-height:1.4;">' + side('p2') + '</div></div>';
+        }).join('');
+        return '<div style="min-width:210px;flex:1;"><strong style="font-size:.78rem;">' +
+          (round === 1 ? 'Primeira rodada' : 'Rodada ' + round) + '</strong>' + cards + '</div>';
+      }).join('');
+      return '<section style="margin-top:12px;"><h4 style="margin:0 0 8px;">' + esc(cat) +
+        '</h4><div style="display:flex;gap:14px;overflow-x:auto;align-items:flex-start;">' + columns + '</div></section>';
+    }).join('');
+    return body ? '<section data-prepared-phase="' + plan.phaseIndex + '" style="margin:16px 0;padding:16px;border:1px solid var(--border-color);border-radius:12px;">' +
+      '<h3 style="margin:0 0 6px;">Chave da próxima fase</h3><p style="margin:0;color:var(--text-muted);font-size:.78rem;">Os confrontos já estão definidos. As vagas serão preenchidas conforme os grupos terminarem.</p>' + body + '</section>' : '';
+  }
+
   // Banner: W.O. onde nenhum suplente presente atende a categoria — o organizador escolhe
   // quem assume (ou dá W.O. ao time). Persistente até resolver (o dialog pode ser fechado).
   var _subChoiceBanner = '';
@@ -5629,7 +5664,7 @@ function renderBracket(container, tournamentId, isInline) {
       _applyMyMatchesFilter();
       return;
     }
-    if (_curPh === 0 && !(t.scheduleWindow && t.scheduleWindow.interleavedPlan) && isOrg && !isTournamentFinished &&
+    if (_curPh === 0 && t.phaseBracketPlanVersion !== 1 && !(t.scheduleWindow && t.scheduleWindow.interleavedPlan) && isOrg && !isTournamentFinished &&
         window._phasesPhaseComplete && window._phasesPhaseComplete(t) && (_curPh + 1) < ((t.phases || []).length)) {
       var _nextPhaseName = window._safeHtml(((t.phases[_curPh + 1] || {}).name) || 'próxima fase');
       // v4.2.2 (pedido do dono): SEM auto-avanço — botão explícito "Avançar" (o
@@ -5672,10 +5707,10 @@ function renderBracket(container, tournamentId, isInline) {
     _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml,
       function () {
         var phase0 = window._renderPhaseBracket(t, canEnterResult, standbyHtml);
-        var hasInterleaved = t.scheduleWindow && t.scheduleWindow.interleavedPlan &&
+        var hasInterleaved =
           (t.matches || []).some(function (m) { return m && Number(m.phaseIndex) === 1; });
-        if (!hasInterleaved) return _competitionTeamStandingsHtml + phase0;
-        return _competitionTeamStandingsHtml + phase0 +
+        if (!hasInterleaved) return _competitionTeamStandingsHtml + preparedPhaseHtml() + phase0;
+        return _competitionTeamStandingsHtml + preparedPhaseHtml() + phase0 +
           '<h2 style="margin:20px 0 12px;color:var(--text-bright);">Eliminatórias em andamento</h2>' +
           window._renderPhaseBracket(t, canEnterResult, '', 1);
       }, _applyMyMatchesFilter);
@@ -5687,12 +5722,12 @@ function renderBracket(container, tournamentId, isInline) {
     _pintarEmEtapas(container, headerHtml + _subChoiceBanner + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner,
       function () {
         var standings = renderStandings(t, isOrg, canEnterResult, '', progressBarHtml, { standbyHtml: standbyHtml });
-        var hasInterleaved = t.scheduleWindow && t.scheduleWindow.interleavedPlan &&
+        var hasInterleaved =
           (t.matches || []).some(function (m) { return m && Number(m.phaseIndex) === 1; });
         return hasInterleaved && typeof window._renderPhaseBracket === 'function'
-          ? standings + '<h2 style="margin:20px 0 12px;color:var(--text-bright);">Eliminatórias em andamento</h2>' +
+          ? preparedPhaseHtml() + standings + '<h2 style="margin:20px 0 12px;color:var(--text-bright);">Eliminatórias em andamento</h2>' +
             window._renderPhaseBracket(t, canEnterResult, '', 1)
-          : standings;
+          : preparedPhaseHtml() + standings;
       }, _applyMyMatchesFilter);
     return;
   }
@@ -5713,7 +5748,7 @@ function renderBracket(container, tournamentId, isInline) {
       // Mesmo contrato explicitamente pedido para o Neon: a classificação geral dos times é
       // o resumo acima da chave; os detalhes por categoria ficam recolhidos.
       _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml,
-        function () { return _competitionTeamStandingsHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml; }, _applyMyMatchesFilter);
+        function () { return _competitionTeamStandingsHtml + preparedPhaseHtml() + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml; }, _applyMyMatchesFilter);
       return;
     }
     // If stage is elimination, fall through to bracket rendering below
@@ -9283,9 +9318,9 @@ window._directBracketSlotSource = function (t, match, slot) {
       kind = 'loser';
     }
   }
-  if (!source && Number.isInteger(Number(match[slot + 'GroupSource'])) &&
-      Number(match[slot + 'GroupSource']) > 0) {
-    return { match: null, label: 'Vencedor do Grupo ' + Number(match[slot + 'GroupSource']) };
+  if (!source && match[slot + 'GroupSource'] != null &&
+      String(match[slot + 'GroupSource']).trim()) {
+    return { match: null, label: 'Vencedor do Grupo ' + String(match[slot + 'GroupSource']).trim() };
   }
   if (!source) return null;
   var n = Number(source._gameNum || source.matchNumber || source.gameNumber || source.number);

@@ -399,10 +399,12 @@ const { chromium } = require('@playwright/test');
       button.onclick = () => window._tvLiveToggle();
       document.body.appendChild(button);
     });
-    const popupPromise = page.waitForEvent('popup');
     await page.locator('#open-tv-test').click();
-    const popup = await popupPromise;
-    await popup.locator('#tv-fullscreen-action').waitFor();
+    const liveFrame = page.locator('iframe[name="scoreplace-live-tv-tour_1790628592058_c342a1e8f5068424887f1702a1633a44"]');
+    await liveFrame.waitFor();
+    const popup = page.frame({ name:'scoreplace-live-tv-tour_1790628592058_c342a1e8f5068424887f1702a1633a44' });
+    assert.ok(popup, 'a TV ao vivo é montada no iframe que recebe a tela cheia');
+    await popup.locator('#tv-root').waitFor();
     await popup.evaluate(() => {
       document.head.querySelector('style').textContent = '.tv-series-player-name{font-size:99px}';
       window.__tvStyleVersion = 'old-version';
@@ -414,32 +416,27 @@ const { chromium } = require('@playwright/test');
       'janela No Ar aberta recebe o CSS novo sem precisar ser fechada');
     const headerPositions = await popup.evaluate(() => {
       const bounds = selector => document.querySelector(selector).getBoundingClientRect();
-      return { title:bounds('.tv-header h1'), action:bounds('#tv-fullscreen-action'), clock:bounds('#tv-now') };
+      return { title:bounds('.tv-header h1'), action:document.querySelector('#tv-fullscreen-action'), clock:bounds('#tv-now') };
     });
-    assert.ok(headerPositions.title.right <= headerPositions.action.left &&
-      headerPositions.action.right <= headerPositions.clock.left,
-    'botão fica entre o nome e o relógio, sem sobreposição');
-    await popup.locator('#tv-fullscreen-action').click();
-    await popup.waitForFunction(() => document.fullscreenElement ||
-      /bloqueada|indisponível/.test(document.querySelector('#tv-fullscreen-action')?.textContent || ''));
-    const fullscreenState = await popup.evaluate(() => ({ active:document.fullscreenElement === document.documentElement,
-      enabled:document.fullscreenEnabled, secure:window.isSecureContext,
-      text:document.querySelector('#tv-fullscreen-action')?.textContent,
-      title:document.querySelector('#tv-fullscreen-action')?.title }));
-    assert.equal(fullscreenState.active, true,
-      'clique do usuário põe a TV em tela cheia no Chromium: ' + JSON.stringify(fullscreenState));
-    await popup.close();
-    await page.waitForFunction(() => !window._tvLiveWindow || window._tvLiveWindow.closed);
+    assert.equal(headerPositions.action, null, 'o botão manual some quando a tela cheia automática já foi ativada');
+    assert.ok(headerPositions.title.right <= headerPositions.clock.left,
+      'nome e relógio do cabeçalho não se sobrepõem na TV em tela cheia');
+    await page.waitForFunction(() => document.fullscreenElement?.tagName === 'IFRAME');
+    assert.equal(await page.evaluate(() => document.fullscreenElement?.getAttribute('title')),
+      'TV · TORNEIO REAL DA PRÉVIA', 'a abertura da TV solicita tela cheia dentro do gesto do organizador');
+    await page.evaluate(() => window._tvLiveToggle());
+    await liveFrame.waitFor({ state:'detached' });
+    await page.waitForFunction(() => document.fullscreenElement === null);
     await page.evaluate(() => {
       Object.defineProperty(window.screen, 'isExtended', { configurable:true, value:false });
       window.getScreenDetails = async () => ({ screens:[
         { label:'Principal', isPrimary:true, availLeft:0, availTop:0, availWidth:1400, availHeight:1000, width:1400, height:1000 },
         { label:'Projetor', isPrimary:false, availLeft:1400, availTop:0, availWidth:1280, availHeight:720, width:1280, height:720 }
       ] });
-      const originalOpen = window.open.bind(window);
-      window.open = (...args) => {
-        window.__tvOpenFeatures = args[2];
-        return originalOpen(...args);
+      window.__tvFullscreenOptions = null;
+      HTMLIFrameElement.prototype.requestFullscreen = function (options) {
+        window.__tvFullscreenOptions = options || {};
+        return Promise.resolve();
       };
     });
     await page.locator('#open-tv-test').click();
@@ -447,21 +444,19 @@ const { chromium } = require('@playwright/test');
     assert.equal(await page.getByRole('button', { name:/Tela principal.*Principal/ }).count(), 1);
     assert.equal(await page.getByRole('button', { name:/Tela secundária.*Projetor/ }).count(), 1,
       'a lista da API prevalece mesmo quando isExtended informa falso');
-    const secondPopupPromise = page.waitForEvent('popup');
     await page.getByRole('button', { name:/Tela secundária.*Projetor/ }).click();
-    const secondPopup = await secondPopupPromise;
-    assert.match(await page.evaluate(() => window.__tvOpenFeatures),
-      /left=1400,top=0,width=1280,height=720,fullscreen/,
-      'o clique na operação abre a TV direto no monitor escolhido e pede tela cheia');
+    const secondFrame = page.locator('iframe[name="scoreplace-live-tv-tour_1790628592058_c342a1e8f5068424887f1702a1633a44"]');
+    await secondFrame.waitFor();
+    const secondPopup = page.frame({ name:'scoreplace-live-tv-tour_1790628592058_c342a1e8f5068424887f1702a1633a44' });
+    assert.ok(secondPopup, 'a seleção de monitor mantém a TV no iframe da operação');
     await secondPopup.waitForSelector('#tv-root');
-    assert.equal(await page.locator('iframe[title^="TV · "]').count(), 0,
-      'a tela escolhida recebe a TV sem deslocar a operação para o segundo monitor');
+    assert.equal(await page.evaluate(() => window.__tvFullscreenOptions?.screen?.label), 'Projetor',
+      'a abertura no gesto de escolha solicita tela cheia no monitor selecionado');
     assert.equal(await secondPopup.locator('#tv-exit-action').count(), 0,
-      'a apresentação externa não mostra Sair da TV');
-    const secondClosePromise = secondPopup.waitForEvent('close');
-    await page.locator('#open-tv-test').click();
-    await secondClosePromise;
-    await page.waitForFunction(() => !window._tvLiveWindow || window._tvLiveWindow.closed);
+      'a apresentação não mostra Sair da TV');
+    await page.evaluate(() => window._tvLiveToggle());
+    await secondFrame.waitFor({ state:'detached' });
+    await page.evaluate(() => { HTMLIFrameElement.prototype.requestFullscreen = Element.prototype.requestFullscreen; });
     await page.evaluate(() => { window.getScreenDetails = async () => ({ screens:[
       { label:'Principal', isPrimary:true, availLeft:0, availTop:0, availWidth:1400, availHeight:1000, width:1400, height:1000 }
     ] }); });

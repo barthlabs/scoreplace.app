@@ -1235,7 +1235,11 @@
 
   // O avanço real, o contador e a súmula usam este mesmo particionamento.
   function buildCategorizedPhaseBrackets(t, groups, phaseCfg, computeStandings, idPrefix, det) {
-    var multi = !!(t && Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1);
+    var loneCategory = t && Array.isArray(t.combinedCategories) && t.combinedCategories.length === 1
+      ? String(t.combinedCategories[0]) : _groupCategory(groups[0]);
+    var officialSingle = !!(phaseCfg && Array.isArray(phaseCfg.officialGroupBracketOrder) &&
+      phaseCfg.officialGroupBracketOrder.indexOf(loneCategory) >= 0);
+    var multi = !!(t && Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) || officialSingle;
     if (!multi) {
       var one = buildPhaseBrackets(groups, phaseCfg, computeStandings, idPrefix, det);
       var lone = t && Array.isArray(t.combinedCategories) && t.combinedCategories.length === 1
@@ -1307,6 +1311,86 @@
     });
     if (combined.repMetaByCat.length) combined.repMeta = combined.repMetaByCat[0];
     return combined;
+  }
+
+  // Prepara a geometria oficial antes de haver classificados. Os nomes fictícios
+  // só alimentam o motor de chaves; nenhum deles é publicado como participante.
+  function prepareOfficialGroupBracket(t, phaseIndex, idPrefix) {
+    var phase = t && t.phases && t.phases[phaseIndex];
+    if (!phase || phaseIndex < 1) return null;
+    var cfg = projectPhaseCfg(phase, t, phaseIndex);
+    if (!cfg || cfg.kind !== 'elimination' ||
+        !Array.isArray(cfg.officialGroupBracketOrder) || !cfg.officialGroupBracketOrder.length) return null;
+    var groups = phaseIndex === 1 ? prevPhaseGroups(t) : bracketPhaseGroups(t, phaseIndex - 1);
+    if (!Array.isArray(groups) || !groups.length) return null;
+    var sources = Object.create(null);
+    function groupCode(group) {
+      var name = String(group && (group.name || group.label) || '').trim();
+      return name.replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '').trim();
+    }
+    function placeholder(group) {
+      var code = groupCode(group);
+      var label = 'Vencedor do Grupo ' + code;
+      sources[label] = code;
+      return [{ name:label, displayName:label }];
+    }
+    // Overrides de atletas são aplicados quando o grupo se resolve; ainda não
+    // podem decidir a vaga em uma chave desenhada antes da primeira partida.
+    cfg = Object.assign({}, cfg, { officialGroupBracketOverrides:null });
+    var built = buildCategorizedPhaseBrackets(t, groups, cfg, placeholder, idPrefix);
+    if (!built || built.error) throw new Error(built && built.error || 'Chave oficial indisponível.');
+    var matches = (built.matches || []).map(function (original) {
+      var m = Object.assign({}, original, { phaseIndex:phaseIndex });
+      ['p1', 'p2'].forEach(function (slot) {
+        var source = sources[String(m[slot] || '')];
+        if (source) m[slot + 'GroupSource'] = source;
+        if (source || !m[slot] || m[slot] === 'TBD') m[slot] = 'TBD';
+        var teamKey = slot === 'p1' ? 'team1Obj' : 'team2Obj';
+        if (m[teamKey]) delete m[teamKey];
+      });
+      delete m.p1Uid; delete m.p2Uid; delete m.team1Uids; delete m.team2Uids;
+      m.winner = null; delete m.winnerUid; delete m.winnerUids;
+      return m;
+    });
+    return { schema:1, fromPhaseIndex:phaseIndex - 1, phaseIndex:phaseIndex,
+      operationalAtByCategory:{}, matches:matches };
+  }
+
+  // Lê uma vaga da mesma transição que gera a chave oficial. Grupo ainda em
+  // disputa não produz equipe, mesmo que a tabela provisória tenha um líder.
+  function resolveOfficialGroupSlot(t, phaseIndex, category, groupSource, computeStandings) {
+    var groups = phaseIndex === 1 ? prevPhaseGroups(t) : bracketPhaseGroups(t, phaseIndex - 1);
+    var code = String(groupSource || '').trim();
+    var group = (groups || []).filter(function (g) {
+      var name = String(g && (g.name || g.label) || '').trim()
+        .replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '').trim();
+      return name === code && (!category || _groupCategory(g) === String(category));
+    });
+    if (group.length !== 1) return null;
+    var matches = group[0].matches || [];
+    if (!matches.length || matches.some(function (m) { return m && !m.isBye && !m.winner && !m.wo; })) return null;
+    if (t.phaseTieAutoError && Number(t.phaseTieAutoError.phaseIndex) === phaseIndex - 1) return null;
+    var tieBook = t.phaseTieDecisions && t.phaseTieDecisions[String(phaseIndex - 1)] || {};
+    var tiePrefix = 'group-' + (groups || []).indexOf(group[0]) + ':';
+    if (Object.keys(tieBook).some(function (key) {
+      return key.indexOf(tiePrefix) === 0 && tieBook[key] && tieBook[key].status !== 'complete';
+    })) return null;
+    var cfg = projectPhaseCfg(t.phases[phaseIndex], t, phaseIndex);
+    var mapping = mappingDaTransicao(cfg);
+    var rows = computeStandings(group[0]) || [];
+    var overrides = cfg.officialGroupBracketOverrides && cfg.officialGroupBracketOverrides[category] || {};
+    var allCategoryGroups = (groups || []).filter(function (g) { return _groupCategory(g) === String(category); });
+    var expected = overrides[String(allCategoryGroups.indexOf(group[0]) + 1)];
+    if (Array.isArray(expected)) {
+      if (expected.length !== 2 || !expected.every(function (name) {
+        return rows.some(function (row) { return row.name === name; });
+      })) throw new Error('Dupla oficial ausente do grupo ' + code);
+      rows = expected.map(function (name) { return rows.find(function (row) { return row.name === name; }); })
+        .concat(rows.filter(function (row) { return expected.indexOf(row.name) < 0; }));
+    }
+    var one = buildEntrantsByDest([group[0]], mapping, cfg.fixedPairs !== false,
+      function () { return rows; }, cfg.pairingStrategy || 'top', optsDaTransicao(cfg, null));
+    return one.main && one.main.length === 1 ? one.main[0] : null;
   }
 
   // v3.1.9 (motor canônico, inc 7): agendador round-robin "MÉTODO DO CÍRCULO" — núcleo
@@ -3995,6 +4079,8 @@
     genTierBracket: genTierBracket,
     roundRobinSchedule: roundRobinSchedule,
     buildPhaseBrackets: buildPhaseBrackets,
+    prepareOfficialGroupBracket: prepareOfficialGroupBracket,
+    resolveOfficialGroupSlot: resolveOfficialGroupSlot,
     buildCategorizedPhaseBrackets: buildCategorizedPhaseBrackets,
     buildPhaseGroupStage: buildPhaseGroupStage,
     buildPhaseLeagueStage: buildPhaseLeagueStage,
