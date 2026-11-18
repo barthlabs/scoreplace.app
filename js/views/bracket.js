@@ -11304,6 +11304,26 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     menos_jogos:'Menos jogos', buchholz:'Buchholz', sonneborn_berger:'Sonneborn-Berger',
     antiguidade:'Antiguidade', juventude:'Juventude', sorteio:'Sorteio'
   };
+  var _superEightTbExplanations = {
+    pontos_avancados:'Pontos Avançados: soma dos pontos atribuídos conforme a configuração do organizador.',
+    confronto_direto:'Confronto direto: resultado do jogo entre os participantes empatados.',
+    sonneborn_berger:'Sonneborn-Berger: soma dos pontos dos adversários vencidos; vencer adversários com mais vitórias pesa mais.',
+    sorteio:'Sorteio: decisão aleatória da organização, usada como último recurso.',
+    buchholz:'Buchholz: soma das vitórias dos adversários enfrentados.',
+    saldo_games:'Saldo de games: games vencidos menos games perdidos.',
+    saldo_sets:'Saldo de sets: sets vencidos menos sets perdidos.',
+    saldo_pontos:'Saldo de pontos: pontos pró menos pontos contra.',
+    games_vencidos:'Games vencidos: total de games ganhos.',
+    sets_vencidos:'Sets vencidos: total de sets ganhos.',
+    tiebreaks_vencidos:'Tie-breaks vencidos: total de tie-breaks ganhos.',
+    saldo_tiebreaks:'Saldo de tie-breaks: tie-breaks ganhos menos perdidos.',
+    saldo_pontos_tiebreak:'Saldo de pontos de tie-break: pontos ganhos menos perdidos nos tie-breaks.',
+    pontos_a_favor:'Pontos a favor: total de pontos marcados.',
+    aproveitamento:'Aproveitamento: vitórias divididas pelos jogos disputados.',
+    menos_jogos:'Menos jogos: prioriza quem disputou menos jogos.',
+    antiguidade:'Antiguidade: prioriza a inscrição mais antiga.',
+    juventude:'Juventude: prioriza o participante mais jovem.'
+  };
   var _superEightTbHeaderLines = {
     pontos_avancados:'💯 PA', confronto_direto:'CBD',
     saldo_pontos:'Saldo de<br>pontos', saldo_sets:'Saldo de<br>sets', saldo_games:'Saldo<br>games',
@@ -11457,7 +11477,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         '<td style="padding:6px 10px;font-weight:700;color:' + window._spCor(clr, 'color') + ';text-align:center;">' + (i + 1) + 'º</td>' +
         '<td class="sp-monarch-standings-name" style="padding:6px 10px;font-weight:600;color:' + window._spCor((_presM ? '#4ade80' : 'var(--text-bright)'), 'color') + ';"><div class="sp-monarch-standings-box" data-sp-card-name-box data-sp-one-line-h="2.3rem" data-sp-two-line-h="2.3rem"><span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.34" data-two-line-maxrem="0.85">' + _presDotM + _nameCellHtml + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</span></div></td>' +
         (_isSuperEightMon && _gamesPrimaryMonarch ? '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;" title="Critério principal: saldo de games">' + (gameDiff >= 0 ? '+' : '') + gameDiff + '</td>' : '') +
-        '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + s.wins + '</td>' +
+      '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + s.wins + '</td>' +
         ((_compacta && !_isSuperEightMon) ? '' : '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + s.losses + '</td>') +
         (_isSuperEightMon && _gamesPrimaryMonarch ? _superEightTieBreakers.map(function (key) {
           var value = _superEightTbValue(key, s);
@@ -11480,7 +11500,9 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     }).join('');
 
     var extraHeaders = (_isSuperEightMon && _gamesPrimaryMonarch ? _superEightTieBreakers.map(function (key) {
-      return '<th style="width:62px;max-width:72px;padding:4px 5px;text-align:center;vertical-align:bottom;color:var(--text-muted);font-size:0.66rem;line-height:1.08;white-space:normal;" title="Critério de desempate: ' + window._safeHtml(_superEightTbLabels[key] || key) + '">' + (_superEightTbHeaderLines[key] || window._safeHtml(_superEightTbLabels[key] || key)) + '</th>';
+      var label = _superEightTbLabels[key] || key;
+      var explanation = _superEightTbExplanations[key] || ('Critério de desempate: ' + label + '.');
+      return '<th tabindex="0" data-explain-title="' + window._safeHtml(label) + '" data-explain="' + window._safeHtml(explanation) + '" style="width:62px;max-width:72px;padding:4px 5px;text-align:center;vertical-align:bottom;color:var(--text-muted);font-size:0.66rem;line-height:1.08;white-space:normal;" title="' + window._safeHtml(explanation) + '">' + (_superEightTbHeaderLines[key] || window._safeHtml(label)) + '</th>';
     }).join('') : (_useSetsMonarch && !_compacta) ? (
       '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-06b6d4,#06b6d4);font-size:0.7rem;" title="Sets vencidos − perdidos">Sets</th>' +
       '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-06b6d4,#06b6d4);font-size:0.7rem;" title="Saldo de sets">±S</th>' +
@@ -11490,20 +11512,20 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     ) : '');
     var standingsTable = '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;margin-top:1rem;">' +
       '<thead><tr style="border-bottom:2px solid var(--border-color);">' +
-      '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">#</th>' +
+      '<th tabindex="0" data-explain-title="Posição" data-explain="Lugar do participante na classificação atual." style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Posição na classificação">#</th>' +
       // ⭐ `width:100%` na coluna do nome: a tabela dá a ela toda a sobra depois que as
       // colunas numéricas (estreitas e de largura fixa pelo conteúdo) se servem. É assim que
       // o nome ganha o espaço que D/Pts/% liberaram, em vez de a tabela só encolher.
       '<th style="padding:6px 10px;color:var(--text-muted);font-size:0.7rem;' + (_compacta ? 'width:100%;' : '') + '">Jogador</th>' +
-      (_isSuperEightMon && _gamesPrimaryMonarch ? '<th style="width:62px;max-width:72px;padding:4px 5px;text-align:center;vertical-align:bottom;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.66rem;line-height:1.08;white-space:normal;" title="Critério principal: saldo de games">Saldo<br>games</th>' : '') +
-      '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">V</th>' +
-      ((_compacta && !_isSuperEightMon) ? '' : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">D</th>') +
+      (_isSuperEightMon && _gamesPrimaryMonarch ? '<th tabindex="0" data-explain-title="Saldo de games" data-explain="Games vencidos menos games perdidos. É o critério principal desta classificação." style="width:62px;max-width:72px;padding:4px 5px;text-align:center;vertical-align:bottom;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.66rem;line-height:1.08;white-space:normal;" title="Critério principal: saldo de games (games vencidos − perdidos)">Saldo<br>games</th>' : '') +
+      '<th tabindex="0" data-explain-title="V — Vitórias" data-explain="Número de partidas vencidas." style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Número de vitórias">V</th>' +
+      ((_compacta && !_isSuperEightMon) ? '' : '<th tabindex="0" data-explain-title="D — Derrotas" data-explain="Número de partidas perdidas." style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Número de derrotas">D</th>') +
       (_compacta || _gamesPrimaryMonarch ? '' : ((t.advancedScoring && t.advancedScoring.enabled)
-        ? '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.7rem;" title="Pontos Avançados — critério principal da classificação">💯 PA</th>'
+        ? '<th tabindex="0" data-explain-title="💯 PA — Pontos Avançados" data-explain="Soma dos pontos atribuídos conforme a configuração de pontuação avançada do organizador." style="padding:6px 10px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.7rem;" title="Pontos Avançados — critério principal da classificação">💯 PA</th>'
         : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Pontos pró (cada ponto conta)">Pts</th>')) +
       ((_isSuperEightMon && _gamesPrimaryMonarch) ? '' : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="' + (_gamesPrimaryMonarch ? 'Saldo de games' : 'Saldo de pontos (pró − contra)') + '">' + (_gamesPrimaryMonarch ? 'Saldo games' : 'Saldo') + '</th>') +
       extraHeaders +
-      ((_compacta && !_isSuperEightMon) ? '' : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Aproveitamento informativo">%</th>') +
+      ((_compacta && !_isSuperEightMon) ? '' : '<th tabindex="0" data-explain-title="% — Aproveitamento" data-explain="Percentual de vitórias: vitórias divididas pelo total de partidas disputadas. É informativo, não critério de desempate." style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Aproveitamento informativo: vitórias ÷ partidas disputadas">%</th>') +
       '</tr></thead><tbody>' + standingsRows + '</tbody></table>';
 
     // Recibo de placar: refaz só a tabela derivada do grupo em um fragmento

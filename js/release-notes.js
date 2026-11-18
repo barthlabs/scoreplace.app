@@ -1,3 +1,6 @@
+// 2.7.38 — O backend aceita a configuração de chamada/aquecimento do Super 8, evitando
+// que o salvamento do formulário descarte também a ativação do modo de teste. Os cabeçalhos
+// compactos da classificação explicam siglas e critérios por hover ou toque prolongado.
 // 2.7.37 — PA e Confronto direto usam cabeçalhos compactos (💯 PA e CBD).
 // Saldo de pontos, Buchholz e Antiguidade saem dos critérios visíveis do Super 8.
 // Recomendações do Scoreplace apontam redundâncias exatas entre a pontuação principal
