@@ -1,3 +1,4 @@
+// 2.7.33 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.32 — O organizador define os games para vencer cada set na fase inicial
 // e na eliminatória. No empate um game abaixo, escolhe tie-break, próximo game
 // decisivo ou vantagem de dois games. Torneios antigos com empate configurado
