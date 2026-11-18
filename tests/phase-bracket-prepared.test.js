@@ -9,10 +9,22 @@ const compiledOfficial = W.FORMAT2.compileToPhases({
   disputa:'dupla', grupos:2, parceria:'rotation_groups_8',
   rodadas:{ modo:'fixo', n:5 }, classifAtiva:true, classificados:1,
   classifScope:'per_group', eliminatoria:{ ativa:true, linhas:1, origem:'formar' }
-}, { sport:'Beach Tennis', categories:['Fem A', 'Fem B', 'Masc A'] });
+}, { sport:'Beach Tennis', categories:['Feminino', 'Masculino'] });
 assert.deepEqual(compiledOfficial.phases[1].officialGroupBracketOrder,
-  ['Fem A', 'Fem B', 'Masc A'],
+  ['Feminino', 'Masculino'],
   'o compilador persiste a ordem oficial das categorias na chave por vencedores de grupo');
+const compiledWithoutCategories = W.FORMAT2.compileToPhases({
+  disputa:'dupla', grupos:2, parceria:'rotation_groups_8', classifAtiva:true,
+  classificados:1, classifScope:'per_group', eliminatoria:{ ativa:true, linhas:1 }
+}, { sport:'Beach Tennis' });
+assert.equal(compiledWithoutCategories.phases[1].officialGroupBracketOrder, undefined,
+  'sem categorias oficiais o compilador não inventa uma ordem de chave');
+const compiledMultipleLines = W.FORMAT2.compileToPhases({
+  disputa:'dupla', grupos:2, parceria:'rotation_groups_8', classifAtiva:true,
+  classificados:1, classifScope:'per_group', eliminatoria:{ ativa:true, linhas:2 }
+}, { sport:'Beach Tennis', categories:['Feminino', 'Masculino'] });
+assert.equal(compiledMultipleLines.phases[1].officialGroupBracketOrder, undefined,
+  'chaves com vários destinos continuam usando a semeadura configurada');
 
 const phases = W.FORMAT2.compileToPhases({ disputa:'dupla', grupos:1, classifAtiva:false,
   eliminatoria:{ ativa:true, openReiRainha:true, reiRainhaCut:2,
@@ -40,6 +52,15 @@ const t = { id:'torneio-generico', phases, currentPhaseIndex:0,
     ...groups.filter(g => g.category === 'Feminino').map(g => ({ kind:'groups', category:g.category })),
     ...groups.filter(g => g.category === 'Masculino').map(g => ({ kind:'groups', category:g.category }))
   ] } } };
+
+const compiledTournament = Object.assign({}, t, { phases:compiledOfficial.phases,
+  fmt2:compiledOfficial.cfg });
+assert.equal(compiledTournament.phases[1].officialGroupBracketGroupOrder, undefined,
+  'ordem manual de grupos é opcional no contrato compilado');
+const compiledPlan = E.prepareOfficialGroupBracket(compiledTournament, 1, 'ph-compiled');
+assert(compiledPlan.matches.some(m => m.category === 'Feminino' && m.round === 1 &&
+  m.p1GroupSource === 'A1' && m.p2GroupSource === 'A2'),
+  'sem ordem manual, a sequência de grupos recebida preserva A1 × A2');
 
 const plan = E.prepareOfficialGroupBracket(t, 1, 'ph-' + t.id + '-1');
 assert(plan && plan.matches.length > 0);
