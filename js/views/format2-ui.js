@@ -430,8 +430,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<p style="margin:0 0 10px 0;font-size:0.8rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;text-transform:uppercase;letter-spacing:1px;">\uD83C\uDFBE Formato da Partida</p>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">' + grid + '</div>' +
       // A eliminatória pode herdar ou escolher seus próprios games e regra de empate.
-      ((typeof window._tieAtToggleHtml === 'function' && eff && !eff.fixedSet && eff.countingType !== 'numeric' &&
-        (typeof window._scoringUsesSets !== 'function' || window._scoringUsesSets(eff)))
+      ((typeof window._tieAtToggleHtml === 'function' && eff && !eff.fixedSet && eff.countingType !== 'numeric')
         ? window._tieAtToggleHtml({ games: (eff && eff.gamesPerSet) || 6, at: _elimTieAtAtual(e),
             rule: eff.tieRule || (eff.tiebreakEnabled !== false ? 'tiebreak' : 'extend'),
             cor: '251,191,36', pfx: 'f2elim', onGames: 'window._f2ElimSetGames', onRule: 'window._f2ElimSetRule' })
@@ -1943,7 +1942,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var base = _elimEffScoring(S.cfg.eliminatoria);
     if (!base) return;
     var sc = Object.assign({}, base, patch, { tiebreakAt: 'g-1' });
-    if (!sc.type) sc.type = 'sets';
+    sc.type = 'sets';
     var ini = (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
     window._f2SetElimScoring(ini && _mesmoFormato(sc, ini) ? null : sc);
   }

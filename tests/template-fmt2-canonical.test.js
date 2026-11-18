@@ -16,6 +16,22 @@ const copy = W._f2TemplateCopy;
 assert.strictEqual(copy(null), null);
 assert.strictEqual(copy(undefined), null);
 assert.strictEqual(copy([]), null);
+// Um modelo com regra curta precisa repor o scoring, além do formato da chave.
+const writeStart = create.indexOf('window._writeScoringToForm = function(');
+const writeEnd = create.indexOf('\n  };', writeStart);
+assert(writeStart >= 0 && writeEnd > writeStart);
+const scoreInputs = Object.fromEntries(['type', 'setsToWin', 'gamesPerSet', 'tiebreakEnabled',
+  'tiebreakAt', 'tieRule', 'countingType'].map(key => ['gsm-' + key, { value: '' }]));
+const scoreWindow = {};
+vm.runInNewContext(create.slice(writeStart, writeEnd + 5), {
+  window: scoreWindow, document: { getElementById: id => scoreInputs[id] || null }
+});
+scoreWindow._writeScoringToForm({ type: 'sets', setsToWin: 1, gamesPerSet: 4,
+  tiebreakEnabled: false, tiebreakAt: 'g-1', tieRule: 'decider', countingType: 'tennis' });
+assert.strictEqual(scoreInputs['gsm-gamesPerSet'].value, '4');
+assert.strictEqual(scoreInputs['gsm-tieRule'].value, 'decider');
+assert(create.includes("if (tpl.scoring && typeof window._writeScoringToForm === 'function')"));
+assert(create.includes('var scoring = window._gsmReadHidden();'));
 
 // Mesmo objeto que o formulário grava: _f2GetConfig() = FORMAT2.normalize(...).
 const f2Source = fs.readFileSync(path.join(root, 'js/views/format2.js'), 'utf8');
@@ -196,11 +212,15 @@ async function integration() {
   formWindow._f2GetConfig = () => savedByOldForm;
   formWindow._readTournamentDateColors = () => ({ background:'#216b96', text:'#ffffff', day:'#ffffff', month:'#ffc400', time:'#e5f4fc' });
   formWindow._allowSelfDeactEl = () => null;
+  formWindow._gsmReadHidden = () => ({ type:'sets', gamesPerSet:4,
+    tiebreakAt:'g-1', tieRule:'decider', tiebreakEnabled:false, countingType:'tennis' });
   formWindow._saveTemplate = async tpl => { formSaved = tpl; return 'ok'; };
   formContext.showInputDialog = (label, name, cb) => cb('Modelo novo');
   formWindow._saveCurrentFormAsTemplate();
   await new Promise(resolve => setImmediate(resolve));
   assert(formSaved && formSaved.fmt2, 'formulário salva configuração canônica');
+  assert.strictEqual(formSaved.scoring.gamesPerSet, 4);
+  assert.strictEqual(formSaved.scoring.tieRule, 'decider');
   assert.strictEqual(formSaved.dateCardColors.month, '#ffc400', 'modelo preserva as cores da data');
   assert.strictEqual(formSaved.fmt2.rodadas.drawFirstDate, '');
   assert.strictEqual(formSaved.fmt2.eliminatoria.endDate, '');
@@ -209,9 +229,10 @@ async function integration() {
 // Atalhos dos modelos aparecem logo após o nome e reutilizam a ação de aplicar.
 const nameField = create.indexOf('id="tourn-name"');
 const shortcutHost = create.indexOf('id="tournament-template-shortcuts"');
+const testModeRow = create.indexOf('id="tourn-test-mode-row"');
 const sportField = create.indexOf('id="select-sport"');
-assert(nameField >= 0 && nameField < shortcutHost && shortcutHost < sportField,
-  'atalhos ficam diretamente entre nome e modalidade');
+assert(nameField >= 0 && nameField < shortcutHost && shortcutHost < testModeRow && testModeRow < sportField,
+  'atalhos ficam imediatamente abaixo do nome');
 const host = { style: {}, innerHTML: '' };
 const shortcutWindow = {
   _templateCache: [{ name: 'Super 8' }, { name: '<Outro>' }],

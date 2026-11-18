@@ -519,6 +519,7 @@ function setupCreateTournamentModal() {
                   <label class="form-label">${_t('create.nameLabel')}</label>
                   <input type="text" class="form-control" id="tourn-name" placeholder="Ex: Copa de Inverno 2026" required oninput="window._refreshCoverPreview()">
                 </div>
+                <div id="tournament-template-shortcuts" aria-label="Modelos de torneio salvos" style="display:none;gap:8px;flex-wrap:wrap;align-items:center;"></div>
                 <label id="tourn-test-mode-row" class="form-group full-width" style="display:none;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);">
                   <span class="toggle-switch" style="--toggle-on-bg:#16a34a;--toggle-on-glow:rgba(34,197,94,.35);--toggle-on-border:#4ade80;">
                     <input type="checkbox" role="switch" id="tourn-test-mode" aria-label="Ativar modo de teste" onchange="window._syncTournamentTestMode()">
@@ -526,7 +527,6 @@ function setupCreateTournamentModal() {
                   </span>
                   <span id="tourn-test-mode-state">Teste desativado · produção</span>
                 </label>
-                <div id="tournament-template-shortcuts" aria-label="Modelos de torneio salvos" style="display:none;gap:8px;flex-wrap:wrap;align-items:center;"></div>
                 <div class="form-group full-width">
                   <label class="form-label">${_t('create.sportLabel')}</label>
                   <!-- Hidden select for backward compatibility -->
@@ -1105,7 +1105,7 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="gsm-tiebreakPoints" value="7">
                 <input type="hidden" id="gsm-tiebreakMargin" value="2">
                 <input type="hidden" id="gsm-tiebreakAt" value="g-1">
-                <!-- 2.0.2: 'extend' (prorrogar até 2 games) | 'tiebreak'. Vazio = deriva do
+                <!-- 'extend' (vantagem de 2 games) | 'decider' (próximo game) | 'tiebreak'. Vazio = deriva do
                      tiebreakEnabled, que é como todo torneio criado até aqui está gravado. -->
                 <input type="hidden" id="gsm-tieRule" value="">
                 <input type="hidden" id="gsm-superTiebreak" value="false">
@@ -8322,10 +8322,8 @@ window._gsmRenderTieAt = function () {
   var _cfg = { type: (document.getElementById('gsm-type') || {}).value || '',
                tiebreakEnabled: (document.getElementById('gsm-tiebreakEnabled') || {}).value === 'true',
                gamesPerSet: g };
-  // A escolha é por fase e só faz sentido nos esportes que contam games dentro do set.
-  var usaSets = (typeof window._scoringUsesSets === 'function')
-    ? window._scoringUsesSets(_cfg) : (!_cfg.type || _cfg.type === 'sets');
-  if (!usaSets || (document.getElementById('gsm-countingType') || {}).value === 'numeric' ||
+  // O tipo legado "simple" também usa games quando a contagem é de tênis, inclusive sem TB.
+  if ((document.getElementById('gsm-countingType') || {}).value === 'numeric' ||
       (document.getElementById('gsm-fixedSet') || {}).value === 'true') { box.innerHTML = ''; return; }
   var ruleEl = document.getElementById('gsm-tieRule');
   var rule = (ruleEl && ruleEl.value) || (_cfg.tiebreakEnabled ? 'tiebreak' : 'extend');
@@ -8337,6 +8335,7 @@ window._gsmRenderTieAt = function () {
 window._gsmSetGamesInline = function (raw) {
   var n = Number(raw);
   if (!Number.isInteger(n) || n < 2) { window._gsmRenderTieAt(); return; }
+  document.getElementById('gsm-type').value = 'sets';
   document.getElementById('gsm-gamesPerSet').value = String(n);
   document.getElementById('gsm-tiebreakAt').value = 'g-1';
   window._gsmForcedCustom = true;
@@ -8346,6 +8345,7 @@ window._gsmSetGamesInline = function (raw) {
 };
 window._gsmSetTieRuleInline = function (rule) {
   if (['tiebreak', 'decider', 'extend'].indexOf(rule) === -1) return;
+  document.getElementById('gsm-type').value = 'sets';
   document.getElementById('gsm-tieRule').value = rule;
   document.getElementById('gsm-tiebreakEnabled').value = rule === 'tiebreak' ? 'true' : 'false';
   document.getElementById('gsm-tiebreakAt').value = 'g-1';
@@ -8774,9 +8774,9 @@ window._prefillFromTemplate = function(tpl) {
   var venueInput = document.getElementById('tourn-venue');
   if (venueInput && tpl.venue) venueInput.value = tpl.venue;
 
-  // Scoring (GSM)
-  if (tpl.scoring && tpl.scoring.type === 'gsm' && typeof window._gsmApplyConfig === 'function') {
-    window._gsmApplyConfig(tpl.scoring);
+  // O modelo restaura a pontuação da fase inicial para qualquer formato de set.
+  if (tpl.scoring && typeof window._writeScoringToForm === 'function') {
+    window._writeScoringToForm(tpl.scoring);
   }
 
   // W.O. é uma ação por jogo; templates antigos não escolhem mais o seu escopo.
@@ -9344,20 +9344,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
     genderCats.forEach(function(g) { skillLike.forEach(function(s) { combinedCats.push(g + ' ' + s); }); });
   } else if (genderCats.length) combinedCats = genderCats.slice();
   else if (skillLike.length) combinedCats = skillLike.slice();
-  var scoring = {
-    type: get('gsm-type') || 'simple',
-    setsToWin: parseInt(get('gsm-setsToWin')) || 1,
-    gamesPerSet: parseInt(get('gsm-gamesPerSet')) || 6,
-    tiebreakEnabled: get('gsm-tiebreakEnabled') === 'true',
-    tiebreakPoints: parseInt(get('gsm-tiebreakPoints')) || 7,
-    tiebreakMargin: parseInt(get('gsm-tiebreakMargin')) || 2,
-    superTiebreak: get('gsm-superTiebreak') === 'true',
-    superTiebreakPoints: parseInt(get('gsm-superTiebreakPoints')) || 10,
-    countingType: get('gsm-countingType') || 'numeric',
-    advantageRule: (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : (get('gsm-advantageRule') === 'true'),
-    fixedSet: get('gsm-fixedSet') === 'true',
-    fixedSetGames: parseInt(get('gsm-fixedSetGames')) || 6
-  };
+  var scoring = window._gsmReadHidden();
   // v2.1.32: o template grava ABSOLUTAMENTE TODAS as configs (menos dados de
   // instância: nome do torneio, datas, organizador, inscritos, logo gerada).
   var ageCats = (get('tourn-age-categories') || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
