@@ -88,6 +88,12 @@ assert(singlePlan.matches.some(m => m.p1GroupSource === 'A1' && m.p2GroupSource 
   'categoria única também respeita o cruzamento oficial A1 × A2');
 
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
+const callStart = source.indexOf('exports.assignMatchCourt = onCall');
+const callEnd = source.indexOf('exports.applyMatchResult = onCall', callStart);
+const callBoundary = source.slice(callStart, callEnd > callStart ? callEnd : undefined);
+assert(callStart >= 0 && callBoundary.indexOf('_reconcileOfficialPhasePlan(t, antes, { phasePlanResume:true })') <
+  callBoundary.indexOf('_activateOfficialPhasePlanOnCall(t, m, agoraIso)'),
+  'chamada prepara eventual chave legada antes de avaliar o gatilho operacional');
 const start = source.indexOf('function _phaseBracketSignature(');
 const end = source.indexOf('/* Grava o torneio respeitando', start);
 assert(start > 0 && end > start);
@@ -177,6 +183,20 @@ operation.reconcile(stale, structuredClone(t), {});
 assert.equal(stale.phaseBracketPlanVersion, 1,
   'escrita antiga pela fronteira do servidor preserva o marcador e a chave');
 assert.equal(JSON.stringify(stale.phaseBracketPlanV1.matches.map(m => m.id)), JSON.stringify(originalIds));
+const legacyDrawn = structuredClone(t);
+delete legacyDrawn.phaseBracketPlanVersion;
+delete legacyDrawn.phaseBracketPlanV1;
+legacyDrawn.matches = legacyDrawn.matches.filter(m => Number(m.phaseIndex || 0) === 0);
+legacyDrawn.currentPhaseIndex = 0;
+legacyDrawn._phaseMaterialized = 0;
+const legacyBeforeCall = structuredClone(legacyDrawn);
+legacyDrawn.groups.filter(g => g.category === 'Feminino').flatMap(g => g.matches)
+  .forEach(m => { m.courtCalledAt = calledAt; });
+operation.reconcile(legacyDrawn, legacyBeforeCall, { phasePlanResume:true });
+assert.equal(legacyDrawn.phaseBracketPlanVersion, 1,
+  'chamada pode preparar com segurança chave de torneio já sorteado antes desta funcionalidade');
+assert.deepEqual(Array.from(operation.activate(legacyDrawn, legacyDrawn.groups[0].matches[0], calledAt)), ['Feminino'],
+  'torneio legado ativa sua categoria na última chamada sem exigir nova fase ou placar');
 const invalid = structuredClone(t);
 invalid.phaseBracketPlanV1 = null;
 assert.throws(() => operation.reconcile(invalid, invalid, {}), /chave planejada.*ausente/i,

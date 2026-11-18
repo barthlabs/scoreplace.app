@@ -1383,7 +1383,14 @@ function _reconcileOfficialPhasePlan(t, before, ctx) {
   }
   const oldPlan = before && before.phaseBracketPlanVersion === 1 && before.phaseBracketPlanV1;
   const drawing = !oldPlan && (!before || !hasDrawnBracket(before)) && hasDrawnBracket(t);
-  if (drawing && !t.phaseBracketPlanV1) _prepareOfficialPhasePlan(t, 1);
+  // Torneios já sorteados antes da chave oficial só podem ser atualizados quando
+  // a organização inicia uma partida. Preparar aqui, ainda na transação da chamada,
+  // permite que a última chamada materialize a chave no instante correto sem
+  // migrar ou sobrescrever partidas eliminatórias que já existam.
+  const resumeDrawnPhase = !!(ctx && ctx.phasePlanResume === true) && !oldPlan &&
+    Number(t.currentPhaseIndex || 0) === 0 && hasDrawnBracket(t) &&
+    !(drawWindow._collectAllMatches(t) || []).some(m => m && Number(m.phaseIndex || 0) > 0 && !m.isBye && !m.isSitOut);
+  if ((drawing || resumeDrawnPhase) && !t.phaseBracketPlanV1) _prepareOfficialPhasePlan(t, 1);
   if (oldPlan && !t.phaseBracketPlanV1 && !(ctx && ctx.phasePlanRedraw)) {
     if (hasDrawnBracket(t)) { t.phaseBracketPlanV1 = JSON.parse(JSON.stringify(oldPlan)); t.phaseBracketPlanVersion = 1; }
     else { delete t.phaseBracketPlanVersion; return; }
@@ -4942,6 +4949,9 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (confirmCall && !m.courtCalledAt) {
         m.courtCalledAt = agoraIso;
         if (m.isMonarch === true && !m.isTieBreak) m.monarchTimingMode = 'perGame';
+        if (t.phaseBracketPlanVersion !== 1 && !t.phaseBracketPlanV1) {
+          _reconcileOfficialPhasePlan(t, antes, { phasePlanResume:true });
+        }
         _activateOfficialPhasePlanOnCall(t, m, agoraIso);
       }
       const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
