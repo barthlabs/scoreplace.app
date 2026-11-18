@@ -920,6 +920,13 @@ function setupCreateTournamentModal() {
                 </div>
 
                 <!-- Escada de estimativa: 2 pot. de 2 abaixo + real + 2 acima -->
+                <div id="super8-setup-scope-wrap" style="display:none;margin-top:8px;padding:8px 10px;border:1px solid rgba(245,158,11,.25);border-radius:8px;background:rgba(245,158,11,.04);">
+                  <label for="super8-setup-scope" style="display:block;font-size:.72rem;color:var(--text-muted);margin-bottom:4px;">Super 8 · aplicar chamada e aquecimento</label>
+                  <select id="super8-setup-scope" class="form-control" onchange="window._recalcDuration()" style="max-width:340px;font-size:.78rem;">
+                    <option value="first_round">Só na primeira rodada</option>
+                    <option value="every_game">Em cada jogo</option>
+                  </select>
+                </div>
                 <div id="phase-estimate-ladder" style="margin-top:8px;"></div>
 
                 <!-- Extra diagnostics (shown only when relevant) -->
@@ -4748,7 +4755,8 @@ function setupCreateTournamentModal() {
     // A partida vale × sets esperados do formato desta fase; chamada e aquecimento
     // acontecem UMA vez por partida. Régua de sets: sport-rules.js.
     var sets = o.sets > 0 ? o.sets : 1;
-    var slot = call + warm + Math.round(dur * sets); // minutos por slot de partida
+    var gameMinutes = Math.round(dur * sets);
+    var slot = call + warm + gameMinutes; // minutos por slot de partida
     var fmt = o.fmt || 'elim_simples';
     var drawMode = o.drawMode || 'sorteio';
     var K = Math.max(o.K || 1, 1);
@@ -4760,6 +4768,7 @@ function setupCreateTournamentModal() {
     var superEight = o.superEight === true;
     var superEightRounds = Math.max(1, Math.min(7, Math.floor(Number(o.superEightRounds) || 7)));
     var superEightCourts = Math.min(courts, 2);
+    var superEightEveryGame = o.superEightSetupScope === 'every_game';
     // Classificados/grupo agora vêm da transição de fases (mapping.rankTo), não de
     // um campo dedicado. Para a estimativa usamos 2 (Rei+Vice), o caso típico.
     var monarchCls = 2;
@@ -4870,7 +4879,7 @@ function setupCreateTournamentModal() {
     var catLabel = K > 1 ? (' · ' + K + ' categorias') : '';
     var h = '';
     var displayedCourts = superEight ? superEightCourts : courts;
-    h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:6px;">' + headLabel + catLabel + ' · ' + displayedCourts + (displayedCourts > 1 ? ' quadras' : ' quadra') + ' · ' + slot + 'min/jogo</div>';
+    h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:6px;">' + headLabel + catLabel + ' · ' + displayedCourts + (displayedCourts > 1 ? ' quadras' : ' quadra') + ' · ' + (superEight ? gameMinutes : slot) + 'min/jogo' + (superEight && !superEightEveryGame ? ' + chamada/aquecimento na 1ª rodada' : '') + '</div>';
     if (N < 2) {
       h += '<div style="font-size:0.72rem;color:var(--text-muted);">Defina a capacidade máxima para estimar participantes, confrontos e tempo de quadra.</div>';
       return h;
@@ -4881,7 +4890,7 @@ function setupCreateTournamentModal() {
       ? Object.keys(categoryMatches).reduce(function (sum, category) { return sum + categoryMatches[category]; }, 0)
       : (matchesPerCategory === null ? totalMatches(N) : matchesPerCategory * K);
     var operationalMinutes = slot <= 0 ? -1 : superEight
-      ? superEightRounds * Math.ceil(2 / superEightCourts) * slot
+      ? superEightRounds * Math.ceil(2 / superEightCourts) * (superEightEveryGame ? slot : gameMinutes) + (superEightEveryGame ? 0 : call + warm)
       : Math.ceil(matches / courts) * slot;
     var unitsLabel = o.unitLbl || 'inscritos';
     var peopleLabel = totalParticipants > 0 ? totalParticipants + ' participante' + (totalParticipants === 1 ? '' : 's') : '';
@@ -4897,7 +4906,7 @@ function setupCreateTournamentModal() {
     h += '</div>';
     if (slot <= 0) h += '<div style="font-size:0.64rem;color:var(--sp-c-f59e0b,#f59e0b);margin-top:6px;">Preencha chamada/aquecimento/duração para calcular o tempo de operação.</div>';
     else h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">' + (superEight
-      ? superEightRounds + ' rodadas × ' + Math.ceil(2 / superEightCourts) + ' janela(s) de ' + slot + 'min = ' + fmtMin(operationalMinutes) + ' de duração; 2 jogos por rodada em ' + superEightCourts + (superEightCourts > 1 ? ' quadras' : ' quadra') + ' (' + fmtMin(matches * slot) + ' de uso total de quadra).'
+      ? superEightRounds + ' rodadas; ' + (superEightEveryGame ? 'chamada e aquecimento em cada jogo' : 'chamada e aquecimento só na primeira rodada') + '. Duração estimada: ' + fmtMin(operationalMinutes) + '; 2 jogos por rodada em ' + superEightCourts + (superEightCourts > 1 ? ' quadras' : ' quadra') + '.'
       : matches + ' confrontos × ' + slot + 'min = ' + fmtMin(matches * slot) + ' de uso de quadra; ' + courts + (courts > 1 ? ' quadras' : ' quadra') + ' exigem ' + Math.ceil(matches / courts) + ' janelas em paralelo.') + '</div>';
     return h;
   };
@@ -4946,6 +4955,8 @@ function setupCreateTournamentModal() {
     }
     var f2cfg = null;
     try { f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) {}
+    var super8ScopeWrap = document.getElementById('super8-setup-scope-wrap');
+    if (super8ScopeWrap) super8ScopeWrap.style.display = f2cfg && f2cfg.parceria === 'super_eight' ? 'block' : 'none';
     var tc = f2cfg && f2cfg.teamCompetition;
     var effectiveTurnos = f2cfg && window.FORMAT2 && typeof window.FORMAT2.resolveTurnos === 'function'
       ? window.FORMAT2.resolveTurnos(f2cfg) : null;
@@ -4980,6 +4991,7 @@ function setupCreateTournamentModal() {
       unitLbl: f2cfg && f2cfg.parceria === 'super_eight' ? 'jogadores' : (teamSize >= 2 ? 'duplas' : 'inscritos'),
       superEight: !!(f2cfg && f2cfg.parceria === 'super_eight'),
       superEightRounds: f2cfg && f2cfg.rodadas && f2cfg.rodadas.n,
+      superEightSetupScope: gv('super8-setup-scope') || 'first_round',
       gruposCount: iv('grupos-count', 4)
     });
   };
@@ -6076,6 +6088,7 @@ function setupCreateTournamentModal() {
     document.getElementById('tourn-court-names').value = t.courtNames ? t.courtNames.join(', ') : '';
     document.getElementById('tourn-call-time').value = t.callTime != null ? t.callTime : 5;
     document.getElementById('tourn-warmup-time').value = t.warmupTime != null ? t.warmupTime : 5;
+    document.getElementById('super8-setup-scope').value = t.superEightSetupScope === 'every_game' ? 'every_game' : 'first_round';
     document.getElementById('tourn-game-duration').value = t.gameDuration || 30;
     window._onCourtCountChange();
 
@@ -7073,6 +7086,7 @@ window._saveTournamentClickHandler = async function() {
           courtNames: courtNamesVal,
           callTime: callTimeVal,
           warmupTime: warmupTimeVal,
+          superEightSetupScope: (document.getElementById('super8-setup-scope') || {}).value === 'every_game' ? 'every_game' : 'first_round',
           gameDuration: gameDurationVal,
           // Formato da partida da FASE INICIAL = t.scoring (fonte única _gsmReadHidden).
           // A fase eliminatória tem o SEU (cfg.eliminatoria.scoring → phases[elim].scoring).
@@ -8364,7 +8378,7 @@ window._gsmRenderTieAt = function () {
 };
 window._gsmSetGamesInline = function (raw) {
   var n = Number(raw);
-  if (!Number.isInteger(n) || n < 1 || window._scoringPhaseHasResult(0)) { window._gsmRenderTieAt(); return; }
+  if (!Number.isInteger(n) || n < 1 || (typeof window._scoringPhaseHasResult === 'function' && window._scoringPhaseHasResult(0))) { window._gsmRenderTieAt(); return; }
   document.getElementById('gsm-type').value = 'sets';
   document.getElementById('gsm-countingType').value = 'tennis';
   document.getElementById('gsm-fixedSet').value = 'false';
@@ -8887,6 +8901,7 @@ window._prefillFromTemplate = function(tpl) {
   // Tempos
   _setV('tourn-call-time', tpl.callTime);
   _setV('tourn-warmup-time', tpl.warmupTime);
+  _setV('super8-setup-scope', tpl.superEightSetupScope === 'every_game' ? 'every_game' : 'first_round');
   _setV('tourn-court-names', tpl.courtNames);
   // Local (todos os campos ocultos)
   _setV('tourn-venue-access', tpl.venueAccess);
@@ -9439,6 +9454,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       courtNames: (get('tourn-court-names') || '').trim(),
       callTime: parseInt(get('tourn-call-time')) || 0,
       warmupTime: parseInt(get('tourn-warmup-time')) || 0,
+      superEightSetupScope: get('super8-setup-scope') === 'every_game' ? 'every_game' : 'first_round',
       gameDuration: parseInt(get('tourn-game-duration')) || '',
       venue: (get('tourn-venue') || '').trim(),
       venueAccess: get('tourn-venue-access') || '',
