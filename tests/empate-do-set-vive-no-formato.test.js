@@ -87,9 +87,10 @@ ok(nodes['gsm-gamesPerSet'].value === '4', 'fração inválida não altera a met
 
 nodes['gsm-tiebreakAt'].value = '6';
 win._gsmRenderTieAt();
-ok(/6-6/.test(nodes['gsm-tieat-inline'].innerHTML), 'torneio antigo com empate em g-g é preservado');
+ok(/5-5/.test(nodes['gsm-tieat-inline'].innerHTML), 'o empate é derivado como um game abaixo do alvo');
+ok(nodes['gsm-tiebreakAt'].value === 'g-1', 'configuração antiga é normalizada para o empate derivado');
 win._gsmSetTieRuleInline('tiebreak');
-ok(nodes['gsm-tiebreakAt'].value === '6', 'mudar a regra preserva o empate definido pelo organizador');
+ok(nodes['gsm-tiebreakAt'].value === 'g-1', 'mudar a regra mantém o empate derivado');
 win._gsmSetTieRuleInline('extend');
 win._gsmSelectPreset('best3');
 ok(nodes['gsm-tieRule'].value === 'extend' && nodes['gsm-tiebreakEnabled'].value === 'false',

@@ -85,7 +85,7 @@ ok(!/gsm-tbat-seg/.test(ct), '⛔ o segmento antigo não sobrou em lugar nenhum 
 })();
 
 // ── 5. O RESUMO conta as duas saídas, com a conta certa ─────────────────────
-ok(/gsmExtendDetail/.test(ct) || /Sem tie-break; o set segue até cumprir/.test(ct),
+ok(/gsmExtendDetail/.test(ct) || /Desativado; o set segue até cumprir/.test(ct),
   'o resumo explica que o set segue quando tie-break fica desligado');
 ok(/tbPts - tbMargin \+ 1/.test(ct),
   'e a conta do "segue até abrir N" é pts-margem+1 — em 5-5 o tie-break de 7 AINDA fecha (7-5)');
