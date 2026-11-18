@@ -1211,14 +1211,14 @@ function setupCreateTournamentModal() {
                 <div id="category-capacity-section" style="display:none; margin-top:0.9rem; padding:10px 12px; background:rgba(16,185,129,0.07); border:1px solid rgba(16,185,129,0.28); border-radius:9px;">
                   <div id="category-capacity-general">
                     <label class="form-label" for="tourn-max-per-category" style="margin-bottom:6px;">Máx. participantes por categoria</label>
-                    <input type="number" class="form-control" id="tourn-max-per-category" min="1" inputmode="numeric" placeholder="Ex.: 16" oninput="window._syncCategoryCapacity({userChanged:true})">
+                    <input type="number" class="form-control" id="tourn-max-per-category" min="1" inputmode="numeric" placeholder="Ex.: 16" oninput="window._syncCategoryCapacity({userChanged:true})" style="width:8ch;max-width:100%;box-sizing:content-box;">
                   </div>
                   <label style="display:flex;align-items:center;gap:9px;margin-top:10px;font-size:0.8rem;color:var(--text-main);cursor:pointer;">
                     <span class="toggle-switch toggle-sm"><input type="checkbox" id="tourn-custom-category-capacity" onchange="window._toggleCategoryCapacity(this.checked)"><span class="toggle-slider"></span></span>
                     Personalizar vagas por categoria
                   </label>
                   <input type="hidden" id="tourn-max-by-category" value="{}">
-                  <div id="category-capacity-grid" style="display:none;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px;"></div>
+                  <div id="category-capacity-grid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(150px,190px));gap:8px;margin-top:10px;"></div>
                   <div id="category-capacity-summary" style="margin-top:7px; font-size:0.78rem; color:var(--sp-c-6ee7b7,#6ee7b7); line-height:1.4;"></div>
                 </div>
               </div>
@@ -4215,7 +4215,7 @@ function setupCreateTournamentModal() {
       var escape = function(s) { return String(s).replace(/[&<>"']/g, function(ch) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]; }); };
       grid.innerHTML = categories.map(function(category) {
         return '<label style="display:block;padding:8px;border:1px solid rgba(16,185,129,.28);border-radius:8px;font-size:.76rem;color:var(--text-main);">' + escape(category) +
-          '<input type="number" min="1" inputmode="numeric" data-category="' + encodeURIComponent(category) + '" value="' + (effective[category] || '') + '" oninput="window._setCategoryCapacityValue(this)" aria-label="Máximo de participantes em ' + escape(category) + '" style="display:block;width:100%;margin-top:5px;padding:7px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);box-sizing:border-box;"></label>';
+          '<input type="number" min="1" inputmode="numeric" data-category="' + encodeURIComponent(category) + '" value="' + (effective[category] || '') + '" oninput="window._setCategoryCapacityValue(this)" aria-label="Máximo de participantes em ' + escape(category) + '" style="display:block;width:8ch;max-width:100%;margin-top:5px;padding:7px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);box-sizing:content-box;"></label>';
       }).join('');
     } else grid.innerHTML = '';
     if (guard && !custom.checked && validGeneral && guard.total > 0 && guard.total !== per * count) {

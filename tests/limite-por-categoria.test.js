@@ -38,6 +38,8 @@ nodes['tourn-max-by-category'].value = JSON.stringify(light);
 context.window._syncCategoryCapacity();
 ok(nodes['tourn-max-participants'].value === '128' && nodes['tourn-max-participants'].readOnly, 'personalizado: soma 32+16+16+32+16+16 = 128');
 ok(nodes['category-capacity-grid'].style.display === 'grid' && nodes['category-capacity-grid'].innerHTML.includes('Fem Light'), 'switch mostra entradas por categoria');
+ok(/id="tourn-max-per-category"[^>]*style="width:8ch/.test(source) && /data-category="' \+ encodeURIComponent\(category\)[\s\S]*?style="display:block;width:8ch/.test(source), 'campos de vagas usam largura compacta para números');
+ok(/grid-template-columns:repeat\(auto-fill,minmax\(150px,190px\)\)/.test(source), 'cards de vagas personalizadas não esticam os campos pela tela');
 ok(nodes['category-capacity-general'].style.display === 'none', 'modo personalizado oculta campo e valor genéricos');
 names.pop();
 context.window._syncCategoryCapacity();
