@@ -4809,8 +4809,17 @@ window._applySwissEliminationTransition = function (t, roundIdx) {
 window._closeRound = function (tId, roundIdx, anchorMatchId, resultCtx) {
   const t = window._findTournamentById(tId);
   if (!t) return;
-  const round = (t.rounds || [])[roundIdx];
+  const isSingleDrawSuperEight = t.superEight === true && t.superEightDrawMode === 'single';
+  const superEightMatches = isSingleDrawSuperEight
+    ? (t.matches || []).filter(function (m) {
+        return m && Number(m.round) === roundIdx + 1 && (m.phaseIndex || 0) === (t.currentPhaseIndex || 0) && !m.isBye && !m.isSitOut;
+      }) : [];
+  const round = isSingleDrawSuperEight ? { matches:superEightMatches } : (t.rounds || [])[roundIdx];
   if (!round) return;
+  if (isSingleDrawSuperEight && superEightMatches.length !== 2) {
+    showNotification('Não consegui encerrar a rodada', 'O Super 8 precisa ter dois jogos válidos nesta rodada.', 'error');
+    return;
+  }
 
   // v0.17.27: auto-aprova resultados pendentes ANTES de checar unfinished —
   // se ninguém aprovou/contestou um placar proposto, considera aprovado
@@ -4821,6 +4830,10 @@ window._closeRound = function (tId, roundIdx, anchorMatchId, resultCtx) {
 
   const unfinished = (round.matches || []).filter(m => !m.winner && !m.isBye && !m.isSitOut);
   if (unfinished.length > 0) {
+    if (isSingleDrawSuperEight) {
+      showNotification('Aguardando o outro jogo', 'A próxima rodada só libera quando os dois jogos desta rodada terminarem.', 'info');
+      return;
+    }
     showConfirmDialog(
       _t('bui.incompleteRound'),
       _t('bui.incompleteRoundMsg', {n: unfinished.length}),
@@ -4834,11 +4847,20 @@ window._closeRound = function (tId, roundIdx, anchorMatchId, resultCtx) {
 };
 
 function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal) {
+  const isSingleDrawSuperEight = t.superEight === true && t.superEightDrawMode === 'single';
+  if (isSingleDrawSuperEight) {
+    const matches = (t.matches || []).filter(function (m) {
+      return m && Number(m.round) === roundIdx + 1 && (m.phaseIndex || 0) === (t.currentPhaseIndex || 0) && !m.isBye && !m.isSitOut;
+    });
+    const closed = Array.isArray(t.superEightClosedRounds) ? t.superEightClosedRounds : [];
+    if (matches.length !== 2 || roundIdx < 0 || roundIdx > 6 || closed.indexOf(roundIdx + 1) >= 0 ||
+        (roundIdx > 0 && closed.indexOf(roundIdx) < 0) || matches.some(function (m) { return !m.winner; })) return;
+  }
   // Guard: only close the most recent round. A stale call (from a duplicate
   // auto-close path, e.g. _saveResultInline + render-time safety net both
   // dispatching for the same round) would otherwise advance the next-round
   // generation or even trigger a premature phase transition.
-  if (roundIdx !== (t.rounds || []).length - 1) return;
+  if (!isSingleDrawSuperEight && roundIdx !== (t.rounds || []).length - 1) return;
   if (t.rounds[roundIdx] && t.rounds[roundIdx].status === 'complete') return;
 
   // Classificatória por rodadas do construtor de fases (fase 0 de N). O FECHO
@@ -7313,6 +7335,25 @@ window._initialDrawResultModel = function (pd) {
   categories.sort(function (a, b) {
     function order(name) { var s = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); return /diamante/.test(s) ? 1 : /ouro/.test(s) ? 2 : /prata/.test(s) ? 3 : 4; }
     return order(a.name) - order(b.name) || a.name.localeCompare(b.name);
+  });
+  // O rótulo “Jogo N” vindo do motor é local à rodada. Na prévia do sorteio,
+  // porém, o número identifica o jogo no torneio inteiro e não pode reiniciar
+  // em cada rodada ou grupo. Reatribui em ordem cronológica depois de organizar
+  // as categorias, mantendo a ordem original dos jogos dentro de cada rodada.
+  var tournamentGameNumber = 0;
+  categories.forEach(function (category) {
+    category.groups.sort(function (a, b) { return a.round - b.round; });
+  });
+  var numberedGroups = [];
+  categories.forEach(function (category, categoryIndex) {
+    category.groups.forEach(function (group, groupIndex) {
+      numberedGroups.push({ group:group, categoryIndex:categoryIndex, groupIndex:groupIndex });
+    });
+  });
+  numberedGroups.sort(function (a, b) {
+    return a.group.round - b.group.round || a.categoryIndex - b.categoryIndex || a.groupIndex - b.groupIndex;
+  }).forEach(function (entry) {
+    entry.group.matches.forEach(function (match) { match.number = ++tournamentGameNumber; });
   });
   // Nomes distintos para categorias que reutilizam as letras dos grupos.
   if (categories.length > 1) categories.forEach(function (category, ci) {

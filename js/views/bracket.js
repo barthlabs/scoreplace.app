@@ -11494,7 +11494,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>'
       : '';
     var _groupCodeMatch = String(window._bracketMonarchGroupLabel(t, sg)).toUpperCase().match(/\bGRUPO\s+([A-Z]{1,3}\d*)\b/);
-    html += '<div data-group-box="1" data-monarch-group="1"' + (_groupCodeMatch ? ' data-group-code="' + _groupCodeMatch[1] + '"' : '') + (_largeMonarch ? ' data-monarch-large="1" data-monarch-category="' + window._safeHtml(_monarchCategories[gi]) + '" hidden' : '') + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="box-sizing:border-box;width:100%;max-width:380px;scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((opts && opts.showHistoricalFullStandings ? '#818cf8' : groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
+    html += '<div data-group-box="1" data-monarch-group="1"' + (_isSuperEightMon ? ' data-super-eight-round="1"' : '') + (_groupCodeMatch ? ' data-group-code="' + _groupCodeMatch[1] + '"' : '') + (_largeMonarch ? ' data-monarch-large="1" data-monarch-category="' + window._safeHtml(_monarchCategories[gi]) + '" hidden' : '') + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="box-sizing:border-box;width:100%;' + (_isSuperEightMon ? 'max-width:none;' : 'max-width:380px;') + 'scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((opts && opts.showHistoricalFullStandings ? '#818cf8' : groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       /* DUAS LINHAS, NÃO TRÊS: título curto em cima, selos embaixo, botões à direita.
        * Antes era tudo numa linha só, com `flex:1` no <h3>: os dois botões grandes
        * comiam a largura, o título quebrava em três linhas e ERA ELE que esticava a
@@ -11517,7 +11517,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       // v4.3.12 (pedido do dono): a tabela de classificação do grupo fica SEMPRE ACIMA das
       // chaves (mesmo padrão de renderGroupStage). Antes vinha depois dos cards de jogo.
       '<div class="standings-scroll">' + standingsTable + '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:8px;margin-top:1rem;">' + matchCards + '</div>' +
+      '<div style="display:grid;grid-template-columns:' + (_isSuperEightMon ? 'repeat(auto-fit,minmax(min(100%,320px),1fr))' : 'minmax(0,1fr)') + ';gap:12px;margin-top:1rem;align-items:start;">' + matchCards + '</div>' +
     '</div>';
   });
 
@@ -12120,6 +12120,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
 
   const currentRoundData = rounds[currentRound - 1];
   const allComplete = (currentRoundData.matches || []).every(m => m.winner || m.isBye || m.isSitOut);
+  const _superEightRoundGames = t.superEight === true && t.superEightDrawMode === 'single'
+    ? (currentRoundData.matches || []).filter(function (m) { return m && !m.isBye && !m.isSitOut; }) : [];
+  const _superEightFinishedGames = _superEightRoundGames.filter(function (m) { return !!m.winner; }).length;
+  const _superEightWaitHtml = _superEightRoundGames.length === 2 && _superEightFinishedGames === 1
+    ? '<span role="status" style="font-size:.78rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;">⏳ Um jogo terminou; aguardando o outro para liberar a próxima rodada.</span>' : '';
 
   /* ── ORDEM CANÔNICA: CHAVES/JOGOS ANTES DA CLASSIFICAÇÃO ────────────────
    * A classificação é leitura do que já ocorreu; a chave é a ação pendente.
@@ -12265,6 +12270,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       ${rankingCountdownHtml}
       <div class="sp-bracket-round-heading" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
         <h3 class="card-title" style="margin:0;border-left:3px solid ${_isReiRainhaRound && !t.superEight ? '#fbbf24' : 'var(--primary-color)'};padding-left:10px;">${_isReiRainhaRound && !t.superEight ? '👑 ' : ''}${isClassificationQualifier ? _classificationQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + (isSuico ? ` / ${maxRounds}` : ''))} ${currentRoundData.status === 'complete' ? '— ' + _t('bracket.complete') + ' ✓' : ''}</h3>
+        ${_superEightWaitHtml}
         ${isOrg && !isFinished && allComplete && _phaseCad ? `
           <button class="btn btn-success btn-sm hover-lift" onclick="window._phaseCloseLeagueRound('${String(_phaseCad.tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${parseInt(_phaseCad.phaseIdx, 10) || 0})">
             🔁 Encerrar rodada e sortear próxima

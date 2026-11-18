@@ -2735,14 +2735,24 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
     // Auto-close round + auto-advance to next round when all matches complete
     // (avoids requiring organizer to manually click "Encerrar Rodada")
     var _roundIdxAuto = -1;
-    (t.rounds || []).forEach(function(r, idx) {
-      (r.matches || []).forEach(function(rm) { if (rm.id === matchId) _roundIdxAuto = idx; });
-    });
+    var _singleDrawSuperEight = t.superEight === true && t.superEightDrawMode === 'single';
+    if (_singleDrawSuperEight) {
+      var _savedMatch = (t.matches || []).find(function (rm) { return rm && String(rm.id) === String(matchId); });
+      if (_savedMatch && Number(_savedMatch.round) >= 1 && Number(_savedMatch.round) <= 7) _roundIdxAuto = Number(_savedMatch.round) - 1;
+    } else {
+      (t.rounds || []).forEach(function(r, idx) {
+        (r.matches || []).forEach(function(rm) { if (rm.id === matchId) _roundIdxAuto = idx; });
+      });
+    }
     if (_roundIdxAuto >= 0) {
-      var _thisRound = t.rounds[_roundIdxAuto];
-      var _thisComplete = (_thisRound.matches || []).every(function(rm) { return !!rm.winner; });
-      var _isLast = _roundIdxAuto === (t.rounds.length - 1);
-      if (_thisComplete && _isLast && _thisRound.status !== 'complete') {
+      var _thisRound = _singleDrawSuperEight
+        ? { matches:(t.matches || []).filter(function (rm) { return rm && Number(rm.round) === _roundIdxAuto + 1 && (rm.phaseIndex || 0) === (t.currentPhaseIndex || 0) && !rm.isBye && !rm.isSitOut; }) }
+        : t.rounds[_roundIdxAuto];
+      var _thisComplete = (_thisRound.matches || []).length === (_singleDrawSuperEight ? 2 : (_thisRound.matches || []).length) &&
+        (_thisRound.matches || []).every(function(rm) { return !!rm.winner; });
+      var _isLast = _singleDrawSuperEight || _roundIdxAuto === (t.rounds.length - 1);
+      var _alreadyClosed = _singleDrawSuperEight && Array.isArray(t.superEightClosedRounds) && t.superEightClosedRounds.indexOf(_roundIdxAuto + 1) >= 0;
+      if (_thisComplete && _isLast && !_alreadyClosed && (_singleDrawSuperEight || _thisRound.status !== 'complete')) {
         // Defer to close-round logic so Swiss/Liga dispatch & elim-transition run uniformly.
         // v4.0.102: o save deste result-save é PULADO (ver _deferSaveToTransition) — o
         // _closeRound faz o save autoritativo; evita a corrida que zerava as quartas.
