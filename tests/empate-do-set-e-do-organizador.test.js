@@ -48,15 +48,13 @@ ok(/out\.tieRule = /.test(ct), 'o "Personalizado" grava tieRule (antes o motor l
 ok(/window\._gsmSetTieRule = function/.test(ct), 'existe o controle prorrogar × tie-break');
 ok(/'tiebreakAt','tieRule'\]/.test(ct), 'os dois viajam junto com o formato entre as fases');
 ok(/id="gsm-tieRule"/.test(ct), 'e têm campo próprio no formulário (senão não salva no torneio)');
-// ⭐ 2.1 — a tela oferece 5-5 × 6-6 num TOGGLE, não três botões. Decisão do dono (22/ago):
-// "na verdade um toggle 5-5/6-6 que ativado faz virar 5-5 por default. isso resolve. e fica
-// claro visualmente." O 'g+1' continua LEGÍVEL pelo motor (torneio já gravado assim segue
-// jogando 7-7), só deixou de ser oferecido — não é a mesma coisa que deixar de existir.
+// O alvo de empate é derivado do total de games: com 6, ativa em 5-5; com 4, em 3-3.
+// O organizador só escolhe ligar/desligar o tie-break, sem um segundo campo redundante.
 ok(/window\._tieAtToggleHtml = function/.test(ct), 'a regra do set usa um controle comum às fases');
-ok(/Games para vencer o set/.test(ct) && /Empate em games para ativar a regra/.test(ct)
-   && /Tie-break no empate em/.test(ct) && /Exigir 2 games de diferença no set/.test(ct)
+ok(/Games para vencer o set/.test(ct) && /var at = Math\.max\(1, g - 1\)/.test(ct)
+   && /Tie-break no empate</.test(ct) && !/tieat-games/.test(ct) && /Exigir 2 games de diferença no set/.test(ct)
    && /Exigir 2 pontos de diferença no tie-break/.test(ct),
-  'a sequência expõe alvo do set, empate que ativa tie-break e margens distintas');
+  'o tie-break usa um game abaixo do alvo; a sequência expõe margens distintas sem campo redundante');
 ok(/'g\+1'/.test(ui), 'o motor continua entendendo o 7-7 já gravado (não some do lançamento)');
 ok(!/gsm-tbat-seg/.test(ct), '⛔ o segmento antigo não sobrou em lugar nenhum do formulário');
 

@@ -338,14 +338,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // classificatória — que é o que o jogo vai usar de verdade. Ordem do dono: "isso nas duas
   // fases possíveis do torneio. tudo igual podendo ser configurado diferente em cada fase."
   function _elimTieAtAtual(e) {
-    if (e && e.scoring && e.scoring.tiebreakAt) return e.scoring.tiebreakAt;
-    return (typeof window._gsmTieAtAtual === 'function') ? window._gsmTieAtAtual() : 'g';
+    var scoring = e && e.scoring;
+    var games = parseInt(scoring && scoring.gamesPerSet, 10) || 6;
+    return games <= 1 ? '' : 'g-1';
   }
   function _elimScoringDesc(sc) {
     if (!sc) return '';
     if (typeof window._gsmBuildDescFromValues !== 'function') return '';
     return window._gsmBuildDescFromValues(sc.setsToWin, sc.gamesPerSet, sc.tiebreakEnabled,
-      sc.tiebreakPoints, sc.superTiebreak, sc.superTiebreakPoints, sc.tiebreakAt, sc.tieRule);
+      sc.tiebreakPoints, sc.superTiebreak, sc.superTiebreakPoints, _elimTieAtAtual({ scoring: sc }), sc.tieRule);
   }
   // Qual preset o scoring atual representa (pra acender o botão certo). 'custom' quando não
   // bate com nenhum — é o mesmo critério de igualdade que o form usa nos campos ocultos.
@@ -1942,6 +1943,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         sc.tiebreakMargin = current.tiebreakMargin;
       }
     }
+    // Configuração nova/alterada deriva o empate automaticamente: N games para
+    // vencer significa que o tie-break, se ligado, começa em (N-1)–(N-1).
+    // Um tie-break já registrado conserva a regra congelada da fase.
+    if (sc && sc.gamesPerSet != null && !hasTiebreak) {
+      var gamesTarget = Number(sc.gamesPerSet) || 6;
+      sc.tiebreakAt = gamesTarget <= 1 ? '' : 'g-1';
+    }
     S.cfg.eliminatoria.scoring = sc || null;
     _norm(); _rerender();
   };
@@ -1968,7 +1976,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var base = _elimEffScoring(S.cfg.eliminatoria);
     if (!base) return;
     var sc = Object.assign({}, base, patch);
-    if (!Object.prototype.hasOwnProperty.call(patch, 'tiebreakAt') && !base.tiebreakAt) sc.tiebreakAt = 'g-1';
+    if (Object.prototype.hasOwnProperty.call(patch, 'gamesPerSet')) {
+      var games = Number(patch.gamesPerSet);
+      sc.tiebreakAt = games <= 1 ? '' : 'g-1';
+    } else if (!Object.prototype.hasOwnProperty.call(patch, 'tiebreakAt')) {
+      var currentGames = Number(sc.gamesPerSet || 6);
+      sc.tiebreakAt = currentGames <= 1 ? '' : 'g-1';
+    }
     sc.type = 'sets';
     var ini = (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
     window._f2SetElimScoring(ini && _mesmoFormato(sc, ini) ? null : sc);

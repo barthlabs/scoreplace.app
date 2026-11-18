@@ -5696,7 +5696,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
   'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','coverGradientBalance','coverGradientBlend','titleColor','dateCardColors','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
   'courtNames','courtOrder','callTime','warmupTime','gameDuration','scoring','swissRounds',
-  'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','superEight','superEightDrawMode','superEightSetupScope','temporada','equilibrado',
+  'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','superEight','superEightDrawMode','setupScope','superEightSetupScope','temporada','equilibrado',
   'clusterSize','balanceBy','genderRatio','genderRatioDisabled','wlGroupBalance','ligaNewPlayerScore',
   'ligaInactivity','ligaInactivityX','allowSelfDeactivation','ligaOpenEnrollment',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy','rankingSitOutScoring',

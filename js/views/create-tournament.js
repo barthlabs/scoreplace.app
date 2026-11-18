@@ -920,12 +920,11 @@ function setupCreateTournamentModal() {
                 </div>
 
                 <!-- Escada de estimativa: 2 pot. de 2 abaixo + real + 2 acima -->
-                <div id="super8-setup-scope-wrap" style="display:none;margin-top:8px;padding:8px 10px;border:1px solid rgba(245,158,11,.25);border-radius:8px;background:rgba(245,158,11,.04);">
-                  <label for="super8-setup-scope" style="display:block;font-size:.72rem;color:var(--text-muted);margin-bottom:4px;">Super 8 · aplicar chamada e aquecimento</label>
-                  <select id="super8-setup-scope" class="form-control" onchange="window._recalcDuration()" style="max-width:340px;font-size:.78rem;">
-                    <option value="first_round">Só na primeira rodada</option>
-                    <option value="every_game">Em cada jogo</option>
-                  </select>
+                <div id="setup-scope-wrap" style="margin-top:8px;padding:8px 10px;border:1px solid rgba(245,158,11,.25);border-radius:8px;background:rgba(245,158,11,.04);">
+                  <label style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--text-muted);cursor:pointer;">
+                    <span class="toggle-switch"><input type="checkbox" id="setup-first-round-only" checked onchange="window._recalcDuration()"><span class="toggle-slider"></span></span>
+                    <span>Só na primeira rodada</span>
+                  </label>
                 </div>
                 <div id="phase-estimate-ladder" style="margin-top:8px;"></div>
 
@@ -4835,7 +4834,7 @@ function setupCreateTournamentModal() {
     var superEight = o.superEight === true;
     var superEightRounds = Math.max(1, Math.min(7, Math.floor(Number(o.superEightRounds) || 7)));
     var superEightCourts = Math.min(courts, 2);
-    var superEightEveryGame = o.superEightSetupScope === 'every_game';
+    var setupFirstRoundOnly = o.setupScope === 'first_round' || o.superEightSetupScope === 'first_round';
     // Classificados/grupo agora vêm da transição de fases (mapping.rankTo), não de
     // um campo dedicado. Para a estimativa usamos 2 (Rei+Vice), o caso típico.
     var monarchCls = 2;
@@ -4874,7 +4873,10 @@ function setupCreateTournamentModal() {
     // categorias dividem o campo mas COMPARTILHAM as quadras) → teto por quadras.
     function roundsTime(arr) {
       var mins = 0;
-      for (var r = 0; r < arr.length; r++) mins += Math.ceil((arr[r] * K) / Math.max(courts, 1)) * slot;
+      for (var r = 0; r < arr.length; r++) {
+        var roundSlot = setupFirstRoundOnly && r > 0 ? gameMinutes : slot;
+        mins += Math.ceil((arr[r] * K) / Math.max(courts, 1)) * roundSlot;
+      }
       return mins;
     }
     function totalMatches(n) {
@@ -4946,7 +4948,7 @@ function setupCreateTournamentModal() {
     var catLabel = K > 1 ? (' · ' + K + ' categorias') : '';
     var h = '';
     var displayedCourts = superEight ? superEightCourts : courts;
-    h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:6px;">' + headLabel + catLabel + ' · ' + displayedCourts + (displayedCourts > 1 ? ' quadras' : ' quadra') + ' · ' + (superEight ? gameMinutes : slot) + 'min/jogo' + (superEight && !superEightEveryGame ? ' + chamada/aquecimento na 1ª rodada' : '') + '</div>';
+    h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:6px;">' + headLabel + catLabel + ' · ' + displayedCourts + (displayedCourts > 1 ? ' quadras' : ' quadra') + ' · ' + (superEight ? gameMinutes : slot) + 'min/jogo' + (setupFirstRoundOnly ? ' + chamada/aquecimento na 1ª rodada' : '') + '</div>';
     if (N < 2) {
       h += '<div style="font-size:0.72rem;color:var(--text-muted);">Defina a capacidade máxima para estimar participantes, confrontos e tempo de quadra.</div>';
       return h;
@@ -4957,8 +4959,10 @@ function setupCreateTournamentModal() {
       ? Object.keys(categoryMatches).reduce(function (sum, category) { return sum + categoryMatches[category]; }, 0)
       : (matchesPerCategory === null ? totalMatches(N) : matchesPerCategory * K);
     var operationalMinutes = slot <= 0 ? -1 : superEight
-      ? superEightRounds * Math.ceil(2 / superEightCourts) * (superEightEveryGame ? slot : gameMinutes) + (superEightEveryGame ? 0 : call + warm)
-      : Math.ceil(matches / courts) * slot;
+      ? superEightRounds * Math.ceil(2 / superEightCourts) * gameMinutes + (setupFirstRoundOnly ? call + warm : superEightRounds * Math.ceil(2 / superEightCourts) * (call + warm))
+      : (categoryMatches || matchesPerCategory !== null)
+        ? Math.ceil(matches / courts) * slot
+        : timeFor(N);
     var unitsLabel = o.unitLbl || 'inscritos';
     var peopleLabel = totalParticipants > 0 ? totalParticipants + ' participante' + (totalParticipants === 1 ? '' : 's') : '';
     var perCategory = categoryMatches
@@ -4973,8 +4977,8 @@ function setupCreateTournamentModal() {
     h += '</div>';
     if (slot <= 0) h += '<div style="font-size:0.64rem;color:var(--sp-c-f59e0b,#f59e0b);margin-top:6px;">Preencha chamada/aquecimento/duração para calcular o tempo de operação.</div>';
     else h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">' + (superEight
-      ? superEightRounds + ' rodadas; ' + (superEightEveryGame ? 'chamada e aquecimento em cada jogo' : 'chamada e aquecimento só na primeira rodada') + '. Duração estimada: ' + fmtMin(operationalMinutes) + '; 2 jogos por rodada em ' + superEightCourts + (superEightCourts > 1 ? ' quadras' : ' quadra') + '.'
-      : matches + ' confrontos × ' + slot + 'min = ' + fmtMin(matches * slot) + ' de uso de quadra; ' + courts + (courts > 1 ? ' quadras' : ' quadra') + ' exigem ' + Math.ceil(matches / courts) + ' janelas em paralelo.') + '</div>';
+      ? superEightRounds + ' rodadas; chamada e aquecimento ' + (setupFirstRoundOnly ? 'só na primeira rodada' : 'em cada jogo') + '. Duração estimada: ' + fmtMin(operationalMinutes) + '; 2 jogos por rodada em ' + superEightCourts + (superEightCourts > 1 ? ' quadras' : ' quadra') + '.'
+      : matches + ' confrontos' + (setupFirstRoundOnly ? '; chamada e aquecimento só na primeira rodada' : ' × ' + slot + 'min') + '. Duração estimada: ' + fmtMin(operationalMinutes) + '; ' + courts + (courts > 1 ? ' quadras' : ' quadra') + '.') + '</div>';
     return h;
   };
 
@@ -5022,8 +5026,8 @@ function setupCreateTournamentModal() {
     }
     var f2cfg = null;
     try { f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) {}
-    var super8ScopeWrap = document.getElementById('super8-setup-scope-wrap');
-    if (super8ScopeWrap) super8ScopeWrap.style.display = f2cfg && f2cfg.parceria === 'super_eight' ? 'block' : 'none';
+    var setupScopeWrap = document.getElementById('setup-scope-wrap');
+    if (setupScopeWrap) setupScopeWrap.style.display = 'block';
     var tc = f2cfg && f2cfg.teamCompetition;
     var effectiveTurnos = f2cfg && window.FORMAT2 && typeof window.FORMAT2.resolveTurnos === 'function'
       ? window.FORMAT2.resolveTurnos(f2cfg) : null;
@@ -5058,7 +5062,7 @@ function setupCreateTournamentModal() {
       unitLbl: f2cfg && f2cfg.parceria === 'super_eight' ? 'jogadores' : (teamSize >= 2 ? 'duplas' : 'inscritos'),
       superEight: !!(f2cfg && f2cfg.parceria === 'super_eight'),
       superEightRounds: f2cfg && f2cfg.rodadas && f2cfg.rodadas.n,
-      superEightSetupScope: gv('super8-setup-scope') || 'first_round',
+      setupScope: (document.getElementById('setup-first-round-only') || {}).checked !== false ? 'first_round' : 'every_game',
       gruposCount: iv('grupos-count', 4)
     });
   };
@@ -6155,7 +6159,7 @@ function setupCreateTournamentModal() {
     document.getElementById('tourn-court-names').value = t.courtNames ? t.courtNames.join(', ') : '';
     document.getElementById('tourn-call-time').value = t.callTime != null ? t.callTime : 5;
     document.getElementById('tourn-warmup-time').value = t.warmupTime != null ? t.warmupTime : 5;
-    document.getElementById('super8-setup-scope').value = t.superEightSetupScope === 'every_game' ? 'every_game' : 'first_round';
+    document.getElementById('setup-first-round-only').checked = (t.setupScope || t.superEightSetupScope || 'first_round') !== 'every_game';
     document.getElementById('tourn-game-duration').value = t.gameDuration || 30;
     window._onCourtCountChange();
 
@@ -7164,7 +7168,7 @@ window._saveTournamentClickHandler = async function() {
           courtNames: courtNamesVal,
           callTime: callTimeVal,
           warmupTime: warmupTimeVal,
-          superEightSetupScope: (document.getElementById('super8-setup-scope') || {}).value === 'every_game' ? 'every_game' : 'first_round',
+          setupScope: (document.getElementById('setup-first-round-only') || {}).checked === false ? 'every_game' : 'first_round',
           gameDuration: gameDurationVal,
           // Formato da partida da FASE INICIAL = t.scoring (fonte única _gsmReadHidden).
           // A fase eliminatória tem o SEU (cfg.eliminatoria.scoring → phases[elim].scoring).
@@ -8446,7 +8450,9 @@ window._scoringPhaseHasTiebreak = function (phaseIndex) {
 window._tieAtToggleHtml = function (o) {
   o = o || {};
   var g = parseInt(o.games, 10) || 6;
-  var at = o.at === 'g' ? g : o.at === 'g+1' ? g + 1 : (o.at === 'g-1' || !o.at ? Math.max(1, g - 1) : (parseInt(o.at, 10) || Math.max(1, g - 1)));
+  // O empate que dispara a regra é sempre o anterior à vitória: com 6 games,
+  // 5–5; com 4, 3–3. Não há um segundo valor independente para configurar.
+  var at = Math.max(1, g - 1);
   var rule = o.rule === 'tiebreak' ? 'tiebreak' : 'extend';
   var setTwoPoint = o.setTwoPointAdvantage !== false;
   var tbTwoPoint = o.tiebreakTwoPointAdvantage !== false;
@@ -8459,9 +8465,9 @@ window._tieAtToggleHtml = function (o) {
     '<label for="' + pfx + '-games-target" style="display:block;font-size:0.82rem;font-weight:700;color:var(--text-color);margin-bottom:5px;">Games para vencer o set</label>' +
     '<input type="number" inputmode="numeric" min="1" step="1" id="' + pfx + '-games-target" class="form-control" value="' + g + '" onchange="' + o.onGames + '(this.value)" style="max-width:110px;font-size:0.9rem;"' + (locked ? ' disabled title="O primeiro placar desta fase já foi lançado."' : '') + '>' +
     (locked ? '<small style="display:block;color:var(--text-muted);margin-top:6px;">Games para vencer bloqueados: já existe resultado nesta fase.</small>' : '') +
-    (g <= 1 ? '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px;">Com 1 game para vencer, o primeiro game encerra o set; empate não se aplica.</div>' : '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:9px 0 6px;"><label for="' + pfx + '-tieat-games" style="font-size:0.74rem;color:var(--text-muted);">Empate em games para ativar a regra:</label><input type="number" inputmode="numeric" min="1" max="99" step="1" id="' + pfx + '-tieat-games" value="' + at + '" onchange="' + o.onTieAt + '(this.value)" style="width:72px;padding:5px 7px;border-radius:7px;background:var(--input-bg,rgba(0,0,0,.16));color:var(--text-bright);border:1px solid rgba(255,255,255,.2);"' + (tieLocked ? ' disabled title="Um tie-break já foi registrado nesta fase."' : '') + '><span style="font-size:0.74rem;color:var(--text-muted);">games iguais (ex.: ' + at + '-' + at + ')</span></div>') +
+    (g <= 1 ? '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px;">Com 1 game para vencer, o primeiro game encerra o set; empate não se aplica.</div>' : '') +
     (g <= 1 ? '' : '<div class="toggle-row" style="padding:6px 0;">' +
-      '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">Tie-break no empate em ' + at + '-' + at + '</span><div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">' + (rule === 'tiebreak' ? 'O empate inicia um tie-break.' : 'Sem tie-break; o set segue até cumprir a diferença configurada.') + '</div></div>' +
+      '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">Tie-break no empate</span><div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">' + (rule === 'tiebreak' ? 'Ativa quando faltar um game para vencer o set (' + at + '-' + at + ').' : 'Desativado; o set segue até cumprir a diferença configurada.') + '</div></div>' +
       '<label class="toggle-switch toggle-sm"><input type="checkbox" aria-label="Ativar tie-break no empate" ' + (rule === 'tiebreak' ? 'checked ' : '') + (tieLocked ? 'disabled title="Um tie-break já foi registrado nesta fase." ' : '') + 'onchange="' + o.onRule + '(this.checked ? \'tiebreak\' : \'extend\')"><span class="toggle-slider"></span></label></div>' +
       '<div class="toggle-row" style="padding:6px 0;">' +
       '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">Exigir 2 games de diferença no set</span><div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">Desative para encerrar ao atingir o total de games para vencer.</div></div>' +
@@ -8485,11 +8491,11 @@ window._gsmTieAtDoAlvo = function () {
 };
 // O gatilho VIGENTE da fase inicial: o gravado, ou o padrão do esporte (nunca "vazio").
 window._gsmTieAtAtual = function () {
+  var g = parseInt((document.getElementById('gsm-gamesPerSet') || {}).value, 10) || 6;
+  var at = g <= 1 ? '' : 'g-1';
   var h = document.getElementById('gsm-tiebreakAt');
-  if (h && h.value) return h.value;
-  return (typeof window._sportTiebreakAt === 'function')
-    ? window._sportTiebreakAt((typeof window._currentSportName === 'function') ? window._currentSportName() : '')
-    : 'g';
+  if (h) h.value = at;
+  return at;
 };
 // Desenha a regra do set DENTRO da seção de formato da fase inicial.
 window._gsmRenderTieAt = function () {
@@ -9074,7 +9080,7 @@ window._prefillFromTemplate = function(tpl) {
   // Tempos
   _setV('tourn-call-time', tpl.callTime);
   _setV('tourn-warmup-time', tpl.warmupTime);
-  _setV('super8-setup-scope', tpl.superEightSetupScope === 'every_game' ? 'every_game' : 'first_round');
+  _setC('setup-first-round-only', (tpl.setupScope || tpl.superEightSetupScope || 'first_round') !== 'every_game');
   _setV('tourn-court-names', tpl.courtNames);
   // Local (todos os campos ocultos)
   _setV('tourn-venue-access', tpl.venueAccess);
@@ -9627,7 +9633,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       courtNames: (get('tourn-court-names') || '').trim(),
       callTime: parseInt(get('tourn-call-time')) || 0,
       warmupTime: parseInt(get('tourn-warmup-time')) || 0,
-      superEightSetupScope: get('super8-setup-scope') === 'every_game' ? 'every_game' : 'first_round',
+      setupScope: getChecked('setup-first-round-only') ? 'first_round' : 'every_game',
       gameDuration: parseInt(get('tourn-game-duration')) || '',
       venue: (get('tourn-venue') || '').trim(),
       venueAccess: get('tourn-venue-access') || '',
