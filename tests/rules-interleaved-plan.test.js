@@ -36,6 +36,12 @@ async function req(uid,fields,mask){const r=await fetch(url+(mask?'?updateMask.f
   out.marker=await req(uid,{phaseCategoryMaterialized:M({'Fem Diamante':I(1)})},'phaseCategoryMaterialized');
   out.officialPlan=await req(uid,{phaseBracketPlanV1:M({schema:I(1),fromPhaseIndex:I(0),phaseIndex:I(2),matches:A([])})},'phaseBracketPlanV1');
   out.officialPlanVersion=await req(uid,{phaseBracketPlanVersion:I(2)},'phaseBracketPlanVersion');
+  const fullSet=await fetch(url,{method:'PATCH',headers:{Authorization:'Bearer '+tok(uid),'Content-Type':'application/json'},
+    body:JSON.stringify({fields:{creatorUid:S(uid),name:S('Tentativa de sobrescrever'),status:S('active'),
+      scheduleWindow:M({interleavedPlan:M({schema:I(1)})}),
+      phaseBracketPlanV1:M({schema:I(1),fromPhaseIndex:I(0),phaseIndex:I(2),matches:A([])}),
+      phaseBracketPlanVersion:I(2),matches:A([M({id:S('jogo-1'),scheduledGameNumber:I(1)})])}})});
+  out.officialPlanFullSet=fullSet.status;
   console.log('__JSON__'+JSON.stringify(out));
 })().catch(e=>{console.error(e.stack);process.exit(1)});
 `;
@@ -58,6 +64,7 @@ try {
     phases:403, fmt2:403, tiebreakers:403, marker:403 };
   expected.officialPlan=403;
   expected.officialPlanVersion=403;
+  expected.officialPlanFullSet=403;
   for (const [key,status] of Object.entries(expected)) {
     if (got[key] !== status) throw Error(key + ': esperado ' + status + ', veio ' + got[key]);
   }

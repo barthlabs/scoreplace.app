@@ -25,6 +25,12 @@ const compiledMultipleLines = W.FORMAT2.compileToPhases({
 }, { sport:'Beach Tennis', categories:['Feminino', 'Masculino'] });
 assert.equal(compiledMultipleLines.phases[1].officialGroupBracketOrder, undefined,
   'chaves com vários destinos continuam usando a semeadura configurada');
+const compiledMultipleQualifiers = W.FORMAT2.compileToPhases({
+  disputa:'dupla', grupos:2, parceria:'rotation_groups_8', classifAtiva:true,
+  classificados:2, classifScope:'per_group', eliminatoria:{ ativa:true, linhas:1 }
+}, { sport:'Beach Tennis', categories:['Feminino', 'Masculino'] });
+assert.equal(compiledMultipleQualifiers.phases[1].officialGroupBracketOrder, undefined,
+  'dois classificados por grupo seguem o mapping configurado, sem inventar cruzamento de vencedores');
 
 const phases = W.FORMAT2.compileToPhases({ disputa:'dupla', grupos:1, classifAtiva:false,
   eliminatoria:{ ativa:true, openReiRainha:true, reiRainhaCut:2,
@@ -127,6 +133,43 @@ assert.equal(plannedFirst.source1, 'Vencedor do Grupo A1');
 assert.equal(plannedFirst.source2, 'Vencedor do Grupo A2');
 assert(plannedFirst.p1.includes(groups[0].rows[0].name) && !plannedFirst.p2,
   'súmula usa a mesma chave e preenche só a vaga resolvida');
+
+// Quando o organizador escolhe múltiplas linhas ou mais de um classificado por grupo,
+// não existe a regra especializada de um vencedor por grupo. Súmula e avanço usam o
+// mesmo compilador para respeitar mapping/semeadura sem divergir.
+function assertProjectionMatchesAdvance(compilation, suffix) {
+  const projectionTournament = structuredClone(t);
+  projectionTournament.phases = compilation.phases;
+  projectionTournament.fmt2 = compilation.cfg;
+  delete projectionTournament.phaseBracketPlanVersion;
+  delete projectionTournament.phaseBracketPlanV1;
+  projectionTournament.currentPhaseIndex = 0;
+  projectionTournament._phaseMaterialized = 0;
+  projectionTournament.phaseCategoryMaterialized = {};
+  const projected = W._sumulaUpcomingBracket(projectionTournament, 1);
+  const advancedTournament = structuredClone(projectionTournament);
+  const advanced = E.materializeNextPhase(advancedTournament, group => group.rows,
+    'projection-' + suffix, { ts:1, rnd:() => 0.5, agoraIso:'2026-11-18T12:00:00Z' });
+  assert(advanced.ok, suffix + ': transição configurada materializa');
+  const groupOfTeam = team => {
+    const members = (team && team.participants || []).map(p => String(p && (p.displayName || p.name) || p || ''));
+    const found = groups.filter(group => members.length && members.every(name =>
+      group.rows.some(row => row.name === name)));
+    return found.length === 1 ? found[0].name.replace(/^Grupo\\s+/, '') : '';
+  };
+  const actualShape = (advanced.matches || []).filter(m => m && !m.isBye).map(m => [
+    String(m.category || ''), Number(m.round || 0), String(m.bracket || ''), !!m.isThirdPlace,
+    groupOfTeam(m.team1Obj), groupOfTeam(m.team2Obj)
+  ].join('|')).sort();
+  const projectedShape = projected.categories.flatMap(bucket => bucket.matches.map(m => [
+    String(bucket.category || ''), Number(m.round || 0), String(m.bracket || ''), !!m.isThirdPlace,
+    String(m.source1 || '').replace(/^Grupo\\s+/, ''), String(m.source2 || '').replace(/^Grupo\\s+/, '')
+  ].join('|'))).sort();
+  assert.deepEqual(projectedShape, actualShape,
+    suffix + ': súmula e avanço mantêm mesmos cruzamentos, linhas e grupos-fonte');
+}
+assertProjectionMatchesAdvance(compiledMultipleLines, 'multiplas-linhas');
+assertProjectionMatchesAdvance(compiledMultipleQualifiers, 'multiplos-classificados');
 const stale = structuredClone(t);
 delete stale.phaseBracketPlanVersion;
 delete stale.phaseBracketPlanV1;
