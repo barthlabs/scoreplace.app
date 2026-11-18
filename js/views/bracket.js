@@ -2329,7 +2329,41 @@ window._bracketOperationsRefresh = function (t, root) {
     return t && node.getAttribute('data-tournament-id') === String(t.id);
   });
   if (!root || !t || root.getAttribute('data-tournament-id') !== String(t.id)) return;
+  // A raiz das abas pode ser reconstruída durante um refresh enquanto a faixa
+  // operacional continua como irmã do container. Se a nova raiz não herdou a
+  // referência JS, criar outra seção em cada atualização deixa cópias visíveis
+  // acumularem. A faixa e o progresso pertencem ao detalhe do torneio, não a
+  // uma instância transitória das abas: recupere uma única cópia conectada e
+  // elimine órfãs antes de qualquer render.
+  var detail = root.closest && root.closest('#view-container') || document;
+  var tournamentId = String(t.id);
+  var strips = Array.prototype.filter.call(detail.querySelectorAll('[data-bracket-operations-strip]'), function (node) {
+    return node.getAttribute('data-operations-tournament-id') === tournamentId;
+  });
   var existing = root._bracketOperationsStrip;
+  if (!existing || !existing.isConnected || strips.indexOf(existing) === -1) existing = strips[0] || null;
+  strips.forEach(function (node) {
+    if (node === existing) return;
+    if (node._spOperationsOnResize) window.removeEventListener('resize', node._spOperationsOnResize);
+    node.remove();
+  });
+  if (existing) {
+    root._bracketOperationsStrip = existing;
+    Array.prototype.forEach.call(detail.querySelectorAll('[data-bracket-tabs-root]'), function (tabsRoot) {
+      if (tabsRoot.getAttribute('data-tournament-id') === tournamentId) tabsRoot._bracketOperationsStrip = existing;
+    });
+  }
+  var progresses = Array.prototype.slice.call(detail.querySelectorAll('[data-bracket-operations-progress]'));
+  var progress = root._bracketOperationsProgress;
+  if (!progress || !progress.isConnected || progresses.indexOf(progress) === -1) progress = progresses[0] || null;
+  progresses.forEach(function (node) { if (node !== progress) node.remove(); });
+  if (progress) {
+    progress.setAttribute('data-operations-tournament-id', tournamentId);
+    root._bracketOperationsProgress = progress;
+    Array.prototype.forEach.call(detail.querySelectorAll('[data-bracket-tabs-root]'), function (tabsRoot) {
+      if (tabsRoot.getAttribute('data-tournament-id') === tournamentId) tabsRoot._bracketOperationsProgress = progress;
+    });
+  }
   var user = window.AppStore && window.AppStore.currentUser;
   var authorized = typeof window._isUserAuthority === 'function' && window._isUserAuthority(t, user);
   var concentrated = typeof window._isConcentratedTournament === 'function' && window._isConcentratedTournament(t);
@@ -2750,6 +2784,7 @@ window._bracketOperationsRefresh = function (t, root) {
     compactProgress = document.createElement('div');
     compactProgress.className = 'sp-operations-progress';
     compactProgress.setAttribute('data-bracket-operations-progress', '1');
+    compactProgress.setAttribute('data-operations-tournament-id', tournamentId);
     compactProgress.setAttribute('aria-label', 'Progresso realizado e previsto');
     root._bracketOperationsProgress = compactProgress;
     existing.parentNode.insertBefore(compactProgress, existing);
@@ -3579,7 +3614,8 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
     var cb = catButtons[c], ownG = cb.getAttribute('data-bracket-tab-gender'), onC = (isAllCategories
       ? cb.getAttribute('data-bracket-subtab') === '__all_categories'
       : ownG === gender && cb.getAttribute('data-bracket-subtab') === category);
-    cb.style.display = ownG === '__all__' || isAllCategories || ownG === gender ? '' : 'none';
+    cb.style.display = ownG === gender ? '' : 'none';
+    if (ownG === '__all__' || isAllCategories) cb.style.display = '';
     cb.setAttribute('aria-selected', onC ? 'true' : 'false');
     cb.style.background = onC ? 'rgba(245,158,11,.22)' : 'rgba(255,255,255,.025)';
     cb.style.color = onC ? 'var(--sp-c-fde68a,#fde68a)' : 'var(--text-muted)';

@@ -1297,29 +1297,34 @@
     var id = String(tournament.id || ''), nextPopup;
     selectedMonitor = screen;
     try {
-      // A tela ao vivo fica no próprio documento: requestFullscreen é feito
-      // sobre o iframe durante o clique que abre a TV. Uma janela aberta por
-      // window.open não herda a ativação do clique e o navegador bloqueia a
-      // tentativa de tela cheia feita dentro dela.
-      tvFrame = document.createElement('iframe');
-      tvFrame.name = 'scoreplace-live-tv-' + id;
-      tvFrame.setAttribute('allowfullscreen', '');
-      tvFrame.title = 'TV · ' + tournament.name;
-      tvFrame.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:2147483646;background:#060d1a';
-      document.body.appendChild(tvFrame);
-      nextPopup = tvFrame.contentWindow;
-      if (tvFrame.requestFullscreen) {
-        var full = tvFrame.requestFullscreen(screen ? { navigationUI:'hide', screen:screen } : { navigationUI:'hide' });
-        if (full && full.catch) full.catch(function (error) {
-          if (screen && /screen|ScreenDetailed|option/i.test(String(error && error.message || ''))) {
-            try {
-              var fallback = tvFrame.requestFullscreen({ navigationUI:'hide' });
-              if (fallback && fallback.catch) return fallback.catch(showFullscreenFallback);
-              return;
-            } catch (fallbackError) { error = fallbackError; }
-          }
-          showFullscreenFallback(error);
-        });
+      if (typeof document.createElement === 'function') {
+        // A tela ao vivo fica no próprio documento: requestFullscreen é feito
+        // sobre o iframe durante o clique que abre a TV. Uma janela aberta por
+        // window.open não herda a ativação do clique e o navegador bloqueia a
+        // tentativa de tela cheia feita dentro dela.
+        tvFrame = document.createElement('iframe');
+        tvFrame.name = 'scoreplace-live-tv-' + id;
+        tvFrame.setAttribute('allowfullscreen', '');
+        tvFrame.title = 'TV · ' + tournament.name;
+        tvFrame.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:2147483646;background:#060d1a';
+        document.body.appendChild(tvFrame);
+        nextPopup = tvFrame.contentWindow;
+        if (tvFrame.requestFullscreen) {
+          var full = tvFrame.requestFullscreen(screen ? { navigationUI:'hide', screen:screen } : { navigationUI:'hide' });
+          if (full && full.catch) full.catch(function (error) {
+            if (screen && /screen|ScreenDetailed|option/i.test(String(error && error.message || ''))) {
+              try {
+                var fallback = tvFrame.requestFullscreen({ navigationUI:'hide' });
+                if (fallback && fallback.catch) return fallback.catch(showFullscreenFallback);
+                return;
+              } catch (fallbackError) { error = fallbackError; }
+            }
+            showFullscreenFallback(error);
+          });
+        }
+      } else {
+        // Compatibilidade com hosts de teste/integração sem DOM de documento.
+        nextPopup = window.open('', 'scoreplace-live-tv-' + id, 'popup,width=1024,height=640');
       }
     }
     catch (e) { nextPopup = null; }
@@ -1333,8 +1338,7 @@
       var action = tvFrame && tvFrame.contentDocument && tvFrame.contentDocument.getElementById('tv-fullscreen-action');
       if (action) { action.hidden = false; action.title = error && error.message || 'Tela cheia bloqueada pelo navegador.'; }
     }
-    // Coordenadas e tela cheia já foram pedidas no window.open. Mover ou
-    // redimensionar depois pode fazer o Chrome abandonar o fullscreen.
+    // Não mova nem redimensione a superfície depois de solicitar fullscreen.
     try { nextPopup.focus(); } catch (e) { /* O navegador pode manter o foco na operação. */ }
     popup = nextPopup; popupTournamentId = id;
     popupGeneration = Math.max(Date.now(), Number(highestGenerationById[id] || 0) + 1);

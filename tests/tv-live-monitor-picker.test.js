@@ -12,8 +12,12 @@ const { chromium } = require('@playwright/test');
       window.ScoreplaceMatchDay = { matchDay() {}, timestamp() {}, localDay() {}, eventZone() {} };
       window._currentBracketTournament = { id:'other-format', name:'Outro torneio' };
       window._collectAllMatches = () => [];
-      window._tvOpenFeatures = [];
-      window.open = (_url, _name, features) => { window._tvOpenFeatures.push(features); return null; };
+      window._tvFullscreenRequests = [];
+      Element.prototype.requestFullscreen = function (options) {
+        window._tvFullscreenRequests.push({ tag:this.tagName, name:this.name, screen:options && options.screen || null });
+        document.fullscreenElement = this;
+        return Promise.resolve();
+      };
       window.getScreenDetails = () => Promise.resolve({ screens:[
         { label:'MacBook', isPrimary:true, left:0, top:0, availLeft:0, availTop:0, width:1440, height:900, availWidth:1440, availHeight:900 },
         { label:'HDMI', isPrimary:false, left:1440, top:0, availLeft:1440, availTop:0, width:1920, height:1080, availWidth:1920, availHeight:1080 }
@@ -24,10 +28,14 @@ const { chromium } = require('@playwright/test');
     await page.locator('[data-tv-monitor="1"]').waitFor();
     assert.match(await page.locator('#tv-monitor-picker').innerText(), /Tela principal[\s\S]*MacBook[\s\S]*Tela secundária[\s\S]*HDMI/);
     await page.locator('[data-tv-monitor="1"]').click();
-    const state = await page.evaluate(() => ({ features:window._tvOpenFeatures, picker:!!document.getElementById('tv-monitor-picker') }));
+    const state = await page.evaluate(() => ({ requests:window._tvFullscreenRequests,
+      frame:document.querySelector('iframe[name^="scoreplace-live-tv-"]'), picker:!!document.getElementById('tv-monitor-picker') }));
     assert.equal(state.picker, false);
-    assert.match(state.features[0], /left=1440,top=0,width=1920,height=1080,fullscreen/,
-      'escolha da segunda tela abre a janela diretamente nas coordenadas do HDMI');
+    assert.ok(state.frame, 'a TV ocupa o detalhe existente, sem abrir uma segunda janela');
+    assert.equal(state.requests[0].tag, 'IFRAME');
+    assert.equal(state.requests[0].screen.label, 'HDMI',
+      'escolha da segunda tela pede fullscreen no monitor selecionado');
+    await page.evaluate(() => window._tvLiveToggle());
     await page.evaluate(() => {
       window.getScreenDetails = () => Promise.reject(new DOMException('Permissão negada', 'NotAllowedError'));
       window._tvLiveToggle();
@@ -35,11 +43,14 @@ const { chromium } = require('@playwright/test');
     await page.locator('[data-tv-monitor="manual"]').waitFor();
     assert.match(await page.locator('#tv-monitor-picker').innerText(), /permita gerenciar janelas/i);
     await page.locator('[data-tv-monitor="manual"]').click();
-    const fallback = await page.evaluate(() => ({ features:window._tvOpenFeatures,
+    const fallback = await page.evaluate(() => ({ requests:window._tvFullscreenRequests,
+      frame:document.querySelector('iframe[name^="scoreplace-live-tv-"]'),
       picker:!!document.getElementById('tv-monitor-picker') }));
     assert.equal(fallback.picker, false);
-    assert.match(fallback.features[1], /^popup,width=1024,height=640$/,
-      'sem permissão de monitores, a opção manual abre uma janela arrastável');
-    console.log('✓ seletor No Ar oferece duas telas e abre a secundária nas coordenadas escolhidas');
+    assert.ok(fallback.frame, 'a opção manual também abre a TV no navegador atual');
+    assert.equal(fallback.requests.length, 2);
+    assert.equal(fallback.requests[1].screen, null,
+      'sem permissão de monitores, a TV pede fullscreen na tela atual');
+    console.log('✓ seletor No Ar abre fullscreen na tela escolhida ou na tela atual');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
