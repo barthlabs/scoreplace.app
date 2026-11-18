@@ -1,3 +1,6 @@
+// 2.7.35 — Games para vencer congelam após o primeiro resultado da fase; a regra
+// do empate segue editável até ser registrado o primeiro tie-break, quando então
+// fica bloqueada. O wordmark do cabeçalho cresce levemente e alinha sua base ao logo.
 // 2.7.34 — A organização pode definir 1 ou mais games para vencer um set em
 // cada fase; seis é o padrão e o valor trava após o primeiro placar da fase.
 // No Super 8, chamada e aquecimento podem valer em cada jogo ou só na 1ª rodada.

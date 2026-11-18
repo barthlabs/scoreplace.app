@@ -1918,6 +1918,24 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
   window._f2SetElimScoring = function (sc) {
     if (!S) return;
+    var current = _elimEffScoring(S.cfg.eliminatoria || {});
+    var hasResult = typeof window._scoringPhaseHasResult === 'function' && window._scoringPhaseHasResult(1);
+    var hasTiebreak = typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(1);
+    if (current && (hasResult || hasTiebreak)) {
+      // "Herdar" continua permitido antes de placares; depois, conserva as regras
+      // que já podem afetar uma partida registrada, mesmo se a pessoa trocar preset.
+      sc = Object.assign({}, sc || current);
+      if (hasResult) {
+        sc.gamesPerSet = current.gamesPerSet;
+        sc.fixedSet = current.fixedSet;
+        sc.fixedSetGames = current.fixedSetGames;
+        sc.tiebreakAt = current.tiebreakAt;
+      }
+      if (hasTiebreak) {
+        sc.tieRule = current.tieRule || (current.tiebreakEnabled === false ? 'extend' : 'tiebreak');
+        sc.tiebreakEnabled = sc.tieRule === 'tiebreak';
+      }
+    }
     S.cfg.eliminatoria.scoring = sc || null;
     _norm(); _rerender();
   };
@@ -1957,6 +1975,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
   window._f2ElimSetRule = function (rule) {
     if (['tiebreak', 'decider', 'extend'].indexOf(rule) === -1) return;
+    if (typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(1)) { _rerender(); return; }
     _setElimGameRule({ tieRule: rule, tiebreakEnabled: rule === 'tiebreak' });
   };
   window._f2ElimScoringPreset = function (key) {

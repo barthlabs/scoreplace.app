@@ -8038,6 +8038,9 @@ window._gsmSelectPreset = function(key) {
     document.getElementById('gsm-gamesPerSet').value = String(p.gamesPerSet);
     // O preset escolhe a quantidade de sets; a regra do empate é um controle da fase.
     var currentRule = (document.getElementById('gsm-tieRule') || {}).value;
+    if (!currentRule && typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(0)) {
+      currentRule = (document.getElementById('gsm-tiebreakEnabled') || {}).value === 'false' ? 'extend' : 'tiebreak';
+    }
     document.getElementById('gsm-tiebreakEnabled').value = currentRule
       ? (currentRule === 'tiebreak' ? 'true' : 'false')
       : (p.tiebreakEnabled ? 'true' : 'false');
@@ -8319,6 +8322,32 @@ window._scoringPhaseHasResult = function (phaseIndex) {
   });
 };
 
+// Resultado comum bloqueia games para vencer; a regra do empate só congela
+// quando há um tie-break registrado nos resultados desta fase.
+window._scoringPhaseHasTiebreak = function (phaseIndex) {
+  var idEl = document.getElementById('edit-tournament-id');
+  var tid = idEl && idEl.value;
+  var t = tid && window.AppStore && Array.isArray(window.AppStore.tournaments)
+    ? window.AppStore.tournaments.find(function (item) { return String(item.id) === String(tid); })
+    : window._editingTournament;
+  if (!t) return false;
+  var matches = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : (t.matches || []);
+  function hasTb(sets) {
+    return Array.isArray(sets) && sets.some(function (set) {
+      var tb = set && set.tiebreak;
+      return !!tb && ['pointsP1', 'pointsP2', 'p1', 'p2'].some(function (key) {
+        return tb[key] !== undefined && tb[key] !== null && tb[key] !== '' && Number.isFinite(Number(tb[key]));
+      });
+    });
+  }
+  return matches.some(function (m) {
+    if (!m || Number(m.phaseIndex || 0) !== Number(phaseIndex || 0) || m.isBye || m.isSitOut) return false;
+    var pending = m.pendingResult || m.result || {};
+    return hasTb(m.sets) || hasTb(pending.sets) ||
+      (m.isTieBreak === true && (m.resultAt || m.completedAt || m.winner || m.winnerKey));
+  });
+};
+
 window._tieAtToggleHtml = function (o) {
   o = o || {};
   var g = parseInt(o.games, 10) || 6;
@@ -8329,16 +8358,17 @@ window._tieAtToggleHtml = function (o) {
   var options = [['tiebreak', 'Tie-break'], ['decider', 'Próximo game vence'], ['extend', 'Vantagem de 2 games']];
   var phaseIndex = o.phaseIndex || 0;
   var locked = !!o.locked || (typeof window._scoringPhaseHasResult === 'function' && window._scoringPhaseHasResult(phaseIndex));
+  var tieLocked = typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(phaseIndex);
   return '<div id="' + pfx + '-tieat-box" style="margin-top:10px;padding:12px;border-radius:10px;border:1px solid rgba(' + cor + ',0.28);background:rgba(' + cor + ',0.07);">' +
     '<label for="' + pfx + '-games-target" style="display:block;font-size:0.82rem;font-weight:700;color:var(--text-color);margin-bottom:5px;">Games para vencer o set</label>' +
     '<input type="number" inputmode="numeric" min="1" step="1" id="' + pfx + '-games-target" class="form-control" value="' + g + '" onchange="' + o.onGames + '(this.value)" style="max-width:110px;font-size:0.9rem;"' + (locked ? ' disabled title="O primeiro placar desta fase já foi lançado."' : '') + '>' +
-    (locked ? '<small style="display:block;color:var(--text-muted);margin-top:6px;">Bloqueado: já existe placar lançado nesta fase.</small>' : '') +
+    (locked ? '<small style="display:block;color:var(--text-muted);margin-top:6px;">Games para vencer bloqueados: já existe resultado nesta fase.</small>' : '') +
     (g <= 1 ? '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px;">Com 1 game para vencer, o primeiro game encerra o set; empate não se aplica.</div>' : '<div style="font-size:0.74rem;color:var(--text-muted);margin:9px 0 6px;">No empate em <strong>' + at + '-' + at + '</strong>, como decidir?</div>') +
     (g <= 1 ? '' : '<div role="group" aria-label="Regra para o empate do set" style="display:flex;gap:6px;flex-wrap:wrap;">' +
       options.map(function (item) {
         var active = rule === item[0];
-        return '<button type="button" aria-pressed="' + active + '" onclick="' + o.onRule + '(\'' + item[0] + '\')" style="flex:1 1 140px;padding:8px;border-radius:8px;cursor:pointer;font-size:0.73rem;font-weight:700;border:2px solid ' + (active ? 'rgba(' + cor + ',0.9)' : 'rgba(255,255,255,0.14)') + ';background:' + (active ? 'rgba(' + cor + ',0.18)' : 'transparent') + ';color:var(--text-bright);">' + item[1] + '</button>';
-      }).join('') + '</div>') +
+        return '<button type="button" aria-pressed="' + active + '"' + (tieLocked ? ' disabled title="Um tie-break já foi registrado nesta fase."' : '') + ' onclick="' + o.onRule + '(\'' + item[0] + '\')" style="flex:1 1 140px;padding:8px;border-radius:8px;cursor:' + (tieLocked ? 'not-allowed' : 'pointer') + ';opacity:' + (tieLocked ? '.68' : '1') + ';font-size:0.73rem;font-weight:700;border:2px solid ' + (active ? 'rgba(' + cor + ',0.9)' : 'rgba(255,255,255,0.14)') + ';background:' + (active ? 'rgba(' + cor + ',0.18)' : 'transparent') + ';color:var(--text-bright);">' + item[1] + '</button>';
+      }).join('') + '</div>' + (tieLocked ? '<small style="display:block;color:var(--text-muted);margin-top:6px;">Regra do empate bloqueada: já foi registrado um tie-break nesta fase.</small>' : '')) +
     (o.at && o.at !== 'g-1' ? '<small style="display:block;color:var(--text-muted);margin-top:6px;">Regra anterior preservada. Ao editar este campo, o empate passa a ocorrer um game abaixo.</small>' : '') +
   '</div>';
 };
@@ -8395,6 +8425,7 @@ window._gsmSetGamesInline = function (raw) {
 };
 window._gsmSetTieRuleInline = function (rule) {
   if (['tiebreak', 'decider', 'extend'].indexOf(rule) === -1) return;
+  if (typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(0)) { window._gsmRenderTieAt(); return; }
   document.getElementById('gsm-type').value = 'sets';
   document.getElementById('gsm-tieRule').value = rule;
   document.getElementById('gsm-tiebreakEnabled').value = rule === 'tiebreak' ? 'true' : 'false';
@@ -8418,6 +8449,8 @@ function _gsmTieRuleBtn(valor, tbLigado, titulo, sub) {
 // muito código ainda lê ele — mas a fonte da decisão é esta.
 window._gsmSetTieRule = function (v) {
   var seg = document.getElementById('gsm-tierule-seg'); if (!seg) return;
+  var phaseIndex = window._gsmConfigTarget === 'elim' ? 1 : 0;
+  if (typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(phaseIndex)) return;
   seg.dataset.tierule = v;
   var tb = (v === 'tiebreak');
   var chk = document.getElementById('gsm-cfg-tiebreak'); if (chk) chk.checked = tb;
