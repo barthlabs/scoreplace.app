@@ -1555,7 +1555,7 @@ window._validateNormalSetScore = function (scoring, sport, a, b) {
   var regular = high >= gp && high - low >= 2 &&
     (!hasTb || (high <= trigger + 1 && low < trigger));
   var byTb = hasTb && high === trigger + 1 && low === trigger;
-  var decider = rule === 'decider' && high === gp && low === gp - 1;
+  var decider = rule === 'decider' && high === trigger + 1 && low === trigger;
   var extended = rule === 'extend' && high >= gp && high - low >= 2;
   if (regular || byTb || decider || extended) return { ok: true };
   return { ok: false, detail: (high >= 20 || low >= 20)
@@ -5037,8 +5037,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       return 0;
     }
     if (state.tieRule === 'decider') {
-      if (cs.gamesP1 >= g && cs.gamesP1 > cs.gamesP2) return 1;
-      if (cs.gamesP2 >= g && cs.gamesP2 > cs.gamesP1) return 2;
+      if (cs.gamesP1 >= g && cs.gamesP1 - cs.gamesP2 >= 2) return 1;
+      if (cs.gamesP2 >= g && cs.gamesP2 - cs.gamesP1 >= 2) return 2;
+      if (cs.gamesP1 === _tieAt + 1 && cs.gamesP2 === _tieAt) return 1;
+      if (cs.gamesP2 === _tieAt + 1 && cs.gamesP1 === _tieAt) return 2;
       return 0;
     }
 

@@ -94,6 +94,10 @@ ok(W._validateNormalSetScore(decider, 'Beach Tennis', 4, 3).ok === true,
   'game decisivo em 3×3 permite fechar 4×3');
 ok(W._validateNormalSetScore(decider, 'Beach Tennis', 5, 4).ok === false,
   'game decisivo não prolonga o set até 5×4');
+const legacyDecider = { type: 'sets', gamesPerSet: 6, tiebreakAt: 'g', tieRule: 'decider', tiebreakEnabled: false };
+ok(W._validateNormalSetScore(legacyDecider, 'Tênis', 6, 5).ok === false &&
+  W._validateNormalSetScore(legacyDecider, 'Tênis', 7, 6).ok === true,
+  'game decisivo em torneio antigo respeita o empate configurado em 6×6');
 const extend = { type: 'sets', gamesPerSet: 4, tiebreakAt: 'g-1', tieRule: 'extend', tiebreakEnabled: false };
 ok(W._validateNormalSetScore(extend, 'Beach Tennis', 4, 3).ok === false,
   'vantagem de 2 games não permite fechar 4×3');

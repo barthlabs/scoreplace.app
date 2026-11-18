@@ -72,6 +72,10 @@ ok(!/gsm-tbat-seg/.test(ct), '⛔ o segmento antigo não sobrou em lugar nenhum 
   }
   ok(check({ tieRule: 'decider' }, 3, 3).result === 0, '3-3 aguarda o game decisivo');
   ok(check({ tieRule: 'decider' }, 4, 3).result === 1, '4-3 fecha o set curto');
+  ok(check({ gamesPerSet: 6, tieAtGames: 6, tieRule: 'decider' }, 6, 5).result === 0,
+    'torneio antigo com empate em 6-6 não termina em 6-5');
+  ok(check({ gamesPerSet: 6, tieAtGames: 6, tieRule: 'decider' }, 7, 6).result === 1,
+    'torneio antigo fecha no game decisivo em 7-6');
   ok(check({ tieRule: 'extend' }, 4, 3).result === 0, 'vantagem de 2 não fecha em 4-3');
   ok(check({ tieRule: 'extend' }, 5, 3).result === 1, 'vantagem de 2 fecha em 5-3');
   const tb = check({ tieRule: 'tiebreak' }, 3, 3);
