@@ -11292,7 +11292,8 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
   var _superEightTieBreakers = _isSuperEightMon && _gamesPrimaryMonarch && Array.isArray(t.tiebreakers)
     ? t.tiebreakers.filter(function (key) {
       return typeof key === 'string' && key !== 'saldo_games' && key !== 'aproveitamento' &&
-        key !== 'vitorias' && key !== 'sorteio';
+        key !== 'vitorias' && key !== 'sorteio' && key !== 'saldo_pontos' &&
+        key !== 'buchholz' && key !== 'antiguidade';
     }) : [];
   var _superEightTbLabels = {
     pontos_avancados:'Pontos avançados', confronto_direto:'Confronto direto', saldo_pontos:'Saldo de pontos',
@@ -11304,7 +11305,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     antiguidade:'Antiguidade', juventude:'Juventude', sorteio:'Sorteio'
   };
   var _superEightTbHeaderLines = {
-    pontos_avancados:'Pontos<br>avançados', confronto_direto:'Confronto<br>direto',
+    pontos_avancados:'💯 PA', confronto_direto:'CBD',
     saldo_pontos:'Saldo de<br>pontos', saldo_sets:'Saldo de<br>sets', saldo_games:'Saldo<br>games',
     sets_vencidos:'Sets<br>vencidos', games_vencidos:'Games<br>vencidos',
     tiebreaks_vencidos:'Tie-breaks<br>vencidos', saldo_tiebreaks:'Saldo de<br>tie-breaks',

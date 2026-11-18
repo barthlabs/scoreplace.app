@@ -1,3 +1,5 @@
+// 2.7.37 — PA e Confronto direto usam cabeçalhos compactos (💯 PA e CBD).
+// Saldo de pontos, Buchholz e Antiguidade saem dos critérios visíveis do Super 8.
 // 2.7.36 — Cabeçalhos compostos da classificação do Super 8 usam duas linhas e
 // colunas mais estreitas. V e D seguem nas colunas principais; não duplica Vitórias
 // nem exibe Sorteio como critério numérico de desempate.
