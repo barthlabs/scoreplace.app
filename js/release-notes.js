@@ -1,3 +1,5 @@
+// 2.7.36 — Cabeçalhos compostos da classificação do Super 8 usam duas linhas e
+// colunas mais estreitas, mantendo os nomes dos critérios legíveis.
 // 2.7.35 — Games para vencer congelam após o primeiro resultado da fase; a regra
 // do empate segue editável até ser registrado o primeiro tie-break, quando então
 // fica bloqueada. Wordmark e versão alinham a base com o logo no cabeçalho.

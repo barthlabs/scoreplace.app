@@ -11300,6 +11300,14 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     menos_jogos:'Menos jogos', buchholz:'Buchholz', sonneborn_berger:'Sonneborn-Berger',
     antiguidade:'Antiguidade', juventude:'Juventude', sorteio:'Sorteio'
   };
+  var _superEightTbHeaderLines = {
+    pontos_avancados:'Pontos<br>avançados', confronto_direto:'Confronto<br>direto',
+    saldo_pontos:'Saldo de<br>pontos', saldo_sets:'Saldo de<br>sets', saldo_games:'Saldo<br>games',
+    sets_vencidos:'Sets<br>vencidos', games_vencidos:'Games<br>vencidos',
+    tiebreaks_vencidos:'Tie-breaks<br>vencidos', saldo_tiebreaks:'Saldo de<br>tie-breaks',
+    saldo_pontos_tiebreak:'Saldo de pontos<br>de tie-break', pontos_a_favor:'Pontos a<br>favor',
+    menos_jogos:'Menos<br>jogos', sonneborn_berger:'Sonneborn-<br>Berger'
+  };
   var _superEightTbValue = function (key, row) {
     var delta = function (won, lost) { return (Number(row[won]) || 0) - (Number(row[lost]) || 0); };
     switch (key) {
@@ -11468,7 +11476,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     }).join('');
 
     var extraHeaders = (_isSuperEightMon && _gamesPrimaryMonarch ? _superEightTieBreakers.map(function (key) {
-      return '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;white-space:nowrap;" title="Critério de desempate: ' + window._safeHtml(_superEightTbLabels[key] || key) + '">' + window._safeHtml(_superEightTbLabels[key] || key) + '</th>';
+      return '<th style="width:62px;max-width:72px;padding:4px 5px;text-align:center;vertical-align:bottom;color:var(--text-muted);font-size:0.66rem;line-height:1.08;white-space:normal;" title="Critério de desempate: ' + window._safeHtml(_superEightTbLabels[key] || key) + '">' + (_superEightTbHeaderLines[key] || window._safeHtml(_superEightTbLabels[key] || key)) + '</th>';
     }).join('') : (_useSetsMonarch && !_compacta) ? (
       '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-06b6d4,#06b6d4);font-size:0.7rem;" title="Sets vencidos − perdidos">Sets</th>' +
       '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-06b6d4,#06b6d4);font-size:0.7rem;" title="Saldo de sets">±S</th>' +
@@ -11483,7 +11491,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       // colunas numéricas (estreitas e de largura fixa pelo conteúdo) se servem. É assim que
       // o nome ganha o espaço que D/Pts/% liberaram, em vez de a tabela só encolher.
       '<th style="padding:6px 10px;color:var(--text-muted);font-size:0.7rem;' + (_compacta ? 'width:100%;' : '') + '">Jogador</th>' +
-      (_isSuperEightMon && _gamesPrimaryMonarch ? '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.7rem;white-space:nowrap;" title="Critério principal: saldo de games">Saldo games</th>' : '') +
+      (_isSuperEightMon && _gamesPrimaryMonarch ? '<th style="width:62px;max-width:72px;padding:4px 5px;text-align:center;vertical-align:bottom;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.66rem;line-height:1.08;white-space:normal;" title="Critério principal: saldo de games">Saldo<br>games</th>' : '') +
       '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">V</th>' +
       ((_compacta && !_isSuperEightMon) ? '' : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">D</th>') +
       (_compacta || _gamesPrimaryMonarch ? '' : ((t.advancedScoring && t.advancedScoring.enabled)
