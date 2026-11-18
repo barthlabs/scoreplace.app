@@ -658,8 +658,8 @@
       return '<span>' + avatar + (series ? '<b class="tv-series-player-name">' + esc(name) + '</b>' : esc(name)) + '</span>';
     }).join('');
   }
-  function sideHtml(label, team, score, options, uids) {
-    return '<div class="tv-side" style="--team:' + esc(team.color) + '">' + (options.teams && team.name ? '<span class="tv-team-tag">' + esc(team.name) + '</span>' : '') +
+  function sideHtml(label, team, score, options, uids, mirror) {
+    return '<div class="tv-side' + (mirror ? ' tv-side-right' : '') + '" style="--team:' + esc(team.color) + '">' + (options.teams && team.name ? '<span class="tv-team-tag">' + esc(team.name) + '</span>' : '') +
       (options.players ? '<div class="tv-players">' + playerRows(label, uids) + '</div>' : '') +
       (options.score && score !== '' ? '<strong class="tv-score">' + esc(score) + '</strong>' : '') + '</div>';
   }
@@ -682,7 +682,7 @@
       }).join('') + '</div>' +
       (options.timer ? '<div class="tv-court-footer"><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div>' : '') + '</article>';
     return '<article class="tv-court tv-court-active' + (card.latest ? ' tv-court-latest' : '') + '"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + (options.number ? ' · JOGO ' + esc(card.number) : '') + '</h2><b class="tv-court-phase">' + esc(card.phase || '') + '</b>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div>' +
-      sideHtml(card.a, card.ta, card.scoreA, options, card.aUids) + '<div class="tv-versus">VS</div>' + sideHtml(card.b, card.tb, card.scoreB, options, card.bUids) +
+      sideHtml(card.a, card.ta, card.scoreA, options, card.aUids, false) + '<div class="tv-versus">VS</div>' + sideHtml(card.b, card.tb, card.scoreB, options, card.bUids, true) +
       (options.timer ? '<div class="tv-court-footer"><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div>' : '') + '</article>';
   }
   function rankingHtml(section, showTitle) {
@@ -1129,7 +1129,7 @@
     '.tv-final-standings{border:1px solid #b78a25;border-radius:.5vw;background:#122238;padding:.55vw;margin:.65vw 0;color:#fff}.tv-final-standings h3{font-size:clamp(.85rem,1vw,1.35rem);color:#fbbf24;margin:0 0 .45vw}.tv-final-category h4{color:#7dd3fc;font-size:clamp(.75rem,.9vw,1.15rem);margin:.45vw 0 .2vw}.tv-final-row{display:grid;grid-template-columns:2.3vw minmax(0,1fr);gap:.4vw;padding:.16vw 0;border-bottom:1px solid #315376;font-size:clamp(.75rem,.83vw,1.05rem)}.tv-final-row b{color:#fbbf24}.tv-final-row span{overflow-wrap:anywhere}' +
     '.tv-results .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '.tv-custom-qr{container-type:inline-size}.tv-custom-qr .tv-qr-brand{gap:2px;font-size:clamp(8px,9cqw,16px);line-height:1.05;white-space:nowrap}.tv-custom-qr .tv-scoreplace-mark{width:clamp(14px,24cqw,32px);min-width:0}.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results{padding:.55vw .8vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
-    '.tv-series-game{grid-template-rows:minmax(0,1fr);overflow:hidden}.tv-series-side,.tv-series-players{height:100%;overflow:hidden}.tv-player-photo{display:block;flex:none;width:clamp(18px,1.5vw,32px);height:clamp(18px,1.5vw,32px);border-radius:50%;object-fit:cover}.tv-players>span{display:flex;align-items:center;gap:.3vw;min-width:0}.tv-series-players{justify-content:center;gap:0}.tv-series-players>span{display:grid;flex:1 1 0;height:50%;max-height:50%;grid-template-columns:clamp(13px,1vw,22px) minmax(0,1fr);align-items:center;gap:.3vw;min-width:0;min-height:0;overflow:hidden;line-height:1.05}.tv-series-player-name{display:block;min-width:0;overflow-wrap:anywhere;white-space:normal;font:inherit;line-height:1.05}.tv-series-right .tv-series-player-name{text-align:right}.tv-series-players .tv-player-photo{width:clamp(13px,1vw,22px);height:clamp(13px,1vw,22px)}' +
+    '.tv-series-game{grid-template-rows:minmax(0,1fr);overflow:hidden}.tv-series-side,.tv-series-players{height:100%;overflow:hidden}.tv-player-photo{display:block;flex:none;width:clamp(18px,1.5vw,32px);height:clamp(18px,1.5vw,32px);border-radius:50%;object-fit:cover}.tv-players>span{display:flex;align-items:center;gap:.3vw;min-width:0}.tv-side-right .tv-players>span{flex-direction:row-reverse;text-align:right}.tv-series-players{justify-content:center;gap:0}.tv-series-players>span{display:grid;flex:1 1 0;height:50%;max-height:50%;grid-template-columns:clamp(13px,1vw,22px) minmax(0,1fr);align-items:center;gap:.3vw;min-width:0;min-height:0;overflow:hidden;line-height:1.05}.tv-series-player-name{display:block;min-width:0;overflow-wrap:anywhere;white-space:normal;font:inherit;line-height:1.05}.tv-series-right .tv-series-players>span{grid-template-columns:minmax(0,1fr) clamp(13px,1vw,22px)}.tv-series-right .tv-series-player-name{grid-column:1;text-align:right}.tv-series-right .tv-series-player-photo{grid-column:2;grid-row:1}.tv-series-players .tv-player-photo{width:clamp(13px,1vw,22px);height:clamp(13px,1vw,22px)}' +
     '.tv-custom-board-event{width:calc(100% - .35vw)}.tv-custom-board-event .tv-custom-results .tv-results{padding-right:.35vw}.tv-custom-board-event .tv-qr-event{padding-bottom:0}.tv-custom-board-event .tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-event{position:relative;display:block;overflow:hidden;width:calc(100% - 1.35vw);max-width:calc(100% - 1.35vw);height:100%;transform:none}.tv-custom-board-event .tv-qr-event .tv-qr-tournament-logo-event-image{display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain}.tv-custom-board-event .tv-qr-event .tv-qr-code,.tv-custom-board-event .tv-qr-event .tv-qr-brand{width:calc(100% - 2.6vw);max-width:calc(100% - 2.6vw);transform:none;justify-self:center}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
@@ -1257,7 +1257,7 @@
       var screen = value === 'manual' ? null : picker._screens[Number(value)];
       if (value !== 'manual' && !screen) return;
       dismissScreenPicker();
-      startTv(tournament, screen || null, null, true);
+      startTv(tournament, screen || null);
     });
     var loadSequence = 0;
     function loadScreens() {
@@ -1293,35 +1293,33 @@
     if (!tournament) return;
     chooseMonitor(tournament);
   };
-  function startTv(tournament, screen, existingWindow, autoFullscreen) {
+  function startTv(tournament, screen) {
     var id = String(tournament.id || ''), nextPopup;
     selectedMonitor = screen;
-    var installed = window.matchMedia && (window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches);
     try {
-      if (existingWindow) {
-        nextPopup = existingWindow;
-      } else if (installed && !screen) {
-        tvFrame = document.createElement('iframe');
-        tvFrame.name = 'scoreplace-live-tv-' + id;
-        tvFrame.setAttribute('allowfullscreen', '');
-        tvFrame.title = 'TV · ' + tournament.name;
-        tvFrame.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:2147483646;background:#060d1a';
-        document.body.appendChild(tvFrame);
-        nextPopup = tvFrame.contentWindow;
-        if (tvFrame.requestFullscreen) {
-          var full = tvFrame.requestFullscreen(screen ? { navigationUI:'hide', screen:screen } : { navigationUI:'hide' });
-          if (full && full.catch) full.catch(function () {});
-        }
-      } else {
-        // Sem permissão para identificar monitores, uma janela menor pode ser
-        // arrastada inteira para a segunda tela antes de entrar em tela cheia.
-        var features = 'popup,width=1024,height=640';
-        if (screen) features = 'popup,left=' + Number(screen.availLeft ?? screen.left ?? 0) +
-          ',top=' + Number(screen.availTop ?? screen.top ?? 0) +
-          ',width=' + Math.max(400, Number(screen.availWidth || screen.width || 1920)) +
-          ',height=' + Math.max(300, Number(screen.availHeight || screen.height || 1080)) +
-          ',fullscreen';
-        nextPopup = window.open('about:blank', 'scoreplace-live-tv-' + id, features);
+      // A tela ao vivo fica no próprio documento: requestFullscreen é feito
+      // sobre o iframe durante o clique que abre a TV. Uma janela aberta por
+      // window.open não herda a ativação do clique e o navegador bloqueia a
+      // tentativa de tela cheia feita dentro dela.
+      tvFrame = document.createElement('iframe');
+      tvFrame.name = 'scoreplace-live-tv-' + id;
+      tvFrame.setAttribute('allowfullscreen', '');
+      tvFrame.title = 'TV · ' + tournament.name;
+      tvFrame.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:2147483646;background:#060d1a';
+      document.body.appendChild(tvFrame);
+      nextPopup = tvFrame.contentWindow;
+      if (tvFrame.requestFullscreen) {
+        var full = tvFrame.requestFullscreen(screen ? { navigationUI:'hide', screen:screen } : { navigationUI:'hide' });
+        if (full && full.catch) full.catch(function (error) {
+          if (screen && /screen|ScreenDetailed|option/i.test(String(error && error.message || ''))) {
+            try {
+              var fallback = tvFrame.requestFullscreen({ navigationUI:'hide' });
+              if (fallback && fallback.catch) return fallback.catch(showFullscreenFallback);
+              return;
+            } catch (fallbackError) { error = fallbackError; }
+          }
+          showFullscreenFallback(error);
+        });
       }
     }
     catch (e) { nextPopup = null; }
@@ -1330,6 +1328,10 @@
       syncButton();
       if (typeof window.showToast === 'function') window.showToast('Permita abrir uma janela para a TV.');
       return;
+    }
+    function showFullscreenFallback(error) {
+      var action = tvFrame && tvFrame.contentDocument && tvFrame.contentDocument.getElementById('tv-fullscreen-action');
+      if (action) { action.hidden = false; action.title = error && error.message || 'Tela cheia bloqueada pelo navegador.'; }
     }
     // Coordenadas e tela cheia já foram pedidas no window.open. Mover ou
     // redimensionar depois pode fazer o Chrome abandonar o fullscreen.
@@ -1343,28 +1345,6 @@
       popup.document.open();
       popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '<script src="' + esc(window.location.origin + '/js/domain/match-timing.js?v=' + (window.SCOREPLACE_VERSION || '')) + '"></script><style>#tv-connection{position:fixed;right:1vw;bottom:1vw;z-index:20;padding:.4em .7em;border-radius:.5em;background:#7f1d1d;color:#fff;font-weight:800}#tv-connection[hidden],#tv-fullscreen-action[hidden]{display:none}#tv-fullscreen-action{flex:none;align-self:center;min-height:36px;padding:.3em .65em;border:2px solid #67e8f9;border-radius:.5em;background:#10263b;color:#fff;font:800 clamp(14px,1.1vw,22px) Arial;white-space:nowrap;cursor:pointer}html:fullscreen #tv-fullscreen-action{display:none}</style></head><body><div id="tv-root"></div><div id="tv-connection">Carregando jogos do servidor…</div>' + childScript(tournament.id, popupGeneration) + '</body></html>');
       popup.document.close();
-      if (autoFullscreen && popup.document.documentElement.requestFullscreen) {
-        try {
-          var automaticFullscreen;
-          try {
-            automaticFullscreen = popup.document.documentElement.requestFullscreen(
-              selectedMonitor ? { navigationUI:'hide', screen:selectedMonitor } : { navigationUI:'hide' });
-          } catch (screenOptionError) {
-            // Navegadores que não aceitam o objeto ScreenDetailed ainda podem
-            // preencher o monitor para o qual a janela já foi movida.
-            automaticFullscreen = popup.document.documentElement.requestFullscreen({ navigationUI:'hide' });
-          }
-          if (automaticFullscreen && automaticFullscreen.catch) automaticFullscreen.catch(function (error) {
-            if (selectedMonitor && /screen|ScreenDetailed/.test(String(error && error.message || ''))) {
-              return popup.document.documentElement.requestFullscreen({ navigationUI:'hide' });
-            }
-            throw error;
-          }).catch(function (error) {
-            var action = popup && popup.document.getElementById('tv-fullscreen-action');
-            if (action) { action.hidden = false; action.title = error && error.message || 'Tela cheia bloqueada pelo navegador.'; }
-          });
-        } catch (automaticError) { /* O botão Tela cheia permanece como alternativa. */ }
-      }
       // O conteúdo de tv-root é substituído a cada atualização; o listener fica no documento.
       popup.document.addEventListener('click', function (event) {
         var button = event.target.closest && event.target.closest('#tv-fullscreen-action');

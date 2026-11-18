@@ -3515,6 +3515,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
   // root antes de qualquer snapshot chegar.
   // [[regression_operational_tab_survives_dashboard_round_trip]]
   try { sessionStorage.setItem('scoreplace_bracket_tab_state_' + String(tid), JSON.stringify(window._bracketTabState[String(tid)])); } catch (e) {}
+  var isAllCategories = category === '__all_categories';
   var isGeneral = category === '__general';
   var isUpcoming = category === '__upcoming';
   // Numa grade concentrada, a categoria também deve seguir as faixas de hora
@@ -3536,7 +3537,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
       return Number(card.getAttribute('data-bracket-scheduled-at')) > 0;
     });
   var isOperationalView = isGeneral || isUpcoming || isScheduledCategory;
-  if (!isGeneral && !isUpcoming) {
+  if (!isAllCategories && !isGeneral && !isUpcoming) {
     root._bracketLastCategoryByGender = root._bracketLastCategoryByGender || {};
     root._bracketLastCategoryByGender[gender] = category;
   }
@@ -3549,9 +3550,9 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
   var cards = _bracketOperationalCards(root, root._bracketTabsScope);
   for (var i = 0; i < cards.length; i++) {
     var card = cards[i];
-    card.hidden = isOperationalView || card.getAttribute('data-bracket-tab-category') !== category ||
-      (usesDateTabs && card.getAttribute('data-bracket-tab-day') !== gender) ||
-      (usesRoundTabs && card.getAttribute('data-bracket-tab-round') !== round);
+    card.hidden = isOperationalView || (!isAllCategories && card.getAttribute('data-bracket-tab-category') !== category) ||
+      (!isAllCategories && usesDateTabs && card.getAttribute('data-bracket-tab-day') !== gender) ||
+      (!isAllCategories && usesRoundTabs && card.getAttribute('data-bracket-tab-round') !== round);
   }
   _bracketSyncEmptyScheduledPhase(root);
   // A camada de cima é a aba principal: Ouro/Prata em linhas independentes;
@@ -3575,8 +3576,10 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
   }
   var catButtons = root.querySelectorAll('[data-bracket-subtab]');
   for (var c = 0; c < catButtons.length; c++) {
-    var cb = catButtons[c], ownG = cb.getAttribute('data-bracket-tab-gender'), onC = ownG === gender && cb.getAttribute('data-bracket-subtab') === category;
-    cb.style.display = ownG === gender ? '' : 'none';
+    var cb = catButtons[c], ownG = cb.getAttribute('data-bracket-tab-gender'), onC = (isAllCategories
+      ? cb.getAttribute('data-bracket-subtab') === '__all_categories'
+      : ownG === gender && cb.getAttribute('data-bracket-subtab') === category);
+    cb.style.display = ownG === '__all__' || isAllCategories || ownG === gender ? '' : 'none';
     cb.setAttribute('aria-selected', onC ? 'true' : 'false');
     cb.style.background = onC ? 'rgba(245,158,11,.22)' : 'rgba(255,255,255,.025)';
     cb.style.color = onC ? 'var(--sp-c-fde68a,#fde68a)' : 'var(--text-muted)';
@@ -3584,7 +3587,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
   }
   for (var q = 0; q < roundButtons.length; q++) {
     var qb = roundButtons[q];
-    var ownRound = qb.getAttribute('data-bracket-tab-gender') === gender && qb.getAttribute('data-bracket-tab-category') === category;
+    var ownRound = !isAllCategories && qb.getAttribute('data-bracket-tab-gender') === gender && qb.getAttribute('data-bracket-tab-category') === category;
     var onRound = ownRound && qb.getAttribute('data-bracket-round-tab') === round;
     qb.style.display = ownRound ? '' : 'none';
     qb.setAttribute('aria-selected', onRound ? 'true' : 'false');
@@ -3631,7 +3634,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
       sections.push(section);
     }
     sections.forEach(function (section) {
-      section.hidden = section.getAttribute('data-bracket-line-section') !== category;
+      section.hidden = !isAllCategories && section.getAttribute('data-bracket-line-section') !== category;
     });
     // Ouro/Prata já está na aba principal. O h4 repetido dentro da seção não
     // acrescenta contexto e, quando a faixa fixa encosta no topo, atravessa o
@@ -3656,7 +3659,7 @@ function _bracketMonarchGroupsApply(root, category, operational) {
   if (!root || !root._bracketTabsScope) return;
   var groups = root._bracketTabsScope.querySelectorAll('[data-monarch-large="1"]');
   for (var i = 0; i < groups.length; i++) {
-    groups[i].hidden = !!operational || groups[i].getAttribute('data-monarch-category') !== category;
+    groups[i].hidden = !!operational || (category !== '__all_categories' && groups[i].getAttribute('data-monarch-category') !== category);
   }
 }
 
@@ -4181,7 +4184,9 @@ window._bracketCategoryTabsMount = function () {
       var title = dateMode ? gender.slice(8, 10) + '/' + gender.slice(5, 7) : (titles[gender] || gender);
       return '<button type="button" data-bracket-primary-tab="' + gender + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + String(firstCategory).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:132px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + title + '</button>';
     }).join(''));
-  var categoryHtml = order.map(function (gender) {
+  var categoryHtml = (allCats > 1
+    ? '<button type="button" data-bracket-tab-gender="__all__" data-bracket-subtab="__all_categories" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'__all__\',\'__all_categories\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">Geral</button>'
+    : '') + order.map(function (gender) {
     var generalSubtab = isTeamSchedule && gender !== 'linhas' && generalAgendaByGender[gender]
       ? '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="__general" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'__general\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">Geral</button>'
       : '';
@@ -4261,6 +4266,10 @@ window._bracketCategoryTabsMount = function () {
   }
   if (isTeamSchedule && (state.category === '__general' || state.category === '__upcoming') && byGender[state.gender] && generalAgendaByGender[state.gender]) {
     _bracketTabsApply(id, state.gender, state.category, '');
+    return;
+  }
+  if (state.category === '__all_categories') {
+    _bracketTabsApply(id, '__all__', '__all_categories', '');
     return;
   }
   // Em agenda concentrada, Geral é a entrada canônica. Categorias continuam
