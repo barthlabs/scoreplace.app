@@ -1,3 +1,4 @@
+// 2.7.40 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.39 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.38 — O organizador configura a pontuação em sequência em cada fase: sets, games
 // para vencer, empate que ativa tie-break, pontos do tie-break e margens independentes
