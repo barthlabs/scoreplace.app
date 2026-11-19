@@ -48,6 +48,7 @@ const _courtOccupancy = require('./vendor/court-occupancy.js');
 const _phaseCallOrder = require('./vendor/phase-call-order.js');
 const _phaseGridPlan = require('./vendor/phase-grid-plan.js');
 const _monarchCourtSeries = require('./monarch-court-series.js');
+const _courtCapabilityDigest = require('./court-capability-digest.js');
 const ScoreplaceRefereeRoster = require('./vendor/referee-roster.js');
 const _isConfirmedTournamentReferee = (t, uid) =>
   ScoreplaceRefereeRoster.sanitizeAll(t && t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
@@ -3166,6 +3167,11 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
         return _operationReceipt.replay(existing.data());
       }
     }
+    // Read before any transaction write. A result closes the temporary release
+    // marker atomically, preventing a stale restore from reoccupying the court.
+    const _courtStateRef = ref.collection('courtState').doc('main');
+    const _courtState = await tx.get(_courtStateRef);
+    const _courtStateData = _courtState.exists ? _courtState.data() || {} : {};
     _hidrataGrupos(t, 'aplicaPlacarNaTransacao', tId);
     const _courtSourceBefore = typeof drawWindow._findMatch === 'function'
       ? drawWindow._findMatch(t, matchId) : null;
@@ -3178,10 +3184,8 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     const _courtSeriesEligible = _courtSourceBefore && _courtSourceBefore.isMonarch === true &&
       _courtSourceBefore.court && _courtSourceBefore.courtCalledAt &&
       !_courtOccupancy.isFinished(_courtSourceBefore);
-    const _courtState = (_courtSeriesEligible || (t.fmt2 && ['singles_then_draw', 'singles_draw_two'].includes(t.fmt2.tieResolution)))
-      ? await tx.get(ref.collection('courtState').doc('main')) : null;
-    const _releasedCourts = _courtState && _courtState.exists
-      ? (_courtState.data().released || {}) : {};
+    const _releasedCourts = _courtStateData.released && typeof _courtStateData.released === 'object'
+      ? _courtStateData.released : {};
     if (_phasePendingDecision.isFrozenMatch(t, matchId)) {
       return { ok: false, reason: 'phase-seeding-frozen',
         message: 'Este jogo ficou pendente quando a organização congelou a ordem da classificação para avançar a fase.' };
@@ -3208,8 +3212,21 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       _monarchCourtSeries.estimateAfterFinalResult(t, drawWindow._findMatch(t, matchId),
         drawWindow._collectAllMatches(t), _agoraIsoTx, _matchTiming, _courtOccupancy);
     }
-    if (_courtAdvance) tx.set(ref.collection('courtState').doc('main'),
-      { revision: FieldValue.increment(1) }, { merge: true });
+    const _blockCourtMap = _courtStateData.blockCourt && typeof _courtStateData.blockCourt === 'object'
+      ? _courtStateData.blockCourt : {};
+    const _needsCourtCleanup = Object.prototype.hasOwnProperty.call(_releasedCourts, String(matchId)) ||
+      Object.prototype.hasOwnProperty.call(_blockCourtMap, String(matchId));
+    if (_courtAdvance || _needsCourtCleanup) {
+      const _courtPatch = { revision: FieldValue.increment(1) };
+      if (_needsCourtCleanup) {
+        const _nextReleased = Object.assign({}, _releasedCourts);
+        const _nextBlockCourt = Object.assign({}, _blockCourtMap);
+        delete _nextReleased[String(matchId)]; delete _nextBlockCourt[String(matchId)];
+        _courtPatch.released = _nextReleased;
+        _courtPatch.blockCourt = _nextBlockCourt;
+      }
+      tx.set(_courtStateRef, _courtPatch, { merge: true });
+    }
     const _tieBeforeResult = {
       decisions: t.phaseTieDecisions && JSON.parse(JSON.stringify(t.phaseTieDecisions)),
       suffix: t.phaseTieNextSuffix && JSON.parse(JSON.stringify(t.phaseTieNextSuffix)),
@@ -5067,19 +5084,23 @@ exports.tournamentOperationControl = onCall({ invoker: 'public' }, async (reques
 exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
   const uid = request.auth && request.auth.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
-  if (request.data && request.data.probe === true) return _operationProbeReply();
+  if (request.data && request.data.probe === true) return Object.assign(_operationProbeReply(), {
+    centralSourceDigest: _courtCapabilityDigest.digestFor(__dirname)
+  });
   const tId = String((request.data && request.data.tournamentId) || '').trim();
   const matchId = String((request.data && request.data.matchId) || '').trim();
   const sandbox = request.data && request.data.sandbox === true;
-  if (!tId || !matchId || sandbox !== tId.startsWith('sb_')) throw new HttpsError('invalid-argument', 'Torneio ou jogo inválido.');
+  if (!tId || sandbox !== tId.startsWith('sb_')) throw new HttpsError('invalid-argument', 'Torneio ou jogo inválido.');
   const action = String((request.data && request.data.action) || 'release');
-  if (!['release', 'restore', 'cancel-call', 'postpone'].includes(action)) throw new HttpsError('invalid-argument', 'Ação inválida.');
-  if (action !== 'release' && !(request.data && request.data.operationId)) {
+  if (!['release', 'restore', 'cancel-call', 'postpone', 'series-mode'].includes(action)) throw new HttpsError('invalid-argument', 'Ação inválida.');
+  if (action !== 'series-mode' && !matchId) throw new HttpsError('invalid-argument', 'Jogo inválido.');
+  if ((action !== 'release' || request.data.monarchEndWholeBlock === true) && !(request.data && request.data.operationId)) {
     throw new HttpsError('invalid-argument', 'Identificador da operação obrigatório.');
   }
-  if (action === 'postpone' && (!Number.isInteger(request.data.expectedRevision) || request.data.expectedRevision < 0)) {
+  if ((action === 'postpone' || action === 'series-mode') && (!Number.isInteger(request.data.expectedRevision) || request.data.expectedRevision < 0)) {
     throw new HttpsError('invalid-argument', 'Revisão da fila inválida.');
   }
+  if (action === 'series-mode' && typeof request.data.enabled !== 'boolean') throw new HttpsError('invalid-argument', 'Estado do encerramento em bloco inválido.');
   if (!drawWindow || typeof drawWindow._findMatch !== 'function' ||
       typeof drawWindow._collectAllMatches !== 'function') {
     throw new HttpsError('internal', 'Motor de chave indisponível no servidor.');
@@ -5090,7 +5111,9 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
   try {
     if (request.data && request.data.operationId != null) receipt = _operationReceipt.prepare({
       operationId: request.data.operationId, actorUid: uid, parentPath: ref.path,
-      kind: 'court-end', target: matchId, action, payload: { sandbox }
+      kind: 'court-end', target: action === 'series-mode' ? 'monarchEndWholeBlock' : matchId, action,
+      payload: action === 'series-mode' ? { sandbox, enabled: request.data.enabled, expectedRevision: request.data.expectedRevision } :
+        request.data.monarchEndWholeBlock === true ? { sandbox, monarchEndWholeBlock: true } : { sandbox }
     });
   } catch (error) { throw new HttpsError('invalid-argument', error.message); }
   const receiptRef = receipt ? ref.collection('operationReceipts').doc(receipt.id) : null;
@@ -5104,27 +5127,95 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
     const stateSnap = await tx.get(stateRef);
     const state = stateSnap.exists ? stateSnap.data() || {} : {};
     const released = state.released && typeof state.released === 'object' ? state.released : {};
+    const modeEnabled = state.monarchEndWholeBlock === true;
+    const needsReadiness = action === 'series-mode' && request.data.enabled === true ||
+      action === 'release' && (modeEnabled || request.data.monarchEndWholeBlock === true);
+    const readinessSnap = needsReadiness
+      ? await tx.get(db.collection('operationRuntimeCapabilities').doc('endMatchOnCourt')) : null;
+    const readiness = readinessSnap && readinessSnap.exists ? readinessSnap.data() || {} : {};
+    if (needsReadiness) {
+      let centralDigest = '';
+      try { centralDigest = _courtCapabilityDigest.digestFor(__dirname); } catch (_) {}
+      if (readiness.ready !== true || readiness.centralSourceDigest !== centralDigest ||
+          (process.env.SP_SOURCE_DIGEST && readiness.sourceDigest !== process.env.SP_SOURCE_DIGEST)) {
+        throw new HttpsError('failed-precondition', 'Operação em bloco indisponível durante atualização das quadras. Atualize a tela mais tarde.');
+      }
+    }
     const admin = _isTournamentAdmin(t, uid);
     const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
     if (!admin && !referee) throw new HttpsError('permission-denied', 'Só a organização ou árbitro confirmado pode liberar a quadra.');
-    if (receiptSnap && receiptSnap.exists) {
-      if (!_operationReceipt.matches(receiptSnap.data(), receipt)) throw new HttpsError('failed-precondition', 'operationId já pertence a outra ação.');
-      return _operationReceipt.replay(receiptSnap.data());
-    }
-    const m = drawWindow._findMatch(t, matchId);
-    const all = drawWindow._collectAllMatches(t);
-    if (!m || !Array.isArray(all)) throw new HttpsError('failed-precondition', 'Jogo não encontrado na chave completa.');
     const commitReply = (reply) => {
       if (receiptRef) tx.create(receiptRef, _operationReceipt.document(receipt, reply, Date.parse(agoraIso)));
       return reply;
     };
+    if (receiptSnap && receiptSnap.exists) {
+      if (!_operationReceipt.matches(receiptSnap.data(), receipt)) throw new HttpsError('failed-precondition', 'operationId já pertence a outra ação.');
+      return _operationReceipt.replay(receiptSnap.data());
+    }
+    if (action === 'series-mode') {
+      if (!admin) throw new HttpsError('permission-denied', 'Só a organização pode alterar o encerramento em bloco.');
+      if (Number(state.revision || 0) !== request.data.expectedRevision) throw new HttpsError('failed-precondition', 'A fila mudou; atualize a tela.');
+      tx.set(stateRef, { monarchEndWholeBlock: request.data.enabled, revision: FieldValue.increment(1) }, { merge: true });
+      return commitReply({ ok: true, changed: modeEnabled !== request.data.enabled, enabled: request.data.enabled });
+    }
+    const m = drawWindow._findMatch(t, matchId);
+    const all = drawWindow._collectAllMatches(t);
+    if (!m || !Array.isArray(all)) throw new HttpsError('failed-precondition', 'Jogo não encontrado na chave completa.');
     const hasScore = _courtOccupancy.isFinished(m) || m.draw === true || !!m.pendingResult ||
       m.liveScored === true || (Array.isArray(m.sets) && m.sets.length > 0) ||
       Number(m.scoreP1) > 0 || Number(m.scoreP2) > 0;
     if (action === 'release') {
-      if (released[matchId]) return commitReply({ ok: true, changed: false });
+      const blockRequest = request.data.monarchEndWholeBlock === true;
+      if (modeEnabled !== blockRequest) {
+        throw new HttpsError('failed-precondition', modeEnabled
+          ? 'Este bloco está configurado para encerrar os três jogos juntos. Atualize a tela; nenhum encerramento foi aplicado.'
+          : 'O encerramento em bloco foi desativado. Atualize a tela; nenhum encerramento foi aplicado.');
+      }
+      if (released[matchId]) {
+        if (blockRequest) throw new HttpsError('failed-precondition', 'Este jogo já foi liberado; atualize a tela antes de encerrar o bloco.');
+        return commitReply({ ok: true, changed: false });
+      }
       if (!m.court || !(m.courtCalledAt || m.startedAt) || hasScore) {
         throw new HttpsError('failed-precondition', 'O jogo precisa estar em quadra e sem resultado.');
+      }
+      if (blockRequest) {
+        if (m.isMonarch !== true || m.isTieBreak || m.monarchGroup == null || m.round == null || !m.category)
+          throw new HttpsError('failed-precondition', 'Não foi possível identificar os três jogos deste bloco.');
+        const series = all.filter(item => item && item.isMonarch === true && !item.isTieBreak &&
+          String(item.category || '') === String(m.category) && Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
+          String(item.round) === String(m.round) && String(item.monarchGroup) === String(m.monarchGroup));
+        series.sort((a, b) => Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0) ||
+          Date.parse(a.scheduledAt || '') - Date.parse(b.scheduledAt || '') || String(a.id).localeCompare(String(b.id)));
+        if (series.length !== 3) throw new HttpsError('failed-precondition', 'O bloco precisa conter exatamente três jogos.');
+        const eligible = series.filter(item => !released[String(item.id)] && !item.isBye && !item.isSitOut &&
+          item.draw !== true && !item.pendingResult && item.liveScored !== true &&
+          !(Array.isArray(item.sets) && item.sets.length) && !(Number(item.scoreP1) > 0) && !(Number(item.scoreP2) > 0) &&
+          !_courtOccupancy.isFinished(item));
+        if (eligible.length !== 3) throw new HttpsError('failed-precondition', 'O bloco contém jogo iniciado, pontuado ou já encerrado; atualize a tela.');
+        const before = _antesDoMotor(t);
+        const nextReleased = { ...released };
+        const blockCourt = Object.assign({}, state.blockCourt || {});
+        const audits = [];
+        const postponed = (Array.isArray(state.postponed) ? state.postponed : []).map(String);
+        const postponedReady = (Array.isArray(state.postponedReady) ? state.postponedReady : []).map(String);
+        series.forEach(item => {
+          const id = String(item.id);
+          blockCourt[id] = item.court == null ? null : String(item.court);
+          nextReleased[id] = agoraIso;
+          audits.push({ matchId: id, court: item.court == null ? null : String(item.court), releasedAt: agoraIso,
+            releasedBy: uid, block: true, group: String(item.monarchGroup) });
+          item.court = null;
+          postponed.splice(0, postponed.length, ...postponed.filter(value => value !== id));
+          postponedReady.splice(0, postponedReady.length, ...postponedReady.filter(value => value !== id));
+        });
+        const estimatedDurationMs = series.every(item => item.courtCalledAt)
+          ? _monarchCourtSeries.estimateLegacyDurations(t, series, agoraIso, _matchTiming) : null;
+        _gravaTorneio(tx, ref, t, before, { agoraIso });
+        tx.set(stateRef, { revision: FieldValue.increment(1), released: nextReleased, blockCourt,
+          postponed: postponed.slice(-all.length), postponedReady: postponedReady.slice(-all.length) }, { merge: true });
+        audits.forEach(audit => tx.create(ref.collection('courtReleases').doc(), audit));
+        return commitReply({ ok: true, changed: true, releasedAt: agoraIso, releasedMatchIds: series.map(item => String(item.id)),
+          estimatedDurationMs: estimatedDurationMs || null });
       }
       let nextInSeries = null;
       let completedSeries = null;
@@ -5213,9 +5304,17 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
     }
     if (action === 'restore') {
       if (!released[matchId]) throw new HttpsError('failed-precondition', 'Este jogo não está em Placares pendentes.');
-      if (!m.court || !(m.courtCalledAt || m.startedAt)) throw new HttpsError('failed-precondition', 'Chamada original indisponível.');
+      const blockCourt = state.blockCourt && typeof state.blockCourt === 'object' ? state.blockCourt : {};
+      const restoreCourt = m.court || blockCourt[matchId] || null;
+      if (!(m.courtCalledAt || m.startedAt)) {
+        tx.update(stateRef, new FieldPath('released', matchId), FieldValue.delete(), new FieldPath('blockCourt', matchId), FieldValue.delete(), 'revision', FieldValue.increment(1));
+        tx.create(ref.collection('courtReleases').doc(), { kind:'restore', matchId, court:null,
+          originalReleasedAt:released[matchId], restoredAt:agoraIso, restoredBy:uid });
+        return commitReply({ ok:true, changed:true, restoredAt:agoraIso, restoredWithoutCourt:true });
+      }
+      if (!restoreCourt) throw new HttpsError('failed-precondition', 'Chamada original indisponível.');
       const candidates = all.filter(item => item && !released[String(item.id)]);
-      if (_courtOccupancy.occupant(candidates, m.court, matchId)) {
+      if (_courtOccupancy.occupant(candidates, restoreCourt, matchId)) {
         throw new HttpsError('failed-precondition', 'A quadra original está ocupada; libere-a antes de restaurar o jogo.');
       }
       // O intervalo em Placares pendentes não pertence ao tempo de jogo.
@@ -5228,8 +5327,11 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
         _gravaTorneio(tx, ref, t, before, { agoraIso });
       }
       const auditRef = ref.collection('courtReleases').doc();
-      tx.update(stateRef, new FieldPath('released', matchId), FieldValue.delete(), 'revision', FieldValue.increment(1));
-      tx.create(auditRef, { kind: 'restore', matchId, court: String(m.court), originalReleasedAt: released[matchId], restoredAt: agoraIso, restoredBy: uid });
+      const beforeRestore = _antesDoMotor(t);
+      m.court = String(restoreCourt);
+      if (m.courtCalledAt || m.startedAt) _gravaTorneio(tx, ref, t, beforeRestore, { agoraIso });
+      tx.update(stateRef, new FieldPath('released', matchId), FieldValue.delete(), new FieldPath('blockCourt', matchId), FieldValue.delete(), 'revision', FieldValue.increment(1));
+      tx.create(auditRef, { kind: 'restore', matchId, court: String(restoreCourt), originalReleasedAt: released[matchId], restoredAt: agoraIso, restoredBy: uid });
       return commitReply({ ok: true, changed: true, restoredAt: agoraIso });
     }
     if (released[matchId]) throw new HttpsError('failed-precondition', 'Restaure primeiro o jogo encerrado.');

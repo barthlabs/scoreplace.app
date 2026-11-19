@@ -233,6 +233,10 @@ do_autodraw() {
     [ -d "$ROOT/functions-autodraw/node_modules" ] || (cd "$ROOT/functions-autodraw" && npm ci)
     (cd "$ROOT/functions-autodraw" && node copy-vendor.js && node test-draw.js) \
       || die "autodraw: test-draw.js falhou — NÃO deployar sorteio quebrado"
+    if [[ ",$targets," == *,functions:endMatchOnCourt,* ]]; then
+      node "$ROOT/scripts/end-court-readiness.js" --invalidate \
+        || die "endMatchOnCourt: não foi possível invalidar readiness antes do deploy"
+    fi
   fi
   deploy_dir "$ROOT/functions-autodraw" "$targets" "autodraw (functions-autodraw/)"
   [ "$DRY" = 1 ] || echo "⚠️  commitar o diff de functions-autodraw/vendor/ (o predeploy re-sincroniza)"

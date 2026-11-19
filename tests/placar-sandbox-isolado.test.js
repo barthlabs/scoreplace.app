@@ -18,7 +18,7 @@ const ref = (path) => ({
   collection: (name) => ({ doc: (id) => ref(path + '/' + name + '/' + (id || 'audit-id')) }),
 });
 const tx = {
-  get: async (target) => { reads.push(target.path); return { exists: true, ref: target }; },
+  get: async (target) => { reads.push(target.path); return { exists: true, ref: target, data: () => ({}) }; },
   set: (target) => { writes.push(target.path); },
   delete: (target) => { writes.push(target.path); },
 };

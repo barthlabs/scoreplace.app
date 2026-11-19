@@ -529,6 +529,9 @@ rm -rf "$PRE"
 printf '%s' "$VERSAO" > "$SP_PREFLIGHT_ATTEST"
 fi
 echo "  ✓ preflight VERDE — pode alinhar o main e publicar"
+# A chave só sobe depois de as portas centrais e regionais confirmarem o mesmo corte.
+# Este check lê apenas o recibo global de capacidades, sem consultar torneios.
+node scripts/check-end-court-readiness.js || exit 1
 # ⭐ O CARIMBO DO PREFLIGHT. O `hosting.predeploy` roda a MESMA lista logo em seguida,
 # sobre o MESMO commit — eram duas rodadas da suíte por publicação (~5min20 cada, com o
 # runner paralelo). `scripts/predeploy-test.js` pula a segunda SÓ se este carimbo bater

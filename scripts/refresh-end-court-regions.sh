@@ -9,12 +9,13 @@ node scripts/check-vendor-fresh.js
 source_commit="$(git log -1 --format=%H -- functions-autodraw)"
 [[ "$source_commit" =~ ^[a-f0-9]{40}$ ]] || exit 1
 # Confira a diferença deste corte contra a base publicada. Esta leva muda
-# somente a transição da série Rei/Rainha e o cálculo da duração anterior ao
-# relógio individual; a porta exposta aqui continua sendo endMatchOnCourt.
+# somente o controle do encerramento do bloco; a porta exposta aqui continua
+# sendo endMatchOnCourt. monarch-court-series.js já existe na base publicada;
+# o código novo fica em index.js e o helper de digest garante o readiness.
 base_commit="$(git merge-base origin/main HEAD)"
 [[ -n "$base_commit" ]] || exit 1
-diff="$(git diff --name-only "$base_commit" HEAD -- functions functions-autodraw)"
-[[ "$diff" == $'functions-autodraw/index.js\nfunctions-autodraw/monarch-court-series.js' ]] || {
+diff="$(git diff --name-only "$base_commit" HEAD -- functions-autodraw/index.js functions-autodraw/court-capability-digest.js)"
+[[ "$diff" == $'functions-autodraw/court-capability-digest.js\nfunctions-autodraw/index.js' ]] || {
   echo "backend fora do corte end-court: $diff" >&2; exit 1;
 }
 echo "✓ diff $base_commit → HEAD: $diff"
@@ -33,6 +34,16 @@ if [[ "$mode" == --deploy && ! -e .claude/tmp/operation-regions-manifest-v2.end-
 fi
 
 project=scoreplace-app
+regional_digest="$(node scripts/operation-source-digest.js functions-autodraw endMatchOnCourt "$source_commit")"
+central_digest="$(node -e 'const d=require(process.argv[1]);process.stdout.write(d.digestFor(process.argv[2]))' "$PWD/functions-autodraw/court-capability-digest.js" "$PWD/functions-autodraw")"
+[[ "$(git rev-parse HEAD)" == "$source_commit" || -z "$(git diff --name-only "$source_commit" HEAD -- functions-autodraw/index.js functions-autodraw/court-capability-digest.js)" ]] || {
+  echo 'fontes endMatchOnCourt divergiram do commit de origem' >&2; exit 1;
+}
+if [[ "$mode" == --deploy ]]; then
+  source scripts/firebase-credencial-persistente.sh
+  sp_preparar_credencial_firebase "$PWD" "$project"
+  node scripts/end-court-readiness.js --invalidate
+fi
 describe() { gcloud run services describe "$1" --project "$project" --region "$2" --format=json; }
 field() { node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{let x=JSON.parse(s);for(const p of process.argv[1].split("."))x=x?.[p];process.stdout.write(x==null?"":String(x))})' "$1"; }
 probe() {
@@ -132,7 +143,7 @@ for version in v3 v2; do
   else
     regions=(us-east1 us-east4 us-south1)
   fi
-  digest="$(node scripts/operation-source-digest.js functions-autodraw endMatchOnCourt "$source_commit")"
+  digest="$regional_digest"
   if [[ "$mode" == --deploy && ! -e "$candidate" ]]; then cp "$manifest" "$candidate"; fi
   source_image=''
   for region in "${regions[@]}"; do
@@ -189,5 +200,6 @@ done
 if [[ "$mode" == --deploy ]]; then
   node scripts/generate-operation-regions-config.js
   node scripts/generate-operation-regions-v3-config.js
+  node scripts/end-court-readiness.js --ready "$regional_digest" "$central_digest" "$source_commit"
   echo '✓ oito portas verificadas e configurações públicas prontas; execute os checks do Hosting antes do upload'
 fi

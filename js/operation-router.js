@@ -128,7 +128,9 @@
       var service = (name === 'tournamentOperationControl' ? CONTROL : OPERATIONS[name])
         .replace(/-v2$/, '-v' + cfg.schema);
       var answer = await post(url(cfg, region, name), { probe: true }, headers, 7000);
-      if (!answer.ok || answer.region !== region || answer.sourceDigest !== cfg.services[service].digest) {
+      if (!answer.ok || answer.region !== region || answer.sourceDigest !== cfg.services[service].digest ||
+          name === 'endMatchOnCourt' && cfg.services[service].centralSourceDigest &&
+            answer.centralSourceDigest !== cfg.services[service].centralSourceDigest) {
         throw fail('Revisão regional divergente.', 'failed-precondition', true);
       }
     }));
@@ -354,7 +356,8 @@
         throw error;
       } finally { progress(false); }
     }
-    if (name === 'endMatchOnCourt' && (payload.action === 'cancel-call' || payload.action === 'postpone')) {
+    if (name === 'endMatchOnCourt' && (payload.action === 'cancel-call' || payload.action === 'postpone' ||
+        payload.action === 'series-mode' || payload.monarchEndWholeBlock === true)) {
       try {
         var centralAnswer;
         try { centralAnswer = await post(CENTRAL_END_COURT, payload, headers, 20000); }
@@ -442,5 +445,14 @@
     task.then(clearInFlight, function () { clearInFlight(null); });
     return task;
   }
-  window.ScoreplaceOperationRouter = { call: call, names: Object.keys(OPERATIONS) };
+  window.ScoreplaceOperationRouter = {
+    call: call,
+    names: Object.keys(OPERATIONS),
+    endCourtCapability: function () {
+      return loadConfig().then(function (cfg) {
+        var service = cfg.services[OPERATIONS.endMatchOnCourt.replace(/-v2$/, '-v' + cfg.schema)] || {};
+        return { sourceDigest: service.digest || '', centralSourceDigest: service.centralSourceDigest || '', schema: cfg.schema };
+      });
+    }
+  };
 })();

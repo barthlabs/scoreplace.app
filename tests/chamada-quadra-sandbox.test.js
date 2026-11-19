@@ -15,6 +15,7 @@ class TestDate extends Date {
 }
 const HttpsError = class extends Error { constructor(code, message) { super(message); this.code = code; } };
 const paths = [], saved = [], courtStates = new Map(), releases = new Map(), receipts = new Map();
+const runtimeCapability = { ready:true, sourceDigest:'regional-test', centralSourceDigest:'central-test' };
 const deleted = Symbol('delete-field');
 let autoId = 0;
 let tournament, ownerProfile = null, isAdmin = true;
@@ -28,6 +29,7 @@ const context = {
       if (wrote) throw new Error('Firestore transaction read after write');
       return ref.path.startsWith('users/')
       ? { exists: !!ownerProfile, data: () => ownerProfile }
+      : ref.path === 'operationRuntimeCapabilities/endMatchOnCourt' ? { exists:true, data: () => runtimeCapability }
       : ref.path.includes('/courtState/') ? { exists: courtStates.has(ref.path), data: () => courtStates.get(ref.path) }
       : ref.path.includes('/courtReleases/') ? { exists: releases.has(ref.path), data: () => releases.get(ref.path) }
       : ref.path.includes('/operationReceipts/') ? { exists: receipts.has(ref.path), data: () => receipts.get(ref.path) }
@@ -67,6 +69,9 @@ const context = {
   _rehearsal: require('../functions-autodraw/tournament-rehearsal.js'),
   _matchTiming: require('../js/domain/match-timing.js'),
   _monarchCourtSeries: require('../functions-autodraw/monarch-court-series.js'),
+  _courtCapabilityDigest: { digestFor: () => 'central-test' },
+  process: { env:{ SP_SOURCE_DIGEST:'regional-test' } },
+  __dirname:'functions-autodraw',
   _agenda: require('../functions-autodraw/agenda-core.js'),
   _phaseTieCourts: require('../functions-autodraw/phase-tie-courts.js'),
   Date: TestDate, Intl, Number, String, Array, Set, console
@@ -185,6 +190,47 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   assert.equal((await endOnCourt({ auth: { uid: 'owner' }, data: {
     tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod'
   } })).changed, false, 'liberação repetida não cria novo estado');
+
+  const monarchGame = (id, num, court, called) => Object.assign(game(id, court), {
+    isMonarch:true, isTieBreak:false, category:'Fem A', phaseIndex:0, round:'Rodada 1',
+    monarchGroup:'A1', _gameNum:num, ...(called ? { courtCalledAt:nowIso, startedAt:nowIso } : {})
+  });
+  tournament.matches = [monarchGame('block-1', 1, 'Quadra 4', true),
+    monarchGame('block-2', 2, 'Quadra 5', false), monarchGame('block-3', 3, 'Quadra 6', false)];
+  const seriesRevision = Number(courtStates.get('tournaments/tour_test/courtState/main').revision || 0);
+  const seriesMode = await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
+    action:'series-mode', enabled:true, expectedRevision:seriesRevision, operationId:'25359ec0-57d6-48d4-9c50-b549b35e7fe8' } });
+  assert.equal(seriesMode.enabled, true, 'preferência é persistida pela callable');
+  assert.equal(courtStates.get('tournaments/tour_test/courtState/main').monarchEndWholeBlock, true);
+  await assert.rejects(endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
+    matchId:'block-1' } }), e => e.code === 'failed-precondition' && /Atualize a tela/.test(e.message),
+    'cliente antigo sem flag não pode encerrar só um jogo de bloco');
+  const blockRelease = await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
+    matchId:'block-1', action:'release', monarchEndWholeBlock:true,
+    operationId:'ec0c29f4-cab6-4655-8c7e-67d98fd3dbf4' } });
+  assert.equal(blockRelease.releasedMatchIds.length, 3, 'um encerramento libera os três jogos do grupo');
+  const blockState = courtStates.get('tournaments/tour_test/courtState/main');
+  for (const id of ['block-1','block-2','block-3']) assert.ok(blockState.released[id]);
+  assert.equal(blockState.blockCourt['block-2'], 'Quadra 5', 'guarda quadra do irmão que ainda não foi chamado');
+  assert.ok(tournament.matches.every(match => match.court === null), 'os três deixam de ocupar quadras');
+  await assert.rejects(endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
+    matchId:'block-1', action:'release', monarchEndWholeBlock:true,
+    operationId:'c3f4cb3e-bda6-44ad-b2c6-4497928b12cc' } }),
+    e => e.code === 'failed-precondition' && /já foi liberado/.test(e.message),
+    'nova intenção não transforma jogo previamente liberado em falso sucesso');
+  const restoreCalled = await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
+    matchId:'block-1', action:'restore', operationId:'8b994594-d074-4b96-95bf-dab9711c6114' } });
+  assert.equal(restoreCalled.changed, true);
+  assert.equal(tournament.matches[0].court, 'Quadra 4', 'jogo chamado volta à sua quadra original');
+  const restoreUncalled = await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
+    matchId:'block-2', action:'restore', operationId:'5f6ebd49-b51a-4575-b09a-632eaee316bd' } });
+  assert.equal(restoreUncalled.restoredWithoutCourt, true, 'irmão não chamado sai dos pendentes sem inventar chamada');
+  assert.equal(courtStates.get('tournaments/tour_test/courtState/main').released['block-2'], undefined);
+  const afterRestoreRevision = Number(courtStates.get('tournaments/tour_test/courtState/main').revision || 0);
+  await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
+    action:'series-mode', enabled:false, expectedRevision:afterRestoreRevision,
+    operationId:'126de800-6a9e-44e5-8091-861e788768a3' } });
+
   isAdmin = false;
   await assert.rejects(callable({ auth: { uid: 'stranger' }, data: {
     tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod', court: 'Quadra 4', confirmCall: true

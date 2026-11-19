@@ -1290,6 +1290,8 @@ window._bracketReloadCourtState = function (tId, entry) {
     .collection('courtState').doc('main').get({ source: 'server' }).then(function (snap) {
       var data = snap.exists ? snap.data() || {} : {};
       entry.released = data.released && typeof data.released === 'object' ? data.released : {};
+      entry.blockCourt = data.blockCourt && typeof data.blockCourt === 'object' ? data.blockCourt : {};
+      entry.monarchEndWholeBlock = data.monarchEndWholeBlock === true;
       entry.postponed = Array.isArray(data.postponed) ? data.postponed : [];
       entry.postponedReady = Array.isArray(data.postponedReady) ? data.postponedReady : null;
       entry.revision = Number(data.revision) || 0;
@@ -1311,6 +1313,8 @@ window._bracketEnsureCourtReleaseListener = function (tId) {
     .doc(id).collection('courtState').doc('main').onSnapshot(function (snap) {
       var data = snap.exists ? snap.data() || {} : {};
       entry.released = data.released && typeof data.released === 'object' ? data.released : {};
+      entry.blockCourt = data.blockCourt && typeof data.blockCourt === 'object' ? data.blockCourt : {};
+      entry.monarchEndWholeBlock = data.monarchEndWholeBlock === true;
       entry.postponed = Array.isArray(data.postponed) ? data.postponed : [];
       entry.postponedReady = Array.isArray(data.postponedReady) ? data.postponedReady : null;
       entry.revision = Number(data.revision) || 0;
@@ -1334,6 +1338,27 @@ window._bracketEnsureCourtReleaseListener = function (tId) {
         if (window._bracketCourtReleaseCache[id] === entry) window._bracketEnsureCourtReleaseListener(id);
       }, 5000);
     });
+};
+window._bracketEnsureCourtCapability = function (tId, entry) {
+  if (!entry || entry.capabilityChecked || entry.capabilityCheckPromise || !window.FirestoreDB ||
+      !window.FirestoreDB.db || !window.ScoreplaceOperationRouter ||
+      typeof window.ScoreplaceOperationRouter.endCourtCapability !== 'function') return;
+  entry.capabilityCheckPromise = Promise.all([
+    window.ScoreplaceOperationRouter.endCourtCapability(),
+    window.FirestoreDB.db.collection('operationRuntimeCapabilities').doc('endMatchOnCourt').get({ source: 'server' })
+  ]).then(function (parts) {
+    var cfg = parts[0], doc = parts[1], data = doc.exists ? doc.data() || {} : {};
+    entry.capabilityReady = data.ready === true && !!cfg.sourceDigest && !!cfg.centralSourceDigest &&
+      data.sourceDigest === cfg.sourceDigest && data.centralSourceDigest === cfg.centralSourceDigest;
+    entry.capabilityChecked = true;
+    entry.capabilityError = null;
+  }).catch(function (error) {
+    entry.capabilityReady = false; entry.capabilityChecked = true; entry.capabilityError = error;
+  }).finally(function () {
+    entry.capabilityCheckPromise = null;
+    var tournament = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(tId)) : null;
+    if (tournament && typeof window._bracketOperationsRefresh === 'function') window._bracketOperationsRefresh(tournament);
+  });
 };
 window._bracketOperationsSelect = function (t) {
   var occupancy = window.ScoreplaceCourtOccupancy;
@@ -2379,6 +2404,7 @@ window._bracketOperationsRefresh = function (t, root) {
     return;
   }
   window._bracketEnsureCourtReleaseListener(t.id);
+  window._bracketEnsureCourtCapability(t.id, window._bracketCourtReleaseCache[String(t.id)]);
   var state = window._bracketOperationsSelect(t);
   if (!state) return; // eco incompleto nunca apaga a faixa anterior
   // Recriar o select enquanto o menu nativo está aberto fecha a lista e pode
@@ -2638,6 +2664,32 @@ window._bracketOperationsRefresh = function (t, root) {
       }
     });
     existing.addEventListener('change', function (event) {
+      var seriesToggle = event.target && event.target.closest('[data-operations-series-mode]');
+      if (seriesToggle) {
+        event.preventDefault();
+        var entry = window._bracketCourtReleaseCache[String(t.id)];
+        if (!entry || !entry.ready || !entry.capabilityReady || existing._spSeriesModeBusy) {
+          seriesToggle.checked = !!(entry && entry.monarchEndWholeBlock); return;
+        }
+        existing._spSeriesModeBusy = true; seriesToggle.disabled = true;
+        window.ScoreplaceOperationRouter.call('endMatchOnCourt', {
+          tournamentId:String(t.id), sandbox:String(t.id).startsWith('sb_'), action:'series-mode',
+          enabled:seriesToggle.checked, expectedRevision:Number(entry.revision || 0), operationId:_courtOperationId()
+        }, null).then(function (answer) {
+          if (!answer || !answer.ok) throw new Error('Não foi possível salvar esta configuração.');
+          entry.monarchEndWholeBlock = !!answer.enabled;
+          if (typeof showNotification === 'function') showNotification('Preferência salva',
+            answer.enabled ? 'Os três jogos do bloco serão liberados juntos.' : 'Os jogos voltarão a ser liberados um por vez.', 'success');
+        }).catch(function (error) {
+          seriesToggle.checked = !!entry.monarchEndWholeBlock;
+          if (typeof showNotification === 'function') showNotification('Configuração não salva', error && error.message || 'Atualize a tela e tente novamente.', 'error');
+        }).finally(function () {
+          existing._spSeriesModeBusy = false;
+          var fresh = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(t.id)) : t;
+          window._bracketOperationsRefresh(fresh || t, root);
+        });
+        return;
+      }
       var select = event.target && event.target.closest('.sp-operations-replica .sp-match-court select');
       if (select && select.hasAttribute('data-tie-court-select')) return;
       if (select && typeof window._assignMatchCourtFromSelect === 'function') {
@@ -2718,6 +2770,16 @@ window._bracketOperationsRefresh = function (t, root) {
   });
   var readyIds = new Set((state.queue || []).map(function (m) { return String(m.id); }));
   var releasedMatches = window._bracketCourtReleased(t.id);
+  var courtEntryForMode = window._bracketCourtReleaseCache[String(t.id)] || {};
+  var hasMonarchSeries = state.matches.some(function (m) { return m && m.isMonarch === true && !m.isTieBreak; });
+  var seriesModeHtml = hasMonarchSeries && typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user)
+    ? '<label class="sp-operations-series-mode" style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin:0 0 10px;border:1px solid var(--border-color);border-radius:10px;">' +
+      '<input type="checkbox" data-operations-series-mode="1"' + (courtEntryForMode.monarchEndWholeBlock ? ' checked' : '') +
+      (!courtEntryForMode.ready || !courtEntryForMode.capabilityReady || existing._spSeriesModeBusy ? ' disabled' : '') +
+      ' style="width:20px;height:20px;accent-color:#22c55e;">' +
+      '<span><strong>Encerrar os 3 jogos do bloco juntos</strong><br><small>' +
+      (courtEntryForMode.capabilityReady ? 'Desativado: liberar jogo por jogo.' : 'Aguardando confirmação das versões operacionais publicadas.') +
+      '</small></span></label>' : '';
   var estimates = _bracketOperationsFutureEstimates(state, t);
   var canAdvancePhase = canCall && typeof window._isUserOrgOrCoHost === 'function' &&
     window._isUserOrgOrCoHost(t, user) && !(t.scheduleWindow && t.scheduleWindow.interleavedPlan) &&
@@ -2754,7 +2816,7 @@ window._bracketOperationsRefresh = function (t, root) {
     availability, root, state.matches, 'next:' + String(m.id));
   }).join('');
   if (existing._spNextScrollRestoreObserver) { existing._spNextScrollRestoreObserver.disconnect(); existing._spNextScrollRestoreObserver = null; }
-  existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll" aria-label="Próximos jogos">' +
+  existing.innerHTML = seriesModeHtml + '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll" aria-label="Próximos jogos">' +
     advancePhaseHtml +
     (nextCardsHtml || '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
@@ -6129,16 +6191,19 @@ window._endMatchOnCourt = function (tId, matchId, button) {
   var match = allMatches && allMatches.find(function (item) { return String(item.id) === String(matchId); });
   var group = match && _bracketOperationsGroup(tournament, match, allMatches);
   var position = group && group.matches.findIndex(function (item) { return String(item.id) === String(matchId); });
-  var continues = position >= 0 && position < 2;
-  return _confirmCourtOperation(tId, matchId, 'release', continues ? 'Encerrar jogo' : 'Liberar quadra',
-    continues
+  var blockMode = !!(window._bracketCourtReleaseCache[String(tId)] || {}).monarchEndWholeBlock;
+  var continues = !blockMode && position >= 0 && position < 2;
+  return _confirmCourtOperation(tId, matchId, 'release', blockMode ? 'Encerrar bloco' : continues ? 'Encerrar jogo' : 'Liberar quadra',
+    blockMode
+      ? 'Encerrar os três jogos deste grupo de uma vez? Todos ficarão disponíveis em Placares pendentes; nenhum placar será alterado.'
+      : continues
       ? 'Encerrar este jogo sem placar? O próximo jogo começa na mesma quadra, e o placar anterior continua acessível pelas setas.'
       : 'Liberar esta quadra sem placar? O jogo ficará em Placares pendentes.', function () {
   if (!window._callCF) return Promise.reject(new Error('Serviço indisponível.'));
   if (button) button.disabled = true;
   return window._callCF('endMatchOnCourt', {
     tournamentId: String(tId), matchId: String(matchId), sandbox: String(tId).startsWith('sb_'),
-    action: 'release', operationId: _courtOperationId()
+    action: 'release', monarchEndWholeBlock:blockMode, operationId: _courtOperationId()
   }, 'Entre na sua conta para liberar a quadra.').then(function (res) {
     var data = (res && res.data) || {};
     if (!data.ok) throw new Error('Não foi possível liberar a quadra.');

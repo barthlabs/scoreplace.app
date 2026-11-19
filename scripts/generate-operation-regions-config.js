@@ -19,6 +19,8 @@ for (const name of names) {
   services[name] = { digest: rows[0].sourceDigest, urls: Object.fromEntries(rows.map(row => [row.region, row.url])) };
 }
 const output = { schema: 2, regions, services };
+const centralDigest = require('../functions-autodraw/court-capability-digest.js').digestFor(path.join(root, 'functions-autodraw'));
+services['sp-op-end-court-v2'].centralSourceDigest = centralDigest;
 const target = path.join(root, 'operation-regions.json');
 const expected = JSON.stringify(output, null, 2) + '\n';
 if (process.argv.includes('--check')) {

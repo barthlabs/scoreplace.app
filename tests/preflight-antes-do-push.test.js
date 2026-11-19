@@ -156,6 +156,9 @@ function cenario(opcoes) {
   // O recibo das Functions é coberto pelo gate próprio; este laboratório usa
   // backend fictício para isolar a ordem preflight → push → upload.
   fs.writeFileSync(path.join(repo, 'scripts', 'check-invite-functions-published.js'), 'process.exit(0);\n');
+  // A prontidão da nova capacidade é validada pelo gate próprio; o laboratório
+  // de ordem usa serviço fictício e precisa manter essa validação externa neutra.
+  fs.writeFileSync(path.join(repo, 'scripts', 'check-end-court-readiness.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'deploy-operation-regions.sh'),
     '#!/bin/sh\n' + (o.regiaoDivergente ? 'exit 1\n' :
       o.fingerprintInicialFalha ? ': > .claude/tmp/operation-regions-manifest-v2.json\nexit 0\n' : 'exit 0\n'));
