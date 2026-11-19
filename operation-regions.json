@@ -39,7 +39,7 @@
       }
     },
     "sp-op-end-court-v2": {
-      "digest": "258cc494fbe27f33de3c693981416db330153a4829acfd91c164261d9a61bddd",
+      "digest": "62dbbb5141309f7a0b63b940a6036daa58b81588e4282855d60c2fdfd76ed724",
       "urls": {
         "us-east1": "https://sp-op-end-court-v2-4f45krjr3a-ue.a.run.app",
         "us-east4": "https://sp-op-end-court-v2-4f45krjr3a-uk.a.run.app",
