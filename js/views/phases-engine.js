@@ -1359,6 +1359,7 @@
 
   // Lê uma vaga da mesma transição que gera a chave oficial. Grupo ainda em
   // disputa não produz equipe, mesmo que a tabela provisória tenha um líder.
+  // Código de origem vazio ou inválido representa vaga ainda pendente (null).
   function resolveOfficialGroupSlot(t, phaseIndex, category, groupSource, computeStandings) {
     if (!t || !Array.isArray(t.phases) || !Number.isInteger(phaseIndex) ||
         phaseIndex < 1 || !t.phases[phaseIndex] || !String(groupSource || '').trim()) return null;

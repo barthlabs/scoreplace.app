@@ -96,6 +96,8 @@ assert.equal(E.resolveOfficialGroupSlot(single, 99, 'Feminino', 'A1', () => []),
   'resolução retorna pendente para fase fora da faixa');
 assert.equal(E.resolveOfficialGroupSlot(single, 1, 'Feminino', '', () => []), null,
   'origem de grupo vazia é explicitamente pendente');
+assert.equal(E.resolveOfficialGroupSlot(single, 1, 'Feminino', '   ', () => []), null,
+  'origem composta só por espaços mantém contrato pendente após trim');
 
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const callStart = source.indexOf('exports.assignMatchCourt = onCall');
