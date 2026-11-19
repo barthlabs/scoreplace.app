@@ -11,12 +11,16 @@ let failures = 0;
 function ok(condition, label) { console.log((condition ? '✓ ' : '✗ ') + label); if (!condition) failures++; }
 const nodes = {};
 for (const id of ['category-capacity-section', 'category-capacity-general', 'tourn-max-per-category', 'tourn-custom-category-capacity',
-  'tourn-max-by-category', 'category-capacity-grid', 'tourn-max-participants', 'cap-max-container', 'category-capacity-summary']) {
+  'tourn-max-by-category', 'tourn-excluded-categories', 'category-capacity-grid', 'tourn-max-participants', 'cap-max-container', 'category-capacity-summary']) {
   nodes[id] = { value: '', checked: false, style: {}, innerHTML: '', readOnly: false };
 }
 nodes['tourn-max-by-category'].value = '{}';
+nodes['tourn-excluded-categories'].value = '[]';
 const names = ['Fem Light', 'Fem Power', 'Fem Extreme', 'Masc Light', 'Masc Power', 'Masc Extreme'];
-const context = { window: { _getCreateFormCategoryData: () => ({ combinedCategories: names }) },
+const context = { window: { _getCreateFormCategoryData: () => {
+  const excluded = JSON.parse(nodes['tourn-excluded-categories'].value || '[]');
+  return { allCombinedCategories: names, excludedCategories: excluded, combinedCategories: names.filter(name => !excluded.includes(name)) };
+} },
   document: { getElementById: id => nodes[id] || null }, console };
 const start = source.indexOf('  window._syncCategoryCapacity = function(options) {');
 const end = source.indexOf('  window._onInscricaoChange = function', start);
@@ -38,7 +42,7 @@ nodes['tourn-max-by-category'].value = JSON.stringify(light);
 context.window._syncCategoryCapacity();
 ok(nodes['tourn-max-participants'].value === '128' && nodes['tourn-max-participants'].readOnly, 'personalizado: soma 32+16+16+32+16+16 = 128');
 ok(nodes['category-capacity-grid'].style.display === 'grid' && nodes['category-capacity-grid'].innerHTML.includes('Fem Light'), 'switch mostra entradas por categoria');
-ok(/id="tourn-max-per-category"[^>]*style="width:8ch/.test(source) && /data-category="' \+ encodeURIComponent\(category\)[\s\S]*?style="display:block;width:8ch/.test(source), 'campos de vagas usam largura compacta para números');
+ok(/id="tourn-max-per-category"[^>]*style="width:8ch/.test(source) && /data-category="' \+ encodeURIComponent\(category\)[\s\S]*?style="display:block;width:5ch/.test(source), 'campo individual de vagas usa largura compacta para números');
 ok(/grid-template-columns:repeat\(auto-fill,minmax\(150px,190px\)\)/.test(source), 'cards de vagas personalizadas não esticam os campos pela tela');
 ok(nodes['category-capacity-general'].style.display === 'none', 'modo personalizado oculta campo e valor genéricos');
 names.pop();
@@ -59,9 +63,17 @@ ok(nodes['tourn-max-participants'].value === '128', 'edição preserva total 128
 nodes['tourn-custom-category-capacity'].checked = true;
 nodes['tourn-max-by-category'].value = JSON.stringify(light);
 context.window._syncCategoryCapacity({ userChanged: true });
+nodes['tourn-max-by-category'].value = JSON.stringify(light);
+const zeroField = { value: '0', getAttribute: name => name === 'data-category' ? encodeURIComponent('Fem Light') : null };
+context.window._setCategoryCapacityValue(zeroField);
+ok(!Object.hasOwn(JSON.parse(nodes['tourn-max-by-category'].value), 'Fem Light') && JSON.parse(nodes['tourn-excluded-categories'].value).includes('Fem Light'), 'zero remove a capacidade e exclui só a categoria informada');
+ok(nodes['tourn-max-participants'].value === '96', 'total cai pela capacidade da categoria zerada');
+const restoreField = { value: '24', getAttribute: name => name === 'data-category' ? encodeURIComponent('Fem Light') : null };
+context.window._setCategoryCapacityValue(restoreField);
+ok(JSON.parse(nodes['tourn-max-by-category'].value)['Fem Light'] === 24 && !JSON.parse(nodes['tourn-excluded-categories'].value).includes('Fem Light'), 'inteiro positivo reativa a categoria com a capacidade digitada');
 nodes['tourn-max-by-category'].value = JSON.stringify({ ...light, 'Fem Light': 0 });
 context.window._syncCategoryCapacity();
-ok(JSON.parse(nodes['tourn-max-by-category'].value)['Fem Light'] === 0, 'valor inválido não é substituído silenciosamente pelo padrão');
+ok(JSON.parse(nodes['tourn-max-by-category'].value)['Fem Light'] === 0, 'edição preserva valor inválido para que validação peça correção explícita');
 ok(/let maxPartsVal =/.test(source) && /if \(customCategoryCapacity && validMap\) maxPartsVal = expectedCapacity;/.test(source) &&
   /!customCategoryCapacity && !validGeneral/.test(source), 'save usa soma personalizada sem dispensar validação do modo geral');
 

@@ -78,6 +78,53 @@ const categories = [{ id: 'light', label: 'Light' }];
   assert.equal(JSON.stringify((await real.get()).data()), realBefore, 'cliente sem flag não altera original');
   console.log('✓ configuração do sandbox grava só na coleção privada');
 
+  // Categoria com zero vagas: campo ausente segue compatível, a edição grava
+  // somente categorias ativas, não cria definições legadas e permite reativar.
+  const zeroId = 'sb_zero-capacity-canonical';
+  const zeroRef = db.collection('sandboxes').doc(zeroId);
+  await zeroRef.set({ id:zeroId, isSandbox:true, sandboxOf:id, sandboxOwnerUid:'sb-owner', sbState:'ready', notificationsMuted:true,
+    creatorUid:'sb-owner', adminUids:['sb-owner'], combinedCategories:['A','B'],
+    categoryDefinitions:[{ id:'cat-a', label:'A', dimension:'skill' }, { id:'cat-b', label:'B', dimension:'skill' }],
+    canonicalRegistrationMigration:{ fingerprint:'zero-capacity-empty', registrationCount:0 },
+    maxParticipantsPerCategory:8, maxParticipants:16, maxParticipantsByCategory:{} });
+  const excludedA = await callFn('updateTournamentConfiguration', { tournamentId:zeroId, sandbox:true,
+    patch:{ combinedCategories:['B'], excludedCategories:['A'], maxParticipantsPerCategory:8, maxParticipants:8,
+      maxParticipantsByCategory:{} } }, owner);
+  assert.equal(excludedA.status, 200, JSON.stringify(excludedA.body));
+  let zeroSaved = (await zeroRef.get()).data();
+  assert.deepEqual(zeroSaved.combinedCategories, ['B']);
+  assert.deepEqual(zeroSaved.excludedCategories, ['A']);
+  assert.deepEqual(zeroSaved.categoryDefinitions.map(item => item.label), ['B']);
+  const reactivated = await callFn('updateTournamentConfiguration', { tournamentId:zeroId, sandbox:true,
+    patch:{ combinedCategories:['A','B'], excludedCategories:[], maxParticipantsPerCategory:8, maxParticipants:16,
+      maxParticipantsByCategory:{} } }, owner);
+  assert.equal(reactivated.status, 200, JSON.stringify(reactivated.body));
+  zeroSaved = (await zeroRef.get()).data();
+  assert.deepEqual(zeroSaved.excludedCategories, []);
+  assert.deepEqual(zeroSaved.categoryDefinitions.map(item => item.label), ['A','B']);
+  assert.equal(zeroSaved.canonicalRegistrationMigration.registrationCount, 0);
+  const missingExclusions = await callFn('updateTournamentConfiguration', { tournamentId:zeroId, sandbox:true,
+    patch:{ name:'Compatível sem migração' } }, owner);
+  assert.equal(missingExclusions.status, 200, 'campo ausente permanece equivalente a lista vazia');
+  console.log('✓ zero vagas exclui uma categoria isolada e valor positivo a reativa no contrato canônico');
+
+  const assignedZeroId = 'sb_zero-capacity-assigned';
+  const assignedZeroRef = db.collection('sandboxes').doc(assignedZeroId);
+  await assignedZeroRef.set({ id:assignedZeroId, isSandbox:true, sandboxOf:id, sandboxOwnerUid:'sb-owner', sbState:'ready', notificationsMuted:true,
+    creatorUid:'sb-owner', adminUids:['sb-owner'], combinedCategories:['A','B'],
+    categoryDefinitions:[{ id:'cat-a', label:'A', dimension:'skill' }, { id:'cat-b', label:'B', dimension:'skill' }],
+    canonicalRegistrationMigration:{ fingerprint:'zero-capacity-assigned', registrationCount:1 },
+    maxParticipantsPerCategory:8, maxParticipants:16, maxParticipantsByCategory:{} });
+  await assignedZeroRef.collection('registrations').doc('assigned-a').set({
+    registrationId:'assigned-a', status:'confirmed', participantKind:'manual', participantKey:'manual:assigned-a',
+    manualParticipantId:'assigned-a', manualDisplayName:'Inscrito A', categoryId:'cat-a', enrollSeq:1 });
+  const assignedRemoval = await callFn('updateTournamentConfiguration', { tournamentId:assignedZeroId, sandbox:true,
+    patch:{ combinedCategories:['B'], excludedCategories:['A'], maxParticipantsPerCategory:8, maxParticipants:8,
+      maxParticipantsByCategory:{} } }, owner);
+  assert.equal(assignedRemoval.body.error.status, 'FAILED_PRECONDITION', 'categoria com inscrição vinculada não pode ser zerada');
+  assert.deepEqual((await assignedZeroRef.get()).data().combinedCategories, ['A','B'], 'recusa não grava parte da exclusão');
+  console.log('✓ exclusão de categoria vinculada a inscrição é recusada sem escrita');
+
   // Trocar a tela exibida durante os jogos é uma atualização pontual: não
   // regrava as posições salvas nem a tela principal do torneio.
   const tvCore = require('./tv-layout-core');

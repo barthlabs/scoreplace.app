@@ -1,3 +1,5 @@
+- O servidor recusa exclusões que afetem inscrições, reservas, preços por categoria ou uma chave já materializada. Vagas de uma chave oficial sem origem de grupo disponível continuam pendentes até poderem ser resolvidas.
+
 ## 2.7.11 — 15/nov/2026 (cabeçalho web móvel)
 
 - Marca e ações do cabeçalho passam a ser renderizadas em camadas separadas no celular, como tentativa de corrigir o desfoque visto no atalho web instalado no iPhone; a nitidez precisa de confirmação no aparelho.
@@ -3249,3 +3251,7 @@ processo.
 - O Camis Day usa a ordem oficial dos grupos na chave Ouro: G1×G2, G3×G4, G5×G6, G7×G8, G9×G10, G11×G12, G13×G14 e G15×G16. A dupla do G4 segue a planilha oficial. A materialização final preserva os jogos das oitavas já chamados e seus placares.
 - A fila da operação aceita confrontos Ouro já definidos antes do fechamento dos outros grupos e não espera a classificatória Ouro para chamar jogos Diamante prontos. Os seletores da chave acompanham a liberação de quadras em tempo real.
 - A TV e a operação identificam os confrontos Ouro publicados como oitavas de final e incluem os próximos jogos já definidos. A grade intercalada aceita a publicação gradual da rodada oficial.
+## 2.7.41 — 18/nov/2026 (categorias opcionais por capacidade)
+
+- O organizador pode definir zero vagas no modo de capacidade personalizada para retirar uma categoria isolada do torneio. A categoria some da lista ativa e do total, enquanto as demais continuam; ao informar um inteiro positivo, ela volta com aquela capacidade.
+- O preview mostra as vagas junto ao nome de cada categoria. Fichas e templates persistem as exclusões; torneios anteriores sem o campo continuam compatíveis sem migração dos documentos existentes.

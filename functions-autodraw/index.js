@@ -573,9 +573,9 @@ async function _assertCategoryConfigBeforeDraw(tx, ref, t) {
 }
 
 // Uma lista de rótulos não carrega a identidade de uma renomeação. Reusar o ID
-// pelo rótulo estável; categorias excluídas retiram só aquela inscrição e
-// deixam a pessoa sem categoria quando não houver outra inscrição ativa.
-async function _categoryDefinitionsForLabels(tx, ref, t, combinedCategories) {
+// pelo rótulo estável; a ficha pode pedir recusa antes de planejar qualquer
+// mudança em inscrições ligadas às categorias removidas.
+async function _categoryDefinitionsForLabels(tx, ref, t, combinedCategories, options) {
   const legacy = require('./vendor/legacy-category-definition-core.js');
   const eligibility = require('./vendor/category-eligibility-core.js');
   let labels, projected;
@@ -606,6 +606,9 @@ async function _categoryDefinitionsForLabels(tx, ref, t, combinedCategories) {
       if (doc.id !== item.registrationId) throw new HttpsError('failed-precondition', 'Inscrição canônica sem ID estrutural.');
       return item;
     });
+    if (options && options.rejectAssignedRemoval && registrations.some(item => removed.has(String(item.categoryId || '')))) {
+      throw new HttpsError('failed-precondition', 'Não é possível retirar uma categoria com inscrições vinculadas.');
+    }
     try {
       removal = require('./vendor/category-removal-core').plan(ref.id, registrations, [...removed]);
       _registrationRoster.rosterFromRegistrations(removal.nextRegistrations);
@@ -5604,7 +5607,14 @@ exports.deleteEmptyTournamentCategory = onCall(async (request) => {
       await _assertCategoryConfigBeforeDraw(tx, ref, t);
       if (!Array.isArray(t.categoryDefinitions)) throw new HttpsError('failed-precondition', 'Definições canônicas de categoria ausentes.');
       const matches = t.categoryDefinitions.filter(def => def && def.label === category);
-      if (matches.length !== 1) return { ok:true, changed:false, outcome:'missing' };
+      const excluded = Array.isArray(t.excludedCategories) ? t.excludedCategories : [];
+      const normalize = label => String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
+      const nextExcluded = excluded.filter(label => normalize(label) !== normalize(category));
+      if (matches.length !== 1) {
+        if (nextExcluded.length === excluded.length) return { ok:true, changed:false, outcome:'missing' };
+        tx.update(ref, { excludedCategories:nextExcluded, updatedAt:FieldValue.serverTimestamp() });
+        return { ok:true, changed:true, outcome:'exclusion-cleared' };
+      }
       const definition = matches[0];
       const prices = t.registrationSettings && t.registrationSettings.pricing;
       if ((prices && prices.mode === 'category' && Object.prototype.hasOwnProperty.call(prices.centsByCategory || {}, category))
@@ -5621,10 +5631,15 @@ exports.deleteEmptyTournamentCategory = onCall(async (request) => {
       return { ok:true, changed:true, outcome:'deleted' };
     }
     _assertLegacyRosterMutationAllowed(t, 'exclusão legada de categoria');
+    const excluded = Array.isArray(t.excludedCategories) ? t.excludedCategories : [];
+    const normalize = label => String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
+    const nextExcluded = excluded.filter(label => normalize(label) !== normalize(category));
+    const exclusionCleared = nextExcluded.length !== excluded.length;
     const before = _antesDoMotor(t), outcome = drawWindow._categoryMutationsCore.deleteEmpty(t, category);
-    if (outcome !== true) return { ok: true, changed: false, outcome };
+    if (outcome !== true && !exclusionCleared) return { ok: true, changed: false, outcome };
+    if (exclusionCleared) t.excludedCategories = nextExcluded;
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
-    return { ok: true, changed: true, outcome: 'deleted', tournament: b.clean };
+    return { ok: true, changed: true, outcome: outcome === true ? 'deleted' : 'exclusion-cleared', tournament: b.clean };
   });
 });
 
@@ -5902,7 +5917,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
    * motor, que cai em `repescagem` diante de qualquer coisa que não reconheça. */
   'politicaDaChave',
   'phase1Name','rankingPrimary','tiebreakers','tiebreakersExcluded','advancedScoring','tvLayout','tvScreens','tvActiveScreen','genderCategories',
-  'skillCategories','ageCategories','customCategories','combinedCategories','rigor','rigorRequire',
+  'skillCategories','ageCategories','customCategories','combinedCategories','excludedCategories','rigor','rigorRequire',
   'fmt2','phases'
 ]);
 /* ⛔ `roundBounds` NÃO É ESTRUTURA — É CALENDÁRIO. Relato do dono (12/set/2026, Confra com a
@@ -6087,6 +6102,12 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       if (!Number.isInteger(raw[key]) || raw[key] < 0 || raw[key] > 11)
         throw new HttpsError('invalid-argument', 'Tela No ar inválida.');
       patch[key] = raw[key];
+    } else if (key === 'excludedCategories') {
+      if (!Array.isArray(raw[key]) || raw[key].length > 128 || raw[key].some(label =>
+        typeof label !== 'string' || !label.trim() || label.trim().length > 160 || /[\x00-\x1f\x7f]/.test(label))) {
+        throw new HttpsError('invalid-argument', 'Categorias excluídas inválidas.');
+      }
+      patch[key] = raw[key].map(label => label.trim());
     } else patch[key] = _clonaConfigDeclarativa(raw[key], 0, [key]);
   });
   if ('titleColor' in patch && (typeof patch.titleColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(patch.titleColor))) {
@@ -6188,22 +6209,84 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           'Já existe inscrição com cobrança. Valor, repasse da taxa e meios de pagamento não podem mudar neste torneio.');
       }
     }
-    const categoryKeys = ['genderCategories', 'skillCategories', 'ageCategories', 'customCategories', 'combinedCategories'];
-    const categoryChanged = categoryKeys.some((key) => Object.prototype.hasOwnProperty.call(patch, key) &&
+    const categoryKeys = ['genderCategories', 'skillCategories', 'ageCategories', 'customCategories', 'combinedCategories', 'excludedCategories'];
+    const normalizeCategory = label => String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
+    const normalizedList = value => (Array.isArray(value) ? value : []).map(normalizeCategory).sort();
+    const exclusionsBefore = normalizedList(t.excludedCategories);
+    const exclusionsAfter = normalizedList(Object.prototype.hasOwnProperty.call(patch, 'excludedCategories') ? patch.excludedCategories : t.excludedCategories);
+    const exclusionDrivenChange = exclusionsBefore.length !== exclusionsAfter.length || exclusionsBefore.some((label, i) => label !== exclusionsAfter[i]);
+    const axesChanged = categoryKeys.slice(0, 4).some((key) => Object.prototype.hasOwnProperty.call(patch, key) &&
       JSON.stringify(patch[key]) !== JSON.stringify(t[key]));
+    const gameTypesChanged = Object.prototype.hasOwnProperty.call(patch, 'gameTypes') && !_configAtiva.igual(patch.gameTypes, t.gameTypes);
+    const safeExclusionEdit = exclusionDrivenChange && Object.prototype.hasOwnProperty.call(patch, 'combinedCategories') && !axesChanged && !gameTypesChanged;
+    const categoryChanged = categoryKeys.slice(0, 5).some((key) => Object.prototype.hasOwnProperty.call(patch, key) &&
+      JSON.stringify(patch[key]) !== JSON.stringify(t[key]));
+    const categoryConfigChanged = categoryChanged || exclusionDrivenChange;
+    let exclusionGuardChecked = false;
+    if (exclusionDrivenChange) {
+      if (!Object.prototype.hasOwnProperty.call(patch, 'combinedCategories')) {
+        throw new HttpsError('failed-precondition', 'A lista de categorias ativas é obrigatória ao excluir uma categoria.');
+      }
+      if (patch.excludedCategories.length && !patch.combinedCategories.length) {
+        throw new HttpsError('failed-precondition', 'Mantenha ao menos uma categoria ativa.');
+      }
+      const previousLabels = Array.isArray(t.combinedCategories) ? t.combinedCategories : [];
+      const nextLabels = patch.combinedCategories;
+      const nextSet = new Set(nextLabels.map(normalizeCategory));
+      const removedLabels = previousLabels.filter(label => !nextSet.has(normalizeCategory(label)));
+      const excludedSet = new Set(patch.excludedCategories.map(normalizeCategory));
+      if (removedLabels.some(label => !excludedSet.has(normalizeCategory(label)))) {
+        throw new HttpsError('failed-precondition', 'Categoria removida sem exclusão explícita.');
+      }
+      await _assertCategoryConfigBeforeDraw(tx, ref, t);
+      exclusionGuardChecked = true;
+      const prices = t.registrationSettings && t.registrationSettings.pricing;
+      const priced = prices && prices.mode === 'category' ? Object.keys(prices.centsByCategory || {}) : [];
+      if (removedLabels.some(label => priced.some(name => normalizeCategory(name) === normalizeCategory(label)))) {
+        throw new HttpsError('failed-precondition', 'Remova o preço específico antes de excluir a categoria.');
+      }
+      const removedIds = new Set();
+      if (t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) {
+        (Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : []).forEach(def => {
+          if (def && removedLabels.some(label => normalizeCategory(label) === normalizeCategory(def.label))) removedIds.add(def.id);
+        });
+        if ((Array.isArray(t.placeholderReservations) ? t.placeholderReservations : []).some(item => item && removedIds.has(item.categoryId))) {
+          throw new HttpsError('failed-precondition', 'Remova ou reatribua as reservas antes de excluir a categoria.');
+        }
+      } else {
+        if (!drawWindow || typeof drawWindow._getParticipantCategories !== 'function') {
+          throw new HttpsError('failed-precondition', 'Não foi possível conferir as categorias dos participantes.');
+        }
+        const participants = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+        const removedSet = new Set(removedLabels.map(normalizeCategory));
+        if (participants.some(person => drawWindow._getParticipantCategories(person).some(name => removedSet.has(normalizeCategory(name))))) {
+          throw new HttpsError('failed-precondition', 'Reatribua os participantes antes de excluir a categoria.');
+        }
+        try {
+          const legacy = require('./vendor/legacy-category-definition-core.js');
+          const projected = legacy.projectedDefinitions({ combinedCategories:previousLabels }, []).definitions;
+          projected.forEach(def => { if (removedLabels.some(label => normalizeCategory(label) === normalizeCategory(def.label))) removedIds.add(def.id); });
+        } catch (error) { throw new HttpsError('failed-precondition', 'Não foi possível conferir as reservas da categoria.'); }
+        if ((Array.isArray(t.placeholderReservations) ? t.placeholderReservations : []).some(item => item && removedIds.has(item.categoryId))) {
+          throw new HttpsError('failed-precondition', 'Remova ou reatribua as reservas antes de excluir a categoria.');
+        }
+      }
+    }
     let categoryChange = null;
-    if (categoryChanged && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) {
-      const axesChanged = categoryKeys.slice(0, 4).some((key) => Object.prototype.hasOwnProperty.call(patch, key) &&
-        JSON.stringify(patch[key]) !== JSON.stringify(t[key]));
+    if (categoryConfigChanged && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) {
       // O seletor de tipo de jogo recompõe os rótulos combinados mesmo quando
       // gênero/habilidade não mudam. Isso é uma edição legítima da ficha.
-      if (!axesChanged && !Object.prototype.hasOwnProperty.call(patch, 'gameTypes') &&
+      if (!safeExclusionEdit && !axesChanged && !Object.prototype.hasOwnProperty.call(patch, 'gameTypes') &&
           Object.prototype.hasOwnProperty.call(patch, 'combinedCategories')) {
         throw new HttpsError('failed-precondition', 'Categorias foram editadas em outra tela. Recarregue antes de alterá-las.');
       }
-      await _assertCategoryConfigBeforeDraw(tx, ref, t);
+      if (!exclusionGuardChecked) await _assertCategoryConfigBeforeDraw(tx, ref, t);
       const finalLabels = Object.prototype.hasOwnProperty.call(patch, 'combinedCategories') ? patch.combinedCategories : t.combinedCategories;
-      categoryChange = await _categoryDefinitionsForLabels(tx, ref, t, finalLabels || []);
+      categoryChange = await _categoryDefinitionsForLabels(tx, ref, t, finalLabels || [], { rejectAssignedRemoval:exclusionDrivenChange });
+      if (exclusionDrivenChange && ((categoryChange.removal && (categoryChange.removal.updates.length || categoryChange.removal.creates.length)) ||
+          (categoryChange.reservations && JSON.stringify(categoryChange.reservations) !== JSON.stringify(t.placeholderReservations || [])))) {
+        throw new HttpsError('failed-precondition', 'A exclusão alteraria inscrições ou reservas existentes.');
+      }
       patch.categoryDefinitions = categoryChange.definitions;
     }
     const hasDraw = hasDrawnBracket(t);
@@ -6216,7 +6299,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           'Pontuação e desempates ficam definidos no primeiro sorteio. (recusado: ' + changedStandings.join(', ') + ')');
       }
     }
-    const planInputsChanged = categoryChanged || ['courtCount', 'gameDuration', 'callTime', 'warmupTime',
+    const planInputsChanged = categoryConfigChanged || ['courtCount', 'gameDuration', 'callTime', 'warmupTime',
       'maxParticipantsPerCategory', 'maxParticipantsByCategory'].some(key =>
       Object.prototype.hasOwnProperty.call(patch, key) && !_configAtiva.igual(patch[key], t[key]));
     if (patch.scheduleWindow !== undefined || planInputsChanged || patch.startDate !== undefined || patch.endDate !== undefined) {

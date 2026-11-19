@@ -3972,7 +3972,8 @@ function setupCreateTournamentModal() {
     });
   };
 
-  window._updateCategoryPreview = function() {
+  window._updateCategoryPreview = function(options) {
+    options = options || {};
     // ⭐ 2.1: a seção de proporção depende das categorias de gênero — ligar "Fem" faz o sorteio
     // rodar homogêneo e a seção sai de cena. Repintar aqui é o que casa as duas coisas, e é o
     // mesmo gancho que serve pra abertura do form e pra edição.
@@ -4052,9 +4053,17 @@ function setupCreateTournamentModal() {
       ageCombined = ageBaseCats;
     }
 
+    var excludedInput = document.getElementById('tourn-excluded-categories');
+    var excluded = [];
+    try { excluded = JSON.parse((excludedInput || {}).value || '[]') || []; } catch (e) {}
+    var normalizeCategory = function(label) { return String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR'); };
+    var excludedSet = new Set(excluded.map(normalizeCategory));
+    combined = combined.filter(function(c) { return !excludedSet.has(normalizeCategory(c)); });
+    ageCombined = ageCombined.filter(function(c) { return !excludedSet.has(normalizeCategory(c)); });
+
     if (combined.length === 0 && ageCombined.length === 0) {
       preview.style.display = 'none';
-      if (typeof window._syncCategoryCapacity === 'function') window._syncCategoryCapacity();
+      if (!options.skipCapacitySync && typeof window._syncCategoryCapacity === 'function') window._syncCategoryCapacity();
       if (typeof window._renderEstimatedGameHours === 'function') window._renderEstimatedGameHours();
       return;
     }
@@ -4098,10 +4107,12 @@ function setupCreateTournamentModal() {
       if (skill.length === 0 && age.length === 0) return;
       var rowHtml = '<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">';
       skill.forEach(function(c) {
-        rowHtml += '<span style="padding:3px 10px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.25);border-radius:6px;color:var(--sp-c-d8b4fe,#d8b4fe);font-weight:600;">' + c + '</span>';
+        var cap = window._categoryPreviewCapacity ? window._categoryPreviewCapacity(c) : '';
+        rowHtml += '<span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.25);border-radius:6px;color:var(--sp-c-d8b4fe,#d8b4fe);font-weight:600;">' + c + (cap ? '<small style="opacity:.8;font-weight:500;white-space:nowrap;">' + cap + ' vagas</small>' : '') + '</span>';
       });
       age.forEach(function(c) {
-        rowHtml += '<span style="padding:3px 10px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.30);border-radius:6px;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;">' + c + '</span>';
+        var cap = window._categoryPreviewCapacity ? window._categoryPreviewCapacity(c) : '';
+        rowHtml += '<span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.30);border-radius:6px;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;">' + c + (cap ? '<small style="opacity:.8;font-weight:500;white-space:nowrap;">' + cap + ' vagas</small>' : '') + '</span>';
       });
       rowHtml += '</div>';
       rows.push(rowHtml);
@@ -4109,7 +4120,7 @@ function setupCreateTournamentModal() {
 
     list.innerHTML = rows.join('');
     preview.style.display = '';
-    if (typeof window._syncCategoryCapacity === 'function') window._syncCategoryCapacity();
+    if (!options.skipCapacitySync && typeof window._syncCategoryCapacity === 'function') window._syncCategoryCapacity();
     if (typeof window._renderEstimatedGameHours === 'function') window._renderEstimatedGameHours();
   };
 
@@ -4159,7 +4170,14 @@ function setupCreateTournamentModal() {
       });
     });
     combined = combined.filter(function (name, index) { return combined.indexOf(name) === index; });
-    return { genderCategories: genderVals, skillCategories: skillCats, ageCategories: ageCats, customCategories: customCats, combinedCategories: combined };
+    var excludedInput = document.getElementById('tourn-excluded-categories');
+    var excluded = [];
+    try { excluded = JSON.parse((excludedInput || {}).value || '[]') || []; } catch (e) {}
+    var normalizeCategory = function(label) { return String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR'); };
+    var excludedSet = new Set(excluded.map(normalizeCategory));
+    var active = combined.filter(function(name) { return !excludedSet.has(normalizeCategory(name)); });
+    return { genderCategories: genderVals, skillCategories: skillCats, ageCategories: ageCats, customCategories: customCats,
+      allCombinedCategories: combined, combinedCategories: active, excludedCategories: excluded.filter(function(name) { return combined.some(function(c) { return normalizeCategory(c) === normalizeCategory(name); }); } ) };
   };
 
   window._syncCategoryCapacity = function(options) {
@@ -4177,6 +4195,8 @@ function setupCreateTournamentModal() {
 
     var catData = window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {};
     var categories = Array.isArray(catData.combinedCategories) ? catData.combinedCategories : [];
+    var allCategories = Array.isArray(catData.allCombinedCategories) ? catData.allCombinedCategories : categories;
+    var excludedSet = new Set((catData.excludedCategories || []).map(function(label) { return String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR'); }));
     var count = categories.length;
     var guard = window._categoryCapacityLoadGuard;
     var sameGuardCategories = guard && categories.length === guard.categories.length &&
@@ -4185,9 +4205,9 @@ function setupCreateTournamentModal() {
       window._categoryCapacityLoadGuard = null;
       guard = null;
     }
-    section.style.display = count > 0 ? '' : 'none';
+    section.style.display = allCategories.length > 0 ? '' : 'none';
     if (generalControl) generalControl.style.display = custom.checked ? 'none' : '';
-    if (legacyContainer) legacyContainer.style.display = count > 0 ? 'none' : '';
+    if (legacyContainer) legacyContainer.style.display = allCategories.length > 0 ? 'none' : '';
     total.readOnly = count > 0;
 
     // Torneios legados só têm o total. Na primeira edição, recuperamos o valor por
@@ -4210,12 +4230,12 @@ function setupCreateTournamentModal() {
       });
     }
     mapInput.value = JSON.stringify(effective);
-    grid.style.display = count > 0 && custom.checked ? 'grid' : 'none';
-    if (custom.checked && count > 0) {
+    grid.style.display = allCategories.length > 0 && custom.checked ? 'grid' : 'none';
+    if (custom.checked && allCategories.length > 0) {
       var escape = function(s) { return String(s).replace(/[&<>"']/g, function(ch) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]; }); };
-      grid.innerHTML = categories.map(function(category) {
+      grid.innerHTML = allCategories.map(function(category) {
         return '<label style="display:block;padding:8px;border:1px solid rgba(16,185,129,.28);border-radius:8px;font-size:.76rem;color:var(--text-main);">' + escape(category) +
-          '<input type="number" min="1" inputmode="numeric" data-category="' + encodeURIComponent(category) + '" value="' + (effective[category] || '') + '" oninput="window._setCategoryCapacityValue(this)" aria-label="Máximo de participantes em ' + escape(category) + '" style="display:block;width:8ch;max-width:100%;margin-top:5px;padding:7px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);box-sizing:content-box;"></label>';
+          '<input type="number" min="0" inputmode="numeric" data-category="' + encodeURIComponent(category) + '" value="' + (excludedSet.has(String(category).trim().normalize('NFKC').toLocaleLowerCase('pt-BR')) ? '0' : (effective[category] || '')) + '" oninput="window._setCategoryCapacityValue(this)" aria-label="Máximo de participantes em ' + escape(category) + '" style="display:block;width:5ch;max-width:100%;margin-top:5px;padding:7px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);box-sizing:content-box;"></label>';
       }).join('');
     } else grid.innerHTML = '';
     if (guard && !custom.checked && validGeneral && guard.total > 0 && guard.total !== per * count) {
@@ -4229,9 +4249,14 @@ function setupCreateTournamentModal() {
         : count + ' categoria' + (count === 1 ? '' : 's') + ' × ' + per + ' participante' + (per === 1 ? '' : 's') + ' = ' + calculated + ' vagas no total.';
     } else if (count > 0 && summary) {
       summary.textContent = 'Defina a capacidade por categoria para calcular o total de vagas.';
+    } else if (allCategories.length > 0 && summary) {
+      summary.textContent = 'Todas as categorias estão sem vagas. Reative ao menos uma para salvar.';
     }
     if (typeof window._updateAutoCloseVisibility === 'function') window._updateAutoCloseVisibility();
     if (typeof window._recalcDuration === 'function') window._recalcDuration();
+    if (typeof window._updateCategoryPreview === 'function' && !options.skipPreviewUpdate) {
+      window._updateCategoryPreview({ skipCapacitySync:true });
+    }
   };
 
   window._toggleCategoryCapacity = function(enabled) {
@@ -4239,15 +4264,41 @@ function setupCreateTournamentModal() {
     if (!enabled && input) input.value = '{}';
     window._syncCategoryCapacity({userChanged:true});
   };
+  window._categoryPreviewCapacity = function(category) {
+    var custom = document.getElementById('tourn-custom-category-capacity');
+    if (custom && custom.checked) {
+      var map = {}; try { map = JSON.parse((document.getElementById('tourn-max-by-category') || {}).value || '{}') || {}; } catch (e) {}
+      if (Number(map[category]) > 0) return Number(map[category]);
+      var data = (window._getCreateFormCategoryData && window._getCreateFormCategoryData()) || {};
+      var display = (typeof window._displayCategoryName === 'function') ? window._displayCategoryName : function(name) { return name; };
+      var matches = (data.combinedCategories || []).filter(function(name) { return display(name) === category && Number(map[name]) > 0; });
+      var values = Array.from(new Set(matches.map(function(name) { return Number(map[name]); })));
+      return values.length ? values.join('/') : '';
+    }
+    var general = Number((document.getElementById('tourn-max-per-category') || {}).value);
+    return Number.isSafeInteger(general) && general > 0 ? general : '';
+  };
   window._setCategoryCapacityValue = function(input) {
     var hidden = document.getElementById('tourn-max-by-category');
     if (!hidden || !input) return;
     var map = {};
     try { map = JSON.parse(hidden.value || '{}') || {}; } catch (e) {}
     var category = decodeURIComponent(input.getAttribute('data-category') || '');
+    if (input.value === '') return;
     var value = Number(input.value);
-    map[category] = Number.isSafeInteger(value) && value > 0 ? value : 0;
+    var excludedInput = document.getElementById('tourn-excluded-categories');
+    var excluded = [];
+    try { excluded = JSON.parse((excludedInput || {}).value || '[]') || []; } catch (e) {}
+    var normalizeCategory = function(label) { return String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR'); };
+    if (Number.isSafeInteger(value) && value === 0) {
+      delete map[category];
+      if (!excluded.some(function(name) { return normalizeCategory(name) === normalizeCategory(category); })) excluded.push(category);
+    } else if (Number.isSafeInteger(value) && value > 0) {
+      map[category] = value;
+      excluded = excluded.filter(function(name) { return normalizeCategory(name) !== normalizeCategory(category); });
+    } else return;
     hidden.value = JSON.stringify(map);
+    if (excludedInput) excludedInput.value = JSON.stringify(excluded);
     // Não recriar o campo durante a digitação; o cursor permanece na mesma posição.
     var total = document.getElementById('tourn-max-participants');
     var summary = document.getElementById('category-capacity-summary');
@@ -4255,6 +4306,7 @@ function setupCreateTournamentModal() {
     var calculated = categories.reduce(function(sum, name) { return sum + (Number(map[name]) || 0); }, 0);
     if (total) total.value = String(calculated);
     if (summary) summary.textContent = categories.map(function(name) { return name + ': ' + (map[name] || '—'); }).join(' · ') + ' = ' + calculated + ' vagas no total.';
+    if (typeof window._updateCategoryPreview === 'function') window._updateCategoryPreview({skipCapacitySync:true});
     if (typeof window._recalcDuration === 'function') window._recalcDuration();
   };
 
@@ -6389,8 +6441,11 @@ function setupCreateTournamentModal() {
     var _catMapEdit = document.getElementById('tourn-max-by-category');
     var _catCustomEdit = document.getElementById('tourn-custom-category-capacity');
     var _savedCatMap = t.maxParticipantsByCategory && typeof t.maxParticipantsByCategory === 'object' ? t.maxParticipantsByCategory : {};
+    var _excludedCatEdit = document.getElementById('tourn-excluded-categories');
+    var _savedExcludedCats = Array.isArray(t.excludedCategories) ? t.excludedCategories : [];
+    if (_excludedCatEdit) _excludedCatEdit.value = JSON.stringify(_savedExcludedCats);
     if (_catMapEdit) _catMapEdit.value = JSON.stringify(_savedCatMap);
-    if (_catCustomEdit) _catCustomEdit.checked = Object.keys(_savedCatMap).length > 0;
+    if (_catCustomEdit) _catCustomEdit.checked = Object.keys(_savedCatMap).length > 0 || _savedExcludedCats.length > 0;
     window._categoryCapacityLoadGuard = { total: Number(t.maxParticipants) || 0, categories: (t.combinedCategories || []).slice() };
     window._updateCategoryPreview();
     // Legado com total exato ganha a leitura por categoria; se não for exato,
@@ -6953,14 +7008,33 @@ window._saveTournamentClickHandler = async function() {
         let maxPartsVal = parseInt(document.getElementById('tourn-max-participants').value) || null;
         const maxPerCategoryVal = parseInt((document.getElementById('tourn-max-per-category') || {}).value, 10) || null;
         const customCategoryCapacity = !!((document.getElementById('tourn-custom-category-capacity') || {}).checked);
-        const capacityCategories = ((window._getCreateFormCategoryData && window._getCreateFormCategoryData()) || {}).combinedCategories || [];
+        const categoryDataForCapacity = ((window._getCreateFormCategoryData && window._getCreateFormCategoryData()) || {});
+        const capacityCategories = categoryDataForCapacity.combinedCategories || [];
+        const allCapacityCategories = categoryDataForCapacity.allCombinedCategories || capacityCategories;
         let maxByCategoryVal = {};
         if (customCategoryCapacity) {
           try { maxByCategoryVal = JSON.parse((document.getElementById('tourn-max-by-category') || {}).value || '{}'); } catch (e) { maxByCategoryVal = {}; }
         }
+        const normalizedExcluded = new Set((categoryDataForCapacity.excludedCategories || []).map(function(label) {
+          return String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
+        }));
+        const categoryCapacityInputs = customCategoryCapacity
+          ? Array.from(document.querySelectorAll('#category-capacity-grid input[data-category]')) : [];
+        const validCategoryInputs = !customCategoryCapacity || (categoryCapacityInputs.length === allCapacityCategories.length &&
+          categoryCapacityInputs.every(function(input) {
+            const category = decodeURIComponent(input.getAttribute('data-category') || '');
+            const value = Number(input.value);
+            const excluded = normalizedExcluded.has(category.trim().normalize('NFKC').toLocaleLowerCase('pt-BR'));
+            return input.value !== '' && Number.isSafeInteger(value) && value >= 0 &&
+              (excluded ? value === 0 : value > 0 && maxByCategoryVal[category] === value);
+          }));
+        if (allCapacityCategories.length && !capacityCategories.length) {
+          showAlertDialog('Vagas por categoria', 'Reative ao menos uma categoria com um número inteiro maior que zero antes de salvar.', null, { type: 'warning' });
+          return;
+        }
         if (capacityCategories.length) {
           const validGeneral = Number.isSafeInteger(maxPerCategoryVal) && maxPerCategoryVal > 0;
-          const validMap = !customCategoryCapacity || (maxByCategoryVal && typeof maxByCategoryVal === 'object' && !Array.isArray(maxByCategoryVal) &&
+          const validMap = !customCategoryCapacity || (validCategoryInputs && maxByCategoryVal && typeof maxByCategoryVal === 'object' && !Array.isArray(maxByCategoryVal) &&
             Object.keys(maxByCategoryVal).length === capacityCategories.length &&
             capacityCategories.every(function(c) { return Number.isSafeInteger(maxByCategoryVal[c]) && maxByCategoryVal[c] > 0; }));
           const expectedCapacity = customCategoryCapacity
@@ -7481,6 +7555,7 @@ window._saveTournamentClickHandler = async function() {
         tourData.ageCategories = catData.ageCategories || []; // v1.2.0
         tourData.customCategories = catData.customCategories || []; // v2.1.80
         tourData.combinedCategories = catData.combinedCategories || [];
+        tourData.excludedCategories = catData.excludedCategories || [];
         // Ausente em torneio antigo não é sinônimo de "gratuito pelo app". Só
         // muda a origem quando o organizador escolher explicitamente; eventos
         // concluídos (como o Neon) não são regravados por esta novidade.
@@ -9168,6 +9243,8 @@ window._prefillFromTemplate = function(tpl) {
     if (typeof window._applyAgeCatUI === 'function') { try { window._applyAgeCatUI(tpl.ageCategories || []); } catch (e) {} }
     // Personalizadas: hidden + chips
     if (typeof window._loadCustomCategoriesFromArray === 'function') { try { window._loadCustomCategoriesFromArray(tpl.customCategories || []); } catch (e) {} }
+    var _tplExcluded = document.getElementById('tourn-excluded-categories');
+    if (_tplExcluded) _tplExcluded.value = JSON.stringify(Array.isArray(tpl.excludedCategories) ? tpl.excludedCategories : []);
     // Recalcula o preview com tudo restaurado
     if (typeof window._updateCategoryPreview === 'function') { try { window._updateCategoryPreview(); } catch (e) {} }
   }
@@ -9176,10 +9253,13 @@ window._prefillFromTemplate = function(tpl) {
   var _tplCatMap = document.getElementById('tourn-max-by-category');
   var _tplCatCustom = document.getElementById('tourn-custom-category-capacity');
   var _tplMap = tpl.maxParticipantsByCategory && typeof tpl.maxParticipantsByCategory === 'object' ? tpl.maxParticipantsByCategory : {};
+  var _tplExcluded = document.getElementById('tourn-excluded-categories');
+  if (_tplExcluded) _tplExcluded.value = JSON.stringify(Array.isArray(tpl.excludedCategories) ? tpl.excludedCategories : []);
   if (_tplCatMap) _tplCatMap.value = JSON.stringify(_tplMap);
-  if (_tplCatCustom) _tplCatCustom.checked = Object.keys(_tplMap).length > 0;
+  if (_tplCatCustom) _tplCatCustom.checked = tpl.customCategoryCapacity === true || Object.keys(_tplMap).length > 0 || (Array.isArray(tpl.excludedCategories) && tpl.excludedCategories.length > 0);
   window._categoryCapacityLoadGuard = { total: Number(tpl.maxParticipants) || 0, categories: (tpl.combinedCategories || []).slice() };
   if (typeof window._syncCategoryCapacity === 'function') { try { window._syncCategoryCapacity({ deriveFromTotal: true }); } catch (e) {} }
+  if (typeof window._updateCategoryPreview === 'function') { try { window._updateCategoryPreview({ skipCapacitySync:true }); } catch (e) {} }
 
   // v4.4.x (Camada 2): CONFIG DE FORMATO — restaura a config do configurador único (format2)
   // salva em tpl.fmt2. É a fonte única de t.phases. Setamos como config pendente e remontamos
@@ -9618,6 +9698,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
   // v2.1.32: o template grava ABSOLUTAMENTE TODAS as configs (menos dados de
   // instância: nome do torneio, datas, organizador, inscritos, logo gerada).
   var ageCats = (get('tourn-age-categories') || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var categorySnapshot = (window._getCreateFormCategoryData && window._getCreateFormCategoryData()) || {};
   if (typeof showInputDialog !== 'function') return;
   showInputDialog(_t('template.namePrompt') || 'Nome do template', defaultName, function(templateName) {
     if (!templateName || !templateName.trim()) return;
@@ -9637,7 +9718,8 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       skillCategories: skillCats,
       ageCategories: ageCats,
       customCategories: customCats,
-      combinedCategories: combinedCats,
+      combinedCategories: categorySnapshot.combinedCategories || combinedCats,
+      excludedCategories: categorySnapshot.excludedCategories || [],
       enrollmentMode: get('select-inscricao') || 'individual',
       mixedPairingSeparated: get('mixed-pairing-separated') === 'true',
       teamSize: parseInt(get('tourn-team-size')) || 1,
@@ -9647,6 +9729,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       waitlistCallPolicy: getChecked('waitlist-enabled') ? 'enrollment_order' : null,
       maxParticipantsPerCategory: parseInt(get('tourn-max-per-category')) || '',
       maxParticipantsByCategory: (function() { try { return getChecked('tourn-custom-category-capacity') ? JSON.parse(get('tourn-max-by-category') || '{}') : {}; } catch (e) { return {}; } })(),
+      customCategoryCapacity: getChecked('tourn-custom-category-capacity'),
       autoCloseOnFull: getChecked('tourn-auto-close'),
       enrollmentLimitMode: get('enrollment-limit-mode') || 'cap',
       targetSlots: parseInt(get('tourn-target-slots')) || '',

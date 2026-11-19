@@ -18,6 +18,18 @@ const custom = Object.assign({}, base, { maxParticipants: 128, maxParticipantsBy
   'Fem Light': 32, 'Fem Power': 16, 'Fem Extreme': 16, 'Masc Light': 32, 'Masc Power': 16, 'Masc Extreme': 16
 } });
 check('capacidade personalizada soma 128', () => validateCapacityConfig(custom, HttpsError), false);
+check('campo excludedCategories ausente continua compatível com torneios anteriores', () => validateCapacityConfig(base, HttpsError), false);
+check('exclusão parcial calcula capacidade somente das categorias ativas', () => validateCapacityConfig({
+  combinedCategories:['Fem Power', 'Fem Extreme', 'Masc Light', 'Masc Power', 'Masc Extreme'], excludedCategories:['Fem Light'],
+  maxParticipantsPerCategory:16, maxParticipants:80, maxParticipantsByCategory:{}
+}, HttpsError), false);
+check('lista de exclusões vazia equivale ao contrato antigo', () => validateCapacityConfig(Object.assign({}, base, { excludedCategories:[] }), HttpsError), false);
+check('rejeita exclusões duplicadas por normalização', () => validateCapacityConfig(Object.assign({}, base, { excludedCategories:['Fem Light',' fem light '] }), HttpsError), true);
+check('rejeita categoria ao mesmo tempo ativa e excluída', () => validateCapacityConfig(Object.assign({}, base, { excludedCategories:['Fem Light'] }), HttpsError), true);
+check('rejeita todas as categorias sem vagas', () => validateCapacityConfig({
+  combinedCategories:[], excludedCategories:base.combinedCategories, maxParticipantsPerCategory:null,
+  maxParticipants:null, maxParticipantsByCategory:{}
+}, HttpsError), true);
 const mapOnly = Object.assign({}, custom, { maxParticipantsPerCategory: null });
 check('mapa completo dispensa vagas gerais', () => validateCapacityConfig(mapOnly, HttpsError), false);
 check('mapa completo sem geral ainda exige total correto', () => validateCapacityConfig(Object.assign({}, mapOnly, { maxParticipants: 127 }), HttpsError), true);

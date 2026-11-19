@@ -7,6 +7,18 @@ function validateCapacityConfig(config, HttpsError, previous) {
   const fail = message => { throw new HttpsError('invalid-argument', message); };
   const c = Object.assign({}, previous || {}, config || {});
   const categories = Array.isArray(c.combinedCategories) ? c.combinedCategories : [];
+  const excluded = c.excludedCategories == null ? [] : c.excludedCategories;
+  if (!Array.isArray(excluded) || excluded.length > 128) fail('Categorias excluídas inválidas.');
+  const normalize = value => String(value || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
+  const excludedSet = new Set();
+  excluded.forEach(label => {
+    if (typeof label !== 'string' || !label.trim() || label.length > 160 || /[\x00-\x1f\x7f]/.test(label)) fail('Categoria excluída inválida.');
+    const key = normalize(label);
+    if (excludedSet.has(key)) fail('Categorias excluídas duplicadas.');
+    excludedSet.add(key);
+  });
+  if (categories.some(label => excludedSet.has(normalize(label)))) fail('Categoria ativa também está excluída.');
+  if (excluded.length && !categories.length) fail('Mantenha ao menos uma categoria ativa.');
   const map = c.maxParticipantsByCategory == null ? {} : c.maxParticipantsByCategory;
   if (!map || typeof map !== 'object' || Array.isArray(map)) fail('Vagas por categoria inválidas.');
   const keys = Object.keys(map);
