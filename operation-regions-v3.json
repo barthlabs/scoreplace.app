@@ -57,7 +57,7 @@
         "us-central1": "https://sp-op-end-court-v3-4f45krjr3a-uc.a.run.app",
         "southamerica-east1": "https://sp-op-end-court-v3-4f45krjr3a-rj.a.run.app"
       },
-      "centralSourceDigest": "de2a563fa2afa6a2aaa627fd944298faef5ade7c7d78ea84b677339cbe64a4c1"
+      "centralSourceDigest": "2f292b1fac61a7a56c913f7a17a012928f6559055d2a1f21eae184f71c36815c"
     },
     "sp-op-control-v3": {
       "digest": "cdea93fc83f9bf293ae73d6d39cd096e9c598cb35b2291b50839b261d954e609",
