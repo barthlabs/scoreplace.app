@@ -58,6 +58,7 @@ const context = {
   _courtOccupancy: require('../js/domain/court-occupancy.js'),
   _phaseCallOrder: require('../js/domain/phase-call-order.js'),
   _activateOfficialPhasePlanOnCall: () => [],
+  _reconcileOfficialPhasePlan: () => {},
   ScoreplaceRefereeRoster: { sanitizeAll: value => value || [] },
   FieldValue: { increment: n => n, delete: () => deleted },
   FieldPath: class { constructor(...segments) { this.segments = segments; } },

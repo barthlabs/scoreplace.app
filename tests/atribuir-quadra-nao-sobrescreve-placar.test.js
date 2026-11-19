@@ -27,8 +27,9 @@ const courtBlockEnd=cf.indexOf('const b = _gravaTorneio',courtBlockStart);
 ok(courtBlockStart>=0 && courtBlockEnd>courtBlockStart, 'regra real da chamada localizada na Function');
 if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
   const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
-  const apply=new AsyncFunction('m','court','confirmCall','agoraIso','_drawFail','tId','matchId','t','drawWindow','_matchTiming','sandbox','_courtOccupancy','_agenda','released','commitReply','uid','_rehearsal','_phaseCallOrder','_activateOfficialPhasePlanOnCall',
-    cf.slice(courtBlockStart,courtBlockEnd)+' return {ok:true,changed:true,courtCalledAt:m.courtCalledAt||null};');
+  const phaseResumeCalls=[];
+  const apply=new AsyncFunction('m','court','confirmCall','agoraIso','_drawFail','tId','matchId','t','drawWindow','_matchTiming','sandbox','_courtOccupancy','_agenda','released','commitReply','uid','_rehearsal','_phaseCallOrder','_activateOfficialPhasePlanOnCall','_reconcileOfficialPhasePlan',
+    'const antes = {};\n' + cf.slice(courtBlockStart,courtBlockEnd)+' return {ok:true,changed:true,courtCalledAt:m.courtCalledAt||null};');
   const _matchTiming=require('../js/domain/match-timing.js');
   const occupancy=require('../js/domain/court-occupancy.js');
   const agenda=require('../functions-autodraw/agenda-core.js');
@@ -36,7 +37,8 @@ if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
     apply(m,court,confirmCall,agoraIso,fail,tId,matchId,t,
       drawWindow ? { ...drawWindow, ScoreplaceNextMatch: drawWindow.ScoreplaceNextMatch || { conflictsWithActive: () => false, knownSide: side => !!side && side !== 'TBD' } } :
         {_collectAllMatches:()=>[m], ScoreplaceNextMatch: { conflictsWithActive: () => false, knownSide: side => !!side && side !== 'TBD' }},
-      _matchTiming,true,occupancy,agenda,{},reply=>reply,'owner',require('../functions-autodraw/tournament-rehearsal.js'),require('../js/domain/phase-call-order.js'),()=>[]);
+      _matchTiming,true,occupancy,agenda,{},reply=>reply,'owner',require('../functions-autodraw/tournament-rehearsal.js'),require('../js/domain/phase-call-order.js'),()=>[],
+      (_tournament,_before,ctx)=>phaseResumeCalls.push(ctx));
   const m={court:'Quadra 4'};
   const event={callTime:5};
   const fail=()=>new Error('precondition');
@@ -44,6 +46,7 @@ if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
   ok(m.courtCalledAt==='2026-10-19T18:00:00Z','OK inicial carimba a chamada');
   const repeat=await testApply(m,'Quadra 4',true,'2026-10-19T18:01:00Z',fail,'t','j',event);
   ok(repeat.changed===false && m.courtCalledAt==='2026-10-19T18:00:00Z','OK repetido conserva o início');
+  ok(phaseResumeCalls.some(ctx=>ctx && ctx.phasePlanResume===true), 'chamada operacional permite retomar o plano de fase legado');
   await testApply(m,'Quadra 5',false,'2026-10-19T18:02:00Z',fail,'t','j',event);
   ok(m.court==='Quadra 5' && m.courtCalledAt==='2026-10-19T18:00:00Z','mudar quadra durante chamada conserva o relógio');
   await testApply(m,'Quadra 5',true,'2026-10-19T18:03:00Z',fail,'t','j',event);
