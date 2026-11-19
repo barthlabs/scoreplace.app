@@ -414,6 +414,16 @@ const { chromium } = require('@playwright/test');
     assert.equal(await popup.evaluate(() => window.__tvStyleVersion),
       await page.evaluate(() => String(window.SCOREPLACE_VERSION || '')),
       'janela No Ar aberta recebe o CSS novo sem precisar ser fechada');
+    await page.waitForFunction(() => {
+      const iframe = document.querySelector('iframe[name="scoreplace-live-tv-tour_1790628592058_c342a1e8f5068424887f1702a1633a44"]');
+      return iframe && document.fullscreenElement === iframe;
+    });
+    await popup.waitForFunction(() => {
+      const titleElement = document.querySelector('.tv-header h1');
+      const clockElement = document.querySelector('#tv-now');
+      if (document.querySelector('#tv-fullscreen-action') || !titleElement || !clockElement) return false;
+      return titleElement.getBoundingClientRect().right <= clockElement.getBoundingClientRect().left;
+    });
     const headerPositions = await popup.evaluate(() => {
       const bounds = selector => document.querySelector(selector).getBoundingClientRect();
       return { title:bounds('.tv-header h1'), action:document.querySelector('#tv-fullscreen-action'), clock:bounds('#tv-now') };
@@ -421,7 +431,6 @@ const { chromium } = require('@playwright/test');
     assert.equal(headerPositions.action, null, 'o botão manual some quando a tela cheia automática já foi ativada');
     assert.ok(headerPositions.title.right <= headerPositions.clock.left,
       'nome e relógio do cabeçalho não se sobrepõem na TV em tela cheia');
-    await page.waitForFunction(() => document.fullscreenElement?.tagName === 'IFRAME');
     assert.equal(await page.evaluate(() => document.fullscreenElement?.getAttribute('title')),
       'TV · TORNEIO REAL DA PRÉVIA', 'a abertura da TV solicita tela cheia dentro do gesto do organizador');
     await page.evaluate(() => window._tvLiveToggle());
