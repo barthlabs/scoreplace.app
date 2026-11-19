@@ -20,6 +20,7 @@ g.window._error = function () {};
 require('./tournaments-utils.js');       // _isLigaFormat
 require('./tournaments-categories.js');  // _sortCategoriesBySkillOrder, _participantInCategory…
 require('./bracket-model.js');           // _appendCanonicalColumn
+require('./standings-core.js');          // _standingsCompareConfig / _standingsOrdemChave
 require('./bracket-logic.js');           // _computeStandings, _generateNextRoundForPlayers, _phaseGenNextLeagueRound
 var E = require('./phases-engine.js');   // buildPhaseLeagueStage, materializeNextPhase
 
@@ -164,6 +165,23 @@ var csId = function (gr) { return gr.standings; };
   // feed-forward: bracketPhaseGroups enxerga os jogos da liga (em phaseRounds) e entrega standings
   var grp = E.bracketPhaseGroups(t, 1);
   ok(Array.isArray(grp) && grp.length >= 1 && grp[0].standings && grp[0].standings.length === 8, 'G: feed-forward da liga → 1 grupo com 8 classificados ordenados');
+})();
+
+// ── (H) legados: draw-two não usa ordem original antes da simples ────────────
+(function () {
+  var matches = [
+    { id: 'legacy-1', p1: 'B', p2: 'C', winner: 'B', scoreP1: 6, scoreP2: 5 },
+    { id: 'legacy-2', p1: 'C', p2: 'A', winner: 'C', scoreP1: 6, scoreP2: 5 },
+    { id: 'legacy-3', p1: 'A', p2: 'B', winner: 'A', scoreP1: 6, scoreP2: 5 }
+  ];
+  var legacy = {
+    fmt2: { tieResolution: 'singles_draw_two' },
+    rankingPrimary: 'wins', tiebreakers: ['vitorias', 'saldo_games', 'sorteio'],
+    participants: ['A', 'B', 'C'], rounds: [{ matches: matches }], matches: []
+  };
+  var rows = g.window._computeStandings(legacy);
+  eq(rows.map(function (row) { return row.name; }), ['A', 'B', 'C'],
+    'H: classificação antiga ignora sorteio após empate em vitórias e saldo, preservando empate para simples');
 })();
 
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phase-brick4: ' + pass + ' asserts ok, ' + fail + ' falharam');

@@ -102,6 +102,12 @@ window._initialDrawPdfPage({ name:'Camis no Beyond', coverColor:'#000000', cover
   coverGradientEnabled:true, coverGradientAngle:135, coverGradientBalance:50, coverGradientBlend:30,
   titleColor:'#FBFBFB', brandColor:'#FFBD4C' }, model.categories[0], model.categories[0].groups, [], 1, 1, null);
 assert(calls.some(c => c[0] === 'text' && c[1] === 'Página 1 de 1' && c[5] === '#000000'), 'o número da página é preto quando o gradiente deixa o rodapé branco');
+calls.length = 0;
+window._initialDrawPdfPage({ name:'CULT. Sol & Saque', coverColor:'#ffffff', coverGradientEnabled:false,
+  titleColor:'#ffffff', brandColor:'#ffffff' }, model.categories[0], model.categories[0].groups, [], 1, 1, null);
+assert(calls.some(c => c[0] === 'rect' && c[5] === '#ffffff'), 'cartão claro mantém a cor de fundo configurada');
+assert(calls.some(c => c[0] === 'text' && c[1] === 'Grupo A1' && c[5] === '#334155'), 'título do grupo tem contraste sobre cartão claro');
+assert(calls.some(c => c[0] === 'text' && String(c[1]).includes('atleta 1a') && c[6] === '#172033'), 'nomes ficam legíveis sobre cartão claro');
 const published = window._publishedInitialDrawData({ matches:draft.draft.matches, competitionTeams:[] });
 assert(published && published.draft.matches.length === 9);
 let visibleResult;

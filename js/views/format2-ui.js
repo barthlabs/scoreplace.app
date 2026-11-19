@@ -263,11 +263,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<h4 style="margin:0 0 5px;color:var(--text-main);">Empate na classificação</h4>' +
       '<p style="margin:0 0 10px;font-size:.8rem;color:var(--text-muted);">Escolha como resolver um empate que afete a classificação.</p>' +
       '<div class="sp-tie-mode-choices" role="group" aria-label="Como desempatar a classificação">' +
-      _pill(singles, "window._f2TieResolution('singles_then_draw')", 'Simples / triangular') +
-      _pill(drawTwo, "window._f2TieResolution('singles_draw_two')", 'Sortear 2 e jogar simples') +
+      _pill(singles, "window._f2TieResolution('singles_then_draw')", 'Simples / triangular direto') +
+      _pill(drawTwo, "window._f2TieResolution('singles_draw_two')", 'Aplicar critérios; depois simples') +
       _pill(!singles && !drawTwo, "window._f2TieResolution('draw_order')", 'Critérios de desempate') + '</div>' +
-      (singles ? '<p style="margin:6px 0 2px;font-size:.76rem;color:var(--text-muted);">Para dois, uma simples; para três, disputa triangular. Se não houver tempo, a organização pode dispensar as partidas e usar a ordem original do sorteio.</p>' + _tieSinglesControls(cfg) : '') +
-      (drawTwo ? '<p style="margin:6px 0 2px;font-size:.76rem;color:var(--text-muted);">Com três ou mais empatados, o sistema sorteia dois atletas para uma simples; se outra posição relevante continuar empatada, sorteia dois entre os restantes. A quantidade de pontos e a vantagem da simples são configuráveis abaixo.</p>' + _tieSinglesControls(cfg) : '') +
+      (singles ? '<p style="margin:6px 0 2px;font-size:.76rem;color:var(--text-muted);">Esta opção vai direto à simples após o critério principal e não usa a lista de critérios secundários. Para dois, joga-se uma simples; para três, uma triangular.</p>' + _tieSinglesControls(cfg) : '') +
+      (drawTwo ? '<p style="margin:6px 0 2px;font-size:.76rem;color:var(--text-muted);">Depois do critério principal, o sistema aplica os critérios secundários acima, na ordem exibida. Só se o empate continuar: duas pessoas jogam uma simples; com três ou mais, sorteia duas para a simples. Se outra posição relevante continuar empatada, sorteia novamente entre as restantes. Pontos e vantagem da simples são configuráveis abaixo.</p>' + _tieSinglesControls(cfg) : '') +
       '</section>';
     _lockDrawnStandings();
   }

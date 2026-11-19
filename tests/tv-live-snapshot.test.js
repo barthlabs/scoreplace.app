@@ -691,6 +691,13 @@ const liveFinal = window._tvLiveBuildSnapshot(t, nowMs).selectedMatches.live1;
 assert.equal(liveFinal.setColumns[0].set.gamesP1, 2, 'final lê os games do placar ao vivo');
 assert.equal(liveFinal.headline, 'AO VIVO · PONTOS 30 × 15', 'final lê os pontos e a conversão do tênis');
 assert.match(tvRoot.innerHTML, /AO VIVO · PONTOS 30 × 15/, 'a janela aberta repinta ao receber um ponto');
+const liveFinalHtml = window._tvLiveBodyHtml(window._tvLiveBuildSnapshot(t, nowMs));
+assert.match(liveFinalHtml, /tv-focus-live-label">PONTOS<\/b>/,
+  'final identifica uma coluna de pontos do game em tempo real');
+assert.match(liveFinalHtml, /tv-focus-set tv-focus-set-win">2<\/span>[\s\S]*tv-focus-live-point" aria-label="Pontos do game">30<\/strong>/,
+  'lado que está com 30 também mostra 2 games no set');
+assert.match(liveFinalHtml, /tv-focus-set tv-focus-set-loss">1<\/span>[\s\S]*tv-focus-live-point" aria-label="Pontos do game">15<\/strong>/,
+  'adversário mostra 15 pontos e 1 game no set');
 liveScoreListener([{kind:'tournament', status:'live', tournamentId:t.id, matchId:'198',
   lastActivityAt:nowMs - 61000, state:{sets:[{gamesP1:2,gamesP2:1}], currentGameP1:2,
     currentGameP2:1, isTiebreak:false, isFinished:false}}]);

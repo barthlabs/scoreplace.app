@@ -1519,6 +1519,7 @@ function setupCreateTournamentModal() {
                   <input type="hidden" id="select-result-entry" value="organizer">
                 </div>
                 <div id="tie-resolution-section"></div>
+                <div id="ranking-order-summary" role="status" aria-live="polite" style="margin:0 0 .8rem;padding:.7rem .8rem;border:1px solid rgba(56,189,248,.28);border-radius:9px;background:rgba(56,189,248,.07);font-size:.8rem;line-height:1.5;color:var(--text-main);"></div>
                 <div id="tiebreaker-criteria-section">
                 <p style="margin: .85rem 0 0.5rem; font-size: 0.8rem; color: var(--sp-c-58a6ff,#58a6ff); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.tiebreakerSection')}</p>
                 <small class="text-muted" style="display:block;margin-bottom:0.5rem;">${_t('create.tiebreakerDesc')}</small>
@@ -1719,11 +1720,42 @@ function setupCreateTournamentModal() {
         points: { key: 'pontos_avancados', label: 'Pontos avançados (PA)' }
       };
       window._updateRankingRecommendations = function() {
+        var primaryInput = document.getElementById('ranking-primary');
+        var primary = primaryInput && primaryInput.value || 'games_diff';
+        var summary = document.getElementById('ranking-order-summary');
+        if (summary) {
+          var labels = { games_diff:'Saldo de games', wins:'Vitórias', points:'Pontos avançados',
+            saldo_games:'Saldo de games', vitorias:'Vitórias', pontos_avancados:'Pontos avançados',
+            confronto_direto:'Confronto direto', saldo_pontos:'Saldo de pontos', saldo_sets:'Saldo de sets',
+            games_vencidos:'Games vencidos', buchholz:'Buchholz', sonneborn_berger:'Sonneborn–Berger',
+            antiguidade:'Antiguidade', juventude:'Juventude', saldo_tiebreaks:'Saldo de tie-breaks',
+            saldo_pontos_tiebreak:'Saldo de pontos de tie-break', sorteio:'Sorteio registrado' };
+          var tieMode = 'draw_order';
+          try {
+            var cfgForSummary = typeof window._f2GetConfig === 'function' ? window._f2GetConfig() : null;
+            if (cfgForSummary && cfgForSummary.tieResolution) tieMode = cfgForSummary.tieResolution;
+          } catch (e) {}
+          var steps = [labels[primary] || primary];
+          var listForSummary = document.getElementById('tiebreaker-list');
+          // O modo triangular legado pula a lista secundária também no salvamento;
+          // não mostre uma ordem que o cálculo não vai executar.
+          if (tieMode !== 'singles_then_draw' && listForSummary) Array.from(listForSummary.querySelectorAll('li[data-tb]')).forEach(function(li) {
+            var key = li.dataset.tb;
+            if (!key || key === 'sorteio' || key === ({ games_diff:'saldo_games', wins:'vitorias', points:'pontos_avancados' })[primary]) return;
+            steps.push(labels[key] || key);
+          });
+          var finalStep = tieMode === 'singles_draw_two'
+            ? 'Simples: se 2 ainda estiverem empatados, jogam entre si; com 3 ou mais, sorteia 2 para a simples e repete o sorteio se outra posição classificatória continuar empatada.'
+            : tieMode === 'singles_then_draw'
+              ? 'Simples/triangular logo após o principal; este modo não aplica a lista de critérios secundários.'
+              : 'Sem simples automática: o empate restante segue a forma de desempate configurada acima.';
+          summary.innerHTML = '<strong>Ordem aplicada automaticamente:</strong> ' + steps.map(function(label, index) {
+            return (index ? ' <span aria-hidden="true">→</span> ' : '') + '<b>' + (index + 1) + '. ' + (window._safeHtml ? window._safeHtml(label) : label) + '</b>';
+          }).join('') + ' <span aria-hidden="true">→</span> <b>' + (steps.length + 1) + '. ' + finalStep + '</b>';
+        }
         var copy = document.getElementById('ranking-recommendations-copy');
         var apply = document.getElementById('ranking-recommendations-apply');
-        var primaryInput = document.getElementById('ranking-primary');
         if (!copy || !apply || !primaryInput) return;
-        var primary = primaryInput.value || 'games_diff';
         var duplicate = _rankingRedundancy[primary];
         if (!duplicate) {
           copy.textContent = 'Não há redundância exata identificada nesta configuração. Os critérios são usados em sequência: cada um só desempata quem continuar empatado nos anteriores.';
@@ -7500,7 +7532,13 @@ window._saveTournamentClickHandler = async function() {
         }
         // A lista vazia é uma escolha explícita: só o critério principal decide
         // a tabela; uma simples pode resolver a fronteira entre destinos.
-        if (_f2cfg && _f2cfg.tieResolution && (!editId || (editingTournament && editingTournament.rulesContractVersion >= 2)) &&
+        if (_f2cfg && _f2cfg.tieResolution === 'singles_draw_two') {
+          // O sorteio dos dois atletas pertence ao método da simples, nunca à
+          // ordem esportiva da classificação. Não o reintroduza no save.
+          tourData.tiebreakers = (tourData.tiebreakers || []).filter(function (key) { return key !== 'sorteio'; });
+          tourData.tiebreakersExcluded = Array.from(new Set((tourData.tiebreakersExcluded || []).concat('sorteio')));
+        } else if (_f2cfg && _f2cfg.tieResolution && _f2cfg.tieResolution !== 'singles_then_draw' &&
+            (!editId || (editingTournament && editingTournament.rulesContractVersion >= 2)) &&
             Array.isArray(tourData.tiebreakers) && tourData.tiebreakers.length) {
           tourData.tiebreakers = tourData.tiebreakers.filter(function (key) { return key !== 'sorteio'; });
           tourData.tiebreakers.push('sorteio');

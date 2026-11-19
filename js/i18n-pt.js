@@ -1939,7 +1939,7 @@ window._translations['pt'] = {
   'create.rankingBlocks': 'Em Blocos',
   'create.rankingTypeHint': 'Personalizado: cada participante recebe colocação específica. Em blocos: eliminados na mesma fase compartilham a colocação.',
   'create.tiebreakerSection': 'Critérios de Desempate (arraste para reordenar)',
-  'create.tiebreakerDesc': 'Opcionais. Deixe a lista vazia para não aplicar critérios adicionais. Arraste para alterar a prioridade.',
+  'create.tiebreakerDesc': 'São aplicados depois do critério principal, na ordem da lista: cada um só entra se o anterior mantiver o empate. Arraste para mudar a prioridade.',
   'create.rankingPrimaryLabel': 'Critério principal da classificação',
   'create.rankingPrimaryPoints': 'Pontos da classificação',
   'create.rankingPrimaryAdvancedPoints': 'Pontos avançados',

@@ -13229,16 +13229,15 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // o substituto convidado já surge nos cards de jogo (via _pendingSub).
           // _woName já foi calculado acima.
           return '<div data-group-box="1"' + (isMyGroup ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(g.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:' + window._spCor(groupBg, 'background') + ';border:1px solid ' + window._spCor(groupBorder, 'borda') + ';border-left:3px solid ' + window._spCor(groupBorderLeft, 'borda') + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
-            // Header do grupo: nome + SEU GRUPO + 👑 Rei/Rainha. Quando NÃO há botões
-            // (_rightCtrl vazio) economiza espaço colocando tudo numa LINHA só (pedido do
-            // dono); com botões, empilha à esquerda e deixa os controles à direita.
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;">' +
-              '<div style="display:flex;' + (_rightCtrl ? 'flex-direction:column;align-items:flex-start;gap:5px;' : 'flex-direction:row;align-items:center;gap:8px;flex-wrap:wrap;') + '">' +
+            // Cabeçalho do grupo: título e identificadores na primeira linha;
+            // ações em uma linha própria abaixo, para não se sobreporem em telas estreitas.
+            '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin-bottom:0.75rem;">' +
+              '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
                 '<span style="display:inline-flex;align-items:center;gap:6px;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(window._bracketMonarchGroupLabel(t, g)) + '</strong>' + statusBadge + '</span>' +
                 (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>' : '') +
                 _monarchBadge +
               '</div>' +
-              (_rightCtrl ? '<span class="btn-row" style="margin-left:auto;display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">' + _rightCtrl + '</span>' : '') +
+              (_rightCtrl ? '<div style="width:100%;box-sizing:border-box;display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-start;">' + _rightCtrl + '</div>' : '') +
             '</div>' +
             // Linha "Jogadores: …" REMOVIDA (pedido do dono — redundante: a classificação
             // do grupo já lista os 4). O ausente de W.O. segue sinalizado na linha de

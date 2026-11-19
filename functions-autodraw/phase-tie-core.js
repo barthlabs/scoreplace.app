@@ -8,12 +8,25 @@ function key(row) {
 }
 
 function canonicalizeTieFallback(config) {
-  if (!config || !config.fmt2 || !['draw_order', 'singles_then_draw'].includes(config.fmt2.tieResolution)) return config;
+  if (!config || !config.fmt2 || !['draw_order', 'singles_then_draw', 'singles_draw_two'].includes(config.fmt2.tieResolution)) return config;
   if (config.fmt2.tieResolution === 'singles_then_draw') {
     const extra = Array.isArray(config.tiebreakers) ? config.tiebreakers : [];
     const excluded = Array.isArray(config.tiebreakersExcluded) ? config.tiebreakersExcluded : [];
     config.tiebreakers = [];
     config.tiebreakersExcluded = [...new Set(excluded.concat(extra))];
+    return config;
+  }
+  // Em `singles_draw_two`, a simples (com sorteio prévio se houver 3+) é a
+  // decisão final depois dos critérios esportivos. Acrescentar `sorteio` à
+  // lista faria o comparador desfazer o empate pela ordem original antes de
+  // `resolvePhaseTies` ter a chance de criar a partida.
+  if (config.fmt2.tieResolution === 'singles_draw_two') {
+    const active = Array.isArray(config.tiebreakers) ? config.tiebreakers : [];
+    const excluded = Array.isArray(config.tiebreakersExcluded) ? config.tiebreakersExcluded : [];
+    config.tiebreakers = active.filter(item => item !== 'sorteio');
+    if (!excluded.includes('sorteio')) {
+      config.tiebreakersExcluded = excluded.concat('sorteio');
+    }
     return config;
   }
   if (Array.isArray(config.tiebreakers) && config.tiebreakers.length) {
@@ -23,6 +36,21 @@ function canonicalizeTieFallback(config) {
     config.tiebreakersExcluded = config.tiebreakersExcluded.filter(item => item !== 'sorteio');
   }
   return config;
+}
+
+// Build an execution-only view of persisted tie rules. Tournament documents
+// may be read by scoring transactions; keep normalization from mutating the
+// live object that the same transaction can write back.
+function canonicalTieFallbackView(config) {
+  if (!config || typeof config !== 'object') return config;
+  const view = Object.assign({}, config, {
+    fmt2: config.fmt2 && typeof config.fmt2 === 'object'
+      ? Object.assign({}, config.fmt2) : config.fmt2,
+    tiebreakers: Array.isArray(config.tiebreakers) ? config.tiebreakers.slice() : config.tiebreakers,
+    tiebreakersExcluded: Array.isArray(config.tiebreakersExcluded)
+      ? config.tiebreakersExcluded.slice() : config.tiebreakersExcluded
+  });
+  return canonicalizeTieFallback(view);
 }
 
 function originalDrawMatches(phaseGames) {
@@ -607,6 +635,6 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
   return { status: 'ready', orderedPools, changed };
 }
 
-module.exports = { key, canonicalizeTieFallback, originalDrawMatches, baseGameNumber, letterIndex,
+module.exports = { key, canonicalizeTieFallback, canonicalTieFallbackView, originalDrawMatches, baseGameNumber, letterIndex,
   drawPosition, rankInitialRows, findBoundaryTie, allBoundaryTies, boundariesFor, matchesFor, drawTwo,
   scoreMatch, rankPlayers, applyOrder, archivePoolDecisions, resolvePhaseTies };

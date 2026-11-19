@@ -4,6 +4,9 @@ const tie = require('../functions-autodraw/phase-tie-core');
 const courts = require('../functions-autodraw/phase-tie-courts');
 const fs = require('fs');
 const operations = fs.readFileSync(require.resolve('../functions-autodraw/index.js'), 'utf8');
+const createTournamentUi = fs.readFileSync(require.resolve('../js/views/create-tournament.js'), 'utf8');
+const storeSource = fs.readFileSync(require.resolve('../js/store.js'), 'utf8');
+const tournamentCreate = fs.readFileSync(require.resolve('../functions-autodraw/tournament-create.js'), 'utf8');
 assert.doesNotMatch(operations, /_phaseTieCourts\.callPending\(/,
   'placar, liberação de quadra e criação do desempate não chamam a simples automaticamente');
 
@@ -20,6 +23,49 @@ const noExtras = { fmt2: { tieResolution: 'singles_then_draw' },
 tie.canonicalizeTieFallback(noExtras);
 assert.deepStrictEqual(noExtras.tiebreakers, [], 'simples com saldo principal não reativa sorteio nem saldo adicional');
 assert.deepStrictEqual(noExtras.tiebreakersExcluded, ['sorteio', 'saldo_games']);
+const orderedDrawTwo = { fmt2: { tieResolution: 'singles_draw_two' },
+  tiebreakers: ['vitorias', 'saldo_games', 'sorteio'], tiebreakersExcluded: [] };
+tie.canonicalizeTieFallback(orderedDrawTwo);
+assert.deepStrictEqual(orderedDrawTwo.tiebreakers, ['vitorias', 'saldo_games'],
+  'simples com sorteio de dois preserva a sequência esportiva sem desempatar pela ordem original antes da partida');
+assert.deepStrictEqual(orderedDrawTwo.tiebreakersExcluded, ['sorteio'],
+  'sorteio final removido da ordem esportiva fica visivelmente em não considerados');
+assert.match(tournamentCreate, /canonicalizeTieFallback\(config\)/,
+  'criação no servidor aplica a mesma regra de fallback ao torneio novo');
+const drawTwoSaveBranch = createTournamentUi.slice(
+  createTournamentUi.indexOf("if (_f2cfg && _f2cfg.tieResolution === 'singles_draw_two')"),
+  createTournamentUi.indexOf('// Sistema de Pontos Avançado', createTournamentUi.indexOf("if (_f2cfg && _f2cfg.tieResolution === 'singles_draw_two')")));
+assert.match(drawTwoSaveBranch, /tiebreakers\s*=.*filter\(function \(key\) \{ return key !== 'sorteio'; \}\)/,
+  'save da ficha não põe sorteio na ordem esportiva em singles_draw_two');
+assert.match(drawTwoSaveBranch, /tiebreakersExcluded\s*=.*concat\('sorteio'\)/,
+  'save da ficha deixa o sorteio visível entre os critérios não considerados');
+const persistedLegacy = { fmt2: { tieResolution: 'singles_draw_two' },
+  tiebreakers: ['vitorias', 'saldo_games', 'sorteio'], tiebreakersExcluded: [] };
+const normalizedLegacyView = tie.canonicalTieFallbackView(persistedLegacy);
+assert.deepStrictEqual(normalizedLegacyView.tiebreakers, ['vitorias', 'saldo_games'],
+  'visão de execução remove fallback antigo antes do cálculo');
+assert.deepStrictEqual(persistedLegacy.tiebreakers, ['vitorias', 'saldo_games', 'sorteio'],
+  'normalização da visão não altera o documento persistido');
+const tDepois = persistedLegacy;
+tDepois.lastScoreOperation = 'score-1';
+const scoreWriteDoc = tDepois;
+assert.deepStrictEqual(scoreWriteDoc.tiebreakers, ['vitorias', 'saldo_games', 'sorteio'],
+  'documento de placar persistido mantém a configuração legada intacta');
+assert.match(storeSource, /_callCF\('updateTournamentConfiguration'/,
+  'edição da ficha grava a configuração pela callable canônica');
+const runtimeStart = operations.indexOf('function _buildPhaseTieRuntime(');
+const runtimeEnd = operations.indexOf('\n// O mesmo motor de desempate', runtimeStart);
+assert.notEqual(runtimeStart, -1);
+assert.match(operations.slice(runtimeStart, runtimeEnd), /canonicalTieFallbackView\(t\)/,
+  'desempate automático usa a cópia normalizada, sem reescrever a ficha lida no placar');
+const scoreStart = operations.indexOf('async function _aplicaPlacarNaTransacao(');
+const scoreEnd = operations.indexOf("exports.applyMatchResult =", scoreStart);
+const scorePath = operations.slice(scoreStart, scoreEnd);
+assert(scoreStart >= 0 && scoreEnd > scoreStart);
+assert(scorePath.indexOf('_antesDoMotor(t)') < scorePath.indexOf('_refreshAutomaticPhaseTies(t'),
+  'o antes-image do placar é capturado antes do refresh automático de desempates');
+assert.match(scorePath, /_gravaTorneio\(tx, ref, t, _tAntes/,
+  'o placar grava o torneio original; a normalização acontece numa cópia de execução');
 const firstDraw = tie.originalDrawMatches([
   { roundIdx: 0, match: { p1: 'B', p2: 'A', round: 3 } },
   { roundIdx: 1, match: { p1: 'A', p2: 'B', round: 1 } }
@@ -322,6 +368,45 @@ assert.equal(autoFlow.decision.matches[0].displayGameNumber, '3A');
 assert.equal(autoFlow.decision.groupName, 'Diamante · Grupo 1');
 assert.equal(autoFlow.decision.reason, 'rule-automatic-singles');
 assert.equal(autoFlow.decision.matches[0].court, undefined, 'quadra é escolhida quando o empate aparece');
+const drawTwoRows = [
+  { uid:'A', name:'A', wins:4, gamesWon:20, gamesLost:10 },
+  { uid:'B', name:'B', wins:4, gamesWon:18, gamesLost:8 },
+  { uid:'C', name:'C', wins:4, gamesWon:22, gamesLost:12 },
+  { uid:'D', name:'D', wins:1, gamesWon:15, gamesLost:18 }
+];
+const drawTwoCompare = (a, b) => (b.wins - a.wins) ||
+  ((b.gamesWon - b.gamesLost) - (a.gamesWon - a.gamesLost));
+drawTwoCompare.originalOrder = { A:0, B:1, C:2, D:3 };
+const drawTwoPool = [{ id:'mover-a1', group:{ name:'Grupo A1' }, rows:drawTwoRows }];
+const drawTwoNext = { source:{ mapping:[{ dest:'final', rankFrom:1, rankTo:2 }] } };
+const drawTwoTournament = { fmt2:{ tieResolution:'singles_draw_two', tieSinglesPoints:7, tieSinglesMargin:1 },
+  tiebreakers:['vitorias','saldo_games','sorteio'] };
+tie.canonicalizeTieFallback(drawTwoTournament); // simula o sorteio final legado vindo do cliente
+assert.deepStrictEqual(drawTwoTournament.tiebreakers, ['vitorias','saldo_games'],
+  'normalização de execução também filtra o sorteio final enviado pelo cliente');
+let drawTwoFlow = tie.resolvePhaseTies(drawTwoTournament, 0, drawTwoPool, drawTwoNext, () => drawTwoCompare,
+  null, 1, false, () => 14, '2026-11-18T23:00:00Z', { randomInt:() => 0 });
+assert.equal(drawTwoFlow.status, 'pending', 'empate esportivo restante inicia a simples automaticamente');
+assert.equal(drawTwoFlow.decision.tieMode, 'draw_two_then_repeat',
+  'empate entre três ou mais sorteia dois antes da simples');
+assert.equal(drawTwoFlow.decision.matches.length, 1, 'o sorteio inicial agenda apenas a simples entre os dois sorteados');
+assert.equal(drawTwoFlow.decision.pointsToWin, 7, 'simples usa a pontuação configurada pelo organizador');
+const firstDrawMatch = drawTwoFlow.decision.matches[0];
+drawTwoFlow = tie.resolvePhaseTies(drawTwoTournament, 0, drawTwoPool, drawTwoNext, () => drawTwoCompare,
+  { type:'score', decisionId:drawTwoFlow.tie.decisionId, matchId:firstDrawMatch.id,
+    sets:[{ p1:7, p2:5 }], at:'2026-11-18T23:01:00Z' },
+  1, false, () => 14, '2026-11-18T23:01:00Z', { randomInt:() => 0 });
+assert.equal(drawTwoFlow.decision.matches.length, 2,
+  'com 3 empatados e 2 vagas, uma segunda simples define a próxima posição entre os restantes');
+const secondDrawMatch = drawTwoFlow.decision.matches[1];
+drawTwoFlow = tie.resolvePhaseTies(drawTwoTournament, 0, drawTwoPool, drawTwoNext, () => drawTwoCompare,
+  { type:'score', decisionId:drawTwoFlow.tie.decisionId, matchId:secondDrawMatch.id,
+    sets:[{ p1:7, p2:5 }], at:'2026-11-18T23:02:00Z' },
+  1, false, () => 14, '2026-11-18T23:02:00Z', { randomInt:() => 0 });
+assert.equal(drawTwoFlow.status, 'ready', 'as duas vagas ficam definidas pelas simples automáticas');
+const completedDrawTwo = Object.values(drawTwoTournament.phaseTieDecisions['0'])[0];
+assert.equal(completedDrawTwo.status, 'complete', 'a decisão é concluída após a simples repetida');
+assert.equal(completedDrawTwo.order.length, 3, 'a decisão guarda a ordem final dos três empatados');
 const extraId = autoFlow.decision.matches[0].id;
 autoFlow = tie.resolvePhaseTies(autoTournament, 0, autoPool, autoCfg, () => cmp,
   null, 1, false, () => 3, '2026-11-07T15:01:00Z', autoOpts);

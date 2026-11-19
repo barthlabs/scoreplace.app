@@ -11,8 +11,8 @@ const from = source.indexOf('function _buildPhaseTieRuntime(');
 const to = source.indexOf('exports.advanceTournamentPhase = onCall', from);
 assert(from > 0 && to > from, 'o resolvedor de placar e avanço é compartilhado');
 const group = { name: 'Diamante · Grupo 1', rows: [
-  { uid: 'A', name: 'A', wins: 3 }, { uid: 'B', name: 'B', wins: 2 },
-  { uid: 'C', name: 'C', wins: 2 }, { uid: 'D', name: 'D', wins: 0 }
+  { uid: 'A', name: 'A', wins: 3, points: 3 }, { uid: 'B', name: 'B', wins: 2, points: 2 },
+  { uid: 'C', name: 'C', wins: 2, points: 2 }, { uid: 'D', name: 'D', wins: 0, points: 0 }
 ], matches: [
   { id: 'm1', winner: 'A', groupIdx: 0, isMonarch: true, team1: ['A', 'B'], team2: ['C', 'D'] },
   { id: 'm2', winner: 'B', groupIdx: 0, isMonarch: true, team1: ['A', 'C'], team2: ['B', 'D'] },
@@ -89,10 +89,19 @@ assert.equal(tournament.phaseTieDecisions['0']['group-0:1:2'], undefined,
   'reabrir o último resultado retira a simples ativa');
 assert(tournament.history.some(item => item.phaseTieDecision), 'a decisão anterior fica auditável');
 
+const legacyDrawTwo = { fmt2: { tieResolution: 'singles_draw_two' },
+  rankingPrimary: 'wins', tiebreakers: ['vitorias', 'saldo_games', 'sorteio'],
+  phases: tournament.phases, currentPhaseIndex: 0, groups: [group], rounds: [] };
+refresh(legacyDrawTwo, 'm3', '2026-11-07T15:03:30Z');
+assert.deepStrictEqual(legacyDrawTwo.tiebreakers, ['vitorias', 'saldo_games', 'sorteio'],
+  'refresh automático calcula com fallback normalizado sem persistir a remoção em documento antigo');
+assert.equal(legacyDrawTwo.phaseTieAutoError, undefined,
+  'documento legado segue resolvível pelo motor de desempate automático');
+
 // Um quarteto fechado deve poder pedir desempate enquanto outro ainda joga.
 const other = { name: 'Ouro · Grupo 2', rows: [
-  { uid: 'E', name: 'E', wins: 3 }, { uid: 'F', name: 'F', wins: 2 },
-  { uid: 'G', name: 'G', wins: 1 }, { uid: 'H', name: 'H', wins: 0 }
+  { uid: 'E', name: 'E', wins: 3, points: 3 }, { uid: 'F', name: 'F', wins: 2, points: 2 },
+  { uid: 'G', name: 'G', wins: 1, points: 1 }, { uid: 'H', name: 'H', wins: 0, points: 0 }
 ], matches: [{ id: 'm4', winner: 'E' }, { id: 'm5', winner: 'F' }, { id: 'm6' }] };
 const several = { fmt2: tournament.fmt2, phases: tournament.phases, currentPhaseIndex: 0,
   groups: [group, other], rounds: [] };

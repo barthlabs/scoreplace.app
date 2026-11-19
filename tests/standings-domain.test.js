@@ -27,6 +27,15 @@ ok(D.standingsCompareConfig(line('x', { wins: 3, gamesWon: 12, gamesLost: 10 }),
   'vitórias não desempata saldo igual sem critério adicional');
 ok(D.standingsCompareConfig(A, B, { primaryField: 'wins', tiebreakers: [] }) < 0,
   'vitórias também pode ser o critério principal exclusivo');
+const MoverA = line('Mover A', { wins: 4, gamesWon: 26, gamesLost: 18 });
+const MoverB = line('Mover B', { wins: 4, gamesWon: 23, gamesLost: 18 });
+ok(D.standingsCompareConfig(MoverA, MoverB,
+  { primaryField: 'wins', tiebreakers: ['saldo_games'] }) < 0,
+  'Mover: vitórias vêm primeiro e saldo de games decide somente o empate em vitórias');
+const MoverC = line('Mover C', { wins: 4, gamesWon: 26, gamesLost: 18 });
+ok(D.standingsCompareConfig(MoverA, MoverC,
+  { primaryField: 'wins', tiebreakers: ['saldo_games'] }) === 0,
+  'simples de desempate só deve ser chamada se vitórias e saldo de games mantiverem o empate');
 const G1 = line('g1', {points: 1, wins: 3, gamesWon: 12, gamesLost: 8});
 const G2 = line('g2', {points: 9, wins: 2, gamesWon: 15, gamesLost: 11});
 ok(D.standingsCompareConfig(G1,G2,{primaryField:'games_diff',tiebreakers:['vitorias','games_vencidos']}) < 0,

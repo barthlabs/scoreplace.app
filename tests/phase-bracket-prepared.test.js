@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const { createHash } = require('node:crypto');
 const { window: W, E } = require('./headless');
+const tieCore = require('../functions-autodraw/phase-tie-core');
 
 const compiledOfficial = W.FORMAT2.compileToPhases({
   disputa:'dupla', grupos:2, parceria:'rotation_groups_8',
@@ -112,7 +113,8 @@ assert(start > 0 && end > start);
 const drawWindow = { _phasesEngine:E, _collectAllMatches:W._collectAllMatches,
   _assignGlobalGameNumbers:() => 0 };
 const operation = vm.runInNewContext(source.slice(start, end) + '\n({prepare:_prepareOfficialPhasePlan,reconcile:_reconcileOfficialPhasePlan,activate:_activateOfficialPhasePlanOnCall})', {
-  drawWindow, createHash, Buffer, hasDrawnBracket:tour => !!(tour && tour.matches && tour.matches.length),
+  drawWindow, createHash, Buffer, _phaseTieCore:tieCore,
+  hasDrawnBracket:tour => !!(tour && tour.matches && tour.matches.length),
   phaseStandingsFn:g => g.rows, HttpsError:class extends Error {
     constructor(code, message) { super(message); this.code = code; }
   }
@@ -228,7 +230,7 @@ assert.throws(() => operation.reconcile(invalid, invalid, {}), /chave planejada.
   'marcador sem plano falha fechado');
 const unavailableEngine = structuredClone(t);
 const operationWithoutEngine = vm.runInNewContext(source.slice(start, end) + '\n({reconcile:_reconcileOfficialPhasePlan})', {
-  drawWindow:{}, phaseStandingsFn:() => [], HttpsError:class HttpsError extends Error {
+  drawWindow:{}, _phaseTieCore:tieCore, phaseStandingsFn:() => [], HttpsError:class HttpsError extends Error {
     constructor(code, message) { super(message); this.code = code; }
   },
   createHash, Buffer, console

@@ -1921,7 +1921,7 @@ window._translations['en'] = {
   'create.rankingBlocks': 'By Block',
   'create.rankingTypeHint': 'Individual: each participant gets a specific ranking. By block: players eliminated in the same round share the ranking.',
   'create.tiebreakerSection': 'Tiebreaker Criteria (drag to reorder)',
-  'create.tiebreakerDesc': 'Optional. Leave the list empty to apply no additional criteria. Drag to change priority.',
+  'create.tiebreakerDesc': 'These run after the primary criterion, in list order: each one applies only if the previous one leaves a tie. Drag to change priority.',
   'create.rankingPrimaryLabel': 'Primary ranking criterion',
   'create.rankingPrimaryPoints': 'Ranking points',
   'create.rankingPrimaryAdvancedPoints': 'Advanced points',

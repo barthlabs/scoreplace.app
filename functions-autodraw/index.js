@@ -1380,6 +1380,7 @@ function _prepareOfficialPhasePlan(t, phaseIndex) {
 
 function _reconcileOfficialPhasePlan(t, before, ctx) {
   if (!t || !Array.isArray(t.phases) || t.phases.length < 2) return;
+  const tieConfig = _phaseTieCore.canonicalTieFallbackView(t);
   const eng = drawWindow && drawWindow._phasesEngine;
   if (before && before.phaseBracketPlanVersion === 1 && !before.phaseBracketPlanV1) {
     throw new HttpsError('failed-precondition', 'A chave planejada do torneio está ausente.');
@@ -1411,7 +1412,7 @@ function _reconcileOfficialPhasePlan(t, before, ctx) {
   if (!eng || typeof eng.resolveOfficialGroupSlot !== 'function' || !phaseStandingsFn) {
     throw new HttpsError('failed-precondition', 'Motor de classificação da chave indisponível.');
   }
-  const opts = { tiebreakers:t.tiebreakers, rankingPrimary:t.rankingPrimary,
+  const opts = { tiebreakers:tieConfig.tiebreakers, rankingPrimary:tieConfig.rankingPrimary,
     birthByName:typeof drawWindow._tbBirthByName === 'function' ? drawWindow._tbBirthByName(t) : {} };
   const actual = new Map((t.matches || []).filter(m => m && m.id).map(m => [String(m.id), m]));
   const bySlot = new Map();
@@ -6876,6 +6877,10 @@ exports.applyTournamentFormat = onCall(async (request) => {
 });
 
 function _buildPhaseTieRuntime(t, current, sourceGroups, currentCfg, phaseEngine, calculateStandings, tbOpts, tieRule) {
+  // Keep every standings consumer (automatic result handling, interleaved
+  // categories, and manual phase advance) on the same rule for stored formats.
+  const tieConfig = _phaseTieCore.canonicalTieFallbackView(t);
+  if (tbOpts) tbOpts.tiebreakers = tieConfig.tiebreakers;
   const nextCfg = phaseEngine && typeof phaseEngine.projectPhaseCfg === 'function'
     ? phaseEngine.projectPhaseCfg(t.phases[current + 1], t, current + 1) : null;
   if (!nextCfg || !nextCfg.source || nextCfg.source.type !== 'previous_phase') {
@@ -6891,7 +6896,7 @@ function _buildPhaseTieRuntime(t, current, sourceGroups, currentCfg, phaseEngine
   const pools = overall
     ? [{ id: 'overall', rows: phaseEngine.globalStandings(sourceGroups, calculateStandings) }]
     : sourceGroups.map((g, index) => ({ id: 'group-' + index, rows: calculateStandings(g), group: g }));
-  const criterionList = Array.isArray(t.tiebreakers) ? t.tiebreakers.filter(k => k !== 'sorteio') : null;
+  const criterionList = Array.isArray(tieConfig.tiebreakers) ? tieConfig.tiebreakers.filter(k => k !== 'sorteio') : null;
   const advanced = !!(phaseEngine.effectiveAdvancedScoring &&
     (phaseEngine.effectiveAdvancedScoring(t, current) || {}).enabled);
   const sourceMatches = pool => {
@@ -6962,7 +6967,7 @@ function _buildPhaseTieRuntime(t, current, sourceGroups, currentCfg, phaseEngine
     const h2h = (typeof drawWindow._standingsBuildH2H === 'function'
       ? drawWindow._standingsBuildH2H : _standingsAdapter.buildH2H)(matches, slotKeys);
     const opts = { tiebreakers: criterionList,
-      primaryField: ['games_diff', 'wins'].includes(t.rankingPrimary) ? t.rankingPrimary : 'points',
+      primaryField: ['games_diff', 'wins'].includes(tieConfig.rankingPrimary) ? tieConfig.rankingPrimary : 'points',
       adv: advanced, h2h, birth: tbOpts.birthByName || {} };
     const compare = (a, b) => (typeof drawWindow._standingsCompareConfig === 'function'
       ? drawWindow._standingsCompareConfig : _standingsAdapter.standingsCompareConfig)(a, b, opts);
@@ -8120,6 +8125,7 @@ exports.runEnrollmentSlotsDraw = onCall(async request => {
 
 // ─── Encerramento manual: status, classificação e aviso server-side ─────────
 function _resolveFinalClassificationTie(t, action, nowIso) {
+  const tieConfig = _phaseTieCore.canonicalTieFallbackView(t);
   const current = t.currentPhaseIndex || 0;
   const phase = Array.isArray(t.phases) && t.phases[current];
   const rule = t.fmt2 && t.fmt2.tieResolution;
@@ -8168,8 +8174,8 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
   }
   const pools = grouped ? groups.map((g, index) => ({
     id: 'group-' + index, group: g,
-    rows: engine.groupTeamStandings(g, { tiebreakers: t.tiebreakers })
-  })) : [{ id: 'overall', rows: standings(t) }];
+    rows: engine.groupTeamStandings(g, { tiebreakers: tieConfig.tiebreakers })
+  })) : [{ id: 'overall', rows: standings(Object.assign({}, t, { tiebreakers: tieConfig.tiebreakers })) }];
   if (pools.some(pool => !Array.isArray(pool.rows) || !pool.rows.length)) {
     throw new HttpsError('failed-precondition', 'Classificação indisponível para definir o título.');
   }
@@ -8199,8 +8205,8 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
       if (label && originalOrder[label] == null) originalOrder[label] = index * 2 + sideIndex;
     });
   });
-  const criterionList = Array.isArray(t.tiebreakers)
-    ? t.tiebreakers.filter(key => key !== 'sorteio') : null;
+  const criterionList = Array.isArray(tieConfig.tiebreakers)
+    ? tieConfig.tiebreakers.filter(key => key !== 'sorteio') : null;
   const compareForPool = pool => {
     const ownMatches = pool.group
       ? (pool.group.matches || []).concat((pool.group.rounds || []).flatMap(round => round.matches || []))

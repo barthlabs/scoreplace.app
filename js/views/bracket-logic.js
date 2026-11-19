@@ -1251,7 +1251,17 @@ function _computeStandings(t, category) {
   if (t.advancedScoring && t.advancedScoring.enabled) {
     defaultTb = ['pontos_avancados'].concat(defaultTb);
   }
-  const tiebreakers = Array.isArray(t.tiebreakers) ? t.tiebreakers : defaultTb;
+  // In either extra-singles mode, display only the criteria that run before
+  // the singles decision. `singles_then_draw` goes straight to singles;
+  // `singles_draw_two` draws two when 3+ remain tied. Exclude stale fallback
+  // values from displayed standings too, including older tournament records.
+  const tieResolution = t.fmt2 && t.fmt2.tieResolution;
+  const tiebreakers = Array.isArray(t.tiebreakers)
+    ? (tieResolution === 'singles_then_draw' ? []
+      : tieResolution === 'singles_draw_two'
+        ? t.tiebreakers.filter(function (key) { return key !== 'sorteio'; })
+        : t.tiebreakers)
+    : defaultTb;
 
   // v2.2.47: mapa nome→timestamp de nascimento (pros critérios antiguidade/juventude)
   var birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
@@ -7412,6 +7422,10 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
     var rgb = [1, 3, 5].map(function (i) { var c = parseInt(value.slice(i, i + 2), 16) / 255; return c <= .04045 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4); });
     return .2126 * rgb[0] + .7152 * rgb[1] + .0722 * rgb[2];
   }
+  function contrastRatio(a, b) {
+    var pair = [luminance(a), luminance(b)].sort(function (x, y) { return y - x; });
+    return (pair[0] + .05) / (pair[1] + .05);
+  }
   var cover = hex(t.coverColor, '#1f2937');
   var secondary = t.coverGradientEnabled ? hex(t.coverGradientColor, cover) : cover;
   var footerBg = cover;
@@ -7448,6 +7462,10 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
   var titleColor = hex(t.titleColor, '#ffffff');
   if (luminance(titleColor) < .35) titleColor = '#ffffff';
   var accent = hex(t.brandColor, mix(cover, '#ffffff', .68));
+  var cardBackground = mix(cover, '#ffffff', .12);
+  var cardText = luminance(cardBackground) >= .45 ? '#172033' : '#ffffff';
+  var cardAccent = contrastRatio(accent, cardBackground) >= 3
+    ? accent : (luminance(cardBackground) >= .45 ? '#334155' : '#f8fafc');
   var headerTextWidth = width - 2 * margin;
   if (logo) {
     var logoWidth = Number(logo.naturalWidth || logo.width) || 1;
@@ -7466,12 +7484,12 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
   blocks.forEach(function (block, index) {
     var row = Math.floor(index / 2), x = margin + (index % 2) * (cardWidth + gap);
     var top = 170 + rowHeights.slice(0, row).reduce(function (sum, h) { return sum + h + gap; }, 0);
-    ctx.fillStyle = mix(cover, '#ffffff', .12); ctx.fillRect(x, top, cardWidth, rowHeights[row]);
-    ctx.fillStyle = accent; ctx.font = 'bold 27px Arial, sans-serif'; ctx.fillText(block.group.name, x + 20, top + 38);
+    ctx.fillStyle = cardBackground; ctx.fillRect(x, top, cardWidth, rowHeights[row]);
+    ctx.fillStyle = cardAccent; ctx.font = 'bold 27px Arial, sans-serif'; ctx.fillText(block.group.name, x + 20, top + 38);
     var rowY = top + 58;
     block.rows.forEach(function (match) {
-      ctx.fillStyle = accent; ctx.font = 'bold 21px Arial, sans-serif'; ctx.fillText(match.label, x + 20, rowY + 23);
-      ctx.fillStyle = '#fff'; ctx.font = '23px Arial, sans-serif';
+      ctx.fillStyle = cardAccent; ctx.font = 'bold 21px Arial, sans-serif'; ctx.fillText(match.label, x + 20, rowY + 23);
+      ctx.fillStyle = cardText; ctx.font = '23px Arial, sans-serif';
       ctx.textAlign = 'center'; ctx.fillText('×', x + versusX, rowY + 23); ctx.textAlign = 'left';
       match.one.forEach(function (player, pi) { player.forEach(function (part, li) {
         var before = match.one.slice(0, pi).reduce(function (n, lines) { return n + lines.length; }, 0);

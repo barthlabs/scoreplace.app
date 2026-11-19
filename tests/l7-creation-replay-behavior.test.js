@@ -57,6 +57,20 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   assert.equal(request.data.config.politicaDaChave,'playin');
   assert.equal(db.docs.get('tournaments/'+tournamentId).politicaDaChave,'repescagem');
  });
+ await test('criação canonicaliza sorteio prévio sem reordenar critérios esportivos',async()=>{
+  const db=fakeDB(),tournamentId='tour_'+(clock+3)+'_'+'d'.repeat(32),fmt2=copy(win.FORMAT2.defaultConfig());
+  fmt2.tieResolution='singles_draw_two';
+  const request={auth,data:{tournamentId,config:{name:'Copa',sport:'Tênis',fmt2,
+    tiebreakers:['vitorias','saldo_games','sorteio'],tiebreakersExcluded:[]}}};
+  await creator(db)(request);
+  const saved=db.docs.get('tournaments/'+tournamentId);
+  assert.deepEqual(saved.tiebreakers,['vitorias','saldo_games'],
+   'na criação, vitórias e saldo seguem como critérios; sorteio vem só antes da simples');
+  assert.deepEqual(saved.tiebreakersExcluded,['sorteio'],
+   'sorteio prévio não é critério esportivo nem desempata antes da simples');
+  assert.deepEqual(request.data.config.tiebreakers,['vitorias','saldo_games','sorteio'],
+   'canonicalização não altera o payload do cliente');
+ });
  await test('validador aceita categorias nomeadas só nos seis mapas de agenda declarados',async()=>{
   const maps=['pairsPerTeamByCategory','gamesPerPairByCategory'];
   for (const map of maps) {
