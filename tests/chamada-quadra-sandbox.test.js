@@ -191,17 +191,28 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
     tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod'
   } })).changed, false, 'liberação repetida não cria novo estado');
 
-  const monarchGame = (id, num, court, called) => Object.assign(game(id, court), {
+  const monarchGame = (id, num, court, called, group = 'A1') => Object.assign(game(id, court), {
     isMonarch:true, isTieBreak:false, category:'Fem A', phaseIndex:0, round:'Rodada 1',
-    monarchGroup:'A1', _gameNum:num, ...(called ? { courtCalledAt:nowIso, startedAt:nowIso } : {})
+    monarchGroup:group, _gameNum:num, ...(called ? { courtCalledAt:nowIso, startedAt:nowIso } : {})
   });
   tournament.matches = [monarchGame('block-1', 1, 'Quadra 4', true),
     monarchGame('block-2', 2, 'Quadra 5', false), monarchGame('block-3', 3, 'Quadra 6', false)];
-  const seriesRevision = Number(courtStates.get('tournaments/tour_test/courtState/main').revision || 0);
+  const seriesRevision = 0;
   const seriesMode = await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
-    action:'series-mode', enabled:true, expectedRevision:seriesRevision, operationId:'25359ec0-57d6-48d4-9c50-b549b35e7fe8' } });
+    matchId:'block-1', action:'series-mode', enabled:true, expectedRevision:seriesRevision, operationId:'25359ec0-57d6-48d4-9c50-b549b35e7fe8' } });
   assert.equal(seriesMode.enabled, true, 'preferência é persistida pela callable');
-  assert.equal(courtStates.get('tournaments/tour_test/courtState/main').monarchEndWholeBlock, true);
+  const configuredBlockState = courtStates.get('tournaments/tour_test/courtState/main');
+  assert.deepEqual(JSON.parse(JSON.stringify(configuredBlockState.monarchEndWholeBlockByMatch)),
+    { 'block-1':true, 'block-2':true, 'block-3':true }, 'toggle grava a preferência só nos jogos desta série');
+  assert.equal(configuredBlockState.monarchEndWholeBlock, undefined, 'configuração nova não usa estado global');
+  tournament.matches.push(monarchGame('block-b1-1', 4, 'Quadra 7', true, 'B1'),
+    monarchGame('block-b1-2', 5, 'Quadra 8', false, 'B1'), monarchGame('block-b1-3', 6, 'Quadra 9', false, 'B1'));
+  const independentMode = await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
+    matchId:'block-b1-1', action:'series-mode', enabled:false, expectedRevision:0, operationId:'4f20863c-7488-446d-8b1b-76869470871f' } });
+  assert.equal(independentMode.enabled, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(courtStates.get('tournaments/tour_test/courtState/main').monarchEndWholeBlockByMatch)),
+    { 'block-1':true, 'block-2':true, 'block-3':true, 'block-b1-1':false, 'block-b1-2':false, 'block-b1-3':false },
+    'segunda série preserva seu próprio estado, independente da primeira');
   await assert.rejects(endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
     matchId:'block-1' } }), e => e.code === 'failed-precondition' && /Atualize a tela/.test(e.message),
     'cliente antigo sem flag não pode encerrar só um jogo de bloco');
@@ -212,7 +223,8 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   const blockState = courtStates.get('tournaments/tour_test/courtState/main');
   for (const id of ['block-1','block-2','block-3']) assert.ok(blockState.released[id]);
   assert.equal(blockState.blockCourt['block-2'], 'Quadra 5', 'guarda quadra do irmão que ainda não foi chamado');
-  assert.ok(tournament.matches.every(match => match.court === null), 'os três deixam de ocupar quadras');
+  assert.ok(tournament.matches.filter(match => match.monarchGroup === 'A1').every(match => match.court === null),
+    'os três jogos da série configurada deixam de ocupar quadras');
   await assert.rejects(endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
     matchId:'block-1', action:'release', monarchEndWholeBlock:true,
     operationId:'c3f4cb3e-bda6-44ad-b2c6-4497928b12cc' } }),
@@ -226,11 +238,13 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
     matchId:'block-2', action:'restore', operationId:'5f6ebd49-b51a-4575-b09a-632eaee316bd' } });
   assert.equal(restoreUncalled.restoredWithoutCourt, true, 'irmão não chamado sai dos pendentes sem inventar chamada');
   assert.equal(courtStates.get('tournaments/tour_test/courtState/main').released['block-2'], undefined);
-  const afterRestoreRevision = Number(courtStates.get('tournaments/tour_test/courtState/main').revision || 0);
+  const afterRestoreRevision = Number(courtStates.get('tournaments/tour_test/courtState/main').monarchEndWholeBlockRevisionByMatch['block-1'] || 0);
   await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
-    action:'series-mode', enabled:false, expectedRevision:afterRestoreRevision,
+    matchId:'block-1', action:'series-mode', enabled:false, expectedRevision:afterRestoreRevision,
     operationId:'126de800-6a9e-44e5-8091-861e788768a3' } });
 
+  tournament.matches.push(game('release-prod', 'Quadra 4'));
+  tournament.matches.at(-1).courtCalledAt = nowIso;
   isAdmin = false;
   await assert.rejects(callable({ auth: { uid: 'stranger' }, data: {
     tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod', court: 'Quadra 4', confirmCall: true

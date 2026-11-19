@@ -5093,7 +5093,7 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
   if (!tId || sandbox !== tId.startsWith('sb_')) throw new HttpsError('invalid-argument', 'Torneio ou jogo inválido.');
   const action = String((request.data && request.data.action) || 'release');
   if (!['release', 'restore', 'cancel-call', 'postpone', 'series-mode'].includes(action)) throw new HttpsError('invalid-argument', 'Ação inválida.');
-  if (action !== 'series-mode' && !matchId) throw new HttpsError('invalid-argument', 'Jogo inválido.');
+  if (!matchId) throw new HttpsError('invalid-argument', 'Jogo inválido.');
   if ((action !== 'release' || request.data.monarchEndWholeBlock === true) && !(request.data && request.data.operationId)) {
     throw new HttpsError('invalid-argument', 'Identificador da operação obrigatório.');
   }
@@ -5111,8 +5111,8 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
   try {
     if (request.data && request.data.operationId != null) receipt = _operationReceipt.prepare({
       operationId: request.data.operationId, actorUid: uid, parentPath: ref.path,
-      kind: 'court-end', target: action === 'series-mode' ? 'monarchEndWholeBlock' : matchId, action,
-      payload: action === 'series-mode' ? { sandbox, enabled: request.data.enabled, expectedRevision: request.data.expectedRevision } :
+      kind: 'court-end', target: matchId, action,
+      payload: action === 'series-mode' ? { sandbox, matchId, enabled: request.data.enabled, expectedRevision: request.data.expectedRevision } :
         request.data.monarchEndWholeBlock === true ? { sandbox, monarchEndWholeBlock: true } : { sandbox }
     });
   } catch (error) { throw new HttpsError('invalid-argument', error.message); }
@@ -5127,9 +5127,40 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
     const stateSnap = await tx.get(stateRef);
     const state = stateSnap.exists ? stateSnap.data() || {} : {};
     const released = state.released && typeof state.released === 'object' ? state.released : {};
-    const modeEnabled = state.monarchEndWholeBlock === true;
+    const monarchModes = state.monarchEndWholeBlockByMatch && typeof state.monarchEndWholeBlockByMatch === 'object'
+      ? state.monarchEndWholeBlockByMatch : {};
+    const monarchModeRevisions = state.monarchEndWholeBlockRevisionByMatch && typeof state.monarchEndWholeBlockRevisionByMatch === 'object'
+      ? state.monarchEndWholeBlockRevisionByMatch : {};
+    const m = drawWindow._findMatch(t, matchId);
+    const all = drawWindow._collectAllMatches(t);
+    if (!m || !Array.isArray(all)) throw new HttpsError('failed-precondition', 'Jogo não encontrado na chave completa.');
+    const legacyModeEnabled = state.monarchEndWholeBlock === true;
+    const seriesMatches = m.isMonarch === true && !m.isTieBreak && m.monarchGroup != null && m.round != null && m.category
+      ? all.filter(item => item && item.isMonarch === true && !item.isTieBreak &&
+        String(item.category || '') === String(m.category) && Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
+        String(item.round) === String(m.round) && String(item.monarchGroup) === String(m.monarchGroup))
+        .sort((a, b) => Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0) ||
+          Date.parse(a.scheduledAt || '') - Date.parse(b.scheduledAt || '') || String(a.id).localeCompare(String(b.id)))
+      : [];
+    const series = seriesMatches.length === 3 ? seriesMatches : null;
+    const seriesIds = series ? series.map(item => String(item.id)) : [];
+    const modeEnabled = Object.prototype.hasOwnProperty.call(monarchModes, matchId) && typeof monarchModes[matchId] === 'boolean'
+      ? monarchModes[matchId] : !!series && legacyModeEnabled;
+    const seriesRevision = series ? Math.max(0, ...seriesIds.map(id => Number(monarchModeRevisions[id]) || 0)) : 0;
     const needsReadiness = action === 'series-mode' && request.data.enabled === true ||
       action === 'release' && (modeEnabled || request.data.monarchEndWholeBlock === true);
+    const admin = _isTournamentAdmin(t, uid);
+    const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
+    if (!admin && !referee) throw new HttpsError('permission-denied', 'Só a organização ou árbitro confirmado pode liberar a quadra.');
+    if (action === 'series-mode' && !admin) throw new HttpsError('permission-denied', 'Só a organização pode alterar o encerramento em bloco.');
+    const commitReply = (reply) => {
+      if (receiptRef) tx.create(receiptRef, _operationReceipt.document(receipt, reply, Date.parse(agoraIso)));
+      return reply;
+    };
+    if (receiptSnap && receiptSnap.exists) {
+      if (!_operationReceipt.matches(receiptSnap.data(), receipt)) throw new HttpsError('failed-precondition', 'operationId já pertence a outra ação.');
+      return _operationReceipt.replay(receiptSnap.data());
+    }
     const readinessSnap = needsReadiness
       ? await tx.get(db.collection('operationRuntimeCapabilities').doc('endMatchOnCourt')) : null;
     const readiness = readinessSnap && readinessSnap.exists ? readinessSnap.data() || {} : {};
@@ -5141,26 +5172,36 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
         throw new HttpsError('failed-precondition', 'Operação em bloco indisponível durante atualização das quadras. Atualize a tela mais tarde.');
       }
     }
-    const admin = _isTournamentAdmin(t, uid);
-    const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
-    if (!admin && !referee) throw new HttpsError('permission-denied', 'Só a organização ou árbitro confirmado pode liberar a quadra.');
-    const commitReply = (reply) => {
-      if (receiptRef) tx.create(receiptRef, _operationReceipt.document(receipt, reply, Date.parse(agoraIso)));
-      return reply;
-    };
-    if (receiptSnap && receiptSnap.exists) {
-      if (!_operationReceipt.matches(receiptSnap.data(), receipt)) throw new HttpsError('failed-precondition', 'operationId já pertence a outra ação.');
-      return _operationReceipt.replay(receiptSnap.data());
-    }
     if (action === 'series-mode') {
-      if (!admin) throw new HttpsError('permission-denied', 'Só a organização pode alterar o encerramento em bloco.');
-      if (Number(state.revision || 0) !== request.data.expectedRevision) throw new HttpsError('failed-precondition', 'A fila mudou; atualize a tela.');
-      tx.set(stateRef, { monarchEndWholeBlock: request.data.enabled, revision: FieldValue.increment(1) }, { merge: true });
-      return commitReply({ ok: true, changed: modeEnabled !== request.data.enabled, enabled: request.data.enabled });
+      if (!series) throw new HttpsError('failed-precondition', 'Não foi possível identificar os três jogos deste bloco. Atualize a tela.');
+      if (seriesRevision !== request.data.expectedRevision) throw new HttpsError('failed-precondition', 'A configuração desta série mudou; atualize a tela.');
+      const validMonarchIds = new Set();
+      const grouped = new Map();
+      all.filter(item => item && item.isMonarch === true && !item.isTieBreak && item.monarchGroup != null && item.round != null && item.category)
+        .forEach(item => {
+          const key = [String(item.category), Number(item.phaseIndex || 0), String(item.round), String(item.monarchGroup)].join('|');
+          if (!grouped.has(key)) grouped.set(key, []);
+          grouped.get(key).push(String(item.id));
+        });
+      grouped.forEach(ids => { if (ids.length === 3) ids.forEach(id => validMonarchIds.add(id)); });
+      const nextModes = {};
+      const nextRevisions = {};
+      Object.keys(monarchModes).forEach(id => {
+        if (validMonarchIds.has(id) && typeof monarchModes[id] === 'boolean') nextModes[id] = monarchModes[id];
+      });
+      Object.keys(monarchModeRevisions).forEach(id => {
+        if (validMonarchIds.has(id) && Number.isInteger(Number(monarchModeRevisions[id]))) nextRevisions[id] = Number(monarchModeRevisions[id]);
+      });
+      const alreadyExplicit = seriesIds.every(id => Object.prototype.hasOwnProperty.call(nextModes, id));
+      const changed = !alreadyExplicit || modeEnabled !== request.data.enabled;
+      const nextRevision = changed ? seriesRevision + 1 : seriesRevision;
+      seriesIds.forEach(id => { nextModes[id] = request.data.enabled; nextRevisions[id] = nextRevision; });
+      if (changed) tx.set(stateRef, {
+        monarchEndWholeBlockByMatch: nextModes,
+        monarchEndWholeBlockRevisionByMatch: nextRevisions
+      }, { mergeFields: ['monarchEndWholeBlockByMatch', 'monarchEndWholeBlockRevisionByMatch'] });
+      return commitReply({ ok: true, changed, enabled: request.data.enabled, matchIds: seriesIds, revision: nextRevision });
     }
-    const m = drawWindow._findMatch(t, matchId);
-    const all = drawWindow._collectAllMatches(t);
-    if (!m || !Array.isArray(all)) throw new HttpsError('failed-precondition', 'Jogo não encontrado na chave completa.');
     const hasScore = _courtOccupancy.isFinished(m) || m.draw === true || !!m.pendingResult ||
       m.liveScored === true || (Array.isArray(m.sets) && m.sets.length > 0) ||
       Number(m.scoreP1) > 0 || Number(m.scoreP2) > 0;

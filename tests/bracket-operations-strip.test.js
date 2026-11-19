@@ -3,6 +3,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { chromium } = require('@playwright/test');
 const source = fs.readFileSync('js/views/bracket.js', 'utf8');
+assert.match(source, /modeButton\.setAttribute\('role', 'switch'\)/,
+  'controle por série usa toggle acessível, não checkbox');
+assert.match(source, /footerActions\.appendChild\(modeButton\)/,
+  'toggle pertence às ações da quadra em que a série está ativa');
+assert.match(source, /action:'series-mode', enabled:nextEnabled, expectedRevision:expectedRevision/,
+  'alteração envia estado e revisão da série específica');
+assert.doesNotMatch(source, /existing\._spSeriesModeBusy/,
+  'não existe bloqueio global para mudanças entre séries');
 const sourceStart = source.indexOf('window._directBracketSlotSource = function');
 const sourceEnd = source.indexOf('// Competições por times', sourceStart);
 assert(sourceStart > 0 && sourceEnd > sourceStart);
@@ -219,8 +227,53 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       };
       window.AppStore.currentUser = { uid: 'other' };
       window._bracketOperationsRefresh(t, root);
+      const outsiderHidden = !document.querySelector('[data-bracket-operations-strip]');
+      window.AppStore.currentUser = { uid:'org' };
+      window._courtOperationId = () => 'series-operation';
+      const originalMatches = t.matches;
+      t.scheduleWindow = { days:[{ day:'2026-10-22' }] };
+      const seriesMatch = (id, group, number, court) => ({ id, _gameNum:number, isMonarch:true, isTieBreak:false,
+        category:'Fem A', phaseIndex:0, round:'Rodada 1', monarchGroup:group, court,
+        ...(court ? { courtCalledAt:'2026-10-22T18:01:00Z', startedAt:'2026-10-22T18:01:00Z' } : {}),
+        p1:'Dupla ' + number, p2:'Dupla adversária ' + number });
+      t.matches = [seriesMatch('a1-1', 'A1', 1, 'Quadra 4'), seriesMatch('a1-2', 'A1', 2, ''),
+        seriesMatch('a1-3', 'A1', 3, ''), seriesMatch('b1-1', 'B1', 4, 'Quadra 5'),
+        seriesMatch('b1-2', 'B1', 5, ''), seriesMatch('b1-3', 'B1', 6, '')];
+      window._bracketCourtReleaseCache = { sb_test: { ready:true, capabilityReady:true, released:{}, postponed:[], revision:0,
+        monarchEndWholeBlockByMatch:{ 'a1-1':true, 'a1-2':true, 'a1-3':true,
+          'b1-1':false, 'b1-2':false, 'b1-3':false },
+        monarchEndWholeBlockRevisionByMatch:{ 'a1-1':2, 'a1-2':2, 'a1-3':2,
+          'b1-1':5, 'b1-2':5, 'b1-3':5 } } };
+      window.ScoreplaceOperationRouter = { call: async (_name, payload) => {
+        window.seriesModeRequest = payload;
+        return { ok:true, enabled:payload.enabled, matchIds:['a1-1','a1-2','a1-3'], revision:3 };
+      } };
+      const selectedSeriesState = window._bracketOperationsSelect(t);
+      window._bracketOperationsRefresh(t, root);
+      const seriesStrip = root._bracketOperationsStrip;
+      const seriesToggles = [...seriesStrip.querySelectorAll('.sp-operations-court-slot--active [data-operations-series-mode]')];
+      const seriesModesBefore = seriesToggles.map(button => button.getAttribute('aria-checked'));
+      const adjacentToEnded = seriesToggles.every(button =>
+        button.previousElementSibling && button.previousElementSibling.getAttribute('data-operations-action') === 'ended');
+      const groupFound = window._bracketOperationsGroup(t, t.matches[0], t.matches);
+      if (seriesToggles[0]) {
+        seriesToggles[0].click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+      const seriesModesAfter = [...seriesStrip.querySelectorAll('.sp-operations-court-slot--active [data-operations-series-mode]')]
+        .map(button => button.getAttribute('aria-checked'));
+      t.matches = originalMatches;
+      delete t.scheduleWindow;
+      window._bracketOperationsRefresh(t, root);
       return { initial, afterCall, refereeView, selectFocusRestored, selectorDoesNotOpenBracket,
-        selectorStayedInStrip, outsiderHidden: !document.querySelector('[data-bracket-operations-strip]') };
+        selectorStayedInStrip, outsiderHidden, seriesModesBefore, seriesModesAfter, adjacentToEnded,
+        groupMatchCount:groupFound && groupFound.matches.length,
+        selectedActiveCount:selectedSeriesState && selectedSeriesState.active.length,
+        activeCardCount:seriesStrip.querySelectorAll('.sp-operations-court-slot--active .sp-operations-replica').length,
+        activeSlotCount:seriesStrip.querySelectorAll('.sp-operations-court-slot--active').length,
+        seriesButtonCount:seriesStrip.querySelectorAll('[data-operations-series-mode]').length,
+        stripBusy:seriesStrip._spCourtBusy || 0,
+        seriesModeRequest:window.seriesModeRequest };
     });
     assert(state.initial.full && state.initial.names && state.initial.noCanonical && state.initial.uniqueIds && state.initial.linked && state.initial.noInline);
     assert.deepEqual(state.initial.nextCards, ['m1', 'm2']);
@@ -258,6 +311,12 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert(state.refereeView.pendingBottomCancel && !state.refereeView.pendingHeaderCancel,
       'Cancelar do placar pendente deve ficar na linha inferior, fora das setas do jogo');
     assert.match(state.refereeView.availableCourt, /2 QUADRAS LIVRES/);
+    assert.deepEqual(state.seriesModesBefore, ['true','false'], 'cada quadra apresenta seu estado independente');
+    assert.deepEqual(state.seriesModesAfter, ['false','false'], 'salvar uma série não altera o toggle da outra quadra');
+    assert(state.adjacentToEnded, 'o toggle visual aparece imediatamente ao lado de Encerrado em cada quadra');
+    assert.equal(state.seriesModeRequest.matchId, 'a1-1');
+    assert.equal(state.seriesModeRequest.enabled, false, 'o clique alterna apenas a série selecionada');
+    assert.equal(state.seriesModeRequest.expectedRevision, 2, 'envia a revisão daquela série, não a revisão global da fila');
     const scrollLayout = await page.evaluate(() => {
       const t = window._findTournamentById();
       const root = document.querySelector('[data-bracket-tabs-root]');
