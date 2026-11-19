@@ -8,8 +8,8 @@
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "76440e09510d5002e0511b271c19bb8f0ac13296",
+      "deployedAt": "2026-11-19T01:58:06.770Z",
       "result": "success",
       "mode": "only"
     },
