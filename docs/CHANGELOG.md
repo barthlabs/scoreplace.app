@@ -1,3 +1,11 @@
+## 2.7.40 — 18/nov/2026 (chave configurável e categorias opcionais)
+
+- A chave eliminatória e a súmula são preparadas desde o sorteio para todas as categorias, com cruzamentos oficiais e vagas pendentes que recebem os classificados conforme os grupos se definem. A chamada do último jogo classificatório aciona a próxima fase no momento previsto para torneios concentrados ou intercalados.
+- A tela de controle reúne categorias na aba Geral, mantém placares pendentes de jogos encerrados e preserva o contexto da quadra; a chave vem antes das ferramentas administrativas. A linha de operação não duplica após atualizações. A TV espelha os dois lados e solicita tela cheia ao abrir, respeitando a ativação exigida pelo navegador.
+- A organização pode configurar partidas por total fixo de games, em que todos são jogados e o placar soma o resultado, e escolher de 1 a 7 rodadas para grupos de oito com parceiros sem repetição. Em empate de três ou mais atletas, o regulamento pode sortear dois para o jogo simples de desempate.
+- Os campos numéricos de vagas por categoria ocupam menos espaço. Uma categoria com zero vagas deixa de existir no torneio, no total e na prévia; um inteiro positivo a reativa com aquela capacidade. Torneios anteriores sem a configuração continuam válidos sem migração de dados.
+- A validação do plano informa erro controlado se o motor de classificação estiver indisponível. Grupos sem nome não geram vagas órfãs, e a súmula não projeta outra chave quando o plano salvo diverge da próxima fase. Uma chave oficial sem plano salvo e origens de grupo ainda vazias permanecem como vagas pendentes.
+
 - O servidor recusa exclusões que afetem inscrições, reservas, preços por categoria ou uma chave já materializada. Vagas de uma chave oficial sem origem de grupo disponível continuam pendentes até poderem ser resolvidas.
 
 ## 2.7.11 — 15/nov/2026 (cabeçalho web móvel)
