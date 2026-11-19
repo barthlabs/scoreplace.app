@@ -1360,7 +1360,8 @@
   // Lê uma vaga da mesma transição que gera a chave oficial. Grupo ainda em
   // disputa não produz equipe, mesmo que a tabela provisória tenha um líder.
   function resolveOfficialGroupSlot(t, phaseIndex, category, groupSource, computeStandings) {
-    if (!t || !Array.isArray(t.phases) || !t.phases[phaseIndex]) return null;
+    if (!t || !Array.isArray(t.phases) || !Number.isInteger(phaseIndex) ||
+        phaseIndex < 1 || !t.phases[phaseIndex] || !String(groupSource || '').trim()) return null;
     var groups = phaseIndex === 1 ? prevPhaseGroups(t) : bracketPhaseGroups(t, phaseIndex - 1);
     var code = String(groupSource || '').trim();
     var group = (groups || []).filter(function (g) {

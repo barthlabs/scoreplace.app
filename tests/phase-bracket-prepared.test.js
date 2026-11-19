@@ -92,6 +92,10 @@ assert.throws(() => E.prepareOfficialGroupBracket(unnamedGroup, 1, 'ph-unnamed')
   'grupo sem nome falha fechado em vez de criar vaga sem origem');
 assert.equal(E.resolveOfficialGroupSlot(null, 1, 'Feminino', 'A1', () => []), null,
   'resolução defensiva retorna pendente sem torneio');
+assert.equal(E.resolveOfficialGroupSlot(single, 99, 'Feminino', 'A1', () => []), null,
+  'resolução retorna pendente para fase fora da faixa');
+assert.equal(E.resolveOfficialGroupSlot(single, 1, 'Feminino', '', () => []), null,
+  'origem de grupo vazia é explicitamente pendente');
 
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const callStart = source.indexOf('exports.assignMatchCourt = onCall');
@@ -145,6 +149,12 @@ assert.equal(plannedFirst.source1, 'A1', 'plano expõe o código de origem sem p
 assert.equal(plannedFirst.source2, 'A2', 'plano expõe o código de origem sem prefixo duplicado');
 assert(plannedFirst.p1.includes(groups[0].rows[0].name) && !plannedFirst.p2,
   'súmula usa a mesma chave e preenche só a vaga resolvida');
+const missingOfficialPlan = structuredClone(t);
+delete missingOfficialPlan.phaseBracketPlanVersion;
+delete missingOfficialPlan.phaseBracketPlanV1;
+const missingOfficialProjection = W._sumulaUpcomingBracket(missingOfficialPlan, 1);
+assert(missingOfficialProjection.pending && missingOfficialProjection.categories.length === 0,
+  'súmula não infere geometria quando a configuração exige um plano oficial ausente');
 const misalignedPlan = structuredClone(t);
 misalignedPlan.phaseBracketPlanV1.phaseIndex = 2;
 const misalignedProjection = W._sumulaUpcomingBracket(misalignedPlan, 1);

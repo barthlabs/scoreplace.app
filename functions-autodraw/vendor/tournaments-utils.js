@@ -1429,6 +1429,17 @@ window._sumulaUpcomingBracket = function (t, phaseIdx) {
   var saved = hasSavedPlan && t.phaseBracketPlanV1;
   var consumedSavedPlan = saved && Number.isInteger(saved.phaseIndex) && saved.phaseIndex < phaseIdx &&
     Array.isArray(t.matches) && t.matches.some(function (m) { return m && Number(m.phaseIndex || 0) === saved.phaseIndex; });
+  if (!hasSavedPlan) {
+    try {
+      var configuredPhase = eng.projectPhaseCfg(t.phases[phaseIdx], t, phaseIdx);
+      if (configuredPhase && configuredPhase.kind === 'elimination' &&
+          Array.isArray(configuredPhase.officialGroupBracketOrder) && configuredPhase.officialGroupBracketOrder.length) {
+        return { phaseIndex:phaseIdx, pending:'A chave oficial ainda não tem um plano salvo.', categories:[] };
+      }
+    } catch (e) {
+      return { phaseIndex:phaseIdx, pending:'A configuração da chave oficial não pôde ser validada.', categories:[] };
+    }
+  }
   if (hasSavedPlan && (!saved || !Number.isInteger(saved.phaseIndex) ||
       !Array.isArray(saved.matches) || (saved.phaseIndex !== phaseIdx && !consumedSavedPlan))) {
     return { phaseIndex:phaseIdx, pending:'A chave planejada não corresponde à próxima fase disponível.', categories:[] };
