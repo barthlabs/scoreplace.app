@@ -1359,12 +1359,13 @@
 
   // Lê uma vaga da mesma transição que gera a chave oficial. Grupo ainda em
   // disputa não produz equipe, mesmo que a tabela provisória tenha um líder.
-  // Código de origem vazio ou inválido representa vaga ainda pendente (null).
+  // A origem vazia é inválida tanto na preparação quanto na leitura do plano.
   function resolveOfficialGroupSlot(t, phaseIndex, category, groupSource, computeStandings) {
     if (!t || !Array.isArray(t.phases) || !Number.isInteger(phaseIndex) ||
-        phaseIndex < 1 || !t.phases[phaseIndex] || !String(groupSource || '').trim()) return null;
-    var groups = phaseIndex === 1 ? prevPhaseGroups(t) : bracketPhaseGroups(t, phaseIndex - 1);
+        phaseIndex < 1 || !t.phases[phaseIndex]) return null;
     var code = String(groupSource || '').trim();
+    if (!code) throw new Error('Origem do grupo obrigatória para resolver chave oficial.');
+    var groups = phaseIndex === 1 ? prevPhaseGroups(t) : bracketPhaseGroups(t, phaseIndex - 1);
     var group = (groups || []).filter(function (g) {
       var name = String(g && (g.name || g.label) || '').trim()
         .replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '').trim();

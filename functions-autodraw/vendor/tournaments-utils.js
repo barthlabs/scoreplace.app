@@ -1460,7 +1460,7 @@ window._sumulaUpcomingBracket = function (t, phaseIdx) {
         loserNextMatchId:m.loserNextMatchId, loserNextSlot:m.loserNextSlot,
         repFill:Array.isArray(m.repFill) ? m.repFill : [] });
     });
-    return { phaseIndex:phaseIdx, name:t.phases[phaseIdx].name || 'Eliminatória', categories:categories };
+    return { phaseIndex:phaseIdx, source:'official-plan', name:t.phases[phaseIdx].name || 'Eliminatória', categories:categories };
   }
   try {
     var groups = _phaseGroupsForProjection(t, phaseIdx, eng);
@@ -1497,7 +1497,7 @@ window._sumulaUpcomingBracket = function (t, phaseIdx) {
       });
       return matches.length === 1 ? String(matches[0].name || matches[0].label || '').trim() : '';
     }
-    return { phaseIndex: phaseIdx, name: cfg.name || t.phases[phaseIdx].name || 'Eliminatória',
+    return { phaseIndex: phaseIdx, source:'geometry', name: cfg.name || t.phases[phaseIdx].name || 'Eliminatória',
       categories: (projected.categoryBuilds || []).map(function (part) {
         var built = part.built;
         var categoryGroups = groups.filter(function (g) {

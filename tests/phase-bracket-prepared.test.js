@@ -94,10 +94,10 @@ assert.equal(E.resolveOfficialGroupSlot(null, 1, 'Feminino', 'A1', () => []), nu
   'resolução defensiva retorna pendente sem torneio');
 assert.equal(E.resolveOfficialGroupSlot(single, 99, 'Feminino', 'A1', () => []), null,
   'resolução retorna pendente para fase fora da faixa');
-assert.equal(E.resolveOfficialGroupSlot(single, 1, 'Feminino', '', () => []), null,
-  'origem de grupo vazia é explicitamente pendente');
-assert.equal(E.resolveOfficialGroupSlot(single, 1, 'Feminino', '   ', () => []), null,
-  'origem composta só por espaços mantém contrato pendente após trim');
+assert.throws(() => E.resolveOfficialGroupSlot(single, 1, 'Feminino', '', () => []), /Origem do grupo obrigatória/,
+  'origem de grupo vazia é recusada na leitura como na preparação');
+assert.throws(() => E.resolveOfficialGroupSlot(single, 1, 'Feminino', '   ', () => []), /Origem do grupo obrigatória/,
+  'origem composta só por espaços é recusada após trim');
 
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const callStart = source.indexOf('exports.assignMatchCourt = onCall');
@@ -145,6 +145,7 @@ assert.equal(filled.p2, 'TBD', 'grupo ainda aberto continua pendente');
 assert.deepEqual(t.phaseBracketPlanV1.matches.map(m => m.id), originalIds,
   'reconciliação não recria os confrontos');
 const future = W._sumulaUpcomingBracket(t, 1);
+assert.equal(future.source, 'official-plan', 'súmula identifica a origem oficial da chave salva');
 const plannedFirst = future.categories.find(bucket => bucket.category === 'Feminino').matches
   .find(m => m.id === first.id);
 assert.equal(plannedFirst.source1, 'A1', 'plano expõe o código de origem sem prefixo duplicado');
@@ -176,6 +177,7 @@ function assertProjectionMatchesAdvance(compilation, suffix) {
   projectionTournament._phaseMaterialized = 0;
   projectionTournament.phaseCategoryMaterialized = {};
   const projected = W._sumulaUpcomingBracket(projectionTournament, 1);
+  assert.equal(projected.source, 'geometry', suffix + ': projeção identifica explicitamente sua origem geométrica');
   const advancedTournament = structuredClone(projectionTournament);
   const advanced = E.materializeNextPhase(advancedTournament, group => group.rows,
     'projection-' + suffix, { ts:1, rnd:() => 0.5, agoraIso:'2026-11-18T12:00:00Z' });
