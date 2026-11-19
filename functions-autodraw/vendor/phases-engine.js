@@ -1330,6 +1330,7 @@
     }
     function placeholder(group) {
       var code = groupCode(group);
+      if (!code) throw new Error('Grupo sem nome para chave oficial.');
       var label = 'Vencedor do Grupo ' + code;
       sources[label] = code;
       return [{ name:label, displayName:label }];
@@ -1359,6 +1360,7 @@
   // Lê uma vaga da mesma transição que gera a chave oficial. Grupo ainda em
   // disputa não produz equipe, mesmo que a tabela provisória tenha um líder.
   function resolveOfficialGroupSlot(t, phaseIndex, category, groupSource, computeStandings) {
+    if (!t || !Array.isArray(t.phases) || !t.phases[phaseIndex]) return null;
     var groups = phaseIndex === 1 ? prevPhaseGroups(t) : bracketPhaseGroups(t, phaseIndex - 1);
     var code = String(groupSource || '').trim();
     var group = (groups || []).filter(function (g) {

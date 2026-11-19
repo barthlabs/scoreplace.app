@@ -1423,10 +1423,17 @@ function _simulatePhaseGames(t, phaseIdx) {
 // antecipar classificados ou alterar o contador usado nas demais telas.
 window._sumulaUpcomingBracket = function (t, phaseIdx) {
   var eng = window._phasesEngine;
-  if (!t || !Array.isArray(t.phases) || !eng ||
+  if (!t || !Array.isArray(t.phases) || !t.phases[phaseIdx] || !eng ||
       typeof eng.projectPhaseCfg !== 'function' || typeof eng.buildCategorizedPhaseBrackets !== 'function') return null;
-  var saved = t.phaseBracketPlanVersion === 1 && t.phaseBracketPlanV1;
-  if (saved && saved.phaseIndex === phaseIdx && Array.isArray(saved.matches)) {
+  var hasSavedPlan = t.phaseBracketPlanVersion === 1;
+  var saved = hasSavedPlan && t.phaseBracketPlanV1;
+  var consumedSavedPlan = saved && Number.isInteger(saved.phaseIndex) && saved.phaseIndex < phaseIdx &&
+    Array.isArray(t.matches) && t.matches.some(function (m) { return m && Number(m.phaseIndex || 0) === saved.phaseIndex; });
+  if (hasSavedPlan && (!saved || !Number.isInteger(saved.phaseIndex) ||
+      !Array.isArray(saved.matches) || (saved.phaseIndex !== phaseIdx && !consumedSavedPlan))) {
+    return { phaseIndex:phaseIdx, pending:'A chave planejada não corresponde à próxima fase disponível.', categories:[] };
+  }
+  if (saved && saved.phaseIndex === phaseIdx) {
     var categories = [];
     saved.matches.forEach(function (m) {
       if (!m || m.isBye || m.isSitOut) return;
@@ -1436,8 +1443,8 @@ window._sumulaUpcomingBracket = function (t, phaseIdx) {
       bucket.matches.push({ id:m.id, round:m.round, bracket:m.bracket,
         isThirdPlace:!!m.isThirdPlace, p1:m.p1 && m.p1 !== 'TBD' ? m.p1 : '',
         p2:m.p2 && m.p2 !== 'TBD' ? m.p2 : '',
-        source1:m.p1GroupSource ? 'Vencedor do Grupo ' + m.p1GroupSource : '',
-        source2:m.p2GroupSource ? 'Vencedor do Grupo ' + m.p2GroupSource : '',
+        source1:m.p1GroupSource || '',
+        source2:m.p2GroupSource || '',
         nextMatchId:m.nextMatchId, nextSlot:m.nextSlot,
         loserNextMatchId:m.loserNextMatchId, loserNextSlot:m.loserNextSlot,
         repFill:Array.isArray(m.repFill) ? m.repFill : [] });

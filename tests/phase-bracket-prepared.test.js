@@ -86,6 +86,12 @@ single.phases[1].officialGroupBracketGroupOrder = { Feminino:[1,2,3,4] };
 const singlePlan = E.prepareOfficialGroupBracket(single, 1, 'ph-single-1-c0');
 assert(singlePlan.matches.some(m => m.p1GroupSource === 'A1' && m.p2GroupSource === 'A2'),
   'categoria única também respeita o cruzamento oficial A1 × A2');
+const unnamedGroup = structuredClone(single);
+unnamedGroup.groups[0].name = '';
+assert.throws(() => E.prepareOfficialGroupBracket(unnamedGroup, 1, 'ph-unnamed'), /Grupo sem nome/,
+  'grupo sem nome falha fechado em vez de criar vaga sem origem');
+assert.equal(E.resolveOfficialGroupSlot(null, 1, 'Feminino', 'A1', () => []), null,
+  'resolução defensiva retorna pendente sem torneio');
 
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const callStart = source.indexOf('exports.assignMatchCourt = onCall');
@@ -135,10 +141,15 @@ assert.deepEqual(t.phaseBracketPlanV1.matches.map(m => m.id), originalIds,
 const future = W._sumulaUpcomingBracket(t, 1);
 const plannedFirst = future.categories.find(bucket => bucket.category === 'Feminino').matches
   .find(m => m.id === first.id);
-assert.equal(plannedFirst.source1, 'Vencedor do Grupo A1');
-assert.equal(plannedFirst.source2, 'Vencedor do Grupo A2');
+assert.equal(plannedFirst.source1, 'A1', 'plano expõe o código de origem sem prefixo duplicado');
+assert.equal(plannedFirst.source2, 'A2', 'plano expõe o código de origem sem prefixo duplicado');
 assert(plannedFirst.p1.includes(groups[0].rows[0].name) && !plannedFirst.p2,
   'súmula usa a mesma chave e preenche só a vaga resolvida');
+const misalignedPlan = structuredClone(t);
+misalignedPlan.phaseBracketPlanV1.phaseIndex = 2;
+const misalignedProjection = W._sumulaUpcomingBracket(misalignedPlan, 1);
+assert(misalignedProjection.pending && misalignedProjection.categories.length === 0,
+  'súmula não infere outra chave quando o plano salvo aponta para fase diferente');
 
 // Quando o organizador escolhe múltiplas linhas ou mais de um classificado por grupo,
 // não existe a regra especializada de um vencedor por grupo. Súmula e avanço usam o
