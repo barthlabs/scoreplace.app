@@ -2402,6 +2402,7 @@ window._bracketOperationsRefresh = function (t, root) {
       (window._tournamentResultsComplete && window._tournamentResultsComplete(t)) ||
       !document.getElementById('tourn-grid-container')) {
     if (existing && existing._spOperationsOnResize) window.removeEventListener('resize', existing._spOperationsOnResize);
+    if (existing && existing._spSeriesLabelObserver) { existing._spSeriesLabelObserver.disconnect(); existing._spSeriesLabelObserver = null; }
     if (existing && existing.parentNode) existing.remove();
     if (root._bracketOperationsProgress) root._bracketOperationsProgress.remove();
     root._bracketOperationsProgress = null;
@@ -2677,7 +2678,10 @@ window._bracketOperationsRefresh = function (t, root) {
         if (!entry || !entry.ready || !entry.capabilityReady || existing._spSeriesModeBusy) {
           seriesToggle.checked = !!(entry && entry.monarchEndWholeBlock); return;
         }
+        existing._spSeriesModeRestoreFocus = document.activeElement === seriesToggle;
         existing._spSeriesModeBusy = true; seriesToggle.disabled = true;
+        var seriesModeState = existing.querySelector('[data-series-mode-state]');
+        if (seriesModeState) seriesModeState.textContent = 'Salvando preferência…';
         window.ScoreplaceOperationRouter.call('endMatchOnCourt', {
           tournamentId:String(t.id), sandbox:String(t.id).startsWith('sb_'), action:'series-mode',
           enabled:seriesToggle.checked, expectedRevision:Number(entry.revision || 0), operationId:_courtOperationId()
@@ -2693,6 +2697,15 @@ window._bracketOperationsRefresh = function (t, root) {
           existing._spSeriesModeBusy = false;
           var fresh = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(t.id)) : t;
           window._bracketOperationsRefresh(fresh || t, root);
+          var settledToggle = existing.querySelector('[data-operations-series-mode]');
+          var settledState = existing.querySelector('[data-series-mode-state]');
+          if (existing.isConnected && settledToggle && settledState && settledState.textContent === 'Salvando preferência…') {
+            settledToggle.checked = !!entry.monarchEndWholeBlock;
+            settledToggle.disabled = !entry.ready || !entry.capabilityReady;
+            settledState.textContent = settledToggle.disabled ? 'Aguardando confirmação das versões operacionais publicadas.' :
+              settledToggle.checked ? 'Ativado: encerrar o bloco com os 3 jogos.' : 'Desativado: liberar jogo por jogo.';
+          }
+          existing._spSeriesModeRestoreFocus = false;
         });
         return;
       }
@@ -2779,12 +2792,14 @@ window._bracketOperationsRefresh = function (t, root) {
   var courtEntryForMode = window._bracketCourtReleaseCache[String(t.id)] || {};
   var hasMonarchSeries = state.matches.some(function (m) { return m && m.isMonarch === true && !m.isTieBreak; });
   var seriesModeHtml = hasMonarchSeries && typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user)
-    ? '<label class="sp-operations-series-mode" style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin:0 0 10px;border:1px solid var(--border-color);border-radius:10px;">' +
+    ? '<label class="sp-operations-series-mode" style="display:flex;flex:0 0 auto;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border-color);border-radius:10px;">' +
       '<input type="checkbox" data-operations-series-mode="1"' + (courtEntryForMode.monarchEndWholeBlock ? ' checked' : '') +
       (!courtEntryForMode.ready || !courtEntryForMode.capabilityReady || existing._spSeriesModeBusy ? ' disabled' : '') +
       ' style="width:20px;height:20px;accent-color:#22c55e;">' +
-      '<span><strong>Encerrar os 3 jogos do bloco juntos</strong><br><small>' +
-      (courtEntryForMode.capabilityReady ? 'Desativado: liberar jogo por jogo.' : 'Aguardando confirmação das versões operacionais publicadas.') +
+      '<span><strong>Encerrar os 3 jogos do bloco juntos</strong><br><small data-series-mode-state>' +
+      (existing._spSeriesModeBusy ? 'Salvando preferência…' :
+        !courtEntryForMode.ready || !courtEntryForMode.capabilityReady ? 'Aguardando confirmação das versões operacionais publicadas.' :
+        courtEntryForMode.monarchEndWholeBlock ? 'Ativado: encerrar o bloco com os 3 jogos.' : 'Desativado: liberar jogo por jogo.') +
       '</small></span></label>' : '';
   var estimates = _bracketOperationsFutureEstimates(state, t);
   var canAdvancePhase = canCall && typeof window._isUserOrgOrCoHost === 'function' &&
@@ -2822,7 +2837,9 @@ window._bracketOperationsRefresh = function (t, root) {
     availability, root, state.matches, 'next:' + String(m.id));
   }).join('');
   if (existing._spNextScrollRestoreObserver) { existing._spNextScrollRestoreObserver.disconnect(); existing._spNextScrollRestoreObserver = null; }
-  existing.innerHTML = seriesModeHtml + '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll" aria-label="Próximos jogos">' +
+  if (existing._spSeriesLabelObserver) { existing._spSeriesLabelObserver.disconnect(); existing._spSeriesLabelObserver = null; }
+  existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next' +
+    (seriesModeHtml ? ' sp-operations-next--series-mode' : '') + '">' + seriesModeHtml + '<div class="sp-operations-next-scroll" aria-label="Próximos jogos">' +
     advancePhaseHtml +
     (nextCardsHtml || '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
@@ -2842,6 +2859,27 @@ window._bracketOperationsRefresh = function (t, root) {
         '</div>';
     }).join('') +
     '</div></div></div><div class="sp-operations-scrollbar" role="scrollbar" tabindex="0" aria-label="Rolar jogos em quadra" aria-orientation="horizontal" aria-valuemin="0"><div class="sp-operations-scrollbar-thumb"></div></div>';
+  var seriesModeLabel = existing.querySelector('[data-operations-series-mode]');
+  var nextCard = existing.querySelector('.sp-operations-next');
+  if (seriesModeLabel && nextCard) {
+    nextCard.style.setProperty('--sp-operations-next-extra', '0px');
+    var updateSeriesModeHeight = function () {
+      if (!seriesModeLabel.isConnected || !nextCard.isConnected) return;
+      var measuredLabelHeight = Math.ceil(seriesModeLabel.offsetHeight);
+      if (measuredLabelHeight > 0) nextCard.style.setProperty('--sp-operations-next-extra', (measuredLabelHeight + 8) + 'px');
+    };
+    updateSeriesModeHeight();
+    if (typeof ResizeObserver === 'function') {
+      existing._spSeriesLabelObserver = new ResizeObserver(updateSeriesModeHeight);
+      existing._spSeriesLabelObserver.observe(seriesModeLabel);
+    }
+  }
+  var newSeriesToggle = existing.querySelector('[data-operations-series-mode]');
+  if (existing._spSeriesModeRestoreFocus && newSeriesToggle && !newSeriesToggle.disabled &&
+      (!document.activeElement || document.activeElement === document.body)) {
+    newSeriesToggle.focus({ preventScroll:true });
+    existing._spSeriesModeRestoreFocus = false;
+  }
   var advancePhaseButton = existing.querySelector('[data-operations-advance-phase]');
   if (advancePhaseButton) advancePhaseButton.addEventListener('click', function () {
     if (typeof window._advanceMultiPhase === 'function') window._advanceMultiPhase(t.id);
