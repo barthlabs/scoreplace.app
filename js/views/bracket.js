@@ -1354,6 +1354,12 @@ window._bracketEnsureCourtCapability = function (tId, entry) {
     entry.capabilityError = null;
   }).catch(function (error) {
     entry.capabilityReady = false; entry.capabilityChecked = true; entry.capabilityError = error;
+    if (!entry.capabilityRetryTimer) entry.capabilityRetryTimer = setTimeout(function () {
+      entry.capabilityRetryTimer = null;
+      if (window._bracketCourtReleaseCache[String(tId)] !== entry) return;
+      entry.capabilityChecked = false;
+      window._bracketEnsureCourtCapability(String(tId), entry);
+    }, 5000);
   }).finally(function () {
     entry.capabilityCheckPromise = null;
     var tournament = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(tId)) : null;
