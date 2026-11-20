@@ -31,6 +31,7 @@ function real(start, end) {
     await page.addScriptTag({ content: real('function _bracketOperationalCards(', '\nfunction _bracketAgendaCompare(') });
     await page.addScriptTag({ content: 'function _bracketLineSection(card) { return card.closest("[data-line-section]"); }\n' +
       'function _bracketGeneralView() { return false; }\nfunction _bracketSyncEmptyScheduledPhase() {}\n' +
+      'function _bracketOperationsApplyCategoryFilter() {}\n' +
       'function _bracketTabsRefreshRoundRail() {}\nfunction _bracketLayoutEliminationTree() {}\n' +
       real('function _bracketTabsApply(', '\nfunction _bracketSyncRoundHeadingOffsets(') });
     const result = await page.evaluate(() => {
