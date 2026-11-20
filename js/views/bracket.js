@@ -1248,6 +1248,10 @@ function _bracketOperationalCards(root, fallbackScope) {
   });
 }
 
+function _bracketTabCategoryMatches(value, category) {
+  return String(value == null ? '' : value) === String(category == null ? '' : category);
+}
+
 function _bracketAgendaCompare(a, b) {
   if (a.at !== b.at) return a.at - b.at;
   var an = Number(a.num), bn = Number(b.num);
@@ -1502,7 +1506,7 @@ window._bracketOperationsSelect = function (t) {
 // Cada clique registra somente a leva que já ocupa as quadras. A próxima
 // partida de uma série entra pela resposta canônica do servidor; ela nunca é
 // incluída no mesmo lote por acidente.
-window._bracketOperationsSimulate = async function (tId) {
+window._bracketOperationsSimulate = async function (tId, categoryFilter) {
   var t = typeof window._findTournamentById === 'function' && window._findTournamentById(String(tId));
   if (!t || !window.AppStore || !window.AppStore.currentUser ||
       typeof window._isUserOrgOrCoHost !== 'function' ||
@@ -1514,6 +1518,7 @@ window._bracketOperationsSimulate = async function (tId) {
   var games = snapshot.active.filter(function (m) {
     if (!m || m.isTieBreak || !m.court || seenCourts.has(String(m.court)) || m.winner || m.pendingResult ||
         !m.p1 || !m.p2 || m.p1 === 'TBD' || m.p2 === 'TBD' || m.isBye) return false;
+    if (categoryFilter && String(m.category || '') !== String(categoryFilter)) return false;
     seenCourts.add(String(m.court));
     return true;
   });
@@ -2200,8 +2205,16 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
       html = activeCard.outerHTML;
     }
   }
+  var tabCategory = String(selected.category || m.category || '');
+  if (selected.isTieBreak || m.isTieBreak) {
+    var tieGameNumber = Number((selected.isTieBreak && selected.tieBaseGameNumber) || (m.isTieBreak && m.tieBaseGameNumber));
+    var tieBase = (allMatches || []).find(function (candidate) {
+      return Number(candidate && (candidate._gameNum || candidate.scheduledGameNumber)) === tieGameNumber;
+    });
+    if (tieBase && tieBase.category) tabCategory = String(tieBase.category);
+  }
   return '<div class="sp-operations-replica' + (role.active ? ' sp-operations-court-card' : '') + '" data-operations-match="' +
-    safe(String(selected.id || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '"><span class="sp-operations-label">' + safe(label) + stage + postpone + '</span>' + (availability || '') + html + '</div>';
+    safe(String(selected.id || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '" data-bracket-tab-category="' + safe(tabCategory) + '"><span class="sp-operations-label">' + safe(label) + stage + postpone + '</span>' + (availability || '') + html + '</div>';
 }
 
 function _bracketOperationsDraftValues(op) {
@@ -2395,6 +2408,24 @@ function _bracketTieLive(tId, decisionId, matchId) {
   });
 }
 
+function _bracketOperationsCategoryFilter(root, tournamentId) {
+  if (!root || root.getAttribute('data-bracket-line-tabs') !== '1') return '';
+  var state = window._bracketTabState && window._bracketTabState[String(tournamentId)] || null;
+  if (!state || !state.category) {
+    try { state = JSON.parse(sessionStorage.getItem('scoreplace_bracket_tab_state_' + String(tournamentId)) || '{}') || {}; }
+    catch (e) { state = null; }
+  }
+  return state && state.category && state.category !== '__all_categories' ? String(state.category) : '';
+}
+
+function _bracketOperationsApplyCategoryFilter(root, strip, tournamentId) {
+  if (!strip) return;
+  var category = _bracketOperationsCategoryFilter(root, tournamentId);
+  Array.prototype.forEach.call(strip.querySelectorAll('.sp-operations-replica'), function (replica) {
+    replica.hidden = !!category && !_bracketTabCategoryMatches(replica.getAttribute('data-bracket-tab-category'), category);
+  });
+}
+
 window._bracketOperationsRefresh = function (t, root) {
   root = root || Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
     return t && node.getAttribute('data-tournament-id') === String(t.id);
@@ -2452,12 +2483,32 @@ window._bracketOperationsRefresh = function (t, root) {
   }
   window._bracketEnsureCourtReleaseListener(t.id);
   window._bracketEnsureCourtCapability(t.id, window._bracketCourtReleaseCache[String(t.id)]);
+  var categoryFilter = _bracketOperationsCategoryFilter(root, tournamentId);
   var state = window._bracketOperationsSelect(t);
-  if (!state) return; // eco incompleto nunca apaga a faixa anterior
+  if (!state) {
+    _bracketOperationsApplyCategoryFilter(root, existing, tournamentId);
+    return; // eco incompleto nunca apaga a faixa anterior
+  }
+  // O filtro de abas altera só a apresentação; fila canônica, ocupação e
+  // contadores/progresso continuam refletindo o torneio inteiro.
+  var categoryMatches = function (match) {
+    if (!categoryFilter) return true;
+    var matchCategory = match && match.category;
+    if (match && match.isTieBreak) {
+      var base = state.matches.find(function (candidate) {
+        return Number(candidate && (candidate._gameNum || candidate.scheduledGameNumber)) === Number(match.tieBaseGameNumber);
+      });
+      if (base && base.category) matchCategory = base.category;
+    }
+    return _bracketTabCategoryMatches(matchCategory, categoryFilter);
+  };
   // Recriar o select enquanto o menu nativo está aberto fecha a lista e pode
   // substituir a escolha por outra quadra antes do clique em OK.
   if (existing && (existing._spCourtBusy ||
-      existing.contains(document.activeElement) && document.activeElement.matches('.sp-operations-replica .sp-match-court select'))) return;
+      existing.contains(document.activeElement) && document.activeElement.matches('.sp-operations-replica .sp-match-court select'))) {
+    _bracketOperationsApplyCategoryFilter(root, existing, tournamentId);
+    return;
+  }
   if (!existing) {
     existing = document.createElement('section');
     existing.setAttribute('data-bracket-operations-strip', '1');
@@ -2518,7 +2569,7 @@ window._bracketOperationsRefresh = function (t, root) {
         existing._spSimulateBusy = true;
         existing._spCourtBusy = (existing._spCourtBusy || 0) + 1;
         simulate.disabled = true;
-        Promise.resolve(window._bracketOperationsSimulate(String(t.id))).catch(function (error) {
+        Promise.resolve(window._bracketOperationsSimulate(String(t.id), _bracketOperationsCategoryFilter(root, t.id))).catch(function (error) {
           if (window._error) window._error('[bracket] Simular em quadra', error);
           if (typeof showNotification === 'function') showNotification('Simulação interrompida',
             'Não foi possível gravar o placar. Confira os jogos em quadra antes de tentar novamente.', 'error');
@@ -2795,7 +2846,7 @@ window._bracketOperationsRefresh = function (t, root) {
   var freeCourts = state.freeCourts;
   var freeCount = freeCourts.length;
   var safe = window._safeHtml || String;
-  var nextCards = [state.next].concat(state.future || []).filter(function (m, index, list) {
+  var nextCards = [state.next].concat(state.future || []).filter(categoryMatches).filter(function (m, index, list) {
     return m && list.findIndex(function (item) { return item && String(item.id) === String(m.id); }) === index;
   });
   var readyIds = new Set((state.queue || []).map(function (m) { return String(m.id); }));
@@ -2831,7 +2882,8 @@ window._bracketOperationsRefresh = function (t, root) {
       postponeBusy:existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
       tieCanPostpone:!!state.tieCanPostpone && index === 0,
       preferFirstFreeCourt:true,
-      preferredCourt:(root._bracketOperationsManualCourt || {})[String(m.id)] || ''
+      preferredCourt:(root._bracketOperationsManualCourt || {})[String(m.id)] || '',
+      categoryFilter:categoryFilter
     }, index === 0 ? nextLabel : 'PRÓXIMO JOGO · ' + (index + 1) + '/' + nextCards.length,
     availability, root, state.matches, 'next:' + String(m.id));
   }).join('');
@@ -2840,23 +2892,25 @@ window._bracketOperationsRefresh = function (t, root) {
   existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll" aria-label="Próximos jogos">' +
     advancePhaseHtml +
     (nextCardsHtml || '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
-      (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
-        'Nenhum jogo aguardando chamada') + '</div>') + '</div></div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
-    state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false, pending: true }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
+      (categoryFilter ? 'Nenhum próximo jogo nesta categoria.' : state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
+        'Nenhum jogo aguardando chamada') + '</div>') + '</div></div>' + (state.pending.some(categoryMatches) ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
+    state.pending.filter(categoryMatches).map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false, pending: true, categoryFilter:categoryFilter }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
     '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><div class="sp-operations-courts-heading"><span class="sp-operations-section-title">EM QUADRA</span>' +
     (typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user) ?
       '<button type="button" class="sp-operations-simulate" data-operations-simulate="1" title="Registra placares simulados apenas nos jogos que estão em quadra agora"' +
-      (state.active.some(function (m) { return m && !m.isTieBreak && !m.winner && !m.pendingResult; }) ? '' : ' disabled') + '>Simular</button>' : '') +
+      (state.active.some(function (m) { return m && categoryMatches(m) && !m.isTieBreak && !m.winner && !m.pendingResult; }) ? '' : ' disabled') + '>Simular</button>' : '') +
     '</div><div class="sp-operations-court-track">' +
     state.courts.map(function (court) {
-      var games = state.active.filter(function (m) { return String(m.court) === court; });
+      var allCourtGames = state.active.filter(function (m) { return String(m.court) === court; });
+      var games = allCourtGames.filter(categoryMatches);
       return '<div class="sp-operations-court-slot' + (games.length ? ' sp-operations-court-slot--active' : '') + '">' +
-        (games.length ? games.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: true }, court, '', root, state.matches, 'court:' + String(m.id)); }).join('') :
+        (games.length ? games.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: true, categoryFilter:categoryFilter }, court, '', root, state.matches, 'court:' + String(m.id)); }).join('') :
           '<span class="sp-operations-label">' + window._safeHtml(court) + '</span><div class="sp-operations-court-free"><span>' +
-          (freeCourts.includes(court) ? 'Livre' : 'Ocupada') + '</span></div>') +
+          (freeCourts.includes(court) ? 'Livre' : allCourtGames.length ? 'Ocupada · outra categoria' : 'Ocupada') + '</span></div>') +
         '</div>';
     }).join('') +
     '</div></div></div><div class="sp-operations-scrollbar" role="scrollbar" tabindex="0" aria-label="Rolar jogos em quadra" aria-orientation="horizontal" aria-valuemin="0"><div class="sp-operations-scrollbar-thumb"></div></div>';
+  _bracketOperationsApplyCategoryFilter(root, existing, tournamentId);
   var courtEntryForMode = window._bracketCourtReleaseCache[String(t.id)] || {};
   if (courtEntryForMode.endCourtRestoreFocus && (!document.activeElement || document.activeElement === document.body)) {
     var restoreEndButton = existing.querySelector('[data-operations-action="' + courtEntryForMode.endCourtRestoreFocus.action + '"][data-series-match-id="' +
@@ -3675,10 +3729,11 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
   var cards = _bracketOperationalCards(root, root._bracketTabsScope);
   for (var i = 0; i < cards.length; i++) {
     var card = cards[i];
-    card.hidden = isOperationalView || (!isAllCategories && card.getAttribute('data-bracket-tab-category') !== category) ||
+    card.hidden = isOperationalView || (!isAllCategories && !_bracketTabCategoryMatches(card.getAttribute('data-bracket-tab-category'), category)) ||
       (!isAllCategories && usesDateTabs && card.getAttribute('data-bracket-tab-day') !== gender) ||
       (!isAllCategories && usesRoundTabs && card.getAttribute('data-bracket-tab-round') !== round);
   }
+  _bracketOperationsApplyCategoryFilter(root, root._bracketOperationsStrip, tid);
   _bracketSyncEmptyScheduledPhase(root);
   // A camada de cima é a aba principal: Ouro/Prata em linhas independentes;
   // Feminina/Masculina quando as categorias pertencem a um gênero. A ativa vem
@@ -4301,7 +4356,8 @@ window._bracketCategoryTabsMount = function () {
     }
   });
   var genderHtml = (isOnlyLines
-    ? (showCategoryLabels ? byGender.linhas : []).map(function (cat) {
+    ? (allCats > 1 ? '<button type="button" data-bracket-primary-tab="__all_categories" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'__all__\',\'__all_categories\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:106px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">Geral</button>' : '')
+      + (showCategoryLabels ? byGender.linhas : []).map(function (cat) {
       var escaped = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       return '<button type="button" data-bracket-primary-tab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'linhas\',\'' + escaped + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:106px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, 'linhas')) : _bracketTabLabel(cat, 'linhas')) + '</button>';
     }).join('')
@@ -4395,6 +4451,10 @@ window._bracketCategoryTabsMount = function () {
     return;
   }
   if (state.category === '__all_categories') {
+    _bracketTabsApply(id, '__all__', '__all_categories', '');
+    return;
+  }
+  if (isOnlyLines && !state.category) {
     _bracketTabsApply(id, '__all__', '__all_categories', '');
     return;
   }
