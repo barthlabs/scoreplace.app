@@ -1,3 +1,4 @@
+// 2.7.45 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.44 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.43 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.42 — Na operação, a organização pode encerrar juntos os três jogos do bloco Rei/Rainha ou encerrar cada jogo separadamente. A capacidade de quadra volta a ser consultada após falhas temporárias, e simulações de deploy não alteram a prontidão publicada.
