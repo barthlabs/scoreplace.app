@@ -1420,18 +1420,8 @@ window._bracketOperationsSelect = function (t) {
   var courtOccupants = occupancy.activeMatches(matches, released, t);
   var pending = matches.filter(function (m) { return m && released[String(m.id)] && !occupancy.isFinished(m); })
     .concat(tieMatches.filter(function (m) { return !m.winnerKey && !!m.courtReleasedAt; }));
-  // Os placares dos jogos 1 e 2 continuam acessíveis pelas setas do card da
-  // série enquanto o jogo seguinte ocupa a mesma quadra. Só após o terceiro
-  // encerramento a série aparece na seção global de pendentes.
-  pending = pending.filter(function (m) {
-    if (!m.isMonarch) return true;
-    var group = _bracketOperationsGroup(t, m, matches);
-    if (!group) return true;
-    var index = group.matches.findIndex(function (item) { return String(item.id) === String(m.id); });
-    return index < 0 || !group.matches.slice(index + 1).some(function (later) {
-      return !released[String(later.id)] && occupancy.occupiesCourt(later);
-    });
-  });
+  // Cada jogo liberado sem resultado entra imediatamente em Placares pendentes,
+  // mesmo quando o jogo seguinte da mesma série já ocupa a quadra.
   var upcoming = matches.filter(function (m) {
     if (!m || released[String(m.id)] || occupancy.isFinished(m) || m.isBye || m.isSitOut || occupancy.occupiesCourt(m) ||
         m.courtCalledAt || m.startedAt) return false;
@@ -2168,6 +2158,12 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
       ['cancel-court', 'ended'].forEach(function (action) {
         var button = activeHeaderActions.querySelector('[data-operations-action="' + action + '"]');
         if (!button) return;
+        if (action === 'ended') {
+          button.textContent = 'Encerra';
+          button.setAttribute('data-operations-end-mode', 'individual');
+          button.setAttribute('data-series-match-id', String(m.id));
+          button.setAttribute('aria-label', 'Encerrar este jogo e enviar para Placares pendentes');
+        }
         footerActions.appendChild(button);
       });
       var monarchGroup = role.active && m.isMonarch === true && !m.isTieBreak
@@ -2178,27 +2174,26 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
           typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, currentUser)) {
         var seriesIds = monarchGroup.matches.map(function (item) { return String(item.id); });
         var seriesKey = seriesIds.slice().sort().join('|');
-        var enabled = window._bracketMonarchEndWholeBlock(modeEntry, String(m.id));
         var busyMap = modeEntry.monarchEndWholeBlockBusyBySeries || {};
         var busy = !!busyMap[seriesKey];
-        var canToggle = !!modeEntry.ready && !!modeEntry.capabilityReady && !busy;
-        var modeButton = document.createElement('button');
-        modeButton.type = 'button';
-        modeButton.className = 'sp-operations-series-switch' + (enabled ? ' sp-operations-series-switch--on' : '');
-        modeButton.setAttribute('role', 'switch');
-        modeButton.setAttribute('aria-checked', enabled ? 'true' : 'false');
-        modeButton.setAttribute('aria-label', 'Encerrar os três jogos desta série juntos');
-        modeButton.setAttribute('title', busy ? 'Salvando preferência desta série…' :
-          !canToggle ? 'Aguardando confirmação das versões operacionais publicadas.' :
-          enabled ? 'Ativado: encerrar os três jogos desta série juntos' : 'Desativado: liberar jogo por jogo');
-        modeButton.setAttribute('data-operations-series-mode', '1');
-        modeButton.setAttribute('data-series-match-id', String(m.id));
-        modeButton.setAttribute('data-series-key', seriesKey);
-        modeButton.setAttribute('data-series-ids', seriesIds.join(','));
-        modeButton.disabled = !canToggle;
-        if (busy) modeButton.setAttribute('aria-busy', 'true');
-        modeButton.innerHTML = '<span class="sp-operations-series-switch-label">Bloco</span><span class="sp-operations-series-switch-track" aria-hidden="true"><span></span></span>';
-        footerActions.appendChild(modeButton);
+        var released = modeEntry.released || {};
+        var blockAlreadyPartial = seriesIds.some(function (id) { return !!released[String(id)]; });
+        var canBlock = !!modeEntry.ready && !!modeEntry.capabilityReady && !busy && !blockAlreadyPartial;
+        var blockButton = document.createElement('button');
+        blockButton.type = 'button';
+        blockButton.className = 'sp-operations-end-button sp-operations-end-button--block';
+        blockButton.textContent = 'Bloco';
+        blockButton.setAttribute('data-operations-end-mode', 'block');
+        blockButton.setAttribute('data-operations-action', 'block');
+        blockButton.setAttribute('data-series-match-id', String(m.id));
+        blockButton.setAttribute('aria-label', 'Encerrar os três jogos deste bloco');
+        blockButton.setAttribute('title', busy ? 'Encerramento do bloco em andamento.' :
+          blockAlreadyPartial ? 'O bloco não pode ser encerrado junto depois que um jogo foi liberado.' :
+          !canBlock ? 'Aguardando confirmação das versões operacionais publicadas.' :
+          'Enviar os três jogos do grupo para Placares pendentes');
+        blockButton.disabled = !canBlock;
+        if (busy) blockButton.setAttribute('aria-busy', 'true');
+        footerActions.appendChild(blockButton);
       }
       if (footerActions.childElementCount) activeCourtRow.insertBefore(footerActions,
         activeCourtRow.querySelector('.sp-match-court-clock') || null);
@@ -2541,49 +2536,13 @@ window._bracketOperationsRefresh = function (t, root) {
       var mid = op.getAttribute('data-operations-match');
       var target = event.target.closest('button,[data-operations-action],[data-operations-open]');
       if (!target || target.disabled) return;
-      if (target.hasAttribute('data-operations-series-mode')) {
+      if (target.hasAttribute('data-operations-end-mode')) {
         event.preventDefault();
-        var modeEntry = window._bracketCourtReleaseCache[String(t.id)];
-        var seriesKey = target.getAttribute('data-series-key');
-        var matchIds = String(target.getAttribute('data-series-ids') || '').split(',').filter(Boolean);
-        var modeMatchId = String(target.getAttribute('data-series-match-id') || mid);
-        if (!modeEntry || !modeEntry.ready || !modeEntry.capabilityReady || !seriesKey || !matchIds.length) return;
-        modeEntry.monarchEndWholeBlockBusyBySeries = modeEntry.monarchEndWholeBlockBusyBySeries || {};
-        if (modeEntry.monarchEndWholeBlockBusyBySeries[seriesKey]) return;
-        var currentEnabled = window._bracketMonarchEndWholeBlock(modeEntry, modeMatchId);
-        var nextEnabled = !currentEnabled;
-        var revisions = modeEntry.monarchEndWholeBlockRevisionByMatch || {};
-        var expectedRevision = Number(revisions[modeMatchId] || 0);
-        modeEntry.monarchEndWholeBlockBusyBySeries[seriesKey] = true;
-        modeEntry.seriesModeRestoreFocusId = modeMatchId;
-        target.disabled = true;
-        target.setAttribute('aria-busy', 'true');
-        window.ScoreplaceOperationRouter.call('endMatchOnCourt', {
-          tournamentId:String(t.id), matchId:modeMatchId, sandbox:String(t.id).startsWith('sb_'),
-          action:'series-mode', enabled:nextEnabled, expectedRevision:expectedRevision, operationId:_courtOperationId()
-        }, null).then(function (answer) {
-          if (!answer || !answer.ok) throw new Error('Não foi possível salvar esta configuração.');
-          var storedIds = Array.isArray(answer.matchIds) && answer.matchIds.length ? answer.matchIds : matchIds;
-          modeEntry.monarchEndWholeBlockByMatch = modeEntry.monarchEndWholeBlockByMatch || {};
-          modeEntry.monarchEndWholeBlockRevisionByMatch = modeEntry.monarchEndWholeBlockRevisionByMatch || {};
-          storedIds.forEach(function (id) {
-            modeEntry.monarchEndWholeBlockByMatch[String(id)] = !!answer.enabled;
-            modeEntry.monarchEndWholeBlockRevisionByMatch[String(id)] = Number(answer.revision || expectedRevision + 1);
-          });
-          if (typeof showNotification === 'function') showNotification('Preferência salva',
-            answer.enabled ? 'Os três jogos desta série serão encerrados juntos.' : 'Esta série voltará a ser encerrada jogo por jogo.', 'success');
-        }).catch(function (error) {
-          if (typeof showNotification === 'function') showNotification('Configuração não salva', error && error.message || 'Atualize a tela e tente novamente.', 'error');
-          return window._bracketReloadCourtState(t.id, modeEntry).catch(function () {
-            modeEntry.ready = false;
-            modeEntry.error = new Error('Falha ao atualizar as preferências da série');
-            window._bracketEnsureCourtReleaseListener(t.id);
-          });
-        }).finally(function () {
-          delete modeEntry.monarchEndWholeBlockBusyBySeries[seriesKey];
-          var live = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(t.id)) : t;
-          window._bracketOperationsRefresh(live || t, root);
-        });
+        var endMode = target.getAttribute('data-operations-end-mode');
+        if (endMode !== 'individual' && endMode !== 'block') return;
+        var modeEntry = window._bracketCourtReleaseCache[String(t.id)] || {};
+        modeEntry.endCourtRestoreFocus = { matchId:mid, action:endMode === 'block' ? 'block' : 'ended' };
+        window._endMatchOnCourt(String(t.id), mid, target, endMode === 'block');
         return;
       }
       if (target.hasAttribute('data-operations-nav')) {
@@ -2742,7 +2701,7 @@ window._bracketOperationsRefresh = function (t, root) {
         if (typeof window._woOpenClaim === 'function') window._woOpenClaim(String(t.id), 'm|' + mid);
       } else if (target.getAttribute('data-operations-action') === 'ended') {
         event.preventDefault();
-        if (typeof window._endMatchOnCourt === 'function') window._endMatchOnCourt(String(t.id), mid, target);
+        if (typeof window._endMatchOnCourt === 'function') window._endMatchOnCourt(String(t.id), mid, target, false);
       } else if (target.getAttribute('data-operations-action') === 'cancel-court') {
         event.preventDefault();
         if (typeof window._cancelCourtAction === 'function')
@@ -2899,11 +2858,11 @@ window._bracketOperationsRefresh = function (t, root) {
     }).join('') +
     '</div></div></div><div class="sp-operations-scrollbar" role="scrollbar" tabindex="0" aria-label="Rolar jogos em quadra" aria-orientation="horizontal" aria-valuemin="0"><div class="sp-operations-scrollbar-thumb"></div></div>';
   var courtEntryForMode = window._bracketCourtReleaseCache[String(t.id)] || {};
-  if (courtEntryForMode.seriesModeRestoreFocusId && (!document.activeElement || document.activeElement === document.body)) {
-    var restoreSeriesSwitch = existing.querySelector('[data-operations-series-mode][data-series-match-id="' +
-      String(courtEntryForMode.seriesModeRestoreFocusId).replace(/["\\]/g, '') + '"]');
-    if (restoreSeriesSwitch && !restoreSeriesSwitch.disabled) restoreSeriesSwitch.focus({ preventScroll:true });
-    courtEntryForMode.seriesModeRestoreFocusId = null;
+  if (courtEntryForMode.endCourtRestoreFocus && (!document.activeElement || document.activeElement === document.body)) {
+    var restoreEndButton = existing.querySelector('[data-operations-action="' + courtEntryForMode.endCourtRestoreFocus.action + '"][data-series-match-id="' +
+      String(courtEntryForMode.endCourtRestoreFocus.matchId || '').replace(/["\\]/g, '') + '"]');
+    if (restoreEndButton && !restoreEndButton.disabled) restoreEndButton.focus({ preventScroll:true });
+    courtEntryForMode.endCourtRestoreFocus = null;
   }
   var advancePhaseButton = existing.querySelector('[data-operations-advance-phase]');
   if (advancePhaseButton) advancePhaseButton.addEventListener('click', function () {
@@ -6254,36 +6213,36 @@ function _confirmCourtOperation(tId, matchId, action, title, message, run) {
   _courtConfirmationPending.set(key, operation);
   return operation.finally(function () { _courtConfirmationPending.delete(key); });
 }
-window._endMatchOnCourt = function (tId, matchId, button) {
+window._endMatchOnCourt = function (tId, matchId, button, endWholeBlock) {
   var tournament = window._findTournamentById && window._findTournamentById(String(tId));
   var allMatches = tournament && window._collectAllMatches && window._collectAllMatches(tournament);
   var match = allMatches && allMatches.find(function (item) { return String(item.id) === String(matchId); });
   var group = match && _bracketOperationsGroup(tournament, match, allMatches);
   var position = group && group.matches.findIndex(function (item) { return String(item.id) === String(matchId); });
-  var blockMode = window._bracketMonarchEndWholeBlock(
-    window._bracketCourtReleaseCache[String(tId)] || {}, String(matchId));
+  var blockMode = endWholeBlock === true;
   var continues = !blockMode && position >= 0 && position < 2;
   return _confirmCourtOperation(tId, matchId, 'release', blockMode ? 'Encerrar bloco' : continues ? 'Encerrar jogo' : 'Liberar quadra',
     blockMode
       ? 'Encerrar os três jogos deste grupo de uma vez? Todos ficarão disponíveis em Placares pendentes; nenhum placar será alterado.'
       : continues
-      ? 'Encerrar este jogo sem placar? O próximo jogo começa na mesma quadra, e o placar anterior continua acessível pelas setas.'
+      ? 'Encerrar este jogo sem placar? Ele vai para Placares pendentes e o próximo jogo continua na mesma quadra.'
       : 'Liberar esta quadra sem placar? O jogo ficará em Placares pendentes.', function () {
-  if (!window._callCF) return Promise.reject(new Error('Serviço indisponível.'));
+  if (!window.ScoreplaceOperationRouter || typeof window.ScoreplaceOperationRouter.call !== 'function') return Promise.reject(new Error('Serviço indisponível.'));
   if (button) button.disabled = true;
-  return window._callCF('endMatchOnCourt', {
+  if (button) button.setAttribute('aria-busy', 'true');
+  return window.ScoreplaceOperationRouter.call('endMatchOnCourt', {
     tournamentId: String(tId), matchId: String(matchId), sandbox: String(tId).startsWith('sb_'),
     action: 'release', monarchEndWholeBlock:blockMode, operationId: _courtOperationId()
-  }, 'Entre na sua conta para liberar a quadra.').then(function (res) {
-    var data = (res && res.data) || {};
+  }, null).then(function (res) {
+    var data = res || {};
     if (!data.ok) throw new Error('Não foi possível liberar a quadra.');
     if (typeof showNotification === 'function') showNotification(data.seriesContinues ? 'Próximo jogo em quadra' : 'Quadra liberada',
-      data.seriesContinues ? 'O relógio do próximo jogo começou. O placar anterior permanece na série.' : 'Placar pendente', 'success');
+      data.seriesContinues ? 'O placar deste jogo está em Placares pendentes. O próximo jogo continua na quadra.' : 'Jogo enviado para Placares pendentes.', 'success');
     return data;
   }).catch(function (error) {
     if (typeof showNotification === 'function') showNotification('Quadra não liberada', error && error.message || 'Tente novamente.', 'error');
     throw error;
-  }).finally(function () { if (button && button.isConnected) button.disabled = false; });
+  }).finally(function () { if (button && button.isConnected) { button.disabled = false; button.removeAttribute('aria-busy'); } });
   });
 };
 window._cancelCourtAction = function (tId, matchId, action, button) {
@@ -11165,7 +11124,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     !_courtFinished && !_courtReleased[String(m.id)] && typeof window._isUserAuthority === 'function' &&
     window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser);
   var _endHeaderChip = _canEndCourt ? '<button type="button" class="sp-match-end-court" onclick="event.stopPropagation();window._endMatchOnCourt(\'' +
-    _esc(tId) + '\',\'' + _esc(m.id) + '\',this)" title="Liberar a quadra e lançar o placar depois">Encerrado</button>' : '';
+    _esc(tId) + '\',\'' + _esc(m.id) + '\',this,false)" title="Encerrar este jogo e lançar o placar depois">Encerra</button>' : '';
   // E05: REPLAY — vem do próprio jogo físico remontado quando ele tem ponto a ponto
   // gravado, o que acontece quando foi disputado no PLACAR AO
   // VIVO. Fica FORA de `_headerActions` de propósito: aquele cluster é de AÇÃO e some
@@ -11790,24 +11749,14 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
           return '<span style="padding:3px 7px;border-radius:6px;background:rgba(99,102,241,.12);font-size:.7rem;color:var(--text-main);"><b>' + window._safeHtml(entry.letter) + '</b> · ' + window._safeHtml(entry.name) + '</span>';
         }).join('') + '</div>' : '';
     html += '<div data-group-box="1" data-monarch-group="1"' + (_isSuperEightMon ? ' data-super-eight-round="1"' : '') + (_groupCodeMatch ? ' data-group-code="' + _groupCodeMatch[1] + '"' : '') + (_largeMonarch ? ' data-monarch-large="1" data-monarch-category="' + window._safeHtml(_monarchCategories[gi]) + '" hidden' : '') + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="box-sizing:border-box;width:100%;' + (_isSuperEightMon ? 'max-width:none;' : 'max-width:380px;') + 'scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((opts && opts.showHistoricalFullStandings ? '#818cf8' : groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
-      /* DUAS LINHAS, NÃO TRÊS: título curto em cima, selos embaixo, botões à direita.
-       * Antes era tudo numa linha só, com `flex:1` no <h3>: os dois botões grandes
-       * comiam a largura, o título quebrava em três linhas e ERA ELE que esticava a
-       * altura dos botões. Agora o título e os selos vivem numa coluna própria
-       * (`align-items:flex-start` no pai, pra os botões não esticarem junto), o nome
-       * vai curto (`C`) e sem quebra, e o selo desce pra segunda linha inteiro —
-       * fonte menor, `white-space:nowrap`, nunca truncado. */
-      /* ⛔ ESPAÇO MORTO ENTRE OS BOTÕES E A CLASSIFICAÇÃO. Relato do dono (03/set/2026):
-       * _"não precisa desse espaço vazio entre os botões e a classificação. pode ser bem
-       * menor esse espaço"_. Era 1rem cheio abaixo de um cabeçalho que já tinha os botões
-       * altos — a tabela começava longe demais do que a explica. 0.45rem encosta a
-       * classificação no cabeçalho sem colar. */
-      '<div class="btn-row" style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:0.45rem;">' +
-        (_isSuperEightMon ? '' : '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;flex:1;">' +
-          '<h3 style="margin:0;font-size:1.1rem;line-height:1.15;white-space:nowrap;color:' + window._spCor((_isMineMon ? '#22d3ee' : 'var(--text-bright)'), 'color') + ';">' + window._safeHtml(window._grpRotuloCurto(window._bracketMonarchGroupLabel(t, sg), true)) + '</h3>' +
-          ((_mineBadgeMon || statusBadge) ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;white-space:nowrap;">' + _mineBadgeMon + (statusBadge || '') + '</div>' : '') +
+      '<div class="sp-monarch-group-heading" style="display:flex;flex-direction:column;align-items:stretch;gap:7px;margin-bottom:0.45rem;">' +
+        (_isSuperEightMon ? '' : '<div class="sp-monarch-group-title-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;">' +
+          '<h3 style="margin:0;font-size:1.1rem;line-height:1.2;white-space:normal;overflow-wrap:anywhere;color:' + window._spCor((_isMineMon ? '#22d3ee' : 'var(--text-bright)'), 'color') + ';">' + window._safeHtml(window._grpRotuloCurto(window._bracketMonarchGroupLabel(t, sg), true)) + '</h3>' +
+          _mineBadgeMon + (statusBadge || '') +
         '</div>') +
-        _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
+        '<div class="sp-monarch-group-controls" style="display:flex;align-items:center;justify-content:flex-start;gap:8px;flex-wrap:wrap;min-width:0;">' +
+          _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
+        '</div>' +
       '</div>' +
       _eightLettersHtml +
       // v4.3.12 (pedido do dono): a tabela de classificação do grupo fica SEMPRE ACIMA das

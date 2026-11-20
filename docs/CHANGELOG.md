@@ -1,3 +1,10 @@
+## 2.7.45 — 20/nov/2026 (encerramento individual e placares pendentes)
+
+- Encerrar um jogo sem placar o coloca imediatamente em **Placares pendentes**, mesmo quando o sucessor do mesmo grupo continua em quadra. A tela deixa de esconder esses jogos atrás da navegação da série.
+- Nas quadras com série Rei/Rainha, os comandos separados **Encerra** e **Bloco** atuam apenas naquela quadra. A escolha individual não depende de preferência antiga gravada; o encerramento em bloco mantém validação transacional dos três jogos.
+- O cabeçalho do grupo e a faixa de botões administrativos ficam em linhas distintas, preservando a identificação completa do grupo e evitando sobreposição.
+- O encerramento individual também usa recibo idempotente. A implantação exige função central, atualização das oito portas regionais, confirmação de readiness e só então Hosting. Durante a atualização regional, comandos ainda em versões antigas falham sem gravar alterações.
+
 ## 2.7.40 — 18/nov/2026 (chave configurável e categorias opcionais)
 
 - A chave eliminatória e a súmula são preparadas desde o sorteio para todas as categorias, com cruzamentos oficiais e vagas pendentes que recebem os classificados conforme os grupos se definem. A chamada do último jogo classificatório aciona a próxima fase no momento previsto para torneios concentrados ou intercalados.

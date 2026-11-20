@@ -35,7 +35,7 @@ assert.equal(suggestCourt(2, courts, courts, '', false, 'Quadra 7', {}, {}, ''),
   'quadra já escolhida pelo organizador prevalece');
 assert.equal(suggestCourt(2, courts, courts.filter(c => c !== 'Quadra 2'), '', false, '', {}, {}, ''), 'Quadra 1',
   'quadra ocupada não é sugerida');
-assert(bracket.includes("(_isSuperEightMon ? '' : '<div style=\"display:flex;flex-direction:column") &&
+assert(bracket.includes("(_isSuperEightMon ? '' : '<div class=\"sp-monarch-group-title-row\"") &&
   bracket.includes('var _mineBadgeMon = _isMineMon && !_isSuperEightMon'),
   'o cabeçalho técnico do grupo e o selo SEU GRUPO não aparecem no Super 8');
 const crownStart = dashboard.indexOf('var _showMonarchCrown = ');

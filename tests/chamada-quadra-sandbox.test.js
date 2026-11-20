@@ -180,7 +180,7 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   tournament.matches[0].courtCalledAt = nowIso;
   const beforeRelease = JSON.stringify(tournament.matches);
   const productionRelease = await endOnCourt({ auth: { uid: 'owner' }, data: {
-    tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod'
+    tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod', operationId:'a1090ce4-e8e4-4db3-a058-4cf36407c643'
   } });
   assert.equal(productionRelease.changed, true);
   assert.equal(JSON.stringify(tournament.matches), beforeRelease, 'Encerrado em produção não altera jogo nem placar');
@@ -188,13 +188,14 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   await callable(request('tour_test', 'follow-prod', 'Quadra 4', true));
   assert.equal(tournament.matches[1].court, 'Quadra 4', 'produção pode chamar próximo jogo para quadra liberada');
   assert.equal((await endOnCourt({ auth: { uid: 'owner' }, data: {
-    tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod'
+    tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod', operationId:'b2090ce4-e8e4-4db3-a058-4cf36407c643'
   } })).changed, false, 'liberação repetida não cria novo estado');
 
   const monarchGame = (id, num, court, called, group = 'A1') => Object.assign(game(id, court), {
     isMonarch:true, isTieBreak:false, category:'Fem A', phaseIndex:0, round:'Rodada 1',
     monarchGroup:group, _gameNum:num, ...(called ? { courtCalledAt:nowIso, startedAt:nowIso } : {})
   });
+  tournament.scheduleWindow = { days:[{ day:'2026-10-22' }] };
   tournament.matches = [monarchGame('block-1', 1, 'Quadra 4', true),
     monarchGame('block-2', 2, 'Quadra 5', false), monarchGame('block-3', 3, 'Quadra 6', false)];
   const seriesRevision = 0;
@@ -214,8 +215,19 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
     { 'block-1':true, 'block-2':true, 'block-3':true, 'block-b1-1':false, 'block-b1-2':false, 'block-b1-3':false },
     'segunda série preserva seu próprio estado, independente da primeira');
   await assert.rejects(endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
-    matchId:'block-1' } }), e => e.code === 'failed-precondition' && /Atualize a tela/.test(e.message),
-    'cliente antigo sem flag não pode encerrar só um jogo de bloco');
+    matchId:'block-b1-1', action:'release', monarchEndWholeBlock:false } }), e => e.code === 'invalid-argument',
+    'release individual também exige operationId para recibo idempotente');
+  const courtStateWithLegacyPreference = courtStates.get('tournaments/tour_test/courtState/main');
+  ['block-b1-1','block-b1-2','block-b1-3'].forEach(id => { courtStateWithLegacyPreference.monarchEndWholeBlockByMatch[id] = true; });
+  const individualRelease = await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
+    matchId:'block-b1-1', action:'release', monarchEndWholeBlock:false,
+    operationId:'883780f4-d2d9-4c04-89a4-3e117fb44c39' } });
+  assert.equal(individualRelease.seriesContinues, true, 'encerramento individual continua a próxima partida');
+  const individualState = courtStates.get('tournaments/tour_test/courtState/main');
+  assert.ok(individualState.released['block-b1-1'], 'o jogo encerrado vai imediatamente para Placares pendentes');
+  assert.equal(individualState.released['block-b1-2'], undefined, 'a preferência legada não libera o bloco junto');
+  assert.equal(tournament.matches.find(match => match.id === 'block-b1-2').court, 'Quadra 7',
+    'o jogo seguinte permanece em quadra após o encerramento individual');
   const blockRelease = await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
     matchId:'block-1', action:'release', monarchEndWholeBlock:true,
     operationId:'ec0c29f4-cab6-4655-8c7e-67d98fd3dbf4' } });
@@ -224,7 +236,7 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   for (const id of ['block-1','block-2','block-3']) assert.ok(blockState.released[id]);
   assert.equal(blockState.blockCourt['block-2'], 'Quadra 5', 'guarda quadra do irmão que ainda não foi chamado');
   assert.ok(tournament.matches.filter(match => match.monarchGroup === 'A1').every(match => match.court === null),
-    'os três jogos da série configurada deixam de ocupar quadras');
+    'os três jogos do bloco deixam de ocupar quadras');
   await assert.rejects(endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
     matchId:'block-1', action:'release', monarchEndWholeBlock:true,
     operationId:'c3f4cb3e-bda6-44ad-b2c6-4497928b12cc' } }),
@@ -250,13 +262,13 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
     tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod', court: 'Quadra 4', confirmCall: true
   } }), e => e.code === 'permission-denied', 'chamada não revela a liberação a quem não tem permissão');
   await assert.rejects(endOnCourt({ auth: { uid: 'stranger' }, data: {
-    tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod'
+    tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod', operationId:'c3090ce4-e8e4-4db3-a058-4cf36407c643'
   } }), e => e.code === 'permission-denied', 'nem liberação repetida revela o estado a estranhos');
   tournament.matches.push(game('release-ref', 'Quadra 5'));
   tournament.matches.at(-1).courtCalledAt = nowIso;
   tournament.arbitros = [{ uid: 'ref', status: 'confirmed' }];
   assert.equal((await endOnCourt({ auth: { uid: 'ref' }, data: {
-    tournamentId: 'tour_test', sandbox: false, matchId: 'release-ref'
+    tournamentId: 'tour_test', sandbox: false, matchId: 'release-ref', operationId:'d4090ce4-e8e4-4db3-a058-4cf36407c643'
   } })).changed, true, 'árbitro confirmado pode liberar a quadra em produção');
   tournament.matches.push(game('assign-ref', 'Quadra 5'));
   await callable({ auth: { uid: 'ref' }, data: {
@@ -268,7 +280,7 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   tournament.matches = [game('release-sandbox', 'Quadra 4'), game('follow-sandbox', 'Quadra 5')];
   tournament.matches[0].courtCalledAt = nowIso;
   const sandboxRelease = await endOnCourt({ auth: { uid: 'owner' }, data: {
-    tournamentId: 'sb_test', sandbox: true, matchId: 'release-sandbox'
+    tournamentId: 'sb_test', sandbox: true, matchId: 'release-sandbox', operationId:'e5090ce4-e8e4-4db3-a058-4cf36407c643'
   } });
   assert.equal(sandboxRelease.changed, true);
   assert.ok(courtStates.get('sandboxes/sb_test/courtState/main').released['release-sandbox']);
@@ -283,7 +295,7 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   tournament.matches = [game('release-sandbox', 'Quadra 4')];
   tournament.matches[0].courtCalledAt = nowIso;
   assert.equal((await endOnCourt({ auth: { uid: 'owner' }, data: {
-    tournamentId: 'sb_test', sandbox: true, matchId: 'release-sandbox'
+    tournamentId: 'sb_test', sandbox: true, matchId: 'release-sandbox', operationId:'f6090ce4-e8e4-4db3-a058-4cf36407c643'
   } })).changed, true, 'ID reutilizado pode ser liberado em novo sorteio');
   assert.equal([...releases.values()].filter(entry => entry.matchId === 'release-sandbox').length, 2,
     'auditoria guarda as duas liberações em documentos separados');
@@ -444,7 +456,7 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   courtStates.set(statePath, { released:{}, postponed:[], postponedReady:[], revision:0 });
   nowIso = '2026-10-20T18:00:00.000Z';
   const firstEnded = await endOnCourt({ auth:{ uid:'owner' }, data:{
-    tournamentId:'tour_test', sandbox:false, matchId:'series-1'
+    tournamentId:'tour_test', sandbox:false, matchId:'series-1', operationId:'a7090ce4-e8e4-4db3-a058-4cf36407c643'
   } });
   assert.equal(firstEnded.nextMatchId, 'series-2', 'encerrar jogo 1 chama automaticamente jogo 2');
   assert.equal(tournament.matches[1].court, 'Quadra 1');
@@ -455,13 +467,13 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   assert.ok(courtStates.get(statePath).released['series-1'], 'placar do jogo 1 continua pendente');
   nowIso = '2026-10-20T18:10:00.000Z';
   const secondEnded = await endOnCourt({ auth:{ uid:'owner' }, data:{
-    tournamentId:'tour_test', sandbox:false, matchId:'series-2'
+    tournamentId:'tour_test', sandbox:false, matchId:'series-2', operationId:'b8090ce4-e8e4-4db3-a058-4cf36407c643'
   } });
   assert.equal(secondEnded.nextMatchId, 'series-3', 'encerrar jogo 2 chama automaticamente jogo 3');
   assert.equal(tournament.matches[2].startedAt, nowIso, 'relógio do jogo 3 inicia independente');
   nowIso = '2026-10-20T18:20:00.000Z';
   const thirdEnded = await endOnCourt({ auth:{ uid:'owner' }, data:{
-    tournamentId:'tour_test', sandbox:false, matchId:'series-3'
+    tournamentId:'tour_test', sandbox:false, matchId:'series-3', operationId:'c9090ce4-e8e4-4db3-a058-4cf36407c643'
   } });
   assert.equal(thirdEnded.seriesContinues, false, 'só o terceiro encerramento libera a quadra');
   assert.equal(thirdEnded.estimatedDurationMs, 500000,

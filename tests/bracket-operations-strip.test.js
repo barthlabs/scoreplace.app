@@ -3,12 +3,18 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { chromium } = require('@playwright/test');
 const source = fs.readFileSync('js/views/bracket.js', 'utf8');
-assert.match(source, /modeButton\.setAttribute\('role', 'switch'\)/,
-  'controle por série usa toggle acessível, não checkbox');
-assert.match(source, /footerActions\.appendChild\(modeButton\)/,
-  'toggle pertence às ações da quadra em que a série está ativa');
-assert.match(source, /action:'series-mode', enabled:nextEnabled, expectedRevision:expectedRevision/,
-  'alteração envia estado e revisão da série específica');
+assert.match(source, /blockButton\.textContent = 'Bloco'/,
+  'ação em bloco é um botão independente de uma palavra');
+assert.match(source, /button\.textContent = 'Encerra'/,
+  'ação individual é um botão independente de uma palavra');
+assert.match(source, /action: 'release', monarchEndWholeBlock:blockMode, operationId: _courtOperationId\(\)/,
+  'ambos os botões enviam explicitamente a intenção de encerramento');
+assert.doesNotMatch(source, /sp-operations-series-switch/,
+  'a operação usa botões, sem controle toggle');
+assert.match(source, /sp-monarch-group-title-row/);
+assert.match(source, /sp-monarch-group-controls/);
+assert.match(source, /pending = matches\.filter\(function \(m\) \{ return m && released\[String\(m\.id\)\] && !occupancy\.isFinished\(m\); \}\)/,
+  'jogo liberado não é removido dos pendentes por haver sucessor em quadra');
 assert.doesNotMatch(source, /existing\._spSeriesModeBusy/,
   'não existe bloqueio global para mudanças entre séries');
 const sourceStart = source.indexOf('window._directBracketSlotSource = function');
@@ -92,7 +98,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window.renderMatchCard = (m, canEnter, tid, num, compact, pending, opts) => _bracketScopeReplicaHtml(
         '<article class="sp-match-card" id="card-' + m.id + '"><div class="sp-mc-head">JOGO ' + num +
         (m.courtCalledAt ? '<div class="sp-mc-acts"><button class="cancel-x-btn" onclick="window._cancelCourtAction()">Cancelar</button>' +
-          '<button class="sp-match-end-court" onclick="window._endMatchOnCourt()">Encerrado</button></div>' : '') +
+        '<button class="sp-match-end-court" onclick="window._endMatchOnCourt()">Encerra</button></div>' : '') +
         '<button id="live-' + m.id + '" onclick="window._openLiveScoringForMatch()">📡 Ao Vivo</button>' +
         '<button class="wo-action" onclick="window._woOpenClaim()">Aplicar W.O.</button>' +
         '<button class="open-action" onclick="window._editResultInline()">Editar</button>' +
@@ -239,39 +245,26 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       t.matches = [seriesMatch('a1-1', 'A1', 1, 'Quadra 4'), seriesMatch('a1-2', 'A1', 2, ''),
         seriesMatch('a1-3', 'A1', 3, ''), seriesMatch('b1-1', 'B1', 4, 'Quadra 5'),
         seriesMatch('b1-2', 'B1', 5, ''), seriesMatch('b1-3', 'B1', 6, '')];
-      window._bracketCourtReleaseCache = { sb_test: { ready:true, capabilityReady:true, released:{}, postponed:[], revision:0,
-        monarchEndWholeBlockByMatch:{ 'a1-1':true, 'a1-2':true, 'a1-3':true,
-          'b1-1':false, 'b1-2':false, 'b1-3':false },
-        monarchEndWholeBlockRevisionByMatch:{ 'a1-1':2, 'a1-2':2, 'a1-3':2,
-          'b1-1':5, 'b1-2':5, 'b1-3':5 } } };
-      window.ScoreplaceOperationRouter = { call: async (_name, payload) => {
-        window.seriesModeRequest = payload;
-        return { ok:true, enabled:payload.enabled, matchIds:['a1-1','a1-2','a1-3'], revision:3 };
-      } };
+      window._bracketCourtReleaseCache = { sb_test: { ready:true, capabilityReady:true, released:{}, postponed:[], revision:0 } };
       const selectedSeriesState = window._bracketOperationsSelect(t);
       window._bracketOperationsRefresh(t, root);
       const seriesStrip = root._bracketOperationsStrip;
-      const seriesToggles = [...seriesStrip.querySelectorAll('.sp-operations-court-slot--active [data-operations-series-mode]')];
-      const seriesModesBefore = seriesToggles.map(button => button.getAttribute('aria-checked'));
-      const adjacentToEnded = seriesToggles.every(button =>
-        button.previousElementSibling && button.previousElementSibling.getAttribute('data-operations-action') === 'ended');
+      const seriesButtons = [...seriesStrip.querySelectorAll('.sp-operations-court-slot--active [data-operations-end-mode]')];
+      const seriesButtonLabels = seriesButtons.map(button => [button.textContent.trim(), button.getAttribute('data-operations-end-mode')]);
       const groupFound = window._bracketOperationsGroup(t, t.matches[0], t.matches);
-      if (seriesToggles[0]) {
-        seriesToggles[0].click();
-        await new Promise(resolve => setTimeout(resolve, 0));
-      }
-      const seriesModesAfter = [...seriesStrip.querySelectorAll('.sp-operations-court-slot--active [data-operations-series-mode]')]
-        .map(button => button.getAttribute('aria-checked'));
+      window.endActions = [];
+      window._endMatchOnCourt = (...args) => window.endActions.push([args[1], args[3]]);
+      seriesButtons.forEach(button => button.click());
       t.matches = originalMatches;
       delete t.scheduleWindow;
       window._bracketOperationsRefresh(t, root);
       return { initial, afterCall, refereeView, selectFocusRestored, selectorDoesNotOpenBracket,
-        selectorStayedInStrip, outsiderHidden, seriesModesBefore, seriesModesAfter, adjacentToEnded,
+        selectorStayedInStrip, outsiderHidden, seriesButtonLabels, endActions:window.endActions,
         groupMatchCount:groupFound && groupFound.matches.length,
         selectedActiveCount:selectedSeriesState && selectedSeriesState.active.length,
         activeCardCount:seriesStrip.querySelectorAll('.sp-operations-court-slot--active .sp-operations-replica').length,
         activeSlotCount:seriesStrip.querySelectorAll('.sp-operations-court-slot--active').length,
-        seriesButtonCount:seriesStrip.querySelectorAll('[data-operations-series-mode]').length,
+        seriesButtonCount:seriesStrip.querySelectorAll('[data-operations-end-mode]').length,
         stripBusy:seriesStrip._spCourtBusy || 0,
         seriesModeRequest:window.seriesModeRequest };
     });
@@ -311,12 +304,10 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert(state.refereeView.pendingBottomCancel && !state.refereeView.pendingHeaderCancel,
       'Cancelar do placar pendente deve ficar na linha inferior, fora das setas do jogo');
     assert.match(state.refereeView.availableCourt, /2 QUADRAS LIVRES/);
-    assert.deepEqual(state.seriesModesBefore, ['true','false'], 'cada quadra apresenta seu estado independente');
-    assert.deepEqual(state.seriesModesAfter, ['false','false'], 'salvar uma série não altera o toggle da outra quadra');
-    assert(state.adjacentToEnded, 'o toggle visual aparece imediatamente ao lado de Encerrado em cada quadra');
-    assert.equal(state.seriesModeRequest.matchId, 'a1-1');
-    assert.equal(state.seriesModeRequest.enabled, false, 'o clique alterna apenas a série selecionada');
-    assert.equal(state.seriesModeRequest.expectedRevision, 2, 'envia a revisão daquela série, não a revisão global da fila');
+    assert.deepEqual(state.seriesButtonLabels, [['Encerra','individual'], ['Bloco','block'], ['Encerra','individual'], ['Bloco','block']],
+      'cada quadra do formato tem dois botões de uma palavra, sem preferência compartilhada');
+    assert.deepEqual(state.endActions, [['a1-1', false], ['a1-1', true], ['b1-1', false], ['b1-1', true]],
+      'Encerra e Bloco são ações independentes por série e por quadra');
     const scrollLayout = await page.evaluate(() => {
       const t = window._findTournamentById();
       const root = document.querySelector('[data-bracket-tabs-root]');
@@ -507,23 +498,27 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert(endStart > 0 && endStop > endStart);
     await page.addScriptTag({ content: source.slice(endStart, endStop) });
     const endFeedback = await page.evaluate(async () => {
-      const calls = [], notices = [];
-      window.showConfirmDialog = (_title, _message, onConfirm) => onConfirm();
+      const calls = [], notices = [], confirmations = [];
+      window.showConfirmDialog = (title, message, onConfirm) => { confirmations.push([title, message]); onConfirm(); };
       window.showNotification = (...args) => notices.push(args);
-      window._callCF = (name, payload) => { calls.push([name, payload]); return Promise.resolve({ data: { ok: true } }); };
-      await window._endMatchOnCourt('tour_test', 'm1');
-      await window._endMatchOnCourt('sb_test', 'm2');
-      window._callCF = () => Promise.reject(new Error('falha de rede'));
+      window.ScoreplaceOperationRouter = { call: (name, payload) => { calls.push([name, payload]); return Promise.resolve({ ok:true, seriesContinues:!payload.monarchEndWholeBlock }); } };
+      await window._endMatchOnCourt('tour_test', 'm1', null, false);
+      await window._endMatchOnCourt('sb_test', 'm2', null, true);
+      window.ScoreplaceOperationRouter.call = () => Promise.reject(new Error('falha de rede'));
       try { await window._endMatchOnCourt('tour_test', 'm3'); } catch (_) {}
-      return { calls, notices };
+      return { calls, notices, confirmations };
     });
     assert.equal(endFeedback.calls[0][1].sandbox, false);
     assert.equal(endFeedback.calls[1][1].sandbox, true);
+    assert.equal(endFeedback.calls[0][1].monarchEndWholeBlock, false, 'Encerra envia intenção individual mesmo com preferência antiga');
+    assert.equal(endFeedback.calls[1][1].monarchEndWholeBlock, true, 'Bloco envia intenção explícita de bloco');
+    assert.match(endFeedback.confirmations[0][1], /Placares pendentes.*próximo jogo continua/i);
+    assert.match(endFeedback.confirmations[1][1], /três jogos.*Placares pendentes/i);
     assert(endFeedback.notices.some(args => args[0] === 'Quadra liberada' && args[2] === 'success'));
     assert(endFeedback.notices.some(args => args[0] === 'Quadra não liberada' && args[2] === 'error'));
     const courtDialog = await page.evaluate(async () => {
       let opens = 0, writes = 0, callbacks;
-      window._callCF = () => { writes++; return Promise.resolve({ data: { ok: true } }); };
+      window.ScoreplaceOperationRouter = { call: () => { writes++; return Promise.resolve({ ok:true }); } };
       window.showConfirmDialog = (_title, _message, ok, cancel) => {
         const old = document.getElementById('custom-confirm-dialog');
         if (old) old.remove();
@@ -975,12 +970,12 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
           examples: [fullLabels[0], fullLabels[8], fullLabels[24]] } };
     });
     assert.deepEqual(carousel.states.map(item => item.title), ['JOGO 1 (1/3)', 'JOGO 9 (2/3)', 'JOGO 17 (3/3)', 'Grupo A', 'JOGO 1 (1/3)', 'Grupo A']);
-    assert.deepEqual(carousel.series.first, { active: [carousel.series.ids[1]], pending: [] },
-      'após jogo 1, jogo 2 ocupa a quadra e placar 1 permanece na série');
-    assert.deepEqual(carousel.series.second, { active: [carousel.series.ids[2]], pending: [] },
-      'após jogo 2, jogo 3 ocupa a quadra e placares anteriores permanecem na série');
+    assert.deepEqual(carousel.series.first, { active: [carousel.series.ids[1]], pending: [carousel.series.ids[0]] },
+      'após jogo 1, seu placar fica pendente enquanto jogo 2 ocupa a quadra');
+    assert.deepEqual(carousel.series.second, { active: [carousel.series.ids[2]], pending: carousel.series.ids.slice(0, 2) },
+      'após jogo 2, ambos os placares ficam pendentes enquanto jogo 3 ocupa a quadra');
     assert.deepEqual(carousel.series.third, { active: [], pending: carousel.series.ids },
-      'só após jogo 3 a quadra libera e os três placares sem resultado ficam pendentes');
+      'após jogo 3, os três placares sem resultado ficam pendentes');
     assert.equal(carousel.series.visibleGame, carousel.series.ids[1], 'card da quadra avança para jogo 2');
     assert.equal(carousel.series.previousGame, carousel.series.ids[0], 'seta volta ao jogo 1 para lançar placar');
     assert(carousel.states.every(item => JSON.stringify(item.navStyle) === JSON.stringify(carousel.states[3].navStyle)),
