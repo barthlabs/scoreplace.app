@@ -5094,7 +5094,7 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
   const action = String((request.data && request.data.action) || 'release');
   if (!['release', 'restore', 'cancel-call', 'postpone', 'series-mode'].includes(action)) throw new HttpsError('invalid-argument', 'Ação inválida.');
   if (!matchId) throw new HttpsError('invalid-argument', 'Jogo inválido.');
-  if ((action !== 'release' || request.data.monarchEndWholeBlock === true) && !(request.data && request.data.operationId)) {
+  if (!(request.data && request.data.operationId)) {
     throw new HttpsError('invalid-argument', 'Identificador da operação obrigatório.');
   }
   if ((action === 'postpone' || action === 'series-mode') && (!Number.isInteger(request.data.expectedRevision) || request.data.expectedRevision < 0)) {
@@ -5113,7 +5113,7 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
       operationId: request.data.operationId, actorUid: uid, parentPath: ref.path,
       kind: 'court-end', target: matchId, action,
       payload: action === 'series-mode' ? { sandbox, matchId, enabled: request.data.enabled, expectedRevision: request.data.expectedRevision } :
-        request.data.monarchEndWholeBlock === true ? { sandbox, monarchEndWholeBlock: true } : { sandbox }
+        { sandbox, monarchEndWholeBlock: request.data.monarchEndWholeBlock === true }
     });
   } catch (error) { throw new HttpsError('invalid-argument', error.message); }
   const receiptRef = receipt ? ref.collection('operationReceipts').doc(receipt.id) : null;
@@ -5148,7 +5148,7 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
       ? monarchModes[matchId] : !!series && legacyModeEnabled;
     const seriesRevision = series ? Math.max(0, ...seriesIds.map(id => Number(monarchModeRevisions[id]) || 0)) : 0;
     const needsReadiness = action === 'series-mode' && request.data.enabled === true ||
-      action === 'release' && (modeEnabled || request.data.monarchEndWholeBlock === true);
+      action === 'release' && request.data.monarchEndWholeBlock === true;
     const admin = _isTournamentAdmin(t, uid);
     const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
     if (!admin && !referee) throw new HttpsError('permission-denied', 'Só a organização ou árbitro confirmado pode liberar a quadra.');
@@ -5207,11 +5207,6 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
       Number(m.scoreP1) > 0 || Number(m.scoreP2) > 0;
     if (action === 'release') {
       const blockRequest = request.data.monarchEndWholeBlock === true;
-      if (modeEnabled !== blockRequest) {
-        throw new HttpsError('failed-precondition', modeEnabled
-          ? 'Este bloco está configurado para encerrar os três jogos juntos. Atualize a tela; nenhum encerramento foi aplicado.'
-          : 'O encerramento em bloco foi desativado. Atualize a tela; nenhum encerramento foi aplicado.');
-      }
       if (released[matchId]) {
         if (blockRequest) throw new HttpsError('failed-precondition', 'Este jogo já foi liberado; atualize a tela antes de encerrar o bloco.');
         return commitReply({ ok: true, changed: false });
