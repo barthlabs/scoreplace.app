@@ -1,3 +1,4 @@
+// 2.7.47 — O tempo central da operação conta desde a chamada original do primeiro jogo à quadra e segue entre dias e fases; ao encerrar, mostra a duração, e antes da primeira chamada aguarda o registro.
 // 2.7.46 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.45 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.44 — Atualização consolidada de produção com as correções validadas desde a última publicação.

@@ -52,7 +52,8 @@ function confra(nowMs, fimFase0Ms, fimTorneioMs) {
   const iniMs = nowMs - 2 * D;
   const matches = [];
   for (let i = 0; i < 20; i++) {
-    const m = { id: 'm' + i, p1: 'A' + i + ' / B' + i, p2: 'C' + i + ' / D' + i, startedAt: iniMs + i * MIN };
+    const m = { id: 'm' + i, p1: 'A' + i + ' / B' + i, p2: 'C' + i + ' / D' + i,
+      courtCalledAt: iniMs - 3 * HOUR + i * MIN, startedAt: iniMs + i * MIN };
     if (i < 8) { m.winner = m.p1; m.resultAt = iniMs + i * MIN + 30 * MIN; }
     matches.push(m);
   }
@@ -79,7 +80,7 @@ const fimTorneio = now + 84 * D + 10 * HOUR;  // o "12/11 23:00" do print
 
 ok(typeof W._tProgClock2L === 'function', '_tProgClock2L existe (FONTE ÚNICA dos 2 relógios)');
 
-// ─── 1) CADA UM NO SEU PAPEL: rodada REGRESSIVA, torneio DECORRIDO ─────────────────────
+// ─── 1) O relógio da operação conta desde a primeira chamada ────────────────────────────
 (function () {
   const t = confra(now, fimFase0, fimTorneio);
   const html = W._buildProgressInner(t);
@@ -88,26 +89,27 @@ ok(typeof W._tProgClock2L === 'function', '_tProgClock2L existe (FONTE ÚNICA do
 
   const alvos = [];
   html.replace(/data-sp-cd2l="(\d+)"/g, function (_, n) { alvos.push(parseInt(n)); return _; });
-  ok(alvos.length === 1, '[RODADA] UMA regressiva só — a do prazo da rodada; o torneio inteiro NÃO conta pra trás — got ' + alvos.length);
+  ok(alvos.length === 0, '[OPERAÇÃO] não mostra regressiva — conta tempo decorrido desde a chamada');
 
   const fimFase0Esperado = new Date(iso(fimFase0) + 'T' + hhmm(fimFase0)).getTime();
   const fimTornEsperado = new Date(iso(fimTorneio) + 'T' + hhmm(fimTorneio)).getTime();
-  ok(alvos[0] === fimFase0Esperado, '[RODADA] a regressiva mira o FINAL PROGRAMADO da fase (' + new Date(fimFase0Esperado).toLocaleString('pt-BR') + ')');
+  ok(alvos.indexOf(fimFase0Esperado) === -1, '[OPERAÇÃO] não usa o fim programado da fase como prazo');
   ok(alvos.indexOf(fimTornEsperado) === -1, '[TORNEIO COMPLETO] ⛔ NUNCA regressiva pro fim do torneio ("83d restante" não é informação)');
 
   const nRest = (html.match(/>restante</g) || []).length;
-  ok(nRest === 1, '[rótulo] UM campo diz "restante" (a rodada) — got ' + nRest);
-  ok((html.match(/>decorrido</g) || []).length === 1, '[rótulo] e UM diz "decorrido" (o torneio completo)');
+  ok(nRest === 0, '[rótulo] nenhum campo operacional diz "restante" — got ' + nRest);
+  ok((html.match(/>decorrido</g) || []).length === 2, '[rótulo] relógio da operação e torneio completo dizem "decorrido"');
 
-  // RODADA: o número é o que FALTA (11d …). TORNEIO: o que JÁ PASSOU desde que dava pra jogar.
-  ok(/>11d \d+h</.test(html), '[RODADA] mostra o que FALTA (11d …h)');
-  ok(/>2d \d+h</.test(html), '[TORNEIO COMPLETO] mostra o DECORRIDO (2d …h) desde a âncora');
+  // O relógio da operação usa a primeira chamada original; o card do torneio mantém sua métrica.
+  ok(!/>11d \d+h</.test(html), '[OPERAÇÃO] não mostra o prazo de fim da rodada');
+  ok(/>2d 3h</.test(html), '[OPERAÇÃO] mostra o tempo desde a primeira chamada, não desde o início programado');
 
   // A âncora do decorrido tem que ser um instante REAL, e ele tica pra cima a cada segundo.
   const ancoras = [];
   html.replace(/data-sp-el2l="(\d+)"/g, function (_, n) { ancoras.push(parseInt(n)); return _; });
-  ok(ancoras.length === 1, '[TORNEIO COMPLETO] o decorrido ticka pra cima (data-sp-el2l) — got ' + ancoras.length);
-  ok(Math.abs(ancoras[0] - W._tournamentPlayableFromTs(t)) < 1000, '[âncora] é _tournamentPlayableFromTs (início programado ou sorteio, o que veio depois)');
+  ok(ancoras.length === 2, '[OPERAÇÃO e TORNEIO COMPLETO] ambos os decorridos ticam pra cima — got ' + ancoras.length);
+  ok(Math.abs(ancoras[0] - (now - 2 * D - 3 * HOUR)) < 1000, '[OPERAÇÃO] ancora na primeira chamada oficial à quadra');
+  ok(Math.abs(ancoras[1] - W._tournamentPlayableFromTs(t)) < 1000, '[TORNEIO COMPLETO] mantém _tournamentPlayableFromTs como âncora independente');
 })();
 
 // ─── 1b) A ÂNCORA: o MAIS TARDE entre início programado e sorteio ───────────────────────
@@ -140,6 +142,60 @@ ok(typeof W._tProgClock2L === 'function', '_tProgClock2L existe (FONTE ÚNICA do
   ok(html.indexOf('>decorrido<') > -1, '[sem prazo] o campo central continua DECORRIDO');
 })();
 
+// ─── 4b) Chamado original vence o relógio individual rebaseado ─────────────────────────
+(function () {
+  const t = confra(now, fimFase0, fimTorneio);
+  t.rounds[0].matches[0].courtClockBaseAt = now - 3 * D;
+  const html = W._buildProgressInner(t);
+  const anchors = [];
+  html.replace(/data-sp-el2l="(\d+)"/g, function (_, n) { anchors.push(Number(n)); return _; });
+  ok(Math.abs(anchors[0] - (now - 2 * D - 3 * HOUR)) < 1000, '[rebase] courtCalledAt original vence courtClockBaseAt mais antigo');
+})();
+
+// ─── 4c) Base por partida é fallback quando a chamada original não existe ──────────────
+(function () {
+  const t = confra(now, fimFase0, fimTorneio);
+  t.rounds[0].matches.forEach(function (m) { delete m.courtCalledAt; delete m.courtClockBaseAt; });
+  const baseCall = now - 5 * D;
+  t.rounds[0].matches[0].courtClockBaseAt = baseCall;
+  const html = W._buildProgressInner(t);
+  const anchors = [];
+  html.replace(/data-sp-el2l="(\d+)"/g, function (_, n) { anchors.push(Number(n)); return _; });
+  ok(Math.abs(anchors[0] - baseCall) < 1000, '[fallback] courtClockBaseAt ancora quando courtCalledAt está ausente');
+})();
+
+// ─── 4d) Desempate chamado sem placar entra como âncora ─────────────────────────────────
+(function () {
+  const t = confra(now, fimFase0, fimTorneio);
+  t.rounds[0].matches.forEach(function (m) { delete m.courtCalledAt; delete m.courtClockBaseAt; });
+  const tieCall = now - 4 * D;
+  t.phaseTieDecisions = { 0: { empate: { matches: [{ id: 'tie-pending', courtCalledAt: tieCall, p1: 'A', p2: 'B' }] } } };
+  t.history = [{ phaseTieDecision: { matches: [{ id: 'tie-pending', courtCalledAt: tieCall, p1: 'A', p2: 'B' }] } }];
+  const html = W._buildProgressInner(t);
+  const anchors = [];
+  html.replace(/data-sp-el2l="(\d+)"/g, function (_, n) { anchors.push(Number(n)); return _; });
+  ok(Math.abs(anchors[0] - tieCall) < 1000, '[desempate pendente] chamada sem placar ancora o cronômetro e o ID duplicado conta uma vez');
+})();
+
+// ─── 4e) Sem chamada registrada, não inventa início a partir do placar ──────────────────
+(function () {
+  const t = confra(now, fimFase0, fimTorneio);
+  t.rounds[0].matches.forEach(function (m) { delete m.courtCalledAt; delete m.courtClockBaseAt; });
+  const html = W._buildProgressInner(t);
+  ok(html.indexOf('Aguardando chamada à quadra') > -1, '[sem chamada] exibe estado de espera apesar de startedAt/resultAt');
+  ok(!/data-sp-el2l="\d+"[^>]*>[^<]*<\/span>\s*<span[^>]*>decorrido/.test(html), '[sem chamada] não inicia duração falsa no relógio da operação');
+})();
+
+// ─── 4f) Reabrir um encerrado retoma o tempo mesmo com os placares completos ────────────
+(function () {
+  const t = confra(now, fimFase0, fimTorneio);
+  t.status = 'active'; delete t.finishedAt;
+  t.rounds[0].matches.forEach(function (m, i) { m.winner = m.p1; m.resultAt = now - 2 * HOUR + i * MIN; });
+  const html = W._buildProgressInner(t);
+  ok(html.indexOf('>decorrido<') > -1, '[reaberto] volta a contar mesmo com demais placares completos');
+  ok(html.indexOf('data-sp-el2l="' + (now - 2 * D - 3 * HOUR) + '"') > -1, '[reaberto] usa âncora original da chamada');
+})();
+
 // ─── 3) Prazo da RODADA vencido → volta pro decorrido (não trava em "0s restante") ─────
 (function () {
   const t = confra(now, now - 1 * HOUR, now - 1 * HOUR);
@@ -152,10 +208,21 @@ ok(typeof W._tProgClock2L === 'function', '_tProgClock2L existe (FONTE ÚNICA do
 (function () {
   const t = confra(now, fimFase0, fimTorneio);
   t.status = 'finished'; t.finishedAt = now - HOUR;
-  t.rounds[0].matches.forEach(function (m, i) { m.winner = m.p1; m.resultAt = now - 2 * HOUR + i * MIN; });
+  t.rounds[0].matches.slice(0, 8).forEach(function (m, i) { m.winner = m.p1; m.resultAt = now - 2 * HOUR + i * MIN; });
   const html = W._buildProgressInner(t);
   ok(html.indexOf('data-sp-cd2l') === -1, '[encerrado] relógio congelado — nenhuma regressiva');
   ok(html.indexOf('>durou<') > -1, '[encerrado] o campo central diz "durou"');
+})();
+
+// ─── 4a) Legado encerrado sem chamada preserva início real antigo ───────────────────────
+(function () {
+  const t = confra(now, fimFase0, fimTorneio);
+  t.status = 'finished'; t.finishedAt = now - HOUR;
+  t.rounds[0].matches.forEach(function (m) { delete m.courtCalledAt; delete m.courtClockBaseAt; });
+  const html = W._buildProgressInner(t);
+  ok(html.indexOf('>durou<') > -1, '[legado] encerrado sem chamada continua mostrando duração');
+  const central = html.slice(0, html.indexOf('>durou<'));
+  ok(central.indexOf('data-sp-el2l="') === -1, '[legado] o relógio encerrado não continua ticando');
 })();
 
 // ─── 5) O helper isolado, nas 4 esquinas ───────────────────────────────────────────────

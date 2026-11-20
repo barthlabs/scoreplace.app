@@ -1945,15 +1945,25 @@ window._buildProgressInner = function(t, barsOnly) {
   }
   if (!prog.total) return '';
   var isFinished = t.status === 'finished' || !!t.finishedAt || !!(_continuousPlan && _continuousPlan.complete);
+  // O cronômetro global da operação só para quando o torneio foi encerrado de
+  // fato. Fechar um dia/etapa ou completar provisoriamente todos os placares não
+  // encerra essa corrida; uma reabertura administrativa deve voltar a contá-la.
+  var _opDone = t.status === 'finished' || !!t.finishedAt;
   var now = Date.now();
   // INÍCIO EFETIVO = tournamentStarted OU, na falta dele, o PRIMEIRO jogo jogado (menor
   // startedAt/resultAt). Lançar resultado É iniciar → a barra não pode ficar em "aguardando
   // início" quando já há placar na mesa. FIM EFETIVO = último jogo (maior resultAt); vira o
   // fim real quando o torneio encerra. Assim início e fim ficam registrados a partir dos JOGOS.
-  var _allStampsG = [], _endStampsG = [], _scheduledGamesG = [];
+  var _allStampsG = [], _endStampsG = [], _scheduledGamesG = [], _callStampsG = [], _callSeenG = {};
   ((typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || [])).forEach(function (m) {
     if (!m || m.isBye || m.isSitOut) return;
     var _calledMs = window._tProgParseMs(m.courtCalledAt);
+    // courtClockBaseAt pode ser rebaseado por relógios individuais. O tempo
+    // global preserva a chamada original; a base serve apenas como fallback.
+    var _callBaseMs = _calledMs != null ? _calledMs : window._tProgParseMs(m.courtClockBaseAt);
+    var _matchId = m.id != null ? String(m.id) : null;
+    if (_callBaseMs != null) _callStampsG.push(_callBaseMs);
+    if (_matchId) _callSeenG[_matchId] = true;
     var _startedMs = window._tProgParseMs(m.startedAt);
     var _resultMs = window._tProgParseMs(m.resultAt);
     if (_calledMs) _allStampsG.push(_calledMs);
@@ -1967,6 +1977,27 @@ window._buildProgressInner = function(t, barsOnly) {
   window._playedTournamentTieMatches(t).forEach(function (m) {
     var stamp = window._tProgParseMs(m.resultAt);
     if (stamp) { _allStampsG.push(stamp); _endStampsG.push(stamp); }
+  });
+  // Desempates ainda pendentes podem já ter sido chamados à quadra. O helper
+  // acima inclui apenas desempates decididos, então leia também as decisões
+  // abertas e o histórico, sem contar IDs já vistos na chave.
+  function addPendingTieCalls(decision, prefix) {
+    (decision && decision.matches || []).forEach(function (m, index) {
+      if (!m || m.isBye || m.isSitOut || m.p1 === 'BYE' || m.p2 === 'BYE') return;
+      var id = m.id != null ? String(m.id) : (prefix + ':' + index);
+      if (_callSeenG[id]) return;
+      _callSeenG[id] = true;
+      var called = window._tProgParseMs(m.courtCalledAt);
+      var base = called != null ? called : window._tProgParseMs(m.courtClockBaseAt);
+      if (base != null) _callStampsG.push(base);
+    });
+  }
+  Object.keys(t && t.phaseTieDecisions || {}).forEach(function (phase) {
+    var decisions = t.phaseTieDecisions[phase] || {};
+    Object.keys(decisions).forEach(function (id) { addPendingTieCalls(decisions[id], phase + ':' + id); });
+  });
+  (t && t.history || []).forEach(function (event, index) {
+    if (event && event.phaseTieDecision) addPendingTieCalls(event.phaseTieDecision, 'history:' + index);
   });
   var _earliestGameMs = _allStampsG.length ? Math.min.apply(null, _allStampsG) : null;
   var _latestGameMs = _endStampsG.length ? Math.max.apply(null, _endStampsG) : null;
@@ -2003,6 +2034,7 @@ window._buildProgressInner = function(t, barsOnly) {
     if (base && estMin > 0) plannedEnd = base + estMin * 60000;
   }
   if (!schedStart) schedStart = actualStart;
+  var callAnchorMs = _callStampsG.length ? Math.min.apply(null, _callStampsG) : (_opDone ? actualStart : null);
   var progFrac = prog.total > 0 ? (prog.completed / prog.total) : 0;
 
   var _time = function(ms) { var d = new Date(ms); return dayStages
@@ -2531,15 +2563,20 @@ window._buildProgressInner = function(t, barsOnly) {
 
   var _endLabel = _roundEndReal ? 'final real' : (isFinished ? 'final real' : 'final estimado');
   var _elapsedLabel = (_roundEndReal || isFinished) ? 'durou' : 'decorrido';
-  // 1.9.101: fase/rodada COM fim programado de verdade (`_schedEndReal` — a mesma data que
-  // a coluna azul da direita mostra como "final programado"/"próximo sorteio") → o relógio
-  // do meio conta pra TRÁS até lá. Rodada encerrada ou torneio finalizado congela em "durou".
-  var _clk = window._tProgClock2L({
-    deadlineMs: _schedEndReal ? expectedEnd : null,
-    frozen: !!(_roundEndReal || isFinished),
-    elapsedMs: elapsedMs, elapsedLabel: _elapsedLabel,
-    anchorMs: _notStarted ? null : actualStart
-  });
+  // O cronômetro central da operação mede a corrida desde a primeira chamada à quadra.
+  // As métricas de prazo/rodada continuam nas colunas e no card separado do torneio completo.
+  var _callEndMs = _opDone
+    ? (_latestGameMs != null ? _latestGameMs : (finishedMs != null ? finishedMs : now))
+    : now;
+  var callElapsedMs = callAnchorMs != null ? Math.max(0, _callEndMs - callAnchorMs) : 0;
+  var _clk = (!_opDone && callAnchorMs == null)
+    ? { attr: '', html: '—', label: _t('progress.awaitingCourtCall') }
+    : window._tProgClock2L({
+      frozen: _opDone,
+      elapsedMs: callElapsedMs,
+      elapsedLabel: _opDone ? 'durou' : 'decorrido',
+      anchorMs: callAnchorMs
+    });
   // mostra DATA (dia) na linha REAL quando: (a) início e fim reais caem em dias diferentes, OU
   // (b) o dia REAL dos jogos difere do dia PROGRAMADO (ex.: jogado hoje, programado p/ 25/07) —
   // aí o horário sozinho engana. Pedido do dono.

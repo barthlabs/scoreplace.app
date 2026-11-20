@@ -1,5 +1,6 @@
 // ─── English translations ───────────────────────────────────────────────────
 window._translations['en'] = {
+  'progress.awaitingCourtCall': 'Waiting for first court call',
   'draw.monarchPairBlockedTitle': 'Pairs after standings',
   'draw.monarchPairBlockedBody': 'In the initial King/Queen phase, entries are individual. Pairs are formed after the standings are final.',
   'bracket.competitorIndex': 'Competitors in the bracket',

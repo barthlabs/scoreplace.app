@@ -1,5 +1,6 @@
 // ─── Portuguese (pt-BR) translations ────────────────────────────────────────
 window._translations['pt'] = {
+  'progress.awaitingCourtCall': 'Aguardando chamada à quadra',
   'draw.monarchPairBlockedTitle': 'Duplas após a classificação',
   'draw.monarchPairBlockedBody': 'Na fase inicial Rei/Rainha, as inscrições são individuais. As duplas serão formadas depois da classificação.',
   'bracket.competitorIndex': 'Competidores na chave',
