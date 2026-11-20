@@ -67,8 +67,8 @@ ok(Math.round((rw.endMs - rw.startMs) / D * 100) / 100 === 2.67,
   '  → a R1 dessa fase tem 8/3 ≈ 2,67 dias, não 8 (got ' + ((rw.endMs - rw.startMs) / D).toFixed(2) + 'd)');
 
 // ── 3. NA TELA (o caso do relato: fase materializada com janela configurada) ─────────
-// É aqui que o defeito aparecia: `deadlineMs` saía do fim da FASE. O `data-sp-cd2l` é o
-// atributo que o tique de 1s reescreve — ele carrega o instante da regressiva.
+// A janela da rodada continua informativa nas colunas; o relógio central agora mede a corrida
+// desde a primeira chamada oficial à quadra, nunca regressa até o prazo da rodada.
 (function () {
   // ⛔ DATA RELATIVA A HOJE, não fixa. Com '2026-09-01' o teste passou até 03/set e caiu no
   // dia 04: a R1 (2,67 dias) tinha terminado no relógio REAL, a regressiva passou a ser da R2
@@ -93,12 +93,8 @@ ok(Math.round((rw.endMs - rw.startMs) / D * 100) / 100 === 2.67,
     participants: [{ uid: 'u1' }], startDate: iniISO, endDate: fimISO,
   };
   const html = W._buildProgressInner(tt);
-  const cd = /data-sp-cd2l="(\d+)"/.exec(html);
-  ok(!!cd, 'a rodada tem regressiva (data-sp-cd2l)');
-  ok(cd && Math.abs(+cd[1] - fimMs) > D, '  → e ela NÃO aponta pro fim da fase (era o bug)');
-  const dias = cd ? (+cd[1] - iniMs) / D : 0;
-  ok(Math.abs(dias - 8 / 3) < 0.02,
-    '  → aponta pro fim da R1 de 3: 8/3 ≈ 2,67 dias (got ' + dias.toFixed(2) + 'd)');
+  ok(!/data-sp-cd2l="\d+"/.test(html), 'o prazo configurado não transforma o relógio central em regressiva');
+  ok(/Aguardando chamada à quadra/.test(html), 'sem chamada oficial, o relógio aguarda em vez de inferir uma duração');
   const flat = html.replace(/<br>/g, ' ');
   ok(/início da rodada/.test(flat) && /final da rodada/.test(flat),
     '  → e as colunas dizem "início/final da RODADA"');

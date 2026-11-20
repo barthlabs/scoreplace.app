@@ -14,11 +14,14 @@ assert(t.tournamentStarted < now && first > now,
   'o teste reproduz o carimbo operacional de início anterior ao primeiro jogo futuro');
 assert.match(html, /Aguardando início/);
 assert.doesNotMatch(html, /Torneio em andamento/);
-assert.match(html, new RegExp('data-sp-cd2l="' + first + '"'));
+assert.match(html, new RegExp('data-sp-cd2l="' + first + '"'),
+  'antes da primeira chamada, mantém a previsão separada para o início agendado');
 assert.match(html, /para o início/);
 const startedGame = W._buildProgressInner({ ...t, matches: [{ ...t.matches[0], startedAt: now - 60000 }] });
 assert.match(startedGame, /Torneio em andamento/,
   'se um jogo começou de fato antes da agenda, o progresso reconhece o início real');
+assert.match(startedGame, /Aguardando chamada à quadra/,
+  'um startedAt sem chamada oficial ainda não inicia o cronômetro global da operação');
 const originalBar = W._progBarPct;
 try {
   for (const offsetDays of [2, -2, 30, -30, 3650, -3650]) {
@@ -57,15 +60,15 @@ const concentrated = { ...t, status: 'in_progress', startDate: new Date(schedule
   matches: [{ ...t.matches[0], scheduledAt: new Date(scheduledStart).toISOString(),
     courtCalledAt: new Date(realStart).toISOString() }, scheduledMatch] };
 const shiftedClock = W._buildProgressInner(concentrated);
-assert.match(shiftedClock, new RegExp('data-sp-cd2l="' + shiftedEnd + '"'),
-  'o prazo e a barra azul terminam após a duração planejada contada desde a primeira chamada');
-assert.doesNotMatch(shiftedClock, new RegExp('data-sp-cd2l="' + (scheduledStart + plannedDuration) + '"'),
-  'o relógio não continua apontando para o fim da data programada');
+assert.match(shiftedClock, new RegExp('data-sp-el2l="' + realStart + '"'),
+  'o cronômetro global conta desde a primeira chamada real');
+assert.doesNotMatch(shiftedClock, /data-sp-cd2l="\d+"/,
+  'o relógio não regressa ao fim calculado nem ao fim da data programada');
 const partial = W._buildProgressInner({ ...concentrated, matches: [
   { ...concentrated.matches[0], resultAt: new Date(now - 1800000).toISOString(),
     score1: 6, score2: 3, winner: 'A' }, scheduledMatch] });
-assert.match(partial, new RegExp('data-sp-cd2l="' + shiftedEnd + '"'),
-  'o primeiro placar não troca a previsão da grade por uma extrapolação do ritmo parcial');
+assert.match(partial, new RegExp('data-sp-el2l="' + realStart + '"'),
+  'o primeiro placar não muda a âncora original da primeira chamada');
 const finalCol = partial.match(/<span style="font-size:1rem;font-weight:800;color:var\(--text-bright\);line-height:1\.1;">([^<]+)<\/span><span[^>]*>([^<]+)<\/span><span[^>]*>final<br>estimado<\/span>/);
 assert(finalCol, 'o final estimado aparece no painel');
 const expectedDate = new Date(shiftedEnd);

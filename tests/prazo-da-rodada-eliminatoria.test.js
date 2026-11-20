@@ -26,8 +26,7 @@ const html = W._buildProgressInner(t);
 const pr = W._phaseCurrentRoundProgress(t);
 const win = W._phaseRoundWindow(W._inicioDaFase(t,1), W._fimDaFase(t,1), pr.roundNum, pr.roundsTotal);
 ok(pr.roundNum === 1 && pr.roundNumGlobal === 2, 'a primeira coluna da eliminatória é exibida como R2, mas agenda localmente como R1');
-const cd = /data-sp-cd2l="(\d+)"/.exec(html);
-ok(!!cd && +cd[1] === win.endMs, 'a regressiva termina no prazo configurado da R2');
+ok(!/data-sp-cd2l="\d+"/.test(html), 'o prazo configurado não substitui o cronômetro decorrido desde a primeira chamada');
 ok(html.indexOf('Rodada 2') >= 0, 'o cabeçalho conserva o nome global correto');
 ok(html.indexOf('final<br>estimado') >= 0, 'o cartão preserva o rótulo de previsão');
 // O cartão precisa ancorar a coluna superior na janela, e não no primeiro placar.
