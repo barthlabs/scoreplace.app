@@ -133,6 +133,8 @@ selected_targets() { # $1=todos os alvos, $2=prefixo do codebase
 _batch_needs_retry_force() { # $1=targets já validados (CSV)
   [ "$ALVO" = "autodraw" ] && [ -n "$ONLY" ] && [ "$ALL" = "0" ] || return 1
   local target retry_name
+  # Não herdar o IFS vírgula do loop de lotes chamador.
+  local IFS=$' \t\n'
   local retry_exports='tournamentSummary tournamentSummaryMatch tournamentSummaryParticipant tournamentSummaryRegistration tournamentSummaryLegacyGroup'
   IFS=',' read -r -a batch_targets <<< "$1"
   for target in "${batch_targets[@]}"; do
