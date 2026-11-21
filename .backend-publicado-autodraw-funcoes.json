@@ -38,8 +38,8 @@
       "mode": "only"
     },
     "createTournament": {
-      "backendCommit": "dbe255293a5fd40f2e3eafdc3d8c30ab7d4e5428",
-      "deployedAt": "2026-11-19T11:48:20.849Z",
+      "backendCommit": "13baec5a5cc5f16f1e2552fa7af9233abc2094c0",
+      "deployedAt": "2026-11-21T22:12:40.675Z",
       "result": "success",
       "mode": "only"
     },
@@ -62,8 +62,8 @@
       "mode": "only"
     },
     "tournamentSummary": {
-      "backendCommit": "7ed572d68e0d9eb78118ffd93d6e89c41107e5f1",
-      "deployedAt": "2026-11-17T23:14:34.391Z",
+      "backendCommit": "13baec5a5cc5f16f1e2552fa7af9233abc2094c0",
+      "deployedAt": "2026-11-21T22:12:40.675Z",
       "result": "success",
       "mode": "only"
     },
@@ -682,6 +682,30 @@
     "setTournamentFeePerPerson": {
       "backendCommit": "109568d18370b11647f79b7f94302332c07736cb",
       "deployedAt": "2026-11-07T15:24:45.656Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "tournamentSummaryMatch": {
+      "backendCommit": "13baec5a5cc5f16f1e2552fa7af9233abc2094c0",
+      "deployedAt": "2026-11-21T22:12:40.675Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "tournamentSummaryParticipant": {
+      "backendCommit": "13baec5a5cc5f16f1e2552fa7af9233abc2094c0",
+      "deployedAt": "2026-11-21T22:12:40.675Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "tournamentSummaryRegistration": {
+      "backendCommit": "13baec5a5cc5f16f1e2552fa7af9233abc2094c0",
+      "deployedAt": "2026-11-21T22:12:40.675Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "tournamentSummaryLegacyGroup": {
+      "backendCommit": "13baec5a5cc5f16f1e2552fa7af9233abc2094c0",
+      "deployedAt": "2026-11-21T22:12:40.675Z",
       "result": "success",
       "mode": "only"
     }
