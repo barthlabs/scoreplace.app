@@ -1863,6 +1863,7 @@ const SUITES = [
   'functions-autodraw/test-match-ready-notifications.js', // avisos de confronto definido e prazo configurado
   'functions-autodraw/test-autodraw-dividido.js', // L6.R1: sorteio agendado em torneio DIVIDIDO
   'functions-autodraw/test-corrida-slot-emu.js',  // L6.R1.1: a corrida manual × automático no EMULADOR real
+  'functions-autodraw/test-tournament-summary-reconcile.js', // projeção read-only, versão e retomada após teste
   'functions-autodraw/test-draw.js',
   'functions-autodraw/test-rebase.js',
   'functions-autodraw/test-groupsby.js',

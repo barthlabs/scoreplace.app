@@ -48,7 +48,7 @@ function withoutRuntimeState(value) {
   }, {});
 }
 // Dependências injetadas: este é o handler real, também executado pelos testes.
-function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig, validateCapacity, validatePolicy, validateIntent, validateTvLayout, compile, boundary, readTournament, now = Date.now }) {
+function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig, validateCapacity, validatePolicy, validateIntent, validateTvLayout, compile, boundary, readTournament, summaryCore, summaryHelpers, now = Date.now }) {
   const fail = (code, message) => { throw new HttpsError(code, message); };
   return async function createTournament(request) {
     const uid = request.auth && request.auth.uid;
@@ -106,6 +106,7 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
     if (Buffer.byteLength(JSON.stringify(config)) > 96 * 1024) fail('invalid-argument', 'Configuração grande demais.');
     const hash = createHash('sha256').update(JSON.stringify(canonical(config))).digest('hex');
     const ref = db.collection('tournaments').doc(id);
+    const summaryRef = db.collection('tournaments_summary').doc(id);
     const receipt = db.collection('tournamentCreationRequests').doc(id);
     return db.runTransaction(async tx => {
       const prior = await tx.get(receipt);
@@ -114,6 +115,8 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         const accepted = prior.data();
         if (accepted.uid !== uid || accepted.hash !== hash) fail('already-exists', 'Este pedido já foi usado para outra criação.');
         if (!snap.exists) fail('not-found', 'Este torneio já foi apagado.');
+        const summary = await tx.get(summaryRef);
+        if (!summary.exists) console.warn('[createTournament] resumo ausente em retry de criação; nenhuma escrita feita', id);
         const tournament = await readTournament(tx, ref, id);
         return { ok: true, changed: false, tournament };
       }
@@ -202,16 +205,32 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         _nJogos: 0, _nGrupos: 0
       };
       PARTES_AO_NASCER.forEach((nome) => { result.persist[nome] = []; });
-      tx.create(ref, Object.assign({}, result.persist, _nascendoDividido,
-        {
+      const persistido = Object.assign({}, result.persist, _nascendoDividido, {
           // Prova de origem, não um novo seletor de formato. Torneios criados
           // por esta porta nunca tiveram documento inteiro para ser migrado, logo
           // não podem nem devem receber um "backup pré-divisão" inventado depois.
           // A leitura segue sendo sempre pelas partes canônicas.
           splitProvenance: { kind: 'born-canonical', schema: 1, writer: 'createTournament' },
           _nascidoEm: FieldValue.serverTimestamp()
-        }));
+      });
+      let resumoInicial;
+      try {
+        if (!summaryCore || typeof summaryCore.buildSummary !== 'function' || typeof summaryHelpers !== 'function') {
+          throw new Error('builder/helpers oficiais do resumo indisponíveis');
+        }
+        const helpers = summaryCore.helpersComInscricoes(persistido, summaryHelpers(), []);
+        resumoInicial = summaryCore.buildSummary(persistido, id, helpers);
+        if (!resumoInicial) throw new Error('builder não produziu resumo');
+        resumoInicial.sourceVersionMicros = clock * 1000;
+      } catch (error) {
+        console.error('[createTournament] não foi possível preparar resumo inicial', id, error && error.message);
+        fail('internal', 'Não foi possível preparar o resumo inicial do torneio.');
+      }
+      // Raiz, recibo e índice leve nascem no mesmo commit: nunca há um torneio
+      // novo elegível que a lista summary-first ainda não consiga encontrar.
+      tx.create(ref, persistido);
       tx.create(receipt, { uid, hash, expiresAt: Number(match[1]) + WINDOW_MS + 60000 });
+      tx.create(summaryRef, resumoInicial);
       return { ok: true, changed: true, tournament: result.clean };
     });
   };

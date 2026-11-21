@@ -31,7 +31,8 @@ const clock=Date.now(), id='tour_'+clock+'_'+'a'.repeat(32);
 const payload={tournamentId:id,config:{name:'Copa',sport:'Tênis',format:'Eliminatórias Simples',isPublic:true}};
 const auth={uid:'owner',token:{email:'org@example.com',email_verified:true}};
 const read=async(tx,ref,id)=>{const snap=await tx.get(ref);if(!snap.exists)return null;await tx.get(ref.collection('resultVisibilityFence').doc('state'));return {...snap.data(),id};};
-function creator(db,time=clock){return makeCreateTournament({db,HttpsError,FieldValue:{serverTimestamp:()=> 'server-time'},...config,validatePolicy:require('../functions-autodraw/elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy,validateIntent:require('../functions-autodraw/format-intent-validation-core').validateNewFormatIntent,compile:(c,x)=>win.FORMAT2.compileToPhases(c,x),boundary,readTournament:read,now:()=>time});}
+const summaryCore=require('../functions-autodraw/tournament-summary-core');
+function creator(db,time=clock,helpers=()=>summaryCore.helpersDe(win)){return makeCreateTournament({db,HttpsError,FieldValue:{serverTimestamp:()=> 'server-time'},...config,validatePolicy:require('../functions-autodraw/elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy,validateIntent:require('../functions-autodraw/format-intent-validation-core').validateNewFormatIntent,compile:(c,x)=>win.FORMAT2.compileToPhases(c,x),boundary,readTournament:read,summaryCore,summaryHelpers:helpers,now:()=>time});}
 (async()=>{
  await test('política explícita inválida falha antes de criar recibo ou torneio',async()=>{
   const db=fakeDB(),fn=creator(db);
@@ -106,8 +107,9 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   const db=fakeDB();db.docs.set('users/owner',{displayName:'Organizador real'});
   const fn=creator(db), request={auth,data:copy(payload)};
   const result=await Promise.all([fn(request),fn(request)]);
-  assert.equal(db.writes,2);assert.equal(result.filter(x=>x.changed).length,1);
+  assert.equal(db.writes,3);assert.equal(result.filter(x=>x.changed).length,1);
   const t=db.docs.get('tournaments/'+id);assert.equal(t.creatorUid,'owner');assert.equal(Object.prototype.hasOwnProperty.call(t,'organizerName'),false);assert.equal(t.status,'open');assert.equal(t._nascidoEm,'server-time');assert.deepEqual(t.participants,[]);
+  const summary=db.docs.get('tournaments_summary/'+id);assert.equal(summary._resumo,true);assert.equal(summary.sourceVersionMicros,clock*1000);assert.deepEqual(summary.memberUids,['owner']);assert.equal(summary.participantsCount,0);assert.equal(summary.competitorsCount,0);assert.equal(summary.matchesTotal,0);
   /* ⛔⛔ CONTRATO NOVO (27/set/2026, ordem do dono): o torneio NASCE DIVIDIDO. Esta linha exigia o
    * contrário — `assert(!t._semPesados)` — porque até aqui ele nascia inteiro e era dividido em voo.
    * Dividir em voo cria DUAS formas do mesmo torneio e quem só acerta uma falha em silêncio.
@@ -121,7 +123,13 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   });
   assert(t.memberUids.includes('owner'));
   t.matches=[{id:'new-game',winner:'A'}];db.docs.set('tournaments/'+id,t);
-  const retry=await fn(request);assert.deepEqual(retry.tournament.matches,t.matches);assert.equal(db.writes,2);
+  const retry=await fn(request);assert.deepEqual(retry.tournament.matches,t.matches);assert.equal(db.writes,3);
+ });
+ await test('resumo inicial exige os helpers oficiais antes de gravar raiz ou recibo',async()=>{
+  const db=fakeDB(),tournamentId='tour_'+(clock+4)+'_'+'e'.repeat(32);
+  await assert.rejects(creator(db,clock,()=>({}))({auth,data:{tournamentId,config:{...payload.config}}}),
+    {code:'internal',message:'Não foi possível preparar o resumo inicial do torneio.'});
+  assert.equal(db.writes,0);assert.equal(db.docs.size,0);
  });
  await test('auth, colisão, injeção de estado e payload grande são recusados sem escrita',async()=>{
   const db=fakeDB(),fn=creator(db);
@@ -134,7 +142,7 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   await fn({auth,data:payload});
   await assert.rejects(fn({auth:{uid:'intruder'},data:payload}),{code:'already-exists'});
   await assert.rejects(fn({auth,data:{...payload,config:{...payload.config,name:'Outra'}}}),{code:'already-exists'});
-  assert.equal(db.writes,2);
+  assert.equal(db.writes,3);
  });
  await test('exclusão seguida de retry nunca recria, mesmo após limpar recibo expirado',async()=>{
   const db=fakeDB();await creator(db)({auth,data:payload});db.docs.delete('tournaments/'+id);

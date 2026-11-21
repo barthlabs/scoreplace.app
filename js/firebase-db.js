@@ -2414,6 +2414,7 @@ window.FirestoreDB = {
     // seria MUITO pior que lista pesada — o torneio da pessoa sumir da tela dela.
     // O espelho é conferido todo dia por scripts/conferir-banco-novo.js (39/39 idênticos).
     var _viaResumo = [];
+    var _resumosFullRead = [];
     try {
       var snapS = await this.db.collection('tournaments_summary')
         .where('memberUids', 'array-contains', uid)
@@ -2429,6 +2430,13 @@ window.FirestoreDB = {
         var d = doc.data();
         if (!d) return;
         if (d.organizerOnly === true && d.creatorUid !== uid && !(Array.isArray(d.memberUids) && d.memberUids.indexOf(uid) !== -1) && !(Array.isArray(d.refereeUids) && d.refereeUids.indexOf(uid) !== -1)) return;
+        // Um resumo marcado pelo servidor como incompleto nunca é tratado como
+        // estado atual: buscamos o canônico diretamente, com source=server.
+        // Isso mantém o caminho leve para todos os demais torneios.
+        if (d.requiresFullRead === true) {
+          _resumosFullRead.push(doc.id);
+          return;
+        }
         d._docId = doc.id;
         if (!d.id) d.id = doc.id;
         // sentinela: se alguém pedir jogo/inscrito a este documento leve, o app avisa
@@ -2438,6 +2446,37 @@ window.FirestoreDB = {
       }); });
     } catch (eR) {
       window._warn('[meus torneios] resumo indisponível, caindo no caminho antigo:', eR && eR.message);
+    }
+    if (_resumosFullRead.length) {
+      var completos = await Promise.all(_resumosFullRead.map(async (id) => {
+        try {
+          var doc = await this._tRef(id).get({ source: 'server' });
+          if (!doc.exists) return null;
+          var d = doc.data();
+          if (!d || d.testModeEnabled === true) return null;
+          var hosts = Array.isArray(d.coHosts) ? d.coHosts : [];
+          var relacionado = d.creatorUid === uid || d.organizerUid === uid || d.organizerId === uid ||
+            (Array.isArray(d.memberUids) && d.memberUids.indexOf(uid) !== -1) ||
+            (Array.isArray(d.adminUids) && d.adminUids.indexOf(uid) !== -1) ||
+            (Array.isArray(d.refereeUids) && d.refereeUids.indexOf(uid) !== -1) ||
+            hosts.some((host) => host && (host.uid || host) === uid && host.status !== 'revoked');
+          if (!relacionado) return null;
+          d._docId = doc.id;
+          if (!d.id) d.id = doc.id;
+          return typeof window._projectTournamentPhasesForRead === 'function' ? window._projectTournamentPhasesForRead(d) : d;
+        } catch (error) {
+          window._warn('[meus torneios] canônico indisponível para resumo incompleto:', id, error && error.message);
+          var code = String(error && error.code || '').toLowerCase();
+          // Um resumo antigo pode continuar indexado depois que o acesso privado
+          // foi revogado. Nesse caso o servidor é a autoridade: omita o torneio.
+          if (code === 'permission-denied' || code === 'not-found' || code === '5' || code === '7') return null;
+          // Só erros transitórios justificam abortar a lista; falhas permanentes
+          // num resumo isolado não podem derrubar todos os outros torneios.
+          if (['aborted', 'unavailable', 'deadline-exceeded', 'internal', 'resource-exhausted', '10', '14', '4', '8'].indexOf(code) >= 0) throw error;
+          return null;
+        }
+      }));
+      completos.forEach(function (d) { if (d) _viaResumo.push(d); });
     }
     if (_viaResumo.length) return _viaResumo;
 

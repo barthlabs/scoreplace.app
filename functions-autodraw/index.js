@@ -6153,7 +6153,8 @@ exports.createTournament = onCall(require('./tournament-create').makeCreateTourn
   validateIntent: require('./format-intent-validation-core').validateNewFormatIntent,
   validateTvLayout: require('./tv-layout-core').normalize,
   compile: (cfg, ctx) => drawWindow.FORMAT2.compileToPhases(cfg, ctx),
-  boundary: _applyWriteBoundary, readTournament: _leTorneio
+  boundary: _applyWriteBoundary, readTournament: _leTorneio,
+  summaryCore: _tourSummary, summaryHelpers: () => _tourSummary.helpersDe(drawWindow)
 }));
 exports.cleanupTournamentCreationRequests = onSchedule('every 24 hours', async () => {
   const expired = await db.collection('tournamentCreationRequests').where('expiresAt', '<', Date.now()).limit(400).get();
@@ -9873,96 +9874,109 @@ exports.sendPushNotification = onDocumentCreated('users/{userId}/notifications/{
 // ⛔ O resumo é DERIVADO, nunca fonte da verdade: é regenerado INTEIRO a cada
 // mudança relevante, então qualquer divergência se corrige na escrita seguinte.
 // ══════════════════════════════════════════════════════════════════════════════
-exports.tournamentSummary = onDocumentWritten(
-  { document: 'tournaments/{tournamentId}', region: 'us-central1', memory: '512MiB', timeoutSeconds: 120 },
-  async (event) => {
-    const id = event.params && event.params.tournamentId;
-    try {
-      const db = getFirestore();
-      const antes = (event.data && event.data.before && event.data.before.exists) ? event.data.before.data() : null;
-      const depois = (event.data && event.data.after && event.data.after.exists) ? event.data.after.data() : null;
-      if (await _rehearsalRootEventBlocked(event, id)) return;
-
-      // torneio apagado → o resumo some junto (senão a tela mostraria fantasma)
-      if (!depois) {
-        await db.collection('tournaments_summary').doc(id).delete().catch(() => {});
-        return;
-      }
-      if (depois.testModeEnabled === true) {
-        await db.runTransaction(async tx => {
-          const root = await tx.get(db.collection('tournaments').doc(id));
-          if (!root.exists || root.data().testModeEnabled === true) {
-            tx.delete(db.collection('tournaments_summary').doc(id));
-          }
-        });
-        return;
-      }
-
-      // as funções do APP, do shim. Sem elas o resumo sairia com os derivados
-      // NULOS — melhor não ter número do que ter número errado.
-      const H = _tourSummary.helpersDe(drawWindow);
-      if (!H.progress || !H.competitors || !H.waitlistPeople) {
-        console.error('[tournamentSummary] shim sem os helpers do app — resumo NÃO gravado', id);
-        return;
-      }
-      if (depois.canonicalRegistrationMigration && depois.canonicalRegistrationMigration.fingerprint) {
-        const expected = Number(depois.canonicalRegistrationMigration.registrationCount);
-        if (!Number.isInteger(expected) || expected < 0) throw new Error('recibo canônico inválido');
-        const registrationSnap = await db.collection('tournaments').doc(id)
-          .collection('registrations').limit(expected + 1).get();
-        const canonical = _tourSummary.canonicalCounts(registrationSnap.docs.map((doc) => doc.data()), expected);
-        H.competitors = () => canonical;
-        H.canonicalParticipants = canonical.people;
-      }
-
-      /* ⛔ TORNEIO DIVIDIDO: O RESUMO SAIRIA ZERADO (regressão medida em 26/ago).
-       * `buildSummary` deriva do DOCUMENTO. Com os jogos fora dele, o Confra passou de
-       * `105 jogos · 72 feitos · 69%` pra `0/0/0` — a barra de progresso da tela inicial
-       * zerada pra todo mundo. Não é número errado por arredondamento: é a tela dizendo
-       * que um torneio com 72 placares não começou.
-       * ⇒ Monta das subcoleções ANTES de resumir. Custa uma leitura da subcoleção por
-       * gravação do torneio; o resumo é o que a tela inicial inteira lê.
-       *
-       * ⛔ E O PORTÃO TAMBÉM: `summaryMudou` compara os dois DOCUMENTOS. Com o progresso
-       * fora do documento, ele nunca veria progresso mudar e o resumo congelaria no
-       * primeiro valor — pior que zerado, porque parece certo. Com o marcador posto o
-       * portão sai do caminho e o resumo é refeito sempre. */
-      let paraResumo = depois;
-      /* ⛔ O resumo não decide pelo marcador legado: todo torneio usa as partes
-       * canônicas e uma fotografia sem `_semPesados` ainda é magra. Sem montar aqui,
-       * a próxima gravação publicaria 0/0/0 por cima de progresso verdadeiro. */
-      try {
-        // ⭐ mesmo caminho único do leitor — aqui fora de transação
-        paraResumo = await _tSplit.montarDoBanco(JSON.parse(JSON.stringify(depois)),
-          async (colecao) => (await db.collection('tournaments').doc(id).collection(colecao).get())
-            .docs.map((d) => d.data()));
-      } catch (eM) {
-        // ⛔ Resumir o doc cru aqui gravaria 0/0/0 por cima do resumo bom. Não gravar
-        // deixa o resumo ANTERIOR de pé, que é velho mas verdadeiro.
-        console.error('[tournamentSummary]', id, '⛔ não montei das subcoleções — resumo NÃO regravado', eM);
-        return;
-      }
-      if (antes && antes.testModeEnabled !== true && !_tourSummary.summaryMudou(antes, depois, id, H)) {
-        // nada que o cartão mostra mudou → não regrava (economia real em torneio ao vivo)
-        return;
-      }
-
-      const resumo = _tourSummary.buildSummary(paraResumo, id, H);
-      if (!resumo) return;
-      // Um evento antigo pode terminar depois da ativação do teste. Releia o
-      // documento na mesma transação que publicaria o resumo.
-      await db.runTransaction(async tx => {
-        const root = await tx.get(db.collection('tournaments').doc(id));
-        const summaryRef = db.collection('tournaments_summary').doc(id);
-        if (!root.exists || root.data().testModeEnabled === true) tx.delete(summaryRef);
-        else tx.set(summaryRef, resumo);
-      });
-    } catch (e) {
-      console.error('[tournamentSummary] falhou', id, e);
+const _summaryReconcile = require('./tournament-summary-reconcile');
+const _REQUIRES_FULL_READ_WRITER = true; // leitor publicado antes deste release
+const _SUMMARY_TRANSIENT_CODES = new Set(['aborted', 'unavailable', 'deadline-exceeded',
+  'internal', 'resource-exhausted', '10', '14', '4', '8']);
+function _summaryTransient(error) {
+  return !!(error && _SUMMARY_TRANSIENT_CODES.has(String(error.code || '')));
+}
+function _matchPayload(snapshot) {
+  if (!snapshot || !snapshot.exists) return null;
+  const data = snapshot.data() || {};
+  return data.jogo && typeof data.jogo === 'object' ? data.jogo : data;
+}
+function _summarySourceChanged(collection, event) {
+  const before = event.data && event.data.before;
+  const after = event.data && event.data.after;
+  const b = before && before.exists ? before.data() : null;
+  const a = after && after.exists ? after.data() : null;
+  if (collection === 'matches') return _summaryReconcile.matchAffectsSummary(_matchPayload(before), _matchPayload(after));
+  if (collection === 'inscritos') return JSON.stringify(b && b.item || null) !== JSON.stringify(a && a.item || null);
+  if (collection === 'registrations') return JSON.stringify(b) !== JSON.stringify(a);
+  return !!(b || a); // grupos físicos existem apenas em alguns torneios legados
+}
+async function _markSummaryFullRead(id, cause) {
+  if (!_REQUIRES_FULL_READ_WRITER) return;
+  const db = getFirestore();
+  await db.runTransaction(async (tx) => {
+    const rootRef = db.collection('tournaments').doc(id);
+    const summaryRef = db.collection('tournaments_summary').doc(id);
+    const root = await tx.get(rootRef);
+    if (!root.exists || root.data().testModeEnabled === true) return;
+    const rootData = root.data() || {};
+    const fallback = _tourSummary.buildSummary(rootData, id, _tourSummary.helpersDe(drawWindow));
+    if (!fallback) return;
+    fallback.requiresFullRead = true;
+    fallback.sourceVersionMicros = Date.now() * 1000;
+    tx.set(summaryRef, fallback);
+  });
+  console.error('[tournamentSummary] excedeu teto de leitura; resumo marcado para fallback canônico', id, cause && cause.message);
+}
+async function _reconcileTournamentSummary(event, id) {
+  const db = getFirestore();
+  const H = _tourSummary.helpersDe(drawWindow);
+  _tourSummary.validarHelpers(H);
+  try {
+    return await _summaryReconcile.reconcile({
+      db, tournamentId: id, split: _tSplit, summaryCore: _tourSummary, helpers: H,
+      eventTime: event && event.time, rehearsal: _rehearsal,
+      eventBefore: event && event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null,
+      eventAfter: event && event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null
+    });
+  } catch (error) {
+    if (error && error.code === 'SUMMARY_READ_BUDGET') {
+      await _markSummaryFullRead(id, error);
+      return { action: 'requires-full-read' };
     }
+    console.error('[tournamentSummary] falhou', id, error);
+    if (_summaryTransient(error)) throw error;
+    return { action: 'failed' };
+  }
+}
+
+exports.tournamentSummary = onDocumentWritten(
+  { document: 'tournaments/{tournamentId}', region: 'us-central1', memory: '512MiB', timeoutSeconds: 120, retry: true },
+  async (event) => {
+    const id = String(event.params && event.params.tournamentId || '');
+    if (!id) return;
+    const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+    const after = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+    if (before && after && before.testModeEnabled === after.testModeEnabled && after.testModeEnabled !== true &&
+        !_tourSummary.summaryMudou(before, after, id, _tourSummary.helpersDe(drawWindow)) &&
+        JSON.stringify(before.canonicalRegistrationMigration || null) === JSON.stringify(after.canonicalRegistrationMigration || null)) return;
+    return _reconcileTournamentSummary(event, id);
   }
 );
 
+exports.tournamentSummaryMatch = onDocumentWritten(
+  { document: 'tournaments/{tournamentId}/matches/{matchId}', region: 'us-central1', memory: '512MiB', timeoutSeconds: 120, retry: true },
+  async (event) => {
+    const id = String(event.params && event.params.tournamentId || '');
+    if (id && _summarySourceChanged('matches', event)) return _reconcileTournamentSummary(event, id);
+  }
+);
+exports.tournamentSummaryParticipant = onDocumentWritten(
+  { document: 'tournaments/{tournamentId}/inscritos/{participantId}', region: 'us-central1', memory: '512MiB', timeoutSeconds: 120, retry: true },
+  async (event) => {
+    const id = String(event.params && event.params.tournamentId || '');
+    if (id && _summarySourceChanged('inscritos', event)) return _reconcileTournamentSummary(event, id);
+  }
+);
+exports.tournamentSummaryRegistration = onDocumentWritten(
+  { document: 'tournaments/{tournamentId}/registrations/{registrationId}', region: 'us-central1', memory: '512MiB', timeoutSeconds: 120, retry: true },
+  async (event) => {
+    const id = String(event.params && event.params.tournamentId || '');
+    if (id && _summarySourceChanged('registrations', event)) return _reconcileTournamentSummary(event, id);
+  }
+);
+exports.tournamentSummaryLegacyGroup = onDocumentWritten(
+  { document: 'tournaments/{tournamentId}/grupos/{groupId}', region: 'us-central1', memory: '512MiB', timeoutSeconds: 120, retry: true },
+  async (event) => {
+    const id = String(event.params && event.params.tournamentId || '');
+    if (id && _summarySourceChanged('grupos', event)) return _reconcileTournamentSummary(event, id);
+  }
+);
 
 // ══ ⭐ ESPELHO PRO BANCO NOVO (2.0.89) ═══════════════════════════════════════
 // Ordem do dono: "cria o banco novo, lê o banco atual, grava no banco novo e refaz as

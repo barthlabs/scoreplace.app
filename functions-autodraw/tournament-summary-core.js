@@ -71,6 +71,29 @@ function canonicalCounts(registrations, expectedCount) {
   return { people: active.length, teams: Object.keys(pairs).length };
 }
 
+/** Garante que qualquer gravação pública use todos os cálculos oficiais do app. */
+function validarHelpers(H) {
+  if (!H || typeof H.progress !== 'function' || typeof H.competitors !== 'function' ||
+      typeof H.waitlistPeople !== 'function') {
+    throw new Error('helpers oficiais do resumo indisponíveis');
+  }
+  return H;
+}
+
+/** Aplica a fotografia canônica de inscrições, quando o torneio nasceu nativo. */
+function helpersComInscricoes(torneio, helpers, registrations) {
+  var H = Object.assign({}, validarHelpers(helpers));
+  var migracao = torneio && torneio.canonicalRegistrationMigration;
+  if (migracao && migracao.fingerprint) {
+    var expected = Number(migracao.registrationCount);
+    if (!Number.isInteger(expected) || expected < 0) throw new Error('recibo canônico inválido');
+    var canonical = canonicalCounts(registrations || [], expected);
+    H.competitors = function () { return canonical; };
+    H.canonicalParticipants = canonical.people;
+  }
+  return H;
+}
+
 
 // ⛔ AQUI NÃO SE REIMPLEMENTA REGRA. Os derivados (progresso, competidores, espera)
 // vêm das MESMAS funções que a tela usa, injetadas em `H`. MEDIDO em 25/ago/2026:
@@ -264,4 +287,6 @@ function helpersDe(win) {
   return H;
 }
 
-module.exports = { buildSummary: buildSummary, summaryMudou: summaryMudou, helpersDe: helpersDe, canonicalCounts: canonicalCounts, CAMPOS_QUE_IMPORTAM: CAMPOS_QUE_IMPORTAM };
+module.exports = { buildSummary: buildSummary, summaryMudou: summaryMudou, helpersDe: helpersDe,
+  canonicalCounts: canonicalCounts, validarHelpers: validarHelpers, helpersComInscricoes: helpersComInscricoes,
+  CAMPOS_QUE_IMPORTAM: CAMPOS_QUE_IMPORTAM };
