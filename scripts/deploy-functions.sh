@@ -186,13 +186,13 @@ deploy_dir() { # $1=dir(de onde rodar o firebase) $2=targets $3=descrição $4=p
 
 _deploy_batch() { # $1=dir $2=targets (máx. 10) $3=descrição
   local dir="$1" targets="$2" desc="$3" _rc=0 _log
-  local -a force_args=()
+  local -a firebase_args=(deploy --project "$PROJECT" --non-interactive --only "$targets")
   # O Firebase exige --force para habilitar failure policy (retry). Com a
   # seleção nominal validada, esta flag só alcança os alvos explícitos do lote.
-  _batch_needs_retry_force "$targets" && force_args=(--force)
+  _batch_needs_retry_force "$targets" && firebase_args+=(--force)
   _log="$(mktemp)"
   echo "   · publicando lote: $(echo "$targets" | tr ',' '\n' | wc -l | tr -d ' ') função(ões)"
-  if (cd "$dir" && firebase deploy --project "$PROJECT" --non-interactive --only "$targets" "${force_args[@]}") >"$_log" 2>&1; then
+  if (cd "$dir" && firebase "${firebase_args[@]}") >"$_log" 2>&1; then
     _rc=0
   else
     _rc=$?
