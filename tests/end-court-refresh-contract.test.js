@@ -1,0 +1,22 @@
+'use strict';
+const assert=require('assert');
+const fs=require('fs');
+const path=require('path');
+const root=path.join(__dirname,'..');
+const script=fs.readFileSync(path.join(root,'scripts/refresh-end-court-regions.sh'),'utf8');
+assert.match(script,/base_commit='3690dc4d6287eed4a029d9051e3db8022a62d99e'/);
+assert.match(script,/git merge-base --is-ancestor "\$base_commit" "\$source_commit"/);
+assert.match(script,/operation-source-digest\.js functions-autodraw endMatchOnCourt "\$source_commit" --from-git/);
+assert.match(script,/central-source-digest\.js "\$source_commit"/);
+assert.match(script,/git archive "\$source_commit" functions-autodraw/);
+assert.doesNotMatch(script,/git archive HEAD functions-autodraw/);
+assert.doesNotMatch(script,/generate-operation-regions-(?:v3-)?config\.js --check/,
+  'preflight não compara os JSONs públicos antigos antes da regeneração');
+assert.match(script,/checkTargetedPublication\(manifest,receipt,commit,exports\)/);
+assert.match(script,/node scripts\/end-court-readiness\.js --ready "\$required_manifest"/);
+const readinessAt=script.indexOf('node scripts/end-court-readiness.js --invalidate');
+assert(readinessAt>script.indexOf('bash "$0" --preflight'),'deploy faz preflight antes da invalidação');
+assert(readinessAt<script.indexOf('for version in v3 v2'),'invalida readiness antes de entrar no ciclo mutável regional');
+assert.match(script,/gcloud run services update-traffic/);
+assert.match(script,/gcloud run deploy/);
+console.log('✓ refresh usa archive imutável, preflight antigo e readiness antes das mutações');

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, '.claude/tmp/operation-regions-manifest-v2.json')));
+const required = JSON.parse(fs.readFileSync(path.join(root, '.backend-requerido-autodraw.json')));
 const regions = ['us-east1', 'us-east4', 'us-south1'];
 const names = ['sp-op-court-v2', 'sp-op-score-v2', 'sp-op-presence-v2',
   'sp-op-presence-wo-v2', 'sp-op-end-court-v2', 'sp-op-control-v2'];
@@ -19,7 +20,14 @@ for (const name of names) {
   services[name] = { digest: rows[0].sourceDigest, urls: Object.fromEntries(rows.map(row => [row.region, row.url])) };
 }
 const output = { schema: 2, regions, services };
-const centralDigest = require('../functions-autodraw/court-capability-digest.js').digestFor(path.join(root, 'functions-autodraw'));
+const endCourtRows = manifest.filter(row => row.name === 'sp-op-end-court-v2' && row.target === 'endMatchOnCourt');
+if (endCourtRows.length !== regions.length ||
+    (required.functions.includes('endMatchOnCourt') && endCourtRows.some(row => row.commit !== required.backendCommit))) {
+  throw new Error('Manifesto end-court v2 não corresponde ao commit requerido.');
+}
+const { digestForCommit, legacyDigestForCommit } = require('./central-source-digest.js');
+const centralDigest = required.functions.includes('endMatchOnCourt')
+  ? digestForCommit(required.backendCommit, root) : legacyDigestForCommit(required.backendCommit, root);
 services['sp-op-end-court-v2'].centralSourceDigest = centralDigest;
 const target = path.join(root, 'operation-regions.json');
 const expected = JSON.stringify(output, null, 2) + '\n';

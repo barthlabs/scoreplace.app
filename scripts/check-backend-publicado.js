@@ -23,6 +23,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { autodrawExports, checkTargetedPublication } = require('./backend-publication-core');
+const { ultimoAutodrawImplantavel, mesmoAutodrawPublicado } = require('./autodraw-publication-git');
 const RAIZ = path.join(__dirname, '..');
 /* ⛔ UM CARIMBO POR ESCOPO. Um carimbo único era furado: qualquer execução do publicador de
  * Functions — inclusive `--dry-run` ou o codebase `main` — o gravava, e ele passava a "provar" que
@@ -39,6 +40,7 @@ const manifestPath = path.join(RAIZ, '.backend-requerido-autodraw.json');
 const exportsAutodraw = () => autodrawExports(fs.readFileSync(path.join(RAIZ, 'functions-autodraw/index.js'), 'utf8'));
 const readJson = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return null; } };
 
+function main() {
 const iCarimbar = process.argv.indexOf('--carimbar');
 const escopoPedido = iCarimbar !== -1 ? String(process.argv[iCarimbar + 1] || '') : '';
 if (iCarimbar !== -1 && !ESCOPOS[escopoPedido]) {
@@ -50,42 +52,8 @@ function ultimoDe(caminhos) {
   try { return git(['log', '-1', '--format=%H', '--'].concat(caminhos)); } catch (e) { return null; }
 }
 
-// O codebase autodraw não envia `test-*.js` (ver firebase.json). Um teste novo
-// precisa passar na revisão, mas não altera o artefato publicado; tratá-lo como
-// backend pendente obriga um redeploy caro de 100 funções e cria um carimbo que
-// afirma uma necessidade inexistente. Todo arquivo que pode entrar no bundle
-// continua exigindo deploy, inclusive vendor, package e firebase.json.
-function ultimoAutodrawImplantavel() {
-  let commits;
-  try { commits = git(['log', '--format=%H', '--', 'functions-autodraw']).split('\n').filter(Boolean); }
-  catch (e) { return null; }
-  for (const sha of commits) {
-    let changed = [];
-    try { changed = git(['diff-tree', '--no-commit-id', '--name-only', '-r', sha]).split('\n').filter(Boolean); }
-    catch (e) { continue; }
-    if (changed.some((file) => file.startsWith('functions-autodraw/') &&
-      !/^functions-autodraw\/test-[^/]+\.js$/.test(file))) return sha;
-  }
-  return '';
-}
-
 function ultimoDoEscopo(nome, caminhos) {
-  return nome === 'autodraw' ? ultimoAutodrawImplantavel() : ultimoDe(caminhos);
-}
-
-// Dois commits podem tocar o vendor e restaurar exatamente os bytes já implantados.
-// Nesse caso, o recibo nominal continua válido: exigir outro deploy por SHA de
-// histórico publicaria Functions sem mudança. A igualdade deve abranger TODO o
-// codebase, não apenas os arquivos escolhidos pelo manifesto.
-function mesmoAutodrawPublicado(backendCommit) {
-  if (!/^[a-f0-9]{40}$/i.test(backendCommit || '')) return false;
-  try {
-    execFileSync('git', ['merge-base', '--is-ancestor', backendCommit, 'HEAD'],
-      { cwd: RAIZ, stdio: 'ignore' });
-    execFileSync('git', ['diff', '--quiet', backendCommit, 'HEAD', '--', 'functions-autodraw'],
-      { cwd: RAIZ, stdio: 'ignore' });
-    return true;
-  } catch (_) { return false; }
+  return nome === 'autodraw' ? ultimoAutodrawImplantavel(RAIZ) : ultimoDe(caminhos);
 }
 
 if (iCarimbar !== -1) {
@@ -110,7 +78,7 @@ if (process.argv[2] === '--registrar-funcoes') {
   if (!raw || new Set(names).size !== names.length || names.some(name => !exported.has(name))) {
     console.error('✗ recibo contém função inexistente ou repetida'); process.exit(1);
   }
-  const sha = ultimoAutodrawImplantavel();
+  const sha = ultimoAutodrawImplantavel(RAIZ);
   if (!sha) { console.error('✗ SHA de autodraw indisponível'); process.exit(1); }
   const old = readJson(receiptPath);
   const entries = old && old.schema === 1 && old.entries && typeof old.entries === 'object' ? old.entries : {};
@@ -151,7 +119,7 @@ Object.keys(ESCOPOS).forEach((nome) => {
   if (jaContem) { console.log('✓ ' + nome + ' publicado (carimbo ' + carimbado.slice(0, 8) + ' já contém)'); return; }
   if (nome === 'autodraw') {
     const manifest = readJson(manifestPath);
-    const sameTree = manifest && mesmoAutodrawPublicado(manifest.backendCommit);
+    const sameTree = manifest && mesmoAutodrawPublicado(RAIZ, manifest.backendCommit);
     const result = checkTargetedPublication(manifest, readJson(receiptPath),
       sameTree ? manifest.backendCommit : ultimo, exportsAutodraw());
     if (result.ok) {
@@ -173,3 +141,6 @@ if (falhou) {
   process.exit(1);
 }
 process.exit(0);
+}
+
+if (require.main === module) main();

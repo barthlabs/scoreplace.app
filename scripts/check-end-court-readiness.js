@@ -13,8 +13,8 @@ async function main() {
   const sourceCommit = capability.sourceCommit;
   const { sourceDescriptor, sourceDigest } = require('../scripts/operation-source-digest.js');
   const regionalDigest = sourceDigest('endMatchOnCourt', sourceCommit,
-    sourceDescriptor('functions-autodraw', sourceCommit));
-  const centralDigest = require('../functions-autodraw/court-capability-digest.js').digestFor(path.join(root,'functions-autodraw'));
+    sourceDescriptor('functions-autodraw', sourceCommit, true));
+  const centralDigest = require('./central-source-digest.js').digestForCommit(sourceCommit, root);
   const v2 = require(path.join(root,'operation-regions.json'));
   const v3 = require(path.join(root,'operation-regions-v3.json'));
   const services = [v2.services && v2.services['sp-op-end-court-v2'], v3.services && v3.services['sp-op-end-court-v3']];
