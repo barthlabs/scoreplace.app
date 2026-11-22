@@ -111,8 +111,10 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
   var resetServer = server.slice(resetStart, resetEnd);
   ok(/t\.testModeEnabled === true/.test(tournaments) && /_isDeveloperIdentity/.test(tournaments) && /Resetar sorteio/.test(tournaments) && /_restoreTournamentPrePublication/.test(tournaments),
     'as Ferramentas oferecem reset somente no modo de teste do desenvolvedor');
-  ok(/restoreMode: 'testModePreDraw'/.test(draw),
-    'a UI envia a intenção genérica de reset do modo de teste');
+  ok(/var preserveDraw = t\.preserveDrawOnTestReset === true/.test(draw) &&
+    /var restoreMode = preserveDraw \? 'testModePostDraw' : 'testModePreDraw'/.test(draw) &&
+    /restoreMode: restoreMode/.test(draw),
+    'o reset escolhe o ponto de retorno pré ou pós-sorteio conforme o controle do torneio');
   ok(/result\.ok !== true \|\| !result\.tournament[\s\S]*?_applyCFTournament\(String\(tId\), result\.tournament\)/.test(draw),
     'a UI só confirma o reset com recibo canônico e troca imediatamente o torneio local pela fotografia limpa (não reexibe a chave obsoleta)');
   ok(/const boundary = _gravaTorneio\(tx, ref, t, before, \{ agoraIso \}\);[\s\S]*?return \{ ok: true, changed: true, tournament: boundary\.clean \};/.test(resetServer),

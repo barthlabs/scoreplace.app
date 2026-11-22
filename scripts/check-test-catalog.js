@@ -117,6 +117,8 @@ const NAO_SAO_SUITE = new Set([
   'tests/_conta-de-partes-fixture.js', 'tests/concurrency/emu-harness.js',
   'tests/concurrency/emu-harness-views.js',
   'functions/test-mode-core.js',
+  // Driver chamado pela suíte embrulhada `tests/draw-checkpoint-emulator.test.js`.
+  'functions-autodraw/test-draw-checkpoint-emu.js',
 ]);
 /* ⚠️ `tests/test-utils.js` SAIU desta lista: ele está em `tests/run-unit.js` e RODA no
  * `npm test` — ou seja, é suíte catalogada, não fixture. Uma isenção que não isenta nada

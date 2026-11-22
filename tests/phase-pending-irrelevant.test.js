@@ -13,6 +13,7 @@ assert(writePath.indexOf('_phasePendingDecision.changedFrozenMatchIds(tAntes,') 
   writePath.indexOf('_phasePendingDecision.changedFrozenMatchIds(tAntes,') < writePath.indexOf('_wp.applyPlan(tx,'),
   'todas as rotas de W.O. e substituição passam pela guarda antes da gravação');
 const writeContext = { drawWindow: null, _phasePendingDecision: pendingDecision,
+  _drawCheckpoint: { locked: () => false },
   HttpsError: class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } } };
 vm.createContext(writeContext);
 vm.runInContext(writePath, writeContext);

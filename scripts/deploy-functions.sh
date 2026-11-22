@@ -135,7 +135,7 @@ _batch_needs_retry_force() { # $1=targets já validados (CSV)
   local target retry_name
   # Não herdar o IFS vírgula do loop de lotes chamador.
   local IFS=$' \t\n'
-  local retry_exports='tournamentSummary tournamentSummaryMatch tournamentSummaryParticipant tournamentSummaryRegistration tournamentSummaryLegacyGroup'
+  local retry_exports='applyQueuedResult tournamentSummary tournamentSummaryMatch tournamentSummaryParticipant tournamentSummaryRegistration tournamentSummaryLegacyGroup'
   IFS=',' read -r -a batch_targets <<< "$1"
   for target in "${batch_targets[@]}"; do
     for retry_name in $retry_exports; do

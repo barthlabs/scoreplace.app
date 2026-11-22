@@ -12,6 +12,10 @@ service cloud.firestore {
     match /tournamentRehearsalBaselines/{tournamentId}/{rest=**} {
       allow read, write: if false;
     }
+    // Fotografia pós-sorteio para reset de torneios privados em modo de teste.
+    match /tournamentDrawCheckpoints/{tournamentId}/{rest=**} {
+      allow read, write: if false;
+    }
 
     // Digest público das callable endMatchOnCourt; só leitura autenticada.
     match /operationRuntimeCapabilities/{capabilityId} {
@@ -508,11 +512,13 @@ service cloud.firestore {
     }
 
     match /tournaments/{tournamentId} {
-      // A captura e a restauração travam o cliente. Durante o ensaio ativo,
-      // a organização pode editar a configuração; o marcador continua imutável
-      // e o elenco segue protegido por elencoIntacto e pelas portas do servidor.
+      // A captura e a restauração bloqueiam escritas de cliente. Durante o
+      // checkpoint, a função mantém o marcador no documento raiz.
       function rehearsalClientUnlocked() {
-        return !(resource.data.get('rehearsal', {}).get('state', '') in ['capturing', 'resetting']);
+        let rehearsalState = resource.data.get('rehearsal', {}).get('state', '');
+        return !(rehearsalState in ['capturing', 'resetting'])
+          && (resource.data.get('preserveDrawOnTestReset', false) != true
+            || !(resource.data.get('drawCheckpoint', {}).get('state', '') in ['capturing', 'resetting']));
       }
       function rehearsalPrivacyIntact() {
         return resource.data.get('rehearsal', {}).get('state', '') != 'active'
@@ -790,6 +796,11 @@ service cloud.firestore {
           && contadoresZerados()
           && igual('_semPesados');
       }
+      function resetDeFaseCandidato() {
+        return d0().get('currentPhaseIndex', 0) > d1().get('currentPhaseIndex', 0)
+          || (d0().get('phaseStartedAt', null) != null && d1().get('phaseStartedAt', null) == null)
+          || (d0().get('status', '') == 'finished' && d1().get('status', '') != 'finished');
+      }
 
       // Anonymous users: only public tournaments. Authenticated users may
       // read any tournament (needed for invite links and enroll/deenroll
@@ -878,7 +889,6 @@ service cloud.firestore {
               'isPublic', 'membersOnly', 'organizerOnly', 'memberUids', 'refereeUids'])))
         && rehearsalClientUnlocked()
         && rehearsalPrivacyIntact()
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rehearsal'])
         && (
           isTournamentAdmin(resource.data)
           // v1.8.62: admin por uid (organizador phone-only sem email)
@@ -887,8 +897,8 @@ service cloud.firestore {
               && (resource.data.get('canonicalRegistrationMigration', {}).get('fingerprint', '') == ''
                   || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pairRequests'])))
         )
-        && (faseIntacta() || ehResetOk())
-        && (planoIntercaladoIntacto() || ehResetOk())
+        && ((resetDeFaseCandidato() && ehResetOk())
+          || (faseIntacta() && planoIntercaladoIntacto()))
         && elencoIntacto()
         // Campos do servidor reunidos numa única diferença. Além de impedir
         // falsificação, evita exceder o teto de expressões no reset completo.
@@ -898,6 +908,7 @@ service cloud.firestore {
           // A tela No ar é editada pela Function autenticada. Saves genéricos
           // de jogos vindos de abas antigas nunca podem sobrescrevê-la.
           'tvLayout', 'tvScreens', 'tvActiveScreen', 'testModeEnabled', 'testModeVisibilityBefore',
+          'preserveDrawOnTestReset', 'drawCheckpoint', 'rehearsal',
           'phaseBracketPlanV1', 'phaseBracketPlanVersion'
         ])
         && cobrancaClienteNaoGeraChave()
@@ -925,6 +936,7 @@ service cloud.firestore {
         && (resource.data.get('testModeEnabled', false) != true
           || request.auth.uid == 'B17n7JCXYOfqahlcLZ0fKxGGyUu1')
         && (isTournamentAdmin(resource.data) || isTournamentAdminByUid(resource.data))
+        && rehearsalClientUnlocked()
         && !dividido();
 
       // ─── COFRE DO SORTEIO INICIAL ─────────────────────────────────────────
@@ -1005,11 +1017,18 @@ service cloud.firestore {
         function parentTq() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
         }
+        function parentClientWritesUnlocked() {
+          let parent = parentTq();
+          let rehearsalState = parent.get('rehearsal', {}).get('state', '');
+          return !(rehearsalState in ['capturing', 'resetting'])
+            && (parent.get('preserveDrawOnTestReset', false) != true
+              || !(parent.get('drawCheckpoint', {}).get('state', '') in ['capturing', 'resetting']));
+        }
         allow read: if canReadTournamentData(parentTq());
         allow create: if request.auth != null
           && (parentTq().get('testModeEnabled', false) != true
             || request.auth.uid == 'B17n7JCXYOfqahlcLZ0fKxGGyUu1')
-          && !(parentTq().get('rehearsal', {}).get('state', '') in ['capturing', 'resetting'])
+          && parentClientWritesUnlocked()
           && request.resource.data.actorUid == request.auth.uid
           && request.resource.data.matchId is string
           && request.resource.data.matchId.size() > 0

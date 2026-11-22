@@ -9,6 +9,7 @@ const { getStorage } = require('firebase-admin/storage');
 const { randomUUID, randomInt, createHash } = require('crypto');
 const _operationReceipt = require('./operation-receipt-core');
 const _rehearsal = require('./tournament-rehearsal');
+const _drawCheckpoint = require('./tournament-draw-checkpoint');
 const _operationDay = require('./operation-day');
 const _phaseTieCore = require('./phase-tie-core');
 // O desempate é operacional mesmo se o shim do sorteio carregar sem os
@@ -1528,6 +1529,9 @@ function _activateOfficialPhasePlanOnCall(t, calledMatch, nowIso) {
  * ⛔ E `participants`/`history` só saem do documento se estiverem NO MARCADOR — `dividir`
  * extrai os três por natureza, e gravar a config crua dele zeraria o elenco. */
 function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
+  if (_drawCheckpoint.locked(tAntes)) {
+    throw new HttpsError('failed-precondition', 'A fotografia ou restauração do sorteio está em andamento; operação temporariamente bloqueada.');
+  }
   const rehearsalState = tAntes && tAntes.rehearsal && tAntes.rehearsal.state;
   if (rehearsalState === 'capturing' || rehearsalState === 'resetting') {
     throw new HttpsError('failed-precondition', 'Ensaio em captura ou restauração; operação temporariamente bloqueada.');
@@ -2059,6 +2063,9 @@ exports.drawRound = onCall(async (request) => {
     if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (_drawCheckpoint.locked(t)) {
+      throw new HttpsError('failed-precondition', 'A fotografia do sorteio anterior ainda está em andamento. Use “Resetar teste” para retomar com segurança.');
+    }
     // Em inscrições canônicas, o documento pai não contém os participantes.
     // Carregue os nomes do elenco reidratado nesta mesma transação; sem isso,
     // uma conta só-UID fica sem nome e o Super 8 enxerga apenas sete atletas.
@@ -2226,16 +2233,39 @@ exports.drawRound = onCall(async (request) => {
       throw _drawFail('failed-precondition',
         'Há jogos fora dos horários configurados. Ajuste a agenda antes de publicar.', { tId });
     }
+    const checkpointEpoch = _drawCheckpoint.prepareDraw(t);
     const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
     // Devolve o doc COM nome (b.clean, não b.persist) — o cliente precisa dele pra notificar
     // (_notifyDrawPersonalized lê os nomes) e pra sincronizar o AppStore sem esperar o listener.
     // Vem FOLDADO (como o doc é no Firestore); o ingest do cliente hidrata, igual ao listener.
     return { ok: true, format: res.format, native: !!res.native, matchCount: res.matchCount,
              sitOuts: res.sitOuts || 0, allMaleCount: res.allMaleCount || 0, duplicatesRemoved, estimatedScheduleApplied,
-             redraw: hadBracket, tournament: b.clean };
+             redraw: hadBracket, checkpointEpoch, tournament: b.clean };
     });
+    if (out && out.checkpointEpoch) {
+      const captured = await _drawCheckpoint.makeService({ db, HttpsError }).capture(tId, out.checkpointEpoch);
+      out.tournament = { ...out.tournament, drawCheckpoint: { state: 'active', epoch: captured.epoch, hash: captured.hash } };
+    }
   } catch (e) {
-    if (rehearsalActivatedHere) {
+    // A response loss after the draw transaction must never erase the key. Read
+    // the root transactionally before deciding whether the rehearsal may roll back.
+    // If that read is uncertain (or the root vanished), fail closed and keep the
+    // current tournament state for an explicit reset/recovery.
+    let checkpointRoot;
+    try {
+      checkpointRoot = await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        return snap.exists ? snap.data() : null;
+      });
+    } catch (readError) {
+      console.error(`drawRound: não foi possível confirmar o checkpoint em ${tId}; nenhuma restauração automática será iniciada:`, readError && readError.stack || readError);
+      throw new HttpsError('aborted', 'Não foi possível confirmar o estado do sorteio. Atualize e tente novamente.');
+    }
+    if (!checkpointRoot) {
+      throw new HttpsError('aborted', 'O torneio não está disponível para confirmar o sorteio. Nenhuma restauração automática foi iniciada.');
+    }
+    const checkpointExists = !!checkpointRoot.drawCheckpoint;
+    if (rehearsalActivatedHere && !checkpointExists) {
       try {
         await _rehearsal.makeService({ db, HttpsError }).restore(request);
       } catch (resetError) {
@@ -2736,6 +2766,11 @@ exports.resetTournamentToEnrollment = onCall({ timeoutSeconds: 540, memory: '512
   if (restoreMode === 'rehearsal') {
     return _rehearsal.makeService({ db, HttpsError }).restore(request);
   }
+  if (restoreMode === 'testModePostDraw') {
+    return _drawCheckpoint.makeService({ db, HttpsError,
+      loadTournament: id => db.runTransaction(tx => _leTorneio(tx, db.collection('tournaments').doc(id), id))
+    }).restore(request);
+  }
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
   if (!drawWindow || typeof drawWindow._clearTournamentDraw !== 'function') {
@@ -2766,6 +2801,7 @@ exports.resetTournamentToEnrollment = onCall({ timeoutSeconds: 540, memory: '512
     }
     const before = _antesDoMotor(t), wasAuto = t.drawManual !== true && t.drawFirstDate;
     drawWindow._clearTournamentDraw(t);
+    if (mayRestoreTestMode) delete t.drawCheckpoint;
     // Na cópia de teste, repetir o sorteio não autoriza inscrições novas.
     // Torneios reais conservam o comportamento anterior de reabertura.
     t.status = (isSandboxRestore || mayRestoreTestMode) ? 'closed' : 'open';
@@ -3587,6 +3623,7 @@ async function _rehearsalRootEventBlocked(event, tournamentId) {
   const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
   const after = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
   if (_rehearsal.locked(before) || _rehearsal.locked(after)) return true;
+  if (_drawCheckpoint.locked(before) || _drawCheckpoint.locked(after)) return true;
   const eventMarker = (after && after.rehearsal) || (before && before.rehearsal);
   if (eventMarker && eventMarker.state === 'active') {
     const fresh = await db.collection('tournaments').doc(tournamentId).get();
@@ -4661,7 +4698,7 @@ exports.applyMatchResult = onCall(async (request) => {
  * resposta legítima, não erro.
  */
 exports.applyQueuedResult = onDocumentCreated(
-  { document: 'tournaments/{tournamentId}/resultQueue/{itemId}', region: 'us-central1', timeoutSeconds: 120 },
+  { document: 'tournaments/{tournamentId}/resultQueue/{itemId}', region: 'us-central1', timeoutSeconds: 120, retry: true },
   async (event) => {
     const tId = event.params && event.params.tournamentId;
     const itemId = event.params && event.params.itemId;
@@ -4670,7 +4707,11 @@ exports.applyQueuedResult = onDocumentCreated(
     const item = snap.data() || {};
     const db = getFirestore();
     const [freshItem, freshRoot] = await Promise.all([snap.ref.get(), db.collection('tournaments').doc(tId).get()]);
-    if (!freshItem.exists || !freshRoot.exists || _rehearsal.locked(freshRoot.data())) return;
+    if (!freshItem.exists || !freshRoot.exists) return;
+    if (_drawCheckpoint.locked(freshRoot.data())) {
+      throw new Error('checkpoint-lock: resultado permanece na fila até terminar a fotografia/restauração do sorteio');
+    }
+    if (_rehearsal.locked(freshRoot.data())) return;
 
     const marca = async (campos) => {
       // ⛔ `merge` e NUNCA apagar o item: ele é o recibo do que a pessoa mandou. Se a
@@ -6033,7 +6074,7 @@ exports.setTournamentFlyerPrefs = onCall({ invoker: 'public' }, async (request) 
 // detalhe de identidade, elenco, fila, jogos, resultados, fases materializadas ou
 // ciclo de vida fica fora desta lista e só possui comandos próprios no servidor.
 const _CAMPOS_CONFIG_TORNEIO = new Set([
-  'name','testModeEnabled','isPublic','membersOnly','organizerOnly','format','sport','startDate','endDate','endTimeEstimated','roundBounds','roundBoundsEditorEnabled','registrationOpenAt','registrationLimit',
+  'name','testModeEnabled','preserveDrawOnTestReset','isPublic','membersOnly','organizerOnly','format','sport','startDate','endDate','endTimeEstimated','roundBounds','roundBoundsEditorEnabled','registrationOpenAt','registrationLimit',
   'enrollmentMode','registrationSettings','mixedPairingSeparated','manualPairing','teamSize','gameTypes',
   // A capacidade por categoria é declarativa; o total que a tela calcula continua
   // em maxParticipants para os fluxos legados de inscrição. Os dois precisam passar
@@ -6259,6 +6300,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
   if ('testModeEnabled' in patch && (uid !== TEST_DEVELOPER_UID || typeof patch.testModeEnabled !== 'boolean')) {
     throw new HttpsError('permission-denied', 'Só o desenvolvedor altera o modo de teste.');
   }
+  if ('preserveDrawOnTestReset' in patch && (uid !== TEST_DEVELOPER_UID || typeof patch.preserveDrawOnTestReset !== 'boolean')) {
+    throw new HttpsError('permission-denied', 'Só o desenvolvedor altera a preservação do sorteio.');
+  }
   if ('dateCardColors' in patch) {
     try { require('./date-card-colors-core').validate(patch.dateCardColors); }
     catch (error) { throw new HttpsError('invalid-argument', error.message); }
@@ -6285,6 +6329,20 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     }
     const turningTestOn = t.testModeEnabled !== true && patch.testModeEnabled === true;
     const turningTestOff = t.testModeEnabled === true && patch.testModeEnabled === false;
+    const preserveDraw = Object.prototype.hasOwnProperty.call(patch, 'preserveDrawOnTestReset')
+      ? patch.preserveDrawOnTestReset : t.preserveDrawOnTestReset === true;
+    const testEnabledAfter = Object.prototype.hasOwnProperty.call(patch, 'testModeEnabled')
+      ? patch.testModeEnabled : t.testModeEnabled === true;
+    if (preserveDraw && !testEnabledAfter) {
+      throw new HttpsError('failed-precondition', '“Preservar sorteio” só pode ficar ativado em torneio de teste.');
+    }
+    if (preserveDraw && hasDrawnBracket(t) &&
+        !(_drawCheckpoint.marker(t) === 'active' && t.drawCheckpoint.hash)) {
+      throw new HttpsError('failed-precondition', 'Ative “Preservar sorteio” antes de sortear; não há fotografia pós-sorteio disponível.');
+    }
+    if (turningTestOff && !Object.prototype.hasOwnProperty.call(patch, 'preserveDrawOnTestReset')) {
+      patch.preserveDrawOnTestReset = false;
+    }
     const testVisibilityBefore = turningTestOn ? {
       isPublic: t.isPublic === true,
       membersOnly: t.membersOnly === true,
@@ -6773,6 +6831,12 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       t.organizerOnly = previous.organizerOnly === true;
       delete t.testModeVisibilityBefore;
       t.memberUids = [];
+    }
+    if (turningTestOff || (Object.prototype.hasOwnProperty.call(patch, 'preserveDrawOnTestReset') &&
+        patch.preserveDrawOnTestReset === false)) {
+      // Uma captura antiga não pode reativar uma chave já removida nem apontar
+      // para um sorteio posterior depois que a opção volta ao modo pré-sorteio.
+      delete t.drawCheckpoint;
     }
     // O seletor geral da ficha controla a classificatória atual. Depois do
     // sorteio, a mescla de phases preserva sua estrutura; sem sincronizar esta
@@ -7791,9 +7855,15 @@ exports.resolvePendingDraw = onCall(async (request) => {
         t.lastAutoDrawAt=pd.generatedAt||t.lastAutoDrawAt||agoraIso; t.pendingDraw=null;
       }
     }
+    const checkpointEpoch = action === 'publish' ? _drawCheckpoint.prepareDraw(t) : null;
     const b=_gravaTorneio(tx,ref,t,antes,{agoraIso});
-    return {ok:true,changed:true,action,roundIndex:pd.roundIndex,firstDraw:!!pd.firstDraw,publishedPublicly:action==='publish' && _drawCanBePublishedPublicly(t),tournament:b.clean};
+    return {ok:true,changed:true,action,roundIndex:pd.roundIndex,firstDraw:!!pd.firstDraw,
+      publishedPublicly:action==='publish' && _drawCanBePublishedPublicly(t),checkpointEpoch,tournament:b.clean};
   }).then(async out=>{
+    if (out.changed && out.checkpointEpoch) {
+      const captured = await _drawCheckpoint.makeService({ db, HttpsError }).capture(tId, out.checkpointEpoch);
+      out.tournament = { ...out.tournament, drawCheckpoint:{ state:'active', epoch:captured.epoch, hash:captured.hash } };
+    }
     // A publicação deixa o servidor, e não o navegador, responsável pela entrega.
     // `publishedPublicly` nasceu dentro da mesma transação que decidiu a visibilidade.
     // Não derive a entrega do retrato retornado: a agenda privada deve permanecer

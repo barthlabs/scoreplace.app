@@ -38,6 +38,7 @@ const writeEnd = source.indexOf('/* Devolve ao estado do banco toda vaga de repe
 assert(writeStart > 0 && writeEnd > writeStart, 'gravador único encontrado');
 Object.assign(context, {
   drawWindow:null, FieldValue:{},
+  _drawCheckpoint:{ locked:() => false },
   _preservaRepescagemCarimbada:() => [],
   _preserveCanonicalRosterProjection:() => true,
   _planejaEscrita:() => ({ boundary:{ ok:true }, ops:[] }),

@@ -527,6 +527,13 @@ function setupCreateTournamentModal() {
                   </span>
                   <span id="tourn-test-mode-state">Teste desativado · produção</span>
                 </label>
+                <label id="tourn-preserve-draw-row" class="form-group full-width" style="display:none;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);">
+                  <span class="toggle-switch" style="--toggle-on-bg:#16a34a;--toggle-on-glow:rgba(34,197,94,.35);--toggle-on-border:#4ade80;">
+                    <input type="checkbox" role="switch" id="tourn-preserve-draw" aria-label="Preservar sorteio ao resetar teste" onchange="window._syncTournamentTestMode()">
+                    <span class="toggle-slider"></span>
+                  </span>
+                  <span id="tourn-preserve-draw-state">Preservar sorteio</span>
+                </label>
                 <div class="form-group full-width">
                   <label class="form-label">${_t('create.sportLabel')}</label>
                   <!-- Hidden select for backward compatibility -->
@@ -5839,6 +5846,19 @@ function setupCreateTournamentModal() {
     state.style.color = input.checked ? '#4ade80' : 'var(--text-muted)';
     row.style.borderColor = input.checked ? 'rgba(34,197,94,.7)' : 'rgba(255,255,255,.15)';
     row.style.background = input.checked ? 'rgba(34,197,94,.13)' : 'transparent';
+    var preserveInput = document.getElementById('tourn-preserve-draw');
+    var preserveState = document.getElementById('tourn-preserve-draw-state');
+    var preserveRow = document.getElementById('tourn-preserve-draw-row');
+    if (preserveInput && preserveState && preserveRow) {
+      preserveInput.disabled = !input.checked;
+      preserveState.textContent = preserveInput.checked
+        ? 'Preservar sorteio · reset volta ao pós-sorteio' : 'Preservar sorteio';
+      preserveState.style.color = preserveInput.checked && input.checked ? '#4ade80' : 'var(--text-muted)';
+      preserveRow.style.opacity = input.checked ? '1' : '.55';
+      preserveRow.style.cursor = input.checked ? 'pointer' : 'not-allowed';
+      preserveRow.style.borderColor = preserveInput.checked && input.checked ? 'rgba(34,197,94,.7)' : 'rgba(255,255,255,.15)';
+      preserveRow.style.background = preserveInput.checked && input.checked ? 'rgba(34,197,94,.13)' : 'transparent';
+    }
   };
 
   window.openEditTournamentModal = function (tId, skipNav, loadedTournament) {
@@ -5865,8 +5885,13 @@ function setupCreateTournamentModal() {
     document.getElementById('tourn-name').value = t.name || '';
     var testModeRow = document.getElementById('tourn-test-mode-row');
     var testModeInput = document.getElementById('tourn-test-mode');
-    if (testModeRow) testModeRow.style.display = window._isDeveloperIdentity && window._isDeveloperIdentity() ? 'flex' : 'none';
+    var preserveDrawRow = document.getElementById('tourn-preserve-draw-row');
+    var preserveDrawInput = document.getElementById('tourn-preserve-draw');
+    var isDeveloper = window._isDeveloperIdentity && window._isDeveloperIdentity();
+    if (testModeRow) testModeRow.style.display = isDeveloper ? 'flex' : 'none';
+    if (preserveDrawRow) preserveDrawRow.style.display = isDeveloper ? 'flex' : 'none';
     if (testModeInput) testModeInput.checked = t.testModeEnabled === true;
+    if (preserveDrawInput) preserveDrawInput.checked = t.preserveDrawOnTestReset === true;
     window._syncTournamentTestMode();
     // Match sport option even if stored value lacks emoji prefix (legacy data)
     const sportSelect = document.getElementById('select-sport');
@@ -7176,7 +7201,11 @@ window._saveTournamentClickHandler = async function() {
           storageCanonico: true,
           name,
           ...(editId && window._isDeveloperIdentity && window._isDeveloperIdentity()
-            ? { testModeEnabled: !!((document.getElementById('tourn-test-mode') || {}).checked) } : {}),
+            ? {
+              testModeEnabled: !!((document.getElementById('tourn-test-mode') || {}).checked),
+              preserveDrawOnTestReset: !!((document.getElementById('tourn-test-mode') || {}).checked &&
+                (document.getElementById('tourn-preserve-draw') || {}).checked)
+            } : {}),
           isPublic: isPublicVal,
           membersOnly: visibilityVal === 'members',
           organizerOnly: visibilityVal === 'organizers',
@@ -9461,8 +9490,12 @@ window.renderCreateTournamentPage = function (container, editId) {
   if (!editId) {
     var newTestRow = document.getElementById('tourn-test-mode-row');
     var newTestInput = document.getElementById('tourn-test-mode');
+    var newPreserveRow = document.getElementById('tourn-preserve-draw-row');
+    var newPreserveInput = document.getElementById('tourn-preserve-draw');
     if (newTestRow) newTestRow.style.display = 'none';
     if (newTestInput) newTestInput.checked = false;
+    if (newPreserveRow) newPreserveRow.style.display = 'none';
+    if (newPreserveInput) newPreserveInput.checked = false;
   }
 
   // Aplique o documento canônico somente depois que setupCreateTournamentModal

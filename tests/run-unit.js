@@ -134,6 +134,8 @@ const SUITES = [
   'tests/native-release-candidate.test.js',
   'tests/format-intent-validation.test.js',
   'tests/test-mode-tournament.test.js',
+  'tests/draw-checkpoint-emulator.test.js',
+  'tests/draw-checkpoint-rules.test.js',
   'tests/test-mode-core.test.js',
   'tests/super8-game-duration-form-contract.test.js',
   'tests/tournament-titles.test.js',
@@ -2499,6 +2501,7 @@ const MEXEM_NO_REPO = [
   'tests/build-www-deterministico.test.js',           // cria/remova o manifesto regional de fixture
   'tests/ext-version-single-source.test.js',            // reescreve js/store.js e extension/content.js
   'tests/trava-de-cache-buster-nao-fica-vazia.test.js', // reescreve index.html
+  'tests/central-source-digest.test.js', // recalcula/manipula manifestos versionados no repo
   'tests/gate-amizade-detecta-alias.test.js',           // cria js/views/__sonda-gate-amizade.js
   'tests/rules-mudou-tem-de-ser-testada.test.js',       // mexe em .rules-testadas (controle)
 ];
@@ -2548,6 +2551,8 @@ const PRENDEM_PORTA = [
   // sem devolver controle, portanto precisa da mesma exclusividade dos demais emuladores.
   'tests/rules-contencao-avanco-de-fase.test.js',
   'tests/rules-letzplayscan-nao-e-proprio.test.js',
+  'tests/draw-checkpoint-emulator.test.js', // Firestore + hub/logging do Firebase CLI
+  'tests/draw-checkpoint-rules.test.js', // sobe outro emulador do Firestore; manter serial
   /* Sobem Firestore + Auth nas portas do firebase.sandbox.json (8093/9092) e carregam as
    * Cloud Functions de verdade. Duas delas ao mesmo tempo disputam a MESMA porta — medido em
    * 14/set/2026: passavam sozinhas e caíam na bateria, sem defeito nenhum. */

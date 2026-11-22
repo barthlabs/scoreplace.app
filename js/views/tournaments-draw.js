@@ -332,22 +332,28 @@ window._restoreTournamentPrePublication = function (tId) {
   var testMode = !!(t && t.testModeEnabled === true &&
     typeof window._isDeveloperIdentity === 'function' && window._isDeveloperIdentity());
   if (!t || !testMode || typeof showAlertDialog !== 'function') return;
+  var preserveDraw = t.preserveDrawOnTestReset === true;
   var n = (typeof window._countCompetitors === 'function') ? window._countCompetitors(t).people : (t.participants || []).length;
   showAlertDialog('🔄 Resetar sorteio?',
-    'Apaga todos os jogos, placares e resultados do teste. Mantém os <strong>' + n +
-    ' inscritos</strong> e a configuração. As inscrições continuam fechadas. Não dá para desfazer.',
+    preserveDraw
+      ? 'Apaga jogos, placares e resultados lançados no teste e restaura exatamente a chave e os confrontos definidos no sorteio. Mantém os <strong>' + n + ' inscritos</strong>. O teste recomeça depois do sorteio.'
+      : 'Apaga todos os jogos, placares e resultados do teste. Mantém os <strong>' + n +
+        ' inscritos</strong> e a configuração. As inscrições continuam fechadas e o torneio volta para antes do sorteio.',
     function () {
       if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
-      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId), restoreMode: 'testModePreDraw' })
+      var restoreMode = preserveDraw ? 'testModePostDraw' : 'testModePreDraw';
+      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId), restoreMode: restoreMode })
         .then(function (result) {
           /* A callable devolve a fotografia canônica JÁ sem partidas. Não esperar o
            * onSnapshot é essencial: redesenhar antes com o objeto velho do AppStore
            * faz a chave e os placares continuarem visíveis mesmo depois de o servidor
            * tê-los apagado. [[regression_prepublication_restore_stale_screen]] */
           if (!result || result.ok !== true || !result.tournament ||
-              result.tournament.pendingDraw != null ||
+              (!preserveDraw && (result.tournament.pendingDraw != null ||
               !Array.isArray(result.tournament.matches) || result.tournament.matches.length ||
-              !Array.isArray(result.tournament.rounds) || result.tournament.rounds.length ||
+              !Array.isArray(result.tournament.rounds) || result.tournament.rounds.length)) ||
+              (preserveDraw && (result.mode !== 'testModePostDraw' ||
+                !result.tournament.drawCheckpoint || result.tournament.drawCheckpoint.state !== 'active')) ||
               typeof window._applyCFTournament !== 'function') {
             throw new Error('A restauração não devolveu o estado canônico confirmado. Atualize e tente novamente.');
           }
@@ -378,8 +384,10 @@ window._restoreTournamentPrePublication = function (tId) {
               typeof window.renderTournaments === 'function') {
             window.renderTournaments(container, id);
           }
-          if (typeof showNotification === 'function') showNotification('🔄 Sorteio resetado',
-            'Os jogos e placares foram apagados; inscritos e configuração foram mantidos.', 'success');
+          if (typeof showNotification === 'function') showNotification('🔄 Teste resetado',
+            preserveDraw
+              ? 'A chave original do sorteio foi restaurada; placares e alterações do teste foram removidos.'
+              : 'O torneio voltou para antes do sorteio; inscritos e configuração foram mantidos.', 'success');
         })
         .catch(function (err) {
           window._error && window._error('[restorePrePublication] server error:', err);

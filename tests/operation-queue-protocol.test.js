@@ -34,6 +34,7 @@ async function runQueue(operationId) {
   };
   const context = { exports: {}, HttpsError, _operationReceipt: receipts,
     _rehearsal: { locked: () => false },
+    _drawCheckpoint: { locked: () => false },
     createHash: require('node:crypto').createHash, getFirestore: () => db,
     onDocumentCreated: (_options, handler) => handler,
     applyResultFn: () => ({ ok: true }), drawWindow: {},
