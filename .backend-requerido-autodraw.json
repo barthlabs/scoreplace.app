@@ -1,13 +1,14 @@
 {
   "schema": 1,
-  "backendCommit": "13baec5a5cc5f16f1e2552fa7af9233abc2094c0",
-  "scopeNote": "Resumos atuais para o painel, criação de resumos atômicos e reconciliação de partidas, participantes, inscrições e grupos legados.",
+  "backendCommit": "17302fee1f2043dc93613e4998824d2331d8ac45",
+  "scopeNote": "Resumos atuais do painel, criação atômica de resumos e reconciliação; controle end-court validado com os mesmos sete fontes centrais.",
   "functions": [
     "createTournament",
     "tournamentSummary",
     "tournamentSummaryMatch",
     "tournamentSummaryParticipant",
     "tournamentSummaryRegistration",
-    "tournamentSummaryLegacyGroup"
+    "tournamentSummaryLegacyGroup",
+    "endMatchOnCourt"
   ]
 }
