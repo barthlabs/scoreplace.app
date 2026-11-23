@@ -62,8 +62,8 @@
       "mode": "only"
     },
     "tournamentSummary": {
-      "backendCommit": "17302fee1f2043dc93613e4998824d2331d8ac45",
-      "deployedAt": "2026-11-22T08:55:57.341Z",
+      "backendCommit": "db27f946db465d629f794a3e133d5da1860d233b",
+      "deployedAt": "2026-11-23T00:30:38.068Z",
       "result": "success",
       "mode": "only"
     },
@@ -170,8 +170,8 @@
       "mode": "only"
     },
     "applyQueuedResult": {
-      "backendCommit": "76ee05d8257c6100d39944a7a605faced7d9e042",
-      "deployedAt": "2026-11-23T00:19:30.629Z",
+      "backendCommit": "db27f946db465d629f794a3e133d5da1860d233b",
+      "deployedAt": "2026-11-23T00:30:38.068Z",
       "result": "success",
       "mode": "only"
     },
