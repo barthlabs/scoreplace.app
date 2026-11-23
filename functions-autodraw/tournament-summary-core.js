@@ -52,6 +52,14 @@ function _tokens(partes) {
 
 function _arr(x) { return Array.isArray(x) ? x : []; }
 
+function _dateCardColors(t) {
+  try {
+    return require('./date-card-colors-core').validate(t && t.dateCardColors);
+  } catch (_) {
+    return null;
+  }
+}
+
 // O torneio canônico não guarda o elenco completo em `participants`: as
 // inscrições e as duplas vivem em `registrations`. Contar a fotografia dividida
 // devolvia 96/48 mesmo com 128 inscrições e 64 duplas confirmadas no servidor.
@@ -233,6 +241,19 @@ function buildSummary(t, id, H) {
     // ── mídia: SÓ URL. ⛔ jamais logoData/coverPhotoData (base64) ──────────
     coverUrl: String(t.coverUrl || ''),
     logoUrl: String(t.logoUrl || ''),
+    coverMode: t.coverMode === 'photo' ? 'photo' : 'color',
+    coverColor: /^#[0-9a-f]{6}$/i.test(t.coverColor || '') ? t.coverColor : '#1f2937',
+    coverGradientColor: /^#[0-9a-f]{6}$/i.test(t.coverGradientColor || '') ? t.coverGradientColor : '#0f172a',
+    coverGradientEnabled: t.coverGradientEnabled === true,
+    coverGradientAngle: Number.isFinite(Number(t.coverGradientAngle))
+      ? Math.max(0, Math.min(360, Number(t.coverGradientAngle))) : 135,
+    coverGradientBalance: Number.isFinite(Number(t.coverGradientBalance))
+      ? Math.max(10, Math.min(90, Number(t.coverGradientBalance))) : 50,
+    coverGradientBlend: t.coverGradientBlend == null || t.coverGradientBlend === '' ? null
+      : (Number.isFinite(Number(t.coverGradientBlend))
+        ? Math.max(0, Math.min(100, Number(t.coverGradientBlend))) : null),
+    titleColor: /^#[0-9a-f]{6}$/i.test(t.titleColor || '') ? t.titleColor : '#ffffff',
+    dateCardColors: _dateCardColors(t),
 
     // ── busca no SERVIDOR (hoje ela só acha o que já está na tela) ─────────
     nameLower: index.nameLower,
@@ -279,7 +300,8 @@ var CAMPOS_QUE_IMPORTAM = [
   'enrollmentMode', 'lateEnrollment', 'registrationLimit', 'ligaSeasonMonths',
   'combinedCategories', 'categories', 'participants', 'placeholderReservations',
   'waitlist', 'standbyParticipants', 'matches', 'rounds', 'groups', 'phases',
-  'coverUrl', 'logoUrl'
+  'coverUrl', 'logoUrl', 'coverMode', 'coverColor', 'coverGradientColor', 'coverGradientEnabled',
+  'coverGradientAngle', 'coverGradientBalance', 'coverGradientBlend', 'titleColor', 'dateCardColors'
 ];
 
 /**

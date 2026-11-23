@@ -18,6 +18,10 @@ assert.equal(matchAffectsSummary(null, { p1: 'A', p2: 'B' }), true, 'jogo novo a
 const root = {
   id: 'tour_summary_fixture', name: 'Resumo transacional', sport: 'Tênis', format: 'Liga', status: 'open',
   isPublic: true, creatorUid: 'owner', memberUids: ['owner'], participants: [], standbyParticipants: [],
+  coverMode: 'color', coverColor: '#4b2e23', coverGradientColor: '#ffffff', coverGradientEnabled: true,
+  coverGradientAngle: 180, coverGradientBalance: 65, coverGradientBlend: 35, titleColor: '#ffffff',
+  dateCardColors: { background: '#216b96', text: '#ffffff', day: '#ffffff', month: '#ffc400', time: '#e5f4fc',
+    typography: { daySize: 100, dayWeight: 800, monthSize: 100, monthWeight: 800, timeSize: 100, timeWeight: 700 } },
   matches: [], rounds: [], groups: [], phases: [], _semPesados: ['matches', 'participants', 'opponentHistory'],
   _nPartes: { matches: 0, participants: 0, opponentHistory: 0 }, _nJogos: 0, _nGrupos: 0,
   canonicalRegistrationMigration: { fingerprint: 'native:fixture', registrationCount: 0 }
@@ -27,6 +31,22 @@ const docs = new Map([
   ['tournaments_summary/' + root.id, Object.assign(Summary.buildSummary(root, root.id,
     Summary.helpersComInscricoes(root, helpers, [])), { sourceVersionMicros: 100 })]
 ]);
+const initialSummary = docs.get('tournaments_summary/' + root.id);
+assert.equal(initialSummary.coverMode, 'color');
+assert.equal(initialSummary.coverColor, '#4b2e23');
+assert.equal(initialSummary.coverGradientColor, '#ffffff');
+assert.equal(initialSummary.coverGradientEnabled, true);
+assert.equal(initialSummary.coverGradientAngle, 180);
+assert.equal(initialSummary.coverGradientBalance, 65);
+assert.equal(initialSummary.coverGradientBlend, 35);
+assert.equal(initialSummary.titleColor, '#ffffff');
+assert.deepEqual(initialSummary.dateCardColors, root.dateCardColors);
+assert.equal(Object.hasOwn(initialSummary, 'logoData'), false, 'projeção visual não inclui imagens base64');
+assert.equal(Object.hasOwn(initialSummary, 'coverPhotoData'), false, 'projeção visual não inclui capa base64');
+assert(Summary.CAMPOS_QUE_IMPORTAM.includes('coverColor'), 'mudança de cor invalida o resumo derivado');
+assert(Summary.CAMPOS_QUE_IMPORTAM.includes('dateCardColors'), 'mudança do cartão de datas invalida o resumo derivado');
+assert.equal(Summary.summaryMudou(root, Object.assign({}, root, { coverColor: '#123456' }), root.id, helpers), true,
+  'mudança visual faz o resumo ser regenerado');
 const writes = [];
 const collectionReads = [];
 function ref(path) {

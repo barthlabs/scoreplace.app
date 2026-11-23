@@ -1,6 +1,17 @@
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
+// Datas dos inputs são horários civis locais (`YYYY-MM-DD` / `HH:mm`), não UTC.
+// Sem horário final explícito, a data final vale pelo dia civil inteiro para validar.
+// O save mantém a regra existente: modo organizador persiste 23:59 marcado como estimado.
+window._isTournamentDateRangeValid = function (startDate, startTime, endDate, endTime) {
+  if (!startDate || !endDate) return true;
+  if (!endTime) return endDate >= startDate;
+  var inicio = startDate + 'T' + (startTime || '00:00');
+  var fim = endDate + 'T' + endTime;
+  return fim > inicio;
+};
+
 window._readTournamentDateColors = function () {
   var defaults = window.ScorePlaceDateCard && window.ScorePlaceDateCard.DEFAULTS || {
     background: '#216b96', text: '#ffffff', day: '#ffffff', month: '#ffc400', time: '#e5f4fc'
@@ -7171,9 +7182,7 @@ window._saveTournamentClickHandler = async function() {
 
         // Validação de datas
         if (startDateRaw && endDateRaw) {
-          const _startD = new Date(startDateVal);
-          const _endD = new Date(endDateVal);
-          if (_endD <= _startD) {
+          if (!window._isTournamentDateRangeValid(startDateRaw, startTimeRaw, endDateRaw, endTimeRaw)) {
             showAlertDialog(window._t('create.datesInvalid'), window._t('create.datesInvalidMsg'), null, { type: 'warning' });
             return;
           }
