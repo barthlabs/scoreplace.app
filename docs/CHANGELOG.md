@@ -1,3 +1,9 @@
+## 2.7.47 — 23/nov/2026 (resumos completos para torneios divididos)
+
+- O resumo leve mantém a cobertura de acesso e busca mesmo quando o documento principal não contém partidas e participantes.
+- Em “Meus torneios”, o fallback carrega do servidor e monta as subcoleções canônicas antes de mostrar a ficha, evitando placares e inscrições incompletos.
+- A reconciliação atualiza o índice de visibilidade e associação de usuários e não grava contagens zeradas como se fossem dados completos.
+
 ## 2.7.45 — 20/nov/2026 (encerramento individual e placares pendentes)
 
 - Encerrar um jogo sem placar o coloca imediatamente em **Placares pendentes**, mesmo quando o sucessor do mesmo grupo continua em quadra. A tela deixa de esconder esses jogos atrás da navegação da série.
