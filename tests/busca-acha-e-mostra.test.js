@@ -24,6 +24,7 @@ const fs = require('fs');
 const path = require('path');
 const M = require('../functions-autodraw/tournament-summary-core.js');
 const HARNESS = require('./render-harness');
+const _R = require('./recorte.js');
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.error('  ✗ ' + m); } };
@@ -65,7 +66,7 @@ const db = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), '
 {
   ok(/async buscarTorneios\(q, limite\)/.test(db), 'existe a busca no servidor');
   const i = db.indexOf('async buscarTorneios');
-  const corpo = db.slice(i, i + 3200);
+  const corpo = _R.ateOFim(db, i);
   ok(/tournaments_summary/.test(corpo), '⭐ e ela consulta o RESUMO (~2 KB), não o torneio inteiro');
   ok(/array-contains', termo/.test(corpo), 'casa PALAVRA inteira (tokens)');
   ok(/nameLower', '>=', termo/.test(corpo) && /\\uf8ff/.test(corpo), 'e PREFIXO (nameLower por faixa)');
@@ -74,7 +75,7 @@ const db = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), '
   ok(/termo\.length < 3/.test(corpo),
      'e 1-2 letras não consultam (casaria com meio banco)');
   const iCompleto = corpo.indexOf("canônico indisponível para resumo incompleto:");
-  const hidrata = corpo.slice(iCompleto, iCompleto + 1200);
+  const hidrata = _R.oBlocoQueContem(corpo, iCompleto);
   ok(/permission-denied/.test(hidrata) && /not-found/.test(hidrata) && /throw error/.test(hidrata),
      'a hidratação ignora somente ausência/acesso negado; erro transitório sobe para a interface');
 }

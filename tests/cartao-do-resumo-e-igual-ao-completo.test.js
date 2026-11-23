@@ -112,7 +112,7 @@ const lista = Array.isArray(arr) ? arr : (arr.tournaments || []);
 {
   const db = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), 'utf8');
   const i = db.indexOf('async loadAllPublicTournaments');
-  const corpo = db.slice(i, i + 5200);   // a função tem um bloco grande de comentário antes da consulta
+  const corpo = _R.ateOFim(db, i);
   ok(/tournaments_summary/.test(corpo), '⭐ a vitrine lê `tournaments_summary`');
   ok(/if \(!_viaResumo\)/.test(corpo),
      '⛔ e cai no caminho ANTIGO quando o resumo não responde');
