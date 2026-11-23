@@ -21,7 +21,7 @@ const scoreRefreshCommit = '2ab7d4779913590350d4bcafd32e14fab9b7a5de';
 // Mudanças em outros arquivos de functions-autodraw (por exemplo, um vendor usado
 // no sorteio) não alteram a imagem desses dois serviços na malha regional.
 const courtControlRefreshCommit = '36a6b3ddae6427ee884ddbf9b7468986913872d3';
-const endCourtRefreshCommit = '3690dc4d6287eed4a029d9051e3db8022a62d99e';
+const endCourtRefreshCommit = '253f2dc0db9845aed1b8f857bcedc577d70f1dbd';
 const regions = version === 'v2'
   ? ['us-east1', 'us-east4', 'us-south1']
   : ['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1'];

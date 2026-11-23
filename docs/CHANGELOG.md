@@ -1,3 +1,7 @@
+## 2.7.48 — 23/nov/2026 (trava de publicação regional)
+
+- A verificação de publicação reconhece o commit efetivamente implantado nas funções regionais de encerramento por quadra.
+
 ## 2.7.47 — 23/nov/2026 (resumos completos para torneios divididos)
 
 - O resumo leve mantém a cobertura de acesso e busca mesmo quando o documento principal não contém partidas e participantes.
