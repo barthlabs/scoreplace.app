@@ -55,7 +55,7 @@ ok(/pagehide/.test(ag) && /visibilitychange/.test(ag) && /hidden/.test(ag),
 ok(/_medirTrecho\('cache-torneios'/.test(ag), 'a gravação é MEDIDA (cache-torneios)');
 
 // 4. o callback é medido
-ok(/_medirTrecho\('snapshot-resumos-torneios', function \(\) \{ _aplicaSnapTorneios\(snap\); \}\)/.test(src),
+ok(/_medirTrecho\('snapshot-resumos-torneios', function \(\) \{ _aplicaSnapTorneios\(snap, optionalFeedsPending\); \}\)/.test(src),
    'o listener de resumos é MEDIDO — travada futura terá nome');
 
 // 5. hidratação R/R seletiva

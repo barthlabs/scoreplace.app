@@ -27,7 +27,7 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 const src = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
 
 // ── monta o pedaço REAL do ouvinte num sandbox ──────────────────────────────
-const iA = src.indexOf('function _aplicaSnapTorneios(snap) {');
+const iA = src.indexOf('function _aplicaSnapTorneios(snap, preservarAusentesPorFeedsPendentes) {');
 ok(iA > 0, 'o aplicador do snapshot existe');
 // o corpo vai até o fecho da função no mesmo nível de indentação
 const fimA = src.indexOf('\n    }', src.indexOf('store._parsedById = _novoParsed;', iA));
