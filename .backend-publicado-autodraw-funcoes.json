@@ -38,8 +38,8 @@
       "mode": "only"
     },
     "createTournament": {
-      "backendCommit": "253f2dc0db9845aed1b8f857bcedc577d70f1dbd",
-      "deployedAt": "2026-11-23T06:23:40.097Z",
+      "backendCommit": "b7b63e146ba02997837d4e2ef04a1b12d5280ef9",
+      "deployedAt": "2026-11-23T16:51:04.608Z",
       "result": "success",
       "mode": "only"
     },
@@ -62,8 +62,8 @@
       "mode": "only"
     },
     "tournamentSummary": {
-      "backendCommit": "253f2dc0db9845aed1b8f857bcedc577d70f1dbd",
-      "deployedAt": "2026-11-23T06:23:40.097Z",
+      "backendCommit": "b7b63e146ba02997837d4e2ef04a1b12d5280ef9",
+      "deployedAt": "2026-11-23T16:51:04.608Z",
       "result": "success",
       "mode": "only"
     },
@@ -164,8 +164,8 @@
       "mode": "only"
     },
     "endMatchOnCourt": {
-      "backendCommit": "253f2dc0db9845aed1b8f857bcedc577d70f1dbd",
-      "deployedAt": "2026-11-23T06:52:11.149Z",
+      "backendCommit": "b7b63e146ba02997837d4e2ef04a1b12d5280ef9",
+      "deployedAt": "2026-11-23T16:51:04.608Z",
       "result": "success",
       "mode": "only"
     },
@@ -686,26 +686,26 @@
       "mode": "only"
     },
     "tournamentSummaryMatch": {
-      "backendCommit": "253f2dc0db9845aed1b8f857bcedc577d70f1dbd",
-      "deployedAt": "2026-11-23T06:23:40.097Z",
+      "backendCommit": "b7b63e146ba02997837d4e2ef04a1b12d5280ef9",
+      "deployedAt": "2026-11-23T16:51:04.608Z",
       "result": "success",
       "mode": "only"
     },
     "tournamentSummaryParticipant": {
-      "backendCommit": "253f2dc0db9845aed1b8f857bcedc577d70f1dbd",
-      "deployedAt": "2026-11-23T06:23:40.097Z",
+      "backendCommit": "b7b63e146ba02997837d4e2ef04a1b12d5280ef9",
+      "deployedAt": "2026-11-23T16:51:04.608Z",
       "result": "success",
       "mode": "only"
     },
     "tournamentSummaryRegistration": {
-      "backendCommit": "253f2dc0db9845aed1b8f857bcedc577d70f1dbd",
-      "deployedAt": "2026-11-23T06:23:40.097Z",
+      "backendCommit": "b7b63e146ba02997837d4e2ef04a1b12d5280ef9",
+      "deployedAt": "2026-11-23T16:51:04.608Z",
       "result": "success",
       "mode": "only"
     },
     "tournamentSummaryLegacyGroup": {
-      "backendCommit": "253f2dc0db9845aed1b8f857bcedc577d70f1dbd",
-      "deployedAt": "2026-11-23T06:23:40.097Z",
+      "backendCommit": "b7b63e146ba02997837d4e2ef04a1b12d5280ef9",
+      "deployedAt": "2026-11-23T16:51:04.608Z",
       "result": "success",
       "mode": "only"
     }
