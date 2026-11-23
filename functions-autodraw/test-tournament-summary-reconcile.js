@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert/strict');
-const { eventMicros, matchAffectsSummary, reconcile } = require('./tournament-summary-reconcile');
+const { eventMicros, matchAffectsSummary, reconcile, markRequiresFullRead } = require('./tournament-summary-reconcile');
 const Split = require('./vendor/tournament-split-core');
 const Summary = require('./tournament-summary-core');
 const helpers = Summary.helpersDe(require('./draw-core')._window);
@@ -41,6 +41,10 @@ const tx = {
     return { size: matches.length, docs: matches };
   },
   set(target, data) { writes.push(['set', target.path, data]); docs.set(target.path, data); },
+  update(target, fields) {
+    writes.push(['update', target.path, fields]);
+    docs.set(target.path, Object.assign({}, docs.get(target.path), fields));
+  },
   delete(target) { writes.push(['delete', target.path]); docs.delete(target.path); }
 };
 const transactionOptions = [];
@@ -87,5 +91,16 @@ db.runTransaction = async (callback, options) => {
     helpers, eventTime: '2026-11-21T12:00:01Z' });
   assert.equal(recreated.action, 'written', 'torneio que sai de teste recria resumo');
   assert.equal(docs.has('tournaments_summary/' + root.id), true);
+
+  const beforeFlag = docs.get('tournaments_summary/' + root.id);
+  const fullRead = await markRequiresFullRead({ tx, db, tournamentId: root.id });
+  assert.equal(fullRead.action, 'requires-full-read');
+  const afterFlag = docs.get('tournaments_summary/' + root.id);
+  assert.equal(afterFlag.requiresFullRead, true);
+  assert.equal(afterFlag.matchesTotal, beforeFlag.matchesTotal,
+    'fallback preserva números e não grava projeção vazia da raiz');
+  assert.equal(afterFlag.sourceVersionMicros, beforeFlag.sourceVersionMicros,
+    'fallback não avança versão à frente de eventos em trânsito');
+  assert.equal(writes.at(-1)[0], 'update', 'fallback marca o resumo sem substituir a projeção');
   console.log('✓ tournament-summary-reconcile: frescor, filtro e transação consistentes');
 })().catch(error => { console.error(error); process.exitCode = 1; });

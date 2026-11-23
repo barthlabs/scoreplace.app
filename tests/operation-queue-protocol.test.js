@@ -23,6 +23,7 @@ async function runQueue(operationId, failureMode) {
     path: 'tournaments/tour_queue_protocol',
     get: async () => {
       if (failureMode === 'permanent-read') throw new Error('invalid read response');
+      if (failureMode === 'transient-read') throw Object.assign(new Error('temporarily unavailable'), { code: 'unavailable' });
       return { exists: true, data: () => failureMode === 'checkpoint-lock'
         ? { drawCheckpoint: { state: 'resetting' } } : {} };
     },
@@ -38,6 +39,8 @@ async function runQueue(operationId, failureMode) {
   };
   const context = { exports: {}, HttpsError, _operationReceipt: receipts,
     _rehearsal: { locked: () => false },
+    _summaryTransient: error => ['aborted', 'unavailable', 'deadline-exceeded', 'internal',
+      'resource-exhausted', '10', '14', '4', '8'].includes(String(error && error.code || '')),
     _drawCheckpoint: { locked: tournament => ['capturing', 'resetting'].includes(
       tournament && tournament.drawCheckpoint && tournament.drawCheckpoint.state) },
     createHash: require('node:crypto').createHash, getFirestore: () => db,
@@ -59,6 +62,7 @@ async function runQueue(operationId, failureMode) {
       update: async fields => marks.push(fields)
     } } });
   if (failureMode === 'checkpoint-lock') await assert.rejects(invocation, /checkpoint-lock:/);
+  else if (failureMode === 'transient-read') await assert.rejects(invocation, /temporarily unavailable/);
   else await invocation;
   if (failureMode) return { marks, writes };
   assert.equal(marks.length, 1);
@@ -73,6 +77,8 @@ async function runQueue(operationId, failureMode) {
   assert.equal(permanent.marks.length, 0, 'erro permanente de leitura termina sem retry do gatilho');
   const locked = await runQueue(undefined, 'checkpoint-lock');
   assert.equal(locked.marks.length, 0, 'lock transitório não consome nem marca a intenção');
+  const transient = await runQueue(undefined, 'transient-read');
+  assert.equal(transient.marks.length, 0, 'falha transitória permanece elegível a retry da plataforma');
   console.log('✓ fila legada sem UUID real recusada após protocolo v2, sem escrita de placar');
   console.log('✓ applyQueuedResult só repropaga checkpoint-lock; erro permanente fica contido');
 })().catch(error => { console.error(error); process.exitCode = 1; });

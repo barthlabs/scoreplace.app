@@ -4753,6 +4753,7 @@ exports.applyQueuedResult = onDocumentCreated(
         await marca({ status: 'recusado', reason: 'protocol' });
         return;
       }
+      if (_summaryTransient(e)) throw e;
       console.error('[filaPlacar] EXPLODIU', tId, itemId, e && e.stack || e);
       await marca({ status: 'erro', reason: String((e && e.message) || e).slice(0, 300) });
       return;
@@ -4771,7 +4772,7 @@ exports.applyQueuedResult = onDocumentCreated(
       // Só o lock curto da fotografia pede retry do gatilho. Erros permanentes
       // ficam no log e não reaplicam uma intenção por dias; a intenção continua
       // preservada no documento da fila para resolução operacional.
-      if (String(error && error.message || error).startsWith('checkpoint-lock:')) throw error;
+      if (String(error && error.message || error).startsWith('checkpoint-lock:') || _summaryTransient(error)) throw error;
       console.error('[filaPlacar] falha fora da aplicação; intenção preservada sem retry',
         tId, itemId, error && error.stack || error);
     }
@@ -9978,19 +9979,11 @@ function _summarySourceChanged(collection, event) {
 async function _markSummaryFullRead(id, cause) {
   if (!_REQUIRES_FULL_READ_WRITER) return;
   const db = getFirestore();
-  await db.runTransaction(async (tx) => {
-    const rootRef = db.collection('tournaments').doc(id);
-    const summaryRef = db.collection('tournaments_summary').doc(id);
-    const root = await tx.get(rootRef);
-    if (!root.exists || root.data().testModeEnabled === true) return;
-    const rootData = root.data() || {};
-    const fallback = _tourSummary.buildSummary(rootData, id, _tourSummary.helpersDe(drawWindow));
-    if (!fallback) return;
-    fallback.requiresFullRead = true;
-    fallback.sourceVersionMicros = Date.now() * 1000;
-    tx.set(summaryRef, fallback);
+  const result = await db.runTransaction(async (tx) => {
+    return _summaryReconcile.markRequiresFullRead({ tx, db, tournamentId: id, rehearsal: _rehearsal });
   });
-  console.error('[tournamentSummary] excedeu teto de leitura; resumo marcado para fallback canônico', id, cause && cause.message);
+  console.error('[tournamentSummary] excedeu teto de leitura; fallback canônico:',
+    id, result.action, cause && cause.message);
 }
 async function _reconcileTournamentSummary(event, id) {
   const db = getFirestore();

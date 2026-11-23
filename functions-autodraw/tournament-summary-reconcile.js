@@ -120,6 +120,23 @@ async function commitProjection({ tx, db, projection, eventTime, rehearsal, even
   return { action: 'written', reads: 2 };
 }
 
+/** Marks an existing summary for canonical fallback without changing its values/version. */
+async function markRequiresFullRead({ tx, db, tournamentId, rehearsal, eventBefore, eventAfter }) {
+  const rootRef = db.collection('tournaments').doc(tournamentId);
+  const summaryRef = db.collection('tournaments_summary').doc(tournamentId);
+  const rootSnap = await tx.get(rootRef);
+  const summarySnap = await tx.get(summaryRef);
+  if (!rootSnap.exists) return { action: 'missing-root' };
+  const root = rootSnap.data() || {};
+  if (rehearsalBlocks(root, rehearsal, eventBefore, eventAfter)) return { action: 'rehearsal-locked' };
+  if (root.testModeEnabled === true) return { action: 'test-excluded' };
+  if (!summarySnap.exists) return { action: 'missing-summary' };
+  const current = summarySnap.data() || {};
+  if (current.requiresFullRead === true) return { action: 'already-marked' };
+  tx.update(summaryRef, { requiresFullRead: true });
+  return { action: 'requires-full-read' };
+}
+
 async function reconcile({ db, tournamentId, split, summaryCore, helpers, eventTime, rehearsal,
   eventBefore, eventAfter, maxDocs = MAX_DOCS_PER_ATTEMPT }) {
   // Firestore's read-only transaction provides a consistent readTime without
@@ -158,4 +175,5 @@ function matchAffectsSummary(before, after) {
 }
 
 module.exports = { MAX_DOCS_PER_ATTEMPT, eventMicros, buildProjectionReadOnly, commitProjection,
+  markRequiresFullRead,
   reconcile, matchAffectsSummary };
