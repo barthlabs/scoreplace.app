@@ -64,4 +64,9 @@ if (start >= 0 && end > start) {
 }
 ok(/scheduleWindow:Object\.assign\(\{\},\s*window\._editingTournament && window\._editingTournament\.scheduleWindow \|\| \{\}, estimatedGameHours/.test(source),
   'preserva a grade existente ao gravar a ordem na mesma chave do planejamento e do motor');
+const toggleRow = source.match(/<div class="sp-binary-choice">([\s\S]*?)<\/div>\s*<\/div>\s*<!-- Datas da fase/);
+ok(!!toggleRow && /<label class="toggle-switch" for="estimated-games-mode-toggle">[\s\S]*?<input id="estimated-games-mode-toggle"[\s\S]*?<span class="toggle-slider"><\/span><\/label>/.test(toggleRow[1]),
+  'trilho e controle do modo de agenda pertencem ao label clicável');
+ok(!!toggleRow && /id="estimated-games-mode-participants"[\s\S]*?<label[\s\S]*?<\/label>[\s\S]*?id="estimated-games-mode-organizer"/.test(toggleRow[1]),
+  'os botões laterais ficam fora do label e não são acionados junto com o trilho');
 process.exit(failures ? 1 : 0);

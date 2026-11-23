@@ -49,7 +49,7 @@ const t = { id: 'neon-test', name: 'NEON NIGHTMARE', logo: 'logo.png', courtName
     match(7, 'Quadra 7', 'PHANTOM', 'VORTEX', { winner: 'p2', scoreP1: 1, scoreP2: 6, resultAt: '2026-10-22T19:00:00Z' })
   ] };
 const snapshot = window._tvLiveBuildSnapshot(t, Date.parse('2026-10-22T21:02:10Z'));
-window._categoryFinalPlacements = () => [{ category:'Fem Light', entries:[
+window._categoryFinalPlacements = () => [{ category:'Fem Light', lineLabel:'Ouro', entries:[
   { pos:5, name:'JOGADORA DEFINIDA' }, { pos:5, name:'PARCEIRA DEFINIDA' }, { pos:6, name:'OUTRA DEFINIDA' }
 ], displayEntries:[
   { pos:5, name:'JOGADORA DEFINIDA / PARCEIRA DEFINIDA' }, { pos:6, name:'OUTRA DEFINIDA' }
@@ -60,6 +60,8 @@ assert(scrollHtml.indexOf('tv-final-standings') > scrollHtml.lastIndexOf('class=
   'classificação final entra após o último placar no mesmo scroll');
 assert.match(scrollHtml, /CLASSIFICAÇÃO FINAL · POSIÇÕES DEFINIDAS[\s\S]*5º[\s\S]*JOGADORA DEFINIDA/,
   'bloco mostra as colocações definitivas disponíveis');
+assert.match(scrollHtml, /Fem Light · Ouro/,
+  'a classificação final da TV identifica a linha Ouro/Prata');
 assert.match(scrollHtml, /class="tv-final-row"><b>5º<\/b><span>JOGADORA DEFINIDA \/ PARCEIRA DEFINIDA<\/span>/,
   'a TV também mostra a dupla em uma única linha');
 const customScrollHtml = window._tvLiveBodyHtml({ ...withPlacements, tvLayout:window.ScoreplaceTvLayout.defaults() });

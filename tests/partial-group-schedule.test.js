@@ -4,6 +4,7 @@
  * node tests/partial-group-schedule.test.js */
 const fs = require('fs');
 const path = require('path');
+const assert = require('node:assert/strict');
 const E = require('../js/views/phases-engine.js');
 let pass = 0, fail = 0;
 function ok(condition, message) { if (condition) pass++; else { fail++; console.error('  ✗ ' + message); } }
@@ -90,6 +91,30 @@ for (let n = 2; n <= 64; n++) {
       n + '×' + wanted + ': rodadas por unidade equilibradas sem vagas artificiais');
   }
 }
+
+// A formação escolhida pelo organizador é aplicada ao elenco efetivo de cada
+// categoria no sorteio: 32 inscritos podem virar quatro grupos de oito, e o
+// critério por tamanho distribui sobras sem perder inscritos.
+for (const [formation, poolSize, expected] of [
+  [{ mode: 'count', value: 4 }, 32, [8, 8, 8, 8]],
+  [{ mode: 'size', value: 8 }, 32, [8, 8, 8, 8]],
+  [{ mode: 'size', value: 8 }, 31, [7, 8, 8, 8]],
+  [{ mode: 'count', value: 2 }, 16, [8, 8]]
+]) {
+  const generated = E.genGroupsFromPool(players(poolSize), {
+    gruposCount: 4,
+    groupFormation: formation,
+    classification: { structure: 'groups' }
+  }, 'group-formation-' + poolSize + '-' + formation.mode);
+  assert.deepEqual(generated.groups.map(group => group.players.length), expected,
+    `${poolSize} unidades com ${formation.mode}=${formation.value} forma grupos equilibrados`);
+  assert.equal(generated.groups.reduce((sum, group) => sum + group.players.length, 0), poolSize,
+    'formação explícita inclui todo o elenco');
+}
+assert.throws(() => E.genGroupsFromPool(players(3), {
+  groupFormation: { mode: 'count', value: 2 }
+}, 'invalid-group-formation'), /menos de duas unidades/,
+'formação inválida não cria grupos com uma única unidade');
 
 // A prévia do editor deve contar as mesmas partidas que o gerador cria. Em
 // particular, 8 duplas × 3 confrontos = 12 jogos na ida e 24 com volta.

@@ -15925,25 +15925,35 @@ window._classifIsComplete = function (matches, clMap) {
 //
 // Uma posição já definida na eliminatória pode aparecer antes do encerramento; o
 // restante dos formatos continua exigindo classificação completa.
+// A Grande Final só une classificações de linhas independentes quando está habilitada e concluída.
+window._classifGrandFinalConverged = function (phase, matches) {
+  return !!phase && phase.grandFinal !== false && (matches || []).some(function (m) {
+    return m && m.bracket === 'grandfinal' && !!m.winner && !m.isBye;
+  });
+};
+
 window._placementInTournament = function (t, uid) {
   if (!t || !uid) return null;
   if (typeof window._categoryFinalPlacements === 'function') {
     var sections = window._categoryFinalPlacements(t);
     for (var s = 0; s < sections.length; s++) {
       var mine = sections[s].entries.filter(function (entry) { return entry.uids.indexOf(uid) !== -1; })[0];
-      if (mine) return { pos:mine.pos, total:sections[s].total, time:mine.name, category:sections[s].category };
+      if (mine) return { pos:mine.pos, total:sections[s].total, time:mine.name, category:sections[s].category,
+        line:sections[s].line || null, lineLabel:sections[s].lineLabel || null };
     }
   }
   var ms = (typeof window._collectAllMatches === 'function')
     ? (window._collectAllMatches(t) || []) : (Array.isArray(t.matches) ? t.matches : []);
   if (!ms.length) return null;
+  var phaseIdx = Number.isInteger(t.currentPhaseIndex) ? t.currentPhaseIndex : (Number(ms[0] && ms[0].phaseIndex) || 0);
+  var currentMatches = Array.isArray(t.phases) ? ms.filter(function (m) { return Number(m.phaseIndex || 0) === phaseIdx; }) : ms;
   var su = (typeof window._slotUids === 'function') ? window._slotUids : null;
   if (!su) return null;
 
   // qual RÓTULO de time é o desta pessoa, e em que linha da chave ela jogou
   var label = null, entryKey = null, linha = null;
-  for (var i = 0; i < ms.length; i++) {
-    var m = ms[i];
+  for (var i = 0; i < currentMatches.length; i++) {
+    var m = currentMatches[i];
     if (su(m, 'p1').indexOf(uid) >= 0) { label = m.p1; entryKey = window._classifEntryKey(label, su(m, 'p1')); linha = (m.bracket || 'main'); break; }
     if (su(m, 'p2').indexOf(uid) >= 0) { label = m.p2; entryKey = window._classifEntryKey(label, su(m, 'p2')); linha = (m.bracket || 'main'); break; }
   }
@@ -15952,21 +15962,25 @@ window._placementInTournament = function (t, uid) {
   // MESMO desenho da página do torneio (_renderPodiumsAndClassif): com grande final a
   // classificação é a unificada; com 2+ linhas sem grande final cada linha classifica a
   // si mesma; senão, fase única.
-  var tierKeys = (typeof window._classifTierKeys === 'function') ? window._classifTierKeys(ms) : ['main'];
-  var hasGF = ms.some(function (m) { return (m.bracket || '') === 'grandfinal'; });
+  var tierKeys = (typeof window._classifTierKeys === 'function') ? window._classifTierKeys(currentMatches) : ['main'];
+  var hasGF = window._classifGrandFinalConverged(t.phases && t.phases[phaseIdx], currentMatches);
   var escopo = ms, entries;
   if (hasGF && typeof window._classifUnifiedEntries === 'function') {
-    entries = window._classifUnifiedEntries(t, ms, tierKeys);
+    escopo = currentMatches;
+    entries = window._classifUnifiedEntries(t, currentMatches, tierKeys);
   } else if (tierKeys.length >= 2) {
-    escopo = ms.filter(function (m) { return (m.bracket || 'main') === linha; });
+    escopo = currentMatches.filter(function (m) { return (m.bracket || 'main') === linha; });
     entries = window._classifEntriesFromMatches(t, escopo);
   } else {
-    entries = window._classifEntriesFromMatches(t, ms);
+    escopo = currentMatches.length ? currentMatches : ms;
+    entries = window._classifEntriesFromMatches(t, escopo);
   }
   if (!window._classifIsComplete(escopo, entries)) return null;
   var mine = entries.filter(function (entry) { return entry && entry.key === entryKey; })[0];
   if (!mine || mine.pos == null) return null;
-  return { pos: mine.pos, total: window._classifCompetitorEntries(escopo).length, time: mine.name || label };
+  return { pos: mine.pos, total: window._classifCompetitorEntries(escopo).length, time: mine.name || label,
+    line: tierKeys.length >= 2 && !hasGF ? linha : null,
+    lineLabel: tierKeys.length >= 2 && !hasGF ? ((currentMatches.filter(function (m) { return (m.bracket || 'main') === linha; })[0] || {}).tierLabel || null) : null };
 };
 
 // Classificação geral com grande final como lista canônica. O mesmo membro pode aparecer
@@ -15984,7 +15998,10 @@ window._classifUnifiedEntries = function (t, fpMatches, tierKeys) {
     placed[entry.key] = true;
     out.push({ key: entry.key, name: entry.name, uids: entry.uids || [], pos: nextPos++ });
   }
-  var gf = (fpMatches || []).filter(function (m) { return (m.bracket || '') === 'grandfinal' && m.winner; })[0];
+  var phaseIdx = Number((fpMatches || [])[0] && fpMatches[0].phaseIndex) || 0;
+  var gf = window._classifGrandFinalConverged(t && t.phases && t.phases[phaseIdx], fpMatches)
+    ? (fpMatches || []).filter(function (m) { return (m.bracket || '') === 'grandfinal' && m.winner && !m.isBye; })[0]
+    : null;
   if (gf) { var gs = window._matchWinnerSide(gf) === 1 ? 'p1' : 'p2'; place(entryFromSlot(gf, gs)); place(entryFromSlot(gf, gs === 'p1' ? 'p2' : 'p1')); }
   var tp = (fpMatches || []).filter(function (m) { return (m.bracket || '') === 'thirdplace' && m.winner; })[0];
   if (tp) { var ts = window._matchWinnerSide(tp) === 1 ? 'p1' : 'p2'; place(entryFromSlot(tp, ts)); place(entryFromSlot(tp, ts === 'p1' ? 'p2' : 'p1')); }
@@ -16279,37 +16296,76 @@ window._categoryFinalPlacements = function (t) {
   if (!Array.isArray(all) || !all.length) return [];
   var phaseIndex = -1;
   t.phases.forEach(function (p, i) { if (p && p.kind === 'elimination') phaseIndex = i; });
-  var elim = all.filter(function (m) { return m && Number(m.phaseIndex || 0) === phaseIndex &&
-    !m.isMonarch && m.bracket !== 'group'; });
-  if (!elim.length) return [];
+  var phase = t.phases[phaseIndex] || {};
+  var phaseMatches = all.filter(function (m) { return m && Number(m.phaseIndex || 0) === phaseIndex; });
+  // _classifTierKeys já omite grandfinal/thirdplace. Não os deixe entrar no conjunto
+  // que cria linhas; eles só são anexados quando convergem ou têm associação explícita.
+  var tierMatches = phaseMatches.filter(function (m) {
+    return !m.isMonarch && m.bracket !== 'group' && m.bracket !== 'grandfinal' &&
+      m.bracket !== 'thirdplace' && !m.isThirdPlace;
+  });
+  if (!tierMatches.length) return [];
   if (!all.some(function (m) { return m && Number(m.phaseIndex || 0) === 0 && m.isMonarch; })) return [];
   var categories = [];
-  elim.forEach(function (m) { var c = String(m.category || ''); if (categories.indexOf(c) < 0) categories.push(c); });
+  tierMatches.forEach(function (m) { var c = String(m.category || ''); if (categories.indexOf(c) < 0) categories.push(c); });
   var raw = window._phasesEngine.prevPhaseGroups(Object.assign({}, t, { matches: all }));
-  function idOf(row) { return row && row.uid ? 'uid:' + String(row.uid) : 'name:' + String(row && row.name || ''); }
+  function idOf(row) { return row && row.uid ? 'uid:' + String(row.uid) : 'name:' + String(row && (row.name || row.displayName) || ''); }
+  function positionalUids(m, side) {
+    var uids = typeof window._slotUidsPositional === 'function' ? window._slotUidsPositional(m, side, t) : [];
+    return uids.length ? uids : (typeof window._slotUids === 'function' ? window._slotUids(m, side) : []);
+  }
   function members(m, side) {
     var obj = m[side === 'p1' ? 'team1Obj' : 'team2Obj'];
     var list = obj && Array.isArray(obj.participants) && obj.participants.length ? obj.participants : null;
-    if (list) return list.map(function (p) { return { name: p.name || p.displayName || '', uid: p.uid || null }; });
-    var uids = (typeof window._slotUidsPositional === 'function') ? window._slotUidsPositional(m, side) : [];
+    if (list) return list.map(function (p) { return { name:p.name || p.displayName || '', uid:p.uid || null }; });
+    var uids = positionalUids(m, side);
+    var isLineMatch = Number(m && m.phaseIndex || 0) === phaseIndex;
     return uids.length ? uids.map(function (uid) { return { name:'', uid:uid }; }) :
-      (!uids.length && !t.phases[phaseIndex].fixedPairs ? [{ name: m[side], uid: null }] : []);
+      (!phase.fixedPairs || !isLineMatch ? [{ name:m[side], uid:null }] : []);
   }
-  return categories.map(function (category) {
-    var lm = elim.filter(function (m) { return String(m.category || '') === category; });
-    var gs = raw.filter(function (g) { return g && String(g.category || '') === category; });
+  function groupRows(g, category) {
+    return window._computeMonarchStandings(g, t, category).filter(function (s) { return s && !s.isGhost; });
+  }
+  function rowInRoster(row, roster) { return !!row && !!roster[idOf(row)]; }
+  function sideIdentityKeys(m, side) {
+    var list = members(m, side);
+    if (list.length) return list.map(idOf).filter(Boolean);
+    var label = m && m[side];
+    return label && label !== 'TBD' && label !== 'BYE' ? ['name:' + String(label)] : [];
+  }
+  function groupContributes(g, roster, category) {
+    return groupRows(g, category).some(function (row) { return rowInRoster(row, roster); });
+  }
+  function makeSection(category, lm, lineKey, lineLabel, restrictToLine) {
+    var lineRoster = {};
+    if (restrictToLine) lm.forEach(function (m) { ['p1','p2'].forEach(function (side) {
+      members(m, side).forEach(function (member) { var k = idOf(member); if (k && k !== 'name:') lineRoster[k] = true; });
+    }); });
+    var categoryGroups = raw.filter(function (g) { return g && String(g.category || '') === category; });
+    var gs = restrictToLine
+      ? categoryGroups.filter(function (g) { return groupContributes(g, lineRoster, category); })
+      : categoryGroups;
+    // A incompleteza só bloqueia a própria linha. Em especial, um grupo sem jogo Rei/Rainha
+    // na Prata não pode apagar uma classificação Ouro já definida.
     if (!gs.length || gs.some(function (g) { return !(g.matches || []).some(function (m) { return m.isMonarch; }); })) return null;
     var standings = [];
     gs.forEach(function (g) {
-      window._computeMonarchStandings(g, t, category).forEach(function (s) { if (!s.isGhost) standings.push(s); });
+      groupRows(g, category).forEach(function (row) {
+        if (!restrictToLine || rowInRoster(row, lineRoster)) standings.push(row);
+      });
     });
     var primary = ['games_diff', 'wins'].indexOf(t.rankingPrimary) >= 0 ? t.rankingPrimary : 'points';
+    var groupMatches = gs.reduce(function (out, g) { return out.concat(g.matches || []); }, []);
+    if (restrictToLine) groupMatches = groupMatches.filter(function (m) {
+      var left = sideIdentityKeys(m, 'p1'), right = sideIdentityKeys(m, 'p2');
+      return left.length && right.length && left.every(function (k) { return lineRoster[k]; }) &&
+        right.every(function (k) { return lineRoster[k]; });
+    });
     var compareOpts = { primaryField:primary, tiebreakers:Array.isArray(t.tiebreakers) ? t.tiebreakers : undefined };
     if (compareOpts.tiebreakers && compareOpts.tiebreakers.indexOf('confronto_direto') >= 0 &&
         typeof window._standingsBuildH2H === 'function') {
-      var groupMatches = gs.reduce(function (out, g) { return out.concat(g.matches || []); }, []);
       compareOpts.h2h = window._standingsBuildH2H(groupMatches, function (m, side) {
-        var uids = (typeof window._slotUids === 'function') ? window._slotUids(m, side) : [];
+        var uids = positionalUids(m, side);
         return uids.length ? uids : (m[side === 'p1' ? 'team1' : 'team2'] || []).filter(Boolean);
       });
     }
@@ -16325,10 +16381,10 @@ window._categoryFinalPlacements = function (t) {
       byId[id] = entry; statsById[id] = row; people.push(entry);
     });
     var pairs = {}, pairCount = 0;
-    lm.forEach(function (m) { ['p1', 'p2'].forEach(function (side) {
+    lm.forEach(function (m) { ['p1','p2'].forEach(function (side) {
       var label = m[side];
       if (!label || label === 'TBD' || label === 'BYE') return;
-      var uids = (typeof window._slotUids === 'function') ? window._slotUids(m, side) : [];
+      var uids = positionalUids(m, side);
       var key = window._classifEntryKey(label, uids);
       if (!key) return;
       var found = members(m, side);
@@ -16336,18 +16392,15 @@ window._categoryFinalPlacements = function (t) {
       pairs[key] = { members:found, label:label }; pairCount++;
     }); });
     var placed = window._classifEntriesFromMatches(t, lm);
-    // Na eliminatória simples, a rodada de eliminação define a faixa. Dentro
-    // da mesma rodada, aplica o saldo de games escolhido pelo organizador;
-    // saldos iguais preservam a mesma posição, sem critério inventado.
     if (t.rankingPrimary === 'games_diff' && Array.isArray(t.tiebreakers) && !t.tiebreakers.length &&
-        t.phases[phaseIndex].elimination && t.phases[phaseIndex].elimination.bracketType === 'single') {
+        phase.elimination && phase.elimination.bracketType === 'single') {
       var performance = {}, exitRound = {};
       lm.forEach(function (m) {
         if (!m || !m.winner || m.isBye || m.isThirdPlace || m.bracket === 'thirdplace') return;
         var side = window._matchWinnerSide(m);
         if (side !== 1 && side !== 2) return;
-        var k1 = window._classifEntryKey(m.p1, window._slotUids(m, 'p1'));
-        var k2 = window._classifEntryKey(m.p2, window._slotUids(m, 'p2'));
+        var k1 = window._classifEntryKey(m.p1, positionalUids(m, 'p1'));
+        var k2 = window._classifEntryKey(m.p2, positionalUids(m, 'p2'));
         var totals = [0, 0];
         if (Array.isArray(m.sets) && m.sets.length) m.sets.forEach(function (set) {
           if (!set || set.superTiebreak) return;
@@ -16391,18 +16444,42 @@ window._categoryFinalPlacements = function (t) {
       person.pos = prev && compare(statsById[prev.key], statsById[person.key]) === 0
         ? prev.pos : pairCount + index + 1;
     });
-    var individualEntries = people.filter(function (person) { return person.pos != null; })
-      .sort(function (a, b) { return a.pos - b.pos; });
+    var individualEntries = people.filter(function (person) { return person.pos != null; }).sort(function (a, b) { return a.pos - b.pos; });
     var displayEntries = placed.filter(function (pair) { return pair.pos != null; }).map(function (pair) {
       var known = pairs[pair.key];
-      return { key:pair.key, name:pair.name, pos:pair.pos,
-        uids:Array.isArray(pair.uids) ? pair.uids.slice() : [],
+      return { key:pair.key, name:pair.name, pos:pair.pos, uids:Array.isArray(pair.uids) ? pair.uids.slice() : [],
         isPair:!!(known && known.members.length > 1) };
-    }).concat(leftOut.filter(function (person) { return person.pos != null; }))
-      .sort(function (a, b) { return a.pos - b.pos; });
-    return { category:category || 'Geral', matches:lm, total:people.length,
-      entries:individualEntries, displayEntries:displayEntries };
-  }).filter(Boolean);
+    }).concat(leftOut.filter(function (person) { return person.pos != null; })).sort(function (a, b) { return a.pos - b.pos; });
+    return { category:category || 'Geral', line:lineKey || null, lineLabel:lineLabel || null,
+      matches:lm, total:people.length, entries:individualEntries, displayEntries:displayEntries };
+  }
+  var sections = [];
+  categories.forEach(function (category) {
+    var categoryMatches = phaseMatches.filter(function (m) { return String(m.category || '') === category; });
+    var categoryTiers = typeof window._classifTierKeys === 'function' ? window._classifTierKeys(categoryMatches) : ['main'];
+    var unified = categoryTiers.length < 2 || window._classifGrandFinalConverged(phase, categoryMatches);
+    if (unified) {
+      var lm = categoryMatches.filter(function (m) { return !m.isMonarch && m.bracket !== 'group'; });
+      var section = makeSection(category, lm, null, null, false);
+      if (section) sections.push(section);
+      return;
+    }
+    categoryTiers.forEach(function (tierKey, index) {
+      var lm = categoryMatches.filter(function (m) {
+        if (m.isMonarch || m.bracket === 'group' || m.bracket === 'grandfinal') return false;
+        if (m.bracket === 'thirdplace' || m.isThirdPlace) {
+          return categoryTiers.length === 1 || (m.line || m.tierKey || m.parentBracket) === tierKey;
+        }
+        return (m.bracket || 'main') === tierKey;
+      });
+      if (!lm.some(function (m) { return (m.bracket || 'main') === tierKey; })) return;
+      var labelMatch = lm.filter(function (m) { return (m.bracket || 'main') === tierKey; })[0];
+      var lineLabel = labelMatch && labelMatch.tierLabel ? String(labelMatch.tierLabel).trim() : ('Chave ' + (index + 1));
+      var section = makeSection(category, lm, tierKey, lineLabel, true);
+      if (section) sections.push(section);
+    });
+  });
+  return sections;
 };
 
 // FUNÇÃO CANÔNICA: pódio(s) + classificação(ões). Usada na página do torneio (encerrado).
@@ -16411,9 +16488,11 @@ window._renderPodiumsAndClassif = function (t) {
   if (!t) return '';
   var categorySections = window._categoryFinalPlacements(t);
   if (categorySections.length) return categorySections.map(function (section) {
-    var pod = window._linePodiumHtml(t, section.matches, section.category, '#fbbf24');
+    var heading = section.lineLabel ? section.category + ' · ' + section.lineLabel : section.category;
+    var color = section.lineLabel ? '#cbd5e1' : '#fbbf24';
+    var pod = window._linePodiumHtml(t, section.matches, heading, color);
     var cls = window._renderClassifBlock(t, section.displayEntries, {
-      label: '📊 Classificação · ' + window._safeHtml(section.category), color: '#fbbf24',
+      label: '📊 Classificação · ' + window._safeHtml(heading), color: color,
       open: false, mode: 'individual', definedCount: section.entries.length
     });
     return '<div style="margin-bottom:1.25rem;">' + pod + cls + '</div>';
@@ -16440,7 +16519,7 @@ window._renderPodiumsAndClassif = function (t) {
   var fpMatches = isMulti ? (Array.isArray(t.matches) ? t.matches : []).filter(function (m) { return (m.phaseIndex || 0) === cur; })
     : (Array.isArray(t.matches) ? t.matches : []);
   var tierKeys = window._classifTierKeys(fpMatches);
-  var hasGF = (fp.grandFinal !== false) && fpMatches.some(function (m) { return (m.bracket || '') === 'grandfinal' && m.winner && !m.isBye; });
+  var hasGF = window._classifGrandFinalConverged(fp, fpMatches);
 
   // ── DUPLA ELIMINATÓRIA → UM pódio + UMA classificação (nunca "Linha 1/2/3"). A Chave
   //    Superior e a Inferior CONVERGEM na Grande Final: é um ranking só. Ordem canônica (dono):

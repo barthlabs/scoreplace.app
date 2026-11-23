@@ -812,7 +812,7 @@ function setupCreateTournamentModal() {
                 <div style="font-weight:700;margin-bottom:8px">🕒 Quem define quando os jogos acontecem?</div>
                 <div class="sp-binary-choice">
                   <button type="button" class="sp-binary-option" id="estimated-games-mode-participants" onclick="window._setEstimatedScheduleMode('participants')">Participantes combinam</button>
-                  <span class="toggle-switch"><input id="estimated-games-mode-toggle" type="checkbox" role="switch" aria-label="Participantes combinam entre si ou organizador determina quando cada jogo acontece" onchange="window._setEstimatedScheduleMode(this.checked ? 'organizer' : 'participants')"><span class="toggle-slider"></span></span>
+                  <label class="toggle-switch" for="estimated-games-mode-toggle"><input id="estimated-games-mode-toggle" type="checkbox" role="switch" aria-label="Participantes combinam entre si ou organizador determina quando cada jogo acontece" onchange="window._setEstimatedScheduleMode(this.checked ? 'organizer' : 'participants')"><span class="toggle-slider"></span></label>
                   <button type="button" class="sp-binary-option" id="estimated-games-mode-organizer" onclick="window._setEstimatedScheduleMode('organizer')">Organizador define</button>
                 </div>
               </div>

@@ -1520,6 +1520,22 @@
     var rotationCfg = phaseCfg && phaseCfg.classification && phaseCfg.classification.partnerRotation === 'unique_8'
       ? phaseCfg.classification : null;
     var nGroups = rotationCfg ? Math.ceil(pool.length / 8) : (parseInt(phaseCfg && phaseCfg.gruposCount, 10) || 4);
+    var formation = phaseCfg && phaseCfg.groupFormation;
+    var explicitFormation = !!(formation && (formation.mode === 'count' || formation.mode === 'size'));
+    if (explicitFormation) {
+      var requested = Number(formation.value);
+      if (!Number.isSafeInteger(requested) || requested < 2) throw new Error('A formação dos grupos precisa ser um número inteiro maior ou igual a dois.');
+      if (pool.length < 2) throw new Error('São necessários pelo menos dois participantes para formar grupos.');
+      nGroups = formation.mode === 'count' ? requested : Math.ceil(pool.length / requested);
+      if (nGroups < 1 || nGroups > Math.floor(pool.length / 2)) {
+        throw new Error('A formação escolhida deixaria algum grupo com menos de duas unidades. Ajuste o número ou o tamanho dos grupos.');
+      }
+      var baseSize = Math.floor(pool.length / nGroups), extraSize = pool.length % nGroups;
+      if (baseSize < 2) throw new Error('Cada grupo precisa ter pelo menos duas unidades.');
+      if (rotationCfg && (pool.length % 8 !== 0 || nGroups !== pool.length / 8 || baseSize !== 8 || extraSize !== 0)) {
+        throw new Error('O rodízio A–H exige grupos completos com exatamente oito atletas.');
+      }
+    }
     if (rotationCfg && pool.length % 8 !== 0) throw new Error('O rodízio de parceiros exige grupos completos de oito atletas em cada categoria.');
     if (nGroups < 1) nGroups = 1;
     // v1.3.88: NUNCA mais grupos que floor(N/2) — senão sobra grupo de 1 time (0 jogos → storePhase
@@ -1528,7 +1544,8 @@
     // degenerados (N=5,6,7 faziam grupos de 1 com o default). Cada grupo fica com ≥2 (o resto sobra
     // no maior). Não afeta config válida (4 grupos p/ 8 times = floor(8/2)=4 → inalterado).
     var _maxGroups = Math.max(1, Math.floor(pool.length / 2));
-    if (nGroups > _maxGroups) nGroups = _maxGroups;
+    if (explicitFormation && nGroups > _maxGroups) throw new Error('A formação escolhida deixaria algum grupo com menos de duas unidades.');
+    if (!explicitFormation && nGroups > _maxGroups) nGroups = _maxGroups;
 
     var groups = [];
     for (var gi = 0; gi < nGroups; gi++) groups.push({ name: 'Grupo ' + String.fromCharCode(65 + gi), groupIdx: gi, players: [], matches: [] });
@@ -1536,7 +1553,7 @@
     // tamanho (floor de pool/grupos); o excedente vira SUPLENTE (waitlist → storePhase manda
     // pra t.standbyParticipants). Eixo da fase, igual ao legado da Fase 0 — não se perde a função.
     var _placePool = pool, _waitlist = [];
-    if (phaseCfg && phaseCfg.gruposEqualOnly && nGroups > 0) {
+    if (!explicitFormation && phaseCfg && phaseCfg.gruposEqualOnly && nGroups > 0) {
       var _eq = Math.floor(pool.length / nGroups);
       if (_eq >= 1) { _placePool = pool.slice(0, _eq * nGroups); _waitlist = pool.slice(_eq * nGroups); }
     }
@@ -2985,7 +3002,7 @@
     if (!Number.isInteger(cutoff) || cutoff < 1 || cutoff >= 999) return false;
     var groups = prevPhaseGroups(t), pending = pendingMatches(t);
     if (!pending.length || pending.length > 128 ||
-        groups.length !== Number(phase.gruposCount || t.gruposCount || 1) ||
+        (!phase.groupFormation && groups.length !== Number(phase.gruposCount || t.gruposCount || 1)) ||
         pending.some(function (item) {
           var index = Number(item.groupIdx);
           return !Number.isInteger(index) || index < 0 || index >= groups.length ||

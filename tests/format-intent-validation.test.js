@@ -8,12 +8,22 @@ class HttpsError extends Error { constructor(code, message) { super(message); th
 
 const valid = {
   disputa: 'dupla', parceria: 'fixa', formacaoDupla: 'manual',
+  groupFormation: { mode: 'count', value: 4 },
   classifScope: 'per_group', rodadas: { modo: 'todos', turnos: 'ida' },
   classificationPairing: { strategy: 'free_draw', rematchPolicy: 'exhaust_cluster_before_repeat' },
   classificationSchedule: { gamesPerUnit: 3, mode: 'structured' },
   eliminatoria: { formacao: 'performance', lateEnrollment: 'inherit', newMatchups: false, linhas: 2 }
 };
 assert.doesNotThrow(() => validateNewFormatIntent(valid, HttpsError));
+assert.doesNotThrow(() => validateNewFormatIntent({ groupFormation: { mode: 'size', value: 8 } }, HttpsError),
+  'organizador pode definir tamanho de grupo');
+assert.throws(() => validateNewFormatIntent({ groupFormation: { mode: 'count' } }, HttpsError),
+  { code: 'invalid-argument' }, 'formação precisa conter critério e número');
+assert.throws(() => validateNewFormatIntent({ groupFormation: { mode: 'count', value: 129 } }, HttpsError),
+  { code: 'invalid-argument' }, 'formação tem limite defensivo');
+assert.throws(() => validateNewFormatIntent({}, HttpsError,
+  { fmt2: { groupFormation: { mode: 'count', value: 4 } } }),
+  { code: 'failed-precondition' }, 'edição não pode remover silenciosamente formação persistida');
 assert.doesNotThrow(() => validateNewFormatIntent({ tieResolution: 'singles_then_draw' }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ tieResolution: 'singles_then_draw', tieSinglesPoints: 5,
   tieSinglesMargin: 1 }, HttpsError));
@@ -86,7 +96,7 @@ for (const [patch, field] of [
     error.code === 'invalid-argument' && error.message.includes('fmt2.' + field), field);
 }
 assert.throws(() => validateNewFormatIntent([], HttpsError), { code: 'invalid-argument' });
-const invalidContainers = ['rodadas', 'classificationPairing', 'eliminatoria'].flatMap(field =>
+const invalidContainers = ['rodadas', 'classificationPairing', 'eliminatoria', 'groupFormation'].flatMap(field =>
   [null, 'texto', [], 7].map(value => ({ field, fmt2: { [field]: value } })));
 for (const { field, fmt2 } of invalidContainers) {
   assert.throws(() => validateNewFormatIntent(fmt2, HttpsError), error =>
@@ -177,7 +187,7 @@ assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title
   decisionTitles.length, 'o fluxo exibe só as seções que controlam decisões');
 assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).slice().sort((a, b) => a - b),
   decisionTitles.map(title => uiBox.innerHTML.indexOf(title)), 'as seções seguem a ordem fixa');
-const flowIds = ['Estrutura — nº de grupos', 'Inscrição e formação de duplas',
+const flowIds = ['Formação dos grupos', 'Inscrição e formação de duplas',
   'f2-phase-dates-slot', 'id="f2-sched-n"', 'Sortear manualmente',
   'Data do 1º sorteio', 'Repetir a cada (dias)', 'f2-hours-slot'];
 const flowPositions = flowIds.map(label => uiBox.innerHTML.indexOf(label));
@@ -188,6 +198,23 @@ assert.doesNotMatch(uiBox.innerHTML, /Quem disputa os jogos\?|Como se formam as 
   'perguntas estáticas antigas não ocupam espaço no formulário');
 assert.match(uiBox.innerHTML, /Simples[\s\S]*?Duplas[\s\S]*?Inscrição individual[\s\S]*?Dupla formada/,
   'modalidade e inscrição são escolhas explícitas');
+assert.match(uiBox.innerHTML, /Número de grupos[\s\S]*?Pessoas por grupo/,
+  'organizador pode escolher quantidade de grupos ou tamanho de cada grupo');
+const rotationCfg = uiHarness.window.FORMAT2.defaultConfig('Beach Tennis');
+rotationCfg.parceria = 'rotation_groups_8';
+uiHarness.window._f2MountInForm(uiBox, 'Beach Tennis', rotationCfg, { id: 'rotation-groups-test' });
+assert.match(uiBox.innerHTML, /id="f2-group-formation-mode"[\s\S]*?value="size" selected/,
+  'rodízio A–H mantém a escolha genérica de formação visível, com oito pessoas por grupo como padrão');
+assert.match(uiBox.innerHTML, /O rodízio A–H exige exatamente 8 atletas por grupo/,
+  'a restrição de oito atletas pertence ao rodízio A–H, não à formação geral dos grupos');
+assert.match(uiBox.innerHTML, /Partidas por atleta em cada grupo[\s\S]*?value="5"/,
+  'a formação de grupos continua separada do número configurável de partidas por atleta');
+uiHarness.window._f2GroupFormation('count', '4');
+assert.equal(uiHarness.window._f2GetConfig().groupFormation.mode, 'count',
+  'rodízio A–H permite escolher a quantidade de grupos');
+assert.equal(uiHarness.window._f2GetConfig().groupFormation.value, 4,
+  'a escolha de formação persiste na configuração do rodízio');
+uiHarness.window._f2MountInForm(uiBox, 'Beach Tennis', uiCfg, { id: 'future-test' });
 assert.equal((uiBox.innerHTML.match(/onchange="window\._f2TeamCompetition\(this\.checked\)"/g) || []).length, 1,
   'a decisão de ter times aparece uma vez dentro da classificatória');
 uiHarness.window._f2TeamCompetition(true);

@@ -731,18 +731,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var diagnosis = window._diagnoseAll(t);
       if (diagnosis && Number.isFinite(Number(diagnosis.effectiveTeams))) units = Math.max(0, Number(diagnosis.effectiveTeams));
     }
-    var resolved = window.FORMAT2.resolveTurnos(cfg);
+    var resolved = window.FORMAT2.resolveTurnos(cfg, units);
     var equalOnly = cfg.gruposEqualOnly != null ? cfg.gruposEqualOnly : !!(t && t.gruposEqualOnly);
     var assessment = window.FORMAT2.assessGroupSchedule(units, resolved.groups, cfg.classificationSchedule,
       equalOnly, resolved.turnos === 'ida_volta');
-    var ng = assessment.groups;
+    var ng = resolved.groups == null ? assessment.groups : resolved.groups;
     var base = assessment.base, rem = assessment.remainder;
     var small = base, big = base + (rem > 0 ? 1 : 0);
     var perU = units > 0 ? (small + (rem ? '–' + big : '')) : '—';
     var perP = units > 0 ? (isDupla ? (small * 2 + (rem ? '–' + big * 2 : '')) : perU) : '—';
-    return { t: t, people: people, isDupla: isDupla, units: units, ng: ng, base: base, rem: rem, perU: perU, perP: perP, assessment: assessment };
+    return { t: t, people: people, isDupla: isDupla, units: units, ng: ng, base: base, rem: rem, perU: perU, perP: perP, assessment: assessment, formation: resolved };
   }
   function _effectiveGroupCount(cfg, gi) {
+    var resolved = window.FORMAT2.resolveTurnos(cfg || {}, gi && gi.units);
+    if (resolved.groups != null) return Math.max(1, Number(resolved.groups) || 1);
     return cfg && cfg.parceria === 'rotation_groups_8'
       ? Math.ceil(Math.max(0, Number(gi && gi.units) || 0) / 8)
       : Math.max(1, Number(cfg && cfg.grupos) || 1);
@@ -818,7 +820,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Categorias distintas geram grades separadas; oito duplas no total não
     // provam oito duplas elegíveis dentro de cada grade.
     if (superEight === 'pairs' && gi.t && Array.isArray(gi.t.categories) && gi.t.categories.length > 1) superEight = null;
-    if (cfg.grupos === 1) {
+    if (gi.formation && gi.formation.invalid) return '<div role="status" style="font-size:0.78rem;color:var(--sp-c-f87171,#f87171);">Essa divisão precisa ter pelo menos duas unidades em cada grupo. Ajuste o número de grupos ou o tamanho.</div>' + _estimateLine(cfg);
+    if (gi.formation && gi.formation.groups == null) {
+      return '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Tamanho definido: <b>' + gi.formation.value + ' unidades por grupo</b>. O número e a distribuição dos grupos serão calculados quando os inscritos estiverem disponíveis.</div>' + _estimateLine(cfg);
+    }
+    if (gi.ng === 1) {
       return '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">1 grupo — <b>' +
         (cfg.parceria === 'super_eight' ? 'Super 8 individual' : superEight === 'pairs' ? 'Super 8 de duplas' : 'Pontos Corridos') +
         '</b> (tabela única, classificação geral)</div>' +
@@ -828,7 +834,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var col = function (n, lbl) { return '<div style="text-align:center;min-width:62px;"><div style="font-size:1.7rem;font-weight:800;color:var(--sp-c-c7d2fe,#c7d2fe);line-height:1;">' + n + '</div><div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px;">' + lbl + '</div></div>'; };
     var dot = '<div style="font-size:1.1rem;color:var(--text-muted);align-self:center;opacity:0.6;">·</div>';
     var nums = '<div style="display:flex;gap:10px;justify-content:center;align-items:flex-start;margin:12px 0 4px;">' +
-      col(cfg.grupos, 'grupos') + dot + col(gi.perP, gi.isDupla ? 'pessoas/grupo' : 'por grupo') +
+      col(gi.ng, 'grupos') + dot + col(gi.perP, gi.isDupla ? 'pessoas/grupo' : 'por grupo') +
       (gi.isDupla ? (dot + col(gi.perU, 'duplas/grupo')) : '') + '</div>' +
       '<div style="text-align:center;font-size:0.74rem;color:var(--text-muted);"><b>' +
       (superEight === 'pairs' ? 'Super 8 de duplas por grupo' : 'Fase de Grupos') +
@@ -987,11 +993,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     entryControls += _binaryChoice('Simples', 'Duplas', isDupla,
       "window._f2Disputa(this.checked?'dupla':'individual')", 'Disputa em simples ou duplas');
 
-    structureControls += _sec('Estrutura — nº de grupos', cfg.parceria === 'rotation_groups_8'
-      ? '<div style="font-size:.78rem;color:var(--text-muted);">Gerados automaticamente por categoria: um grupo a cada oito atletas.</div>'
-      : '<div style="display:flex;align-items:center;gap:12px;">' +
-        '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="window._f2GruposLive(this.value)" onchange="window._f2Grupos(this.value)" style="flex:1;accent-color:#818cf8;">' +
-        '<span id="f2-grupos-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:var(--sp-c-c7d2fe,#c7d2fe);">' + cfg.grupos + '</span></div>');
+    var currentFormation = cfg.groupFormation || (cfg.parceria === 'rotation_groups_8'
+      ? { mode: 'size', value: 8 }
+      : { mode: 'count', value: cfg.grupos });
+    structureControls += _sec('Formação dos grupos',
+      '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:9px;">' +
+        '<label for="f2-group-formation-mode" style="font-size:.84rem;">Definir por</label>' +
+        '<select id="f2-group-formation-mode" onchange="window._f2GroupFormation(this.value,document.getElementById(\'f2-group-formation-value\').value)" style="padding:7px 9px;border-radius:8px;border:1px solid rgba(255,255,255,.22);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);"><option value="count"' + (currentFormation.mode === 'count' ? ' selected' : '') + '>Número de grupos</option><option value="size"' + (currentFormation.mode === 'size' ? ' selected' : '') + '>Pessoas por grupo</option></select>' +
+        '<input id="f2-group-formation-value" type="number" min="2" max="128" value="' + currentFormation.value + '" aria-label="' + (currentFormation.mode === 'size' ? 'Pessoas por grupo' : 'Número de grupos') + '" onchange="window._f2GroupFormation(document.getElementById(\'f2-group-formation-mode\').value,this.value)" style="width:78px;text-align:center;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,.22);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);">' +
+        '<span style="font-size:.78rem;color:var(--text-muted);">' + (currentFormation.mode === 'size' ? 'pessoas por grupo' : 'grupos; distribuição equilibrada') + '</span></div>' +
+        (cfg.parceria === 'rotation_groups_8'
+          ? '<div style="font-size:.78rem;color:var(--text-muted);margin-top:7px;">O rodízio A–H exige exatamente 8 atletas por grupo. Com 32 inscritos na categoria, escolha 4 grupos ou 8 pessoas por grupo.</div>'
+          : ''));
 
     // (A FORMAÇÃO das duplas — participantes montam × organizador, + times sorteados vs
     //  montados — fica nos toggles detalhados da seção "Formação de Duplas" abaixo do form.)
@@ -1535,6 +1548,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     S.cfg.grupos = Math.max(1, parseInt(v, 10) || 1);
     _norm();
     _rerender();
+  };
+  window._f2GroupFormation = function (mode, value) {
+    if (!S || (mode !== 'count' && mode !== 'size')) return;
+    var parsed = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
+    if (!Number.isSafeInteger(parsed) || parsed < 2 || parsed > 128) return;
+    S.cfg.groupFormation = { mode: mode, value: parsed };
+    var resolved = window.FORMAT2.resolveGroupFormation(S.cfg.groupFormation, _groupInfo(S.cfg).units, S.cfg.grupos);
+    if (resolved.groups != null && !resolved.invalid) S.cfg.grupos = resolved.groups;
+    _norm(); _rerender();
   };
   window._f2GroupSchedule = function (v, input) {
     if (!S) return;

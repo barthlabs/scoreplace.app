@@ -2466,7 +2466,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           ? ' · <span style="color:' + window._spCor((_plc.pos <= 3 ? _LZ_C_POS : _LZ_C_GRUPO), 'color') + ';font-weight:' +
             (_plc.pos <= 3 ? '800' : '600') + ';">' +
             (_plc.pos <= 3 ? _lzMedalhaPos(_plc.pos) + ' ' : '') +
-            _plc.pos + 'º</span>'
+            _plc.pos + 'º' + (_plc.lineLabel ? ' · ' + _esc(_plc.lineLabel) : '') + '</span>'
           : '';
         // v1.8.31: abre pelo selo do scoreplace, ANTES da data — mesma regra da linha do
         // letzplay (ver _lzSelo e o topo do builder de lá). O 🏆 saiu: ele era idêntico ao

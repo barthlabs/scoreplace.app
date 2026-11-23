@@ -2521,6 +2521,7 @@ window._buildPhase0Cfg = function (t) {
         reiRainha: rei,
         superEight: !!(phase0 && phase0.superEight === true),
         gruposCount: parseInt((phase0 && phase0.gruposCount) != null ? phase0.gruposCount : t.gruposCount, 10) || 4,
+        groupFormation: (phase0 && phase0.groupFormation) || (t.fmt2 && t.fmt2.groupFormation) || undefined,
         gruposClassified: parseInt((phase0 && phase0.gruposClassified) != null ? phase0.gruposClassified : t.gruposClassified, 10) || 2,
         gruposEqualOnly: (phase0 && phase0.gruposEqualOnly) === true || t.gruposEqualOnly === true,
         // Time representado é uma camada sobre as duplas/categorias. A fase 0 precisa
@@ -2565,10 +2566,10 @@ window._buildPhase0Cfg = function (t) {
                 throw new Error('Configuração de turnos indisponível; sorteio não iniciado.');
             }
             var intent = window.FORMAT2.normalize(t.fmt2, t.sport);
-            var resolved = window.FORMAT2.resolveTurnos(intent);
+            var resolved = window.FORMAT2.resolveTurnos(intent, Array.isArray(t.participants) ? t.participants.length : undefined);
             // Sem fase explícita, a mesma configuração que o editor mostra define
             // tanto grupos quanto turnos; um contador legado não divide a decisão.
-            cfg.gruposCount = resolved.groups;
+            if (resolved.groups != null) cfg.gruposCount = resolved.groups;
             cfg.turnos = resolved.turnos;
         } else {
             cfg.turnos = (t.turnos === 'ida_volta' || parseInt((phase0 && phase0.ligaTurnos) != null ? phase0.ligaTurnos : t.ligaTurnos, 10) === 2) ? 'ida_volta' : 'ida';

@@ -124,4 +124,59 @@ assert.equal(placeOf(c.pairs[1].people[0]), 5, 'melhor saldo entre eliminadas na
 assert.equal(placeOf(c.pairs[5].people[0]), 5, 'saldo igual nas quartas conserva empate');
 assert.equal(placeOf(c.pairs[7].people[0]), 7, 'saldo intermediário fica depois das empatadas');
 assert.equal(placeOf(c.pairs[3].people[0]), 8, 'pior saldo fica no fim da mesma faixa');
+
+// Confra: Ouro e Prata são duas chaves independentes dentro da mesma categoria.
+const confra = category('Confra', 8);
+function lineGame(bracket, tierLabel, id, round, left, right, winner) {
+  return { id:`Confra-${id}`, phaseIndex:1, category:'Confra', bracket, tierLabel, round,
+    p1:left.label, p2:right.label, winner:winner && winner.label,
+    scoreP1:6, scoreP2:4,
+    team1Obj:{ participants:left.people.map(name => ({ name })) },
+    team2Obj:{ participants:right.people.map(name => ({ name })) } };
+}
+function lineMatches(bracket, tierLabel, start) {
+  const [a, b, c, d] = confra.pairs.slice(start, start + 4);
+  return [lineGame(bracket, tierLabel, `${bracket}-s1`, 1, a, b, a),
+    lineGame(bracket, tierLabel, `${bracket}-s2`, 1, c, d, c),
+    lineGame(bracket, tierLabel, `${bracket}-final`, 2, a, c, a),
+    lineGame(bracket, tierLabel, `${bracket}-third`, 2, b, d, b)];
+}
+const splitConfra = { ...t, id:'confra-ouro-prata', status:'finished', currentPhaseIndex:1,
+  phases:[t.phases[0], { ...t.phases[1], grandFinal:false }],
+  matches:confra.matches.filter(m => m.isMonarch).concat(
+    lineMatches('gold', 'Ouro', 0), lineMatches('silver', 'Prata', 4),
+    { ...lineGame('thirdplace', 'Ouro', 'ouro-terceiro', 3, confra.pairs[1], confra.pairs[3], confra.pairs[1]),
+      line:'gold', isThirdPlace:true }) };
+const confraSections = W._categoryFinalPlacements(splitConfra);
+assert.deepEqual(Array.from(confraSections, section => section.line), ['gold', 'silver'],
+  'Ouro e Prata viram seções distintas na ordem canônica');
+assert.deepEqual(Array.from(confraSections, section => section.lineLabel), ['Ouro', 'Prata'],
+  'cada linha preserva o nome oficial da chave');
+assert(confraSections.every(section => section.total === 8 && section.entries.length === 8),
+  'cada classificação conta somente os oito atletas da própria chave');
+const ouroNames = new Set(confraSections[0].entries.map(entry => entry.name));
+const prataNames = new Set(confraSections[1].entries.map(entry => entry.name));
+assert([...ouroNames].every(name => !prataNames.has(name)), 'atletas da Prata não vazam para a classificação Ouro');
+assert([...prataNames].every(name => !ouroNames.has(name)), 'atletas da Ouro não vazam para a classificação Prata');
+assert(confraSections.every(section => section.matches.every(match => match.bracket !== 'thirdplace' || match.line === section.line)),
+  'terceiro lugar não vira uma terceira linha independente');
+const confraHtml = W._renderPodiumsAndClassif(splitConfra);
+assert(confraHtml.includes('Confra · Ouro') && confraHtml.includes('Confra · Prata'),
+  'a página encerrada mostra os dois títulos de linha');
+const confraBracket = W._renderPhaseBracket(splitConfra, false, '');
+assert(confraBracket.includes('Classificação · Confra · Ouro') &&
+       confraBracket.includes('Classificação · Confra · Prata'),
+  'o chaveamento preserva as duas classificações');
+const pendingGrandFinal = { ...splitConfra,
+  phases:[t.phases[0], { ...t.phases[1], grandFinal:true }],
+  matches:splitConfra.matches.concat({ id:'confra-gf-pendente', phaseIndex:1, category:'Confra',
+    bracket:'grandfinal', p1:'Ouro', p2:'Prata', winner:null }) };
+assert.deepEqual(Array.from(W._categoryFinalPlacements(pendingGrandFinal), section => section.line), ['gold', 'silver'],
+  'uma Grande Final pendente não apaga as classificações independentes');
+const completedGrandFinal = { ...pendingGrandFinal,
+  matches:pendingGrandFinal.matches.map(match => match.id === 'confra-gf-pendente'
+    ? { ...match, winner:'p1' } : match) };
+const convergedSections = W._categoryFinalPlacements(completedGrandFinal);
+assert.equal(convergedSections.length, 1, 'a Grande Final concluída une a classificação da categoria');
+assert.equal(convergedSections[0].line, null, 'após a convergência a seção deixa de representar uma linha');
 console.log('✅ classificação completa por categoria e posições progressivas');

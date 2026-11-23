@@ -19,6 +19,7 @@ const ENUMS = [
   ['rankingRemainderPolicy', ['lottery_average', 'waitlist_legacy']],
   ['rankingSitOutScoring.mode', ['average', 'zero', 'fixed']],
   ['classificationSchedule.mode', ['free', 'structured']],
+  ['groupFormation.mode', ['count', 'size']],
   ['eliminatoria.formacao', ['performance', 'equilibrio', 'sorteio']],
   ['eliminatoria.semeadura', ['performance', 'equilibrio', 'sorteio']],
   ['eliminatoria.lateEnrollment', ['inherit', 'closed', 'standby', 'expand']],
@@ -37,7 +38,8 @@ const INTEGERS = [
   ['tieSinglesPoints', 1],
   ['rodadas.n', 1],
   ['classificationPairing.clusterSize', 2],
-  ['classificationSchedule.gamesPerUnit', 1]
+  ['classificationSchedule.gamesPerUnit', 1],
+  ['groupFormation.value', 2]
 ];
 
 function explicitValue(object, path) {
@@ -122,12 +124,22 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize) {
   }
   // Um contêiner explicitamente enviado não pode sumir durante a validação
   // dos filhos e reaparecer como default no compilador tolerante de legado.
-  for (const path of ['rodadas', 'classificationPairing', 'eliminatoria', 'rankingSitOutScoring']) {
+  for (const path of ['rodadas', 'classificationPairing', 'eliminatoria', 'rankingSitOutScoring', 'groupFormation']) {
     const field = explicitValue(fmt2, path);
     if (field.present && (!field.value || typeof field.value !== 'object' ||
         Array.isArray(field.value) || Object.getPrototypeOf(field.value) !== Object.prototype)) {
       throw new HttpsError('invalid-argument', 'Valor de formato inválido em fmt2.' + path + '.');
     }
+  }
+  const storedGroupFormation = explicitValue(stored && stored.fmt2, 'groupFormation');
+  const requestedGroupFormation = explicitValue(fmt2, 'groupFormation');
+  if (storedGroupFormation.present && !requestedGroupFormation.present) {
+    throw new HttpsError('failed-precondition', 'Atualize o app para editar a formação dos grupos deste torneio.');
+  }
+  if (requestedGroupFormation.present &&
+      (!explicitValue(fmt2, 'groupFormation.mode').present ||
+       !explicitValue(fmt2, 'groupFormation.value').present)) {
+    throw new HttpsError('invalid-argument', 'A formação dos grupos exige escolher o critério e o número.');
   }
   const sitOutScoring = explicitValue(fmt2, 'rankingSitOutScoring');
   const dayPolicy = explicitValue(fmt2, 'teamCompetition.schedule.originDayPolicy');
@@ -180,6 +192,9 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize) {
     }
     if (path === 'tieSinglesPoints' && parsed > 99) {
       throw new HttpsError('invalid-argument', 'O desempate de simples aceita de 1 a 99 pontos.');
+    }
+    if (path === 'groupFormation.value' && parsed > 128) {
+      throw new HttpsError('invalid-argument', 'A formação aceita de 2 a 128 grupos ou unidades por grupo.');
     }
     if (path === 'eliminatoria.finalSeriesBestOf' && (parsed > 99 || parsed % 2 !== 1)) {
       throw new HttpsError('invalid-argument', 'A série final exige de 1 a 99 partidas, em número ímpar.');

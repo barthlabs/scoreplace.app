@@ -88,11 +88,33 @@
   // Recebe somente a configuração já normalizada. A grade técnica de times
   // pode materializar mais grupos que o slider geral, mas nunca autoriza uma
   // volta que a própria classificatória não comporta.
-  function resolveTurnos(cfg) {
-    var groups = Math.max(1, parseInt(cfg.grupos, 10) || 1);
+  function resolveGroupFormation(formation, units, legacyGroups) {
+    units = units == null || units === '' ? null : (Number.isFinite(Number(units)) ? Math.max(0, Math.floor(Number(units))) : null);
+    if (!formation || (formation.mode !== 'count' && formation.mode !== 'size')) {
+      return { declared: false, groups: Math.max(1, parseInt(legacyGroups, 10) || 1), sizes: null };
+    }
+    var value = Math.floor(Number(formation.value));
+    if (!Number.isSafeInteger(value) || value < 2) return { declared: true, groups: null, sizes: null, invalid: true };
+    if (units == null) return { declared: true, mode: formation.mode, value: value,
+      groups: formation.mode === 'count' ? value : null, sizes: null };
+    if (units === 0) return { declared: true, mode: formation.mode, value: value,
+      groups: formation.mode === 'count' ? value : null, sizes: null };
+    if (units < 2) return { declared: true, mode: formation.mode, value: value, groups: 0, sizes: [], invalid: true };
+    var count = formation.mode === 'count' ? value : Math.ceil(units / value);
+    if (count > units || count < 1) return { declared: true, mode: formation.mode, value: value, groups: count, sizes: [], invalid: true };
+    var base = Math.floor(units / count), remainder = units % count;
+    var sizes = Array.from({ length: count }, function (_, index) { return base + (index < remainder ? 1 : 0); });
+    if (sizes.some(function (size) { return size < 2; })) return { declared: true, mode: formation.mode, value: value, groups: count, sizes: sizes, invalid: true };
+    return { declared: true, mode: formation.mode, value: value, groups: count, sizes: sizes };
+  }
+
+  function resolveTurnos(cfg, units) {
+    var formation = resolveGroupFormation(cfg.groupFormation, units, cfg.grupos);
+    var groups = formation.groups == null ? null : formation.groups;
+    if (groups == null && !formation.declared) groups = Math.max(1, parseInt(cfg.grupos, 10) || 1);
     var tc = cfg.teamCompetition;
     var schedule = tc && tc.schedule;
-    if (!cfg.classificationSchedule && tc && tc.enabled && schedule && schedule.enabled && tc.teamCount >= 2) {
+    if (!cfg.groupFormation && !cfg.classificationSchedule && tc && tc.enabled && schedule && schedule.enabled && tc.teamCount >= 2) {
       var map = schedule.pairsPerTeamByCategory;
       var values = map && typeof map === 'object' ? Object.keys(map).map(function (key) {
         return Math.max(1, parseInt(map[key], 10) || 1);
@@ -101,7 +123,8 @@
       groups = Math.max(1, Math.ceil((tc.teamCount * maxPairs) / schedule.teamsPerGroup));
     }
     var turnos = groups === 1 && cfg.rodadas && cfg.rodadas.turnos === 'ida_volta' ? 'ida_volta' : 'ida';
-    return { groups: groups, turnos: turnos, ligaTurnos: turnos === 'ida_volta' ? 2 : 1 };
+    return { groups: groups, sizes: formation.sizes, declared: formation.declared, invalid: formation.invalid === true,
+      mode: formation.mode, value: formation.value, turnos: turnos, ligaTurnos: turnos === 'ida_volta' ? 2 : 1 };
   }
 
   // Super 8 de duplas é a leitura de uma configuração completa, não um formato
@@ -498,6 +521,9 @@
     var first = projected[0] || {};
     var elimination = projected.filter(function (phase) { return phase && phase.kind === 'elimination'; })[0] || null;
     var cfg = defaultConfig(sport || tournament.sport);
+    if (tournament.fmt2 && tournament.fmt2.groupFormation && typeof tournament.fmt2.groupFormation === 'object') {
+      cfg.groupFormation = JSON.parse(JSON.stringify(tournament.fmt2.groupFormation));
+    }
     if (tournament.fmt2 && tournament.fmt2.eliminatoria &&
         typeof tournament.fmt2.eliminatoria.nome === 'string') {
       cfg.eliminatoria.nome = tournament.fmt2.eliminatoria.nome.trim().slice(0, 40);
@@ -624,6 +650,17 @@
     var isDupla = out.disputa === 'dupla';
 
     out.grupos = Math.max(1, parseInt(out.grupos, 10) || 1);
+    if (out.groupFormation != null) {
+      var gf = out.groupFormation;
+      if (!gf || typeof gf !== 'object' || Array.isArray(gf) ||
+          (gf.mode !== 'count' && gf.mode !== 'size') || !Number.isSafeInteger(Number(gf.value)) || Number(gf.value) < 2) {
+        delete out.groupFormation;
+      } else {
+        out.groupFormation = { mode: gf.mode, value: Number(gf.value) };
+        var gfResolved = resolveGroupFormation(out.groupFormation, null, out.grupos);
+        if (gfResolved.groups != null) out.grupos = gfResolved.groups;
+      }
+    }
     var umGrupo = out.grupos === 1;
     // Times representados: a dupla continua na categoria e o time soma
     // seus resultados. Normalizar aqui garante que web e CF leiam o MESMO toggle de
@@ -835,7 +872,8 @@
     // tem a classificatória onde a tabela de times existe. Desligar nesses casos evita
     // uma configuração visualmente possível, mas sem unidade estável para representar o time.
     if (!isDupla || out.parceria !== 'fixa') out.teamCompetition.enabled = false;
-    if (out.classifAtiva && resolveTurnos(out).groups > 1) out.rodadas.turnos = 'ida';
+    var normalizedGroups = resolveTurnos(out).groups;
+    if (out.classifAtiva && normalizedGroups != null && normalizedGroups > 1) out.rodadas.turnos = 'ida';
     // v1.6.80: término PRÓPRIO da eliminatória — só faz sentido quando ela é 2ª fase. Na
     // eliminação DIRETA ela É a fase inicial e já usa as datas do form (t.startDate/t.endDate),
     // então aqui fica vazio pra não haver duas fontes pro mesmo fim. Só aceita 'AAAA-MM-DD';
@@ -868,7 +906,10 @@
       return parts.join(' · ');
     }
     var resolved = resolveTurnos(cfg);
-    parts.push(cfg.parceria === 'rotation_groups_8' ? 'Grupos de 8' : (resolved.groups === 1 ? 'Pontos Corridos' : (resolved.groups + ' grupos')));
+    var groupLabel = resolved.groups == null
+      ? ('Grupos de ' + resolved.value + ' · definidos pelos inscritos')
+      : (cfg.parceria === 'rotation_groups_8' ? 'Grupos de 8' : (resolved.groups === 1 ? 'Pontos Corridos' : (resolved.groups + ' grupos')));
+    parts.push(groupLabel);
     if (cfg.disputa === 'dupla') {
       if (cfg.parceria === 'super_eight') parts.push('Super 8 individual · todas as parcerias');
       else if (cfg.parceria === 'rotation_groups_8') parts.push(cfg.rodadas.n + ' partidas por atleta · parceiros sem repetição');
@@ -1155,14 +1196,15 @@
       // parcial apenas limita jogos por unidade, não cria outro formato de torneio.
       // Há uma grade técnica por CATEGORIA. Com duas duplas Light por time,
       // por exemplo, cada grupo recebe 2× mais unidades sem inventar times.
-      var _turns = resolveTurnos(cfg);
-      var _teamGroupCount = _turns.groups;
+      var _turns = resolveTurnos(cfg, opts.units);
+      var _teamGroupCount = _turns.groups == null ? Math.max(1, parseInt(cfg.grupos, 10) || 1) : _turns.groups;
       top.format = 'Fase de Grupos';
       top.drawMode = 'sorteio';
       top.teamSize = teamSize;
       top.enrollmentMode = isDupla && cfg.formacaoDupla === 'manual' ? 'teams' : 'individual';
       top.manualPairing = top.enrollmentMode === 'teams' ? cfg.manualPairingPolicy : 'organizer_only';
       top.gruposCount = _teamGroupCount;
+      if (cfg.groupFormation) top.groupFormation = cfg.groupFormation;
       top.gruposClassified = cfg.classificados;
       if (cfg.parceria === 'rotation_groups_8') {
         top.partnerRotation = 'unique_8';
@@ -1194,6 +1236,7 @@
         teamCompetition: (cfg.teamCompetition && cfg.teamCompetition.enabled) ? cfg.teamCompetition : null,
         pairingStrategy: 'top', grandFinal: true
       });
+      if (cfg.groupFormation) p0.groupFormation = cfg.groupFormation;
       if (cfg.completedMixedGroupOnly === true) {
         // Nenhuma eliminatória foi materializada. Não introduzir no espelho
         // uma política de chave que o sorteio histórico nunca recebeu.
@@ -1479,6 +1522,7 @@
     translateLegacyTournament: translateLegacyTournament,
     assessGroupSchedule: assessGroupSchedule,
     resolveTurnos: resolveTurnos,
+    resolveGroupFormation: resolveGroupFormation,
     superEightVariant: superEightVariant
   };
 })();

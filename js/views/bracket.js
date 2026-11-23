@@ -9066,9 +9066,10 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       (_bracketIsEliminationTree(t, curPhase) ? '<span data-bracket-presentation-fallback>' + _bracketPresentationControlHtml() + '</span>' : '') + _bracketZoomControlHtml() + '</div>' : '';
   if (categoryFinalSections.length) {
     body += categoryFinalSections.map(function (section) {
+      var heading = section.lineLabel ? section.category + ' · ' + section.lineLabel : section.category;
       return window._renderClassifBlock(t, section.displayEntries || section.entries, {
-        label:'📊 Classificação · ' + window._safeHtml(section.category),
-        color:'#fbbf24', open:false, mode:'individual', definedCount:section.entries.length
+        label:'📊 Classificação · ' + window._safeHtml(heading),
+        color:section.lineLabel ? '#cbd5e1' : '#fbbf24', open:false, mode:'individual', definedCount:section.entries.length
       });
     }).join('');
   }
