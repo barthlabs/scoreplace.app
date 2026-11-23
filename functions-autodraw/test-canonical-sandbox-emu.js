@@ -39,6 +39,28 @@ const categories = [{ id: 'light', label: 'Light' }];
   const owner = await token('sb-owner');
   const member = await token('sb-member');
   const stranger = await token('sb-stranger');
+  const testDeveloperUid = 'B17n7JCXYOfqahlcLZ0fKxGGyUu1';
+  const testDeveloper = await token(testDeveloperUid);
+
+  // Desligar o teste sem repetir a preferência precisa limpar a configuração
+  // antiga antes das validações e restaurar a visibilidade anterior.
+  const resetConfigId = 'tour_1234567890123_' + 'a'.repeat(32);
+  const resetConfigRef = db.collection('tournaments').doc(resetConfigId);
+  await resetConfigRef.set({ id:resetConfigId, creatorUid:testDeveloperUid, memberUids:[testDeveloperUid],
+    testModeEnabled:true, preserveDrawOnTestReset:true,
+    testModeVisibilityBefore:{ isPublic:true, membersOnly:false, organizerOnly:false },
+    isPublic:false, membersOnly:false, organizerOnly:true, rulesContractVersion:1,
+    participants:[], matches:[], rounds:[], groups:[], phases:[] });
+  const testOff = await callFn('updateTournamentConfiguration', { tournamentId:resetConfigId,
+    patch:{ testModeEnabled:false } }, testDeveloper);
+  assert.equal(testOff.status, 200, JSON.stringify(testOff.body));
+  const testOffSaved = (await resetConfigRef.get()).data();
+  assert.equal(testOffSaved.testModeEnabled, false);
+  assert.equal(testOffSaved.preserveDrawOnTestReset, false,
+    'desligar teste limpa automaticamente a preferência de preservar sorteio');
+  assert.equal(testOffSaved.isPublic, true, 'desligar teste restaura a visibilidade anterior');
+  console.log('✓ desligar teste com preservar sorteio ativo retorna ao estado normal sem erro');
+
   const id = 'same-id-in-both-collections';
   const real = db.collection('tournaments').doc(id);
   const sb = db.collection('sandboxes').doc(id);
