@@ -6339,11 +6339,11 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     }
     const turningTestOn = t.testModeEnabled !== true && patch.testModeEnabled === true;
     const turningTestOff = t.testModeEnabled === true && patch.testModeEnabled === false;
-    if (turningTestOff && !Object.prototype.hasOwnProperty.call(patch, 'preserveDrawOnTestReset')) {
-      patch.preserveDrawOnTestReset = false;
-    }
-    const preserveDraw = Object.prototype.hasOwnProperty.call(patch, 'preserveDrawOnTestReset')
-      ? patch.preserveDrawOnTestReset : t.preserveDrawOnTestReset === true;
+    const hasPreserveDrawPatch = Object.prototype.hasOwnProperty.call(patch, 'preserveDrawOnTestReset');
+    const preserveDraw = hasPreserveDrawPatch
+      ? patch.preserveDrawOnTestReset
+      : turningTestOff ? false : t.preserveDrawOnTestReset === true;
+    if (turningTestOff && !hasPreserveDrawPatch) patch.preserveDrawOnTestReset = false;
     const testEnabledAfter = Object.prototype.hasOwnProperty.call(patch, 'testModeEnabled')
       ? patch.testModeEnabled : t.testModeEnabled === true;
     if (preserveDraw && !testEnabledAfter) {

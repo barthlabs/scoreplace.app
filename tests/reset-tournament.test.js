@@ -124,7 +124,7 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
     'a callable do codebase functions-autodraw devolve a fotografia pós-transação efetivamente persistida para a UI refletir');
   ok(/async _callFn\(name, payload, msgs\)/.test(db) && resetStart >= 0,
     'o transporte canônico e a callable de restauração existem');
-  ok(/const turningTestOff = t\.testModeEnabled === true && patch\.testModeEnabled === false;[\s\S]*?if \(turningTestOff && !Object\.prototype\.hasOwnProperty\.call\(patch, 'preserveDrawOnTestReset'\)\) \{\s*patch\.preserveDrawOnTestReset = false;\s*\}[\s\S]*?const preserveDraw =/.test(configServer),
+  ok(/const turningTestOff = t\.testModeEnabled === true && patch\.testModeEnabled === false;[\s\S]*?const hasPreserveDrawPatch = Object\.prototype\.hasOwnProperty\.call\(patch, 'preserveDrawOnTestReset'\);[\s\S]*?const preserveDraw = hasPreserveDrawPatch[\s\S]*?turningTestOff \? false[\s\S]*?if \(turningTestOff && !hasPreserveDrawPatch\) patch\.preserveDrawOnTestReset = false;[\s\S]*?if \(preserveDraw && !testEnabledAfter\)/.test(configServer),
     'desligar teste limpa a preferência preservada antes de validar a configuração final');
   ok(/isSandboxRestore/.test(server) && /isPrePublicationRestore/.test(server) && /!isSandboxRestore && !mayRestorePrePublication/.test(server),
     'o servidor só aceita restauração de Sandbox ou a pré-publicação explicitamente habilitada');

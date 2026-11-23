@@ -105,6 +105,20 @@ async function restore(tournamentId) {
     assert.equal(checkpoint.marker((await corrupt.tournamentRef.get()).data()), 'resetting');
     assert.equal((await corrupt.tournamentRef.get()).data().status, 'active', 'falha de hash não sobrescreve dados ao vivo');
 
+    // An active root with a missing snapshot is corruption, not an interrupted
+    // capture. Reset must fail closed instead of turning the played tree into
+    // a fresh post-draw baseline.
+    const missingSnapshot = await seed('missing-active-snapshot');
+    const missingSnapshotRef = manifestRef(missingSnapshot.tournamentId)
+      .collection('snapshots').doc(missingSnapshot.epoch);
+    await deleteRecursively(missingSnapshotRef);
+    await missingSnapshot.tournamentRef.collection('matches').doc('final-1').update({ score:[6,4] });
+    await assert.rejects(restore(missingSnapshot.tournamentId), error => error.code === 'data-loss');
+    assert.deepEqual((await missingSnapshot.tournamentRef.collection('matches').doc('final-1').get()).data().score,
+      [6,4], 'fotografia ausente não recaptura nem desfaz dados de teste');
+    assert.equal(checkpoint.marker((await missingSnapshot.tournamentRef.get()).data()), 'resetting',
+      'a falha permanece bloqueada para recuperação explícita');
+
     console.log('✅ checkpoint pós-sorteio: reset repetível, recuperação e integridade no Firestore Emulator');
   } finally {
     for (const fixture of fixtures) await deleteRecursively(fixture.tournamentRef);
