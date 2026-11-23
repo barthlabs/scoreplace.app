@@ -17,11 +17,15 @@ const section = (start, end) => {
 };
 class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } }
 const receipts = require('../functions-autodraw/operation-receipt-core');
-async function runQueue(operationId) {
+async function runQueue(operationId, failureMode) {
   const marks = [], writes = [];
   const parent = {
     path: 'tournaments/tour_queue_protocol',
-    get: async () => ({ exists: true, data: () => ({}) }),
+    get: async () => {
+      if (failureMode === 'permanent-read') throw new Error('invalid read response');
+      return { exists: true, data: () => failureMode === 'checkpoint-lock'
+        ? { drawCheckpoint: { state: 'resetting' } } : {} };
+    },
     collection: () => ({ doc: () => ({}) })
   };
   const db = {
@@ -34,7 +38,8 @@ async function runQueue(operationId) {
   };
   const context = { exports: {}, HttpsError, _operationReceipt: receipts,
     _rehearsal: { locked: () => false },
-    _drawCheckpoint: { locked: () => false },
+    _drawCheckpoint: { locked: tournament => ['capturing', 'resetting'].includes(
+      tournament && tournament.drawCheckpoint && tournament.drawCheckpoint.state) },
     createHash: require('node:crypto').createHash, getFirestore: () => db,
     onDocumentCreated: (_options, handler) => handler,
     applyResultFn: () => ({ ok: true }), drawWindow: {},
@@ -48,11 +53,14 @@ async function runQueue(operationId) {
   vm.runInContext(section('exports.applyQueuedResult = onDocumentCreated(', 'exports.closeRound = onCall('), context);
   const item = { matchId: 'game', actorUid: 'owner', payload: { action: 'score' } };
   if (operationId !== undefined) item.operationId = operationId;
-  await context.exports.applyQueuedResult({ params: { tournamentId: 'tour_queue_protocol', itemId: 'queued_1' },
+  const invocation = context.exports.applyQueuedResult({ params: { tournamentId: 'tour_queue_protocol', itemId: 'queued_1' },
     data: { exists: true, data: () => item, ref: {
       get: async () => ({ exists: true }),
       update: async fields => marks.push(fields)
     } } });
+  if (failureMode === 'checkpoint-lock') await assert.rejects(invocation, /checkpoint-lock:/);
+  else await invocation;
+  if (failureMode) return { marks, writes };
   assert.equal(marks.length, 1);
   assert.equal(marks[0].status, 'recusado');
   assert.equal(marks[0].reason, 'protocol');
@@ -61,5 +69,10 @@ async function runQueue(operationId) {
 (async () => {
   await runQueue(undefined);
   await runQueue('legacy-client-id');
+  const permanent = await runQueue(undefined, 'permanent-read');
+  assert.equal(permanent.marks.length, 0, 'erro permanente de leitura termina sem retry do gatilho');
+  const locked = await runQueue(undefined, 'checkpoint-lock');
+  assert.equal(locked.marks.length, 0, 'lock transitório não consome nem marca a intenção');
   console.log('✓ fila legada sem UUID real recusada após protocolo v2, sem escrita de placar');
+  console.log('✓ applyQueuedResult só repropaga checkpoint-lock; erro permanente fica contido');
 })().catch(error => { console.error(error); process.exitCode = 1; });

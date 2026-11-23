@@ -113,6 +113,7 @@ const SUITES = [
   'tests/operation-regions-v3-config.test.js',
   'tests/operation-control-transaction.test.js',
   'tests/operation-queue-protocol.test.js',
+  'tests/queued-score-idempotency.test.js',
   'tests/operation-receipt-core.test.js',
   'tests/operation-receipt-wo-handler.test.js',
   'tests/operation-probe-readonly.test.js',

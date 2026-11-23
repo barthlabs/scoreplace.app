@@ -4703,6 +4703,7 @@ exports.applyQueuedResult = onDocumentCreated(
     const tId = event.params && event.params.tournamentId;
     const itemId = event.params && event.params.itemId;
     const snap = event.data;
+    try {
     if (!snap || !snap.exists) return;
     const item = snap.data() || {};
     const db = getFirestore();
@@ -4765,6 +4766,14 @@ exports.applyQueuedResult = onDocumentCreated(
       // de idempotência quando a porta chamável tinha aplicado e a resposta se perdeu.
       console.log(`[filaPlacar] ${tId}/${matchId} por ${actorUid} — recusado(${out.reason})`);
       await marca({ status: 'recusado', reason: out.reason });
+    }
+    } catch (error) {
+      // Só o lock curto da fotografia pede retry do gatilho. Erros permanentes
+      // ficam no log e não reaplicam uma intenção por dias; a intenção continua
+      // preservada no documento da fila para resolução operacional.
+      if (String(error && error.message || error).startsWith('checkpoint-lock:')) throw error;
+      console.error('[filaPlacar] falha fora da aplicação; intenção preservada sem retry',
+        tId, itemId, error && error.stack || error);
     }
   }
 );
