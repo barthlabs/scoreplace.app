@@ -40,6 +40,7 @@ async function buildProjectionReadOnly({ tx, db, tournamentId, split, summaryCor
   if (root.testModeEnabled === true) return { action: 'test-excluded', tournamentId, reads: 1 };
 
   let reads = 1;
+  const sourceDocuments = {};
   // montarDoBanco already translates logical parts (for example `participants`)
   // to their physical collection before invoking this callback.
   const readCollection = async (collectionName, part) => {
@@ -51,6 +52,10 @@ async function buildProjectionReadOnly({ tx, db, tournamentId, split, summaryCor
       error.code = 'SUMMARY_READ_BUDGET';
       throw error;
     }
+    sourceDocuments[collectionName] = snap.docs.map((doc) => ({
+      id: doc.id,
+      updateTime: doc.updateTime && doc.updateTime.toMillis ? doc.updateTime.toMillis() : null
+    }));
     return snap.docs.map((doc) => Object.assign({ id: doc.id }, doc.data()));
   };
 
@@ -68,6 +73,15 @@ async function buildProjectionReadOnly({ tx, db, tournamentId, split, summaryCor
       error.code = 'SUMMARY_READ_BUDGET';
       throw error;
     }
+    if (snap.size !== expected) {
+      const error = new Error(`canonical registration count mismatch: expected ${expected}, read ${snap.size}`);
+      error.code = 'SUMMARY_REGISTRATION_COUNT_MISMATCH';
+      throw error;
+    }
+    sourceDocuments.registrations = snap.docs.map((doc) => ({
+      id: doc.id,
+      updateTime: doc.updateTime && doc.updateTime.toMillis ? doc.updateTime.toMillis() : null
+    }));
     registrations = snap.docs.map((doc) => doc.data());
   }
   const H = summaryCore.helpersComInscricoes(complete, helpers, registrations);
@@ -75,12 +89,13 @@ async function buildProjectionReadOnly({ tx, db, tournamentId, split, summaryCor
   if (!next) throw new Error('summary builder returned empty projection');
   return {
     action: 'projection-built', tournamentId, next, reads,
+    sourceDocuments,
     rootUpdateTime: rootSnap.updateTime && rootSnap.updateTime.toMillis
       ? rootSnap.updateTime.toMillis() : null
   };
 }
 
-/** Commits only after a short root+summary transaction and rejects stale events. */
+/** Commits after validating the source subcollections and rejects stale events. */
 async function commitProjection({ tx, db, projection, eventTime, rehearsal, eventBefore, eventAfter }) {
   const { tournamentId } = projection;
   const rootRef = db.collection('tournaments').doc(tournamentId);
@@ -105,6 +120,20 @@ async function commitProjection({ tx, db, projection, eventTime, rehearsal, even
   const currentVersion = current && Number.isSafeInteger(current.sourceVersionMicros)
     ? current.sourceVersionMicros : -1;
   if (currentVersion > incomingVersion) return { action: 'stale-event', reads: 2 };
+
+  // The root updateTime cannot detect writes in Firestore subcollections. Re-read
+  // the exact collection snapshots in this transaction so concurrent source writes
+  // conflict with the summary commit instead of allowing an older projection through.
+  for (const [collectionName, observed] of Object.entries(projection.sourceDocuments || {})) {
+    const currentSource = await tx.get(rootRef.collection(collectionName).limit(Math.max(1, observed.length + 1)));
+    const currentDocuments = currentSource.docs.map((doc) => ({
+      id: doc.id,
+      updateTime: doc.updateTime && doc.updateTime.toMillis ? doc.updateTime.toMillis() : null
+    }));
+    if (JSON.stringify(currentDocuments) !== JSON.stringify(observed)) {
+      return { action: 'projection-stale', reads: 2 + currentDocuments.length };
+    }
+  }
 
   // A root update during the projection read means this snapshot is obsolete;
   // abort so Firestore retries this small transaction and the caller can rebuild.

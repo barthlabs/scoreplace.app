@@ -50,8 +50,16 @@ const tx = {
   delete(target) { writes.push(['delete', target.path]); docs.delete(target.path); }
 };
 const transactionOptions = [];
+let injectConcurrentMatch = false;
 db.runTransaction = async (callback, options) => {
   transactionOptions.push(options || {});
+  if (options && options.maxAttempts === 5 && injectConcurrentMatch) {
+    injectConcurrentMatch = false;
+    docs.set('tournaments/' + root.id + '/matches/m_concurrent', {
+      _chave: 'm_concurrent', _loc: { tipo: 'matches', mi: 1 },
+      jogo: { id: 'm_concurrent', p1: 'C', p2: 'D', score1: 6, score2: 3 }
+    });
+  }
   return callback(tx);
 };
 
@@ -74,6 +82,14 @@ db.runTransaction = async (callback, options) => {
   assert.equal(writes.length, 1);
   assert.equal(writes[0][2].matchesDone, 1);
   assert.equal(writes[0][2].sourceVersionMicros, Date.parse('2026-11-21T12:00:00Z') * 1000 + 1);
+
+  injectConcurrentMatch = true;
+  const reconciledConcurrentWrite = await reconcile({ db, tournamentId: root.id, split: Split,
+    summaryCore: Summary, helpers, eventTime: '2026-11-21T12:00:00.000002Z' });
+  assert.equal(reconciledConcurrentWrite.action, 'written',
+    'mudança em subcoleção durante projeção faz reler antes de gravar');
+  assert.equal(docs.get('tournaments_summary/' + root.id).matchesDone, 2,
+    'resumo final inclui a partida criada durante a primeira leitura');
 
   const locked = await reconcile({ db, tournamentId: root.id, split: Split,
     summaryCore: Summary, helpers, rehearsal: { locked: () => true } });
@@ -139,6 +155,13 @@ db.runTransaction = async (callback, options) => {
   assert.equal(noOpRefresh.action, 'already-marked');
   assert.equal(writes.length, writesBeforeIndexRefresh + 1,
     'índice atualizado não é regravado sem mudança');
+
+  root.canonicalRegistrationMigration = { fingerprint: 'native:fixture', registrationCount: 1 };
+  docs.set('tournaments/' + root.id, root);
+  await assert.rejects(() => reconcile({ db, tournamentId: root.id, split: Split,
+    summaryCore: Summary, helpers, eventTime: '2026-11-21T12:00:03Z' }),
+  (error) => error.code === 'SUMMARY_REGISTRATION_COUNT_MISMATCH',
+  'resumo não publica projeção se a coleção de inscrições diverge do total canônico');
 
   docs.delete('tournaments_summary/' + root.id);
   const missing = await markRequiresFullRead({ tx, db, tournamentId: root.id });
