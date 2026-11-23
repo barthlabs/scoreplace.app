@@ -225,11 +225,20 @@ const dashNum = (function () {
       else if (SRC_DB[i] === '}') { nivel--; if (nivel === 0) { fim = i + 1; break; } }
     }
     const corpo = SRC_DB.slice(ini, fim);
+    const hydratePos = SRC_DB.indexOf('async _loadCompleteTournamentFromServer(');
+    const hydrateBodyStart = SRC_DB.indexOf('{', hydratePos);
+    let hydrateDepth = 0, hydrateEnd = -1;
+    for (let j = hydrateBodyStart; j < SRC_DB.length; j++) {
+      if (SRC_DB[j] === '{') hydrateDepth++;
+      else if (SRC_DB[j] === '}') { hydrateDepth--; if (hydrateDepth === 0) { hydrateEnd = j + 1; break; } }
+    }
+    const hydrateMethod = SRC_DB.slice(hydratePos, hydrateEnd);
     const logs = []; const erros = [];
     const win = { _log: (...a) => logs.push(a), _warn: () => {}, _error: (...a) => erros.push(a), _noteFsReads: () => {}, _marcaResumo: () => {} };
+    win._tSplit = { partesDe: t => t._semPesados || [] };
     const ctx = { window: win, console: console, Promise: Promise, Array: Array, Object: Object, Date: Date, String: String, Number: Number };
     ctx.globalThis = ctx; vm.createContext(ctx);
-    const obj = vm.runInContext('({ ' + corpo + ' })', ctx);
+    const obj = vm.runInContext('({ ' + hydrateMethod + ', ' + corpo + ' })', ctx);
 
     const docsFalsos = (n, pref) => {
       const arr = []; for (let k = 0; k < n; k++) arr.push({ id: pref + k, data: () => ({ id: pref + k, name: 'T' + k }) });
@@ -245,6 +254,23 @@ const dashNum = (function () {
     const ultimo = logs[logs.length - 1] || [];
     ok(ultimo[1] && ultimo[1].lidos === 3 && ultimo[1].via === 'resumo',
       '  → com contagem válida no log (lidos=' + (ultimo[1] && ultimo[1].lidos) + ', via=' + (ultimo[1] && ultimo[1].via) + ')');
+
+    // Marcador sem projeção nunca pode ser usado como cartão; buscar documento canônico.
+    const marker = { id: 'fallback-1', name: 'Torneio parcial', requiresFullRead: true };
+    const snapMarcador = { size: 1, forEach: f => f({ id: 'fallback-1', data: () => ({ ...marker }) }) };
+    obj.db = { collection: (nome) => consulta(async () => (nome === 'tournaments_summary') ? snapMarcador : docsFalsos(9, 'c')) };
+    obj._tRef = id => ({ get: async () => ({ exists: id === 'fallback-1', id,
+      data: () => ({ id, name: 'Torneio raiz dividido', isPublic: true, _semPesados: ['matches'] }) }) });
+    obj._montaDeSubcolecoes = async (id, root, parts) => ({ ...root, matches: [{ id: 'm1' }], matchesTotal: 24, assembledParts: parts });
+    const hidratado = await obj.loadAllPublicTournaments({ limit: 50 });
+    ok(hidratado.tournaments.length === 1 && hidratado.tournaments[0].matchesTotal === 24 &&
+       hidratado.tournaments[0].matches.length === 1 && hidratado.tournaments[0].assembledParts[0] === 'matches',
+      'marcador público monta as partes canônicas, em vez de exibir a raiz dividida como se estivesse completa');
+    obj._tRef = () => ({ get: async () => { throw new Error('unavailable'); } });
+    obj.db = { collection: (nome) => consulta(async () => (nome === 'tournaments_summary') ? snapMarcador : docsFalsos(2, 'c')) };
+    const fallbackMarcador = await obj.loadAllPublicTournaments({ limit: 50 });
+    ok(fallbackMarcador.tournaments.length === 2 && logs[logs.length - 1][1].via === 'completo',
+      'falha ao hidratar marcador cai na consulta canônica completa sem sumir da vitrine');
 
     // O torneio público na posição 78 não pode sumir por causa do antigo teto de 50.
     const todos = docsFalsos(79, 'r');

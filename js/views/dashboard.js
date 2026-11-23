@@ -1595,7 +1595,17 @@ function renderDashboard(container) {
         window._log('[busca] servidor trouxe', novos.length, 'torneio(s) que não estavam na tela');
         if (typeof window._dashRerender === 'function') window._dashRerender({ compact: true });
         if (typeof window._applyDashSearchInPlace === 'function') window._applyDashSearchInPlace();
-      }).catch(function (e) { window._warn('[busca] servidor falhou:', e && e.message); });
+      }).catch(function (e) {
+        window._warn('[busca] servidor falhou:', e && e.message);
+        // Permite repetir o mesmo termo e deixa claro que o resultado pode
+        // estar incompleto; uma falha transitória não vira “nenhum torneio”.
+        if (String(window._dashSearch || '').trim() === termo) {
+          _buscaUltima = '';
+          if (typeof window.showNotification === 'function') {
+            window.showNotification('Busca temporariamente indisponível', 'Não foi possível atualizar os resultados. Tente novamente.', 'warning');
+          }
+        }
+      });
     }, 320);
   };
   window._applyDashLocation = function(loc) {

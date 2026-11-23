@@ -118,9 +118,10 @@ function buildSummary(t, id, H) {
   var local = String(t.venueName || t.venue || '').trim();
   var esporte = String(t.sport || '').trim();
   var participantes = _arr(t.participants);
+  var index = summaryIndexFields(t, id);
 
   return {
-    id: String(id || t.id || ''),
+    id: index.id,
 
     // ── ⭐ O QUE O CARTÃO AINDA PEDIA DO DOCUMENTO INTEIRO (2.0.90) ──────────
     // MEDIDO: dos 33 campos que `renderTournamentCard` lê, 20 já estavam aqui.
@@ -181,10 +182,10 @@ function buildSummary(t, id, H) {
     sport: esporte,
     format: String(t.format || ''),
     status: String(t.status || ''),
-    isPublic: t.isPublic === true && t.organizerOnly !== true,
-    organizerOnly: t.organizerOnly === true,
-    membersOnly: t.membersOnly === true,
-    isSandbox: t.isSandbox === true,
+    isPublic: index.isPublic,
+    organizerOnly: index.organizerOnly,
+    membersOnly: index.membersOnly,
+    isSandbox: index.isSandbox,
     venueName: local,
     venuePlaceId: String(t.venuePlaceId || ''),
     startDate: t.startDate || null,
@@ -196,19 +197,15 @@ function buildSummary(t, id, H) {
     tournamentStarted: t.tournamentStarted === true,
 
     // ── quem manda / quem está dentro (é o que responde "meus torneios") ───
-    creatorUid: String(t.creatorUid || ''),
-    adminUids: _arr(t.adminUids).map(String).filter(Boolean),
-    refereeUids: _arr(t.refereeUids).map(String).filter(Boolean),
+    creatorUid: index.creatorUid,
+    adminUids: index.adminUids,
+    refereeUids: index.refereeUids,
     coHostUids: _arr(t.coHosts).map(function (c) {
       return String((c && (c.uid || c)) || '');
     }).filter(Boolean),
     // Rascunho reservado à organização: o índice de "meus torneios" não
     // entrega o resumo aos inscritos antes da liberação explícita.
-    memberUids: (t.organizerOnly === true
-      ? _arr(t.adminUids).concat([t.creatorUid])
-      : t.membersOnly === true
-        ? _arr(t.memberUids).concat(_arr(t.adminUids), [t.creatorUid])
-        : _arr(t.memberUids)).filter(Boolean).map(String).filter(function (uid, i, all) { return all.indexOf(uid) === i; }),
+    memberUids: index.memberUids,
 
     // ── configuração que o cartão mostra ──────────────────────────────────
     enrollmentMode: String(t.enrollmentMode || ''),
@@ -238,8 +235,39 @@ function buildSummary(t, id, H) {
     logoUrl: String(t.logoUrl || ''),
 
     // ── busca no SERVIDOR (hoje ela só acha o que já está na tela) ─────────
-    nameLower: _semAcento(nome).toLowerCase(),
-    tokens: _tokens([nome, local, esporte])
+    nameLower: index.nameLower,
+    tokens: index.tokens
+  };
+}
+
+/** Índice mínimo usado tanto pelo resumo completo quanto pelo marcador de fallback. */
+function summaryIndexFields(t, id) {
+  t = t && typeof t === 'object' ? t : {};
+  var uniqueUids = function (values) {
+    return Array.from(new Set((Array.isArray(values) ? values : []).map(String).filter(Boolean)));
+  };
+  var creatorUid = String(t.creatorUid || '');
+  var name = String(t.name || '').trim();
+  var venue = String(t.venueName || t.venue || '').trim();
+  var sport = String(t.sport || '').trim();
+  var adminUids = _arr(t.adminUids).map(String).filter(Boolean);
+  var memberUids = t.organizerOnly === true
+    ? uniqueUids(adminUids.concat(creatorUid))
+    : t.membersOnly === true
+      ? uniqueUids((Array.isArray(t.memberUids) ? t.memberUids : []).concat(adminUids, creatorUid))
+      : uniqueUids(t.memberUids);
+  return {
+    id: String(id || t.id || ''),
+    creatorUid: creatorUid,
+    adminUids: adminUids,
+    memberUids: memberUids,
+    refereeUids: _arr(t.refereeUids).map(String).filter(Boolean),
+    isPublic: t.isPublic === true && t.organizerOnly !== true,
+    organizerOnly: t.organizerOnly === true,
+    membersOnly: t.membersOnly === true,
+    isSandbox: t.isSandbox === true,
+    nameLower: _semAcento(name).toLowerCase(),
+    tokens: _tokens([name, venue, sport])
   };
 }
 
@@ -289,4 +317,4 @@ function helpersDe(win) {
 
 module.exports = { buildSummary: buildSummary, summaryMudou: summaryMudou, helpersDe: helpersDe,
   canonicalCounts: canonicalCounts, validarHelpers: validarHelpers, helpersComInscricoes: helpersComInscricoes,
-  CAMPOS_QUE_IMPORTAM: CAMPOS_QUE_IMPORTAM };
+  summaryIndexFields: summaryIndexFields, CAMPOS_QUE_IMPORTAM: CAMPOS_QUE_IMPORTAM };

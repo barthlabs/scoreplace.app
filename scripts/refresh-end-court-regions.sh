@@ -32,10 +32,14 @@ diff="$(git diff --name-only "$base_commit" "$source_commit" -- functions-autodr
 expected="$(printf '%s\n' \
   functions-autodraw/court-capability-digest.js \
   functions-autodraw/index.js \
+  functions-autodraw/test-canonical-sandbox-emu.js \
+  functions-autodraw/test-draw-checkpoint-emu.js \
   functions-autodraw/test-tournament-summary-reconcile.js \
   functions-autodraw/tournament-create.js \
+  functions-autodraw/tournament-draw-checkpoint.js \
   functions-autodraw/tournament-summary-core.js \
   functions-autodraw/tournament-summary-reconcile.js \
+  functions-autodraw/vendor/tournaments-draw.js \
   functions-autodraw/vendor/tournaments-utils.js | LC_ALL=C sort)"
 [[ "$diff" == "$expected" ]] || {
   echo "backend fora do corte end-court/summaries: $diff" >&2; exit 1;

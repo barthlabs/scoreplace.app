@@ -65,7 +65,7 @@ const db = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), '
 {
   ok(/async buscarTorneios\(q, limite\)/.test(db), 'existe a busca no servidor');
   const i = db.indexOf('async buscarTorneios');
-  const corpo = db.slice(i, i + 2200);
+  const corpo = db.slice(i, i + 3200);
   ok(/tournaments_summary/.test(corpo), '⭐ e ela consulta o RESUMO (~2 KB), não o torneio inteiro');
   ok(/array-contains', termo/.test(corpo), 'casa PALAVRA inteira (tokens)');
   ok(/nameLower', '>=', termo/.test(corpo) && /\\uf8ff/.test(corpo), 'e PREFIXO (nameLower por faixa)');
@@ -73,6 +73,10 @@ const db = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), '
      '⛔ sem acento dos dois lados — procurar "clinica" tem que achar "Clínica"');
   ok(/termo\.length < 3/.test(corpo),
      'e 1-2 letras não consultam (casaria com meio banco)');
+  const iCompleto = corpo.indexOf("canônico indisponível para resumo incompleto:");
+  const hidrata = corpo.slice(iCompleto, iCompleto + 1200);
+  ok(/permission-denied/.test(hidrata) && /not-found/.test(hidrata) && /throw error/.test(hidrata),
+     'a hidratação ignora somente ausência/acesso negado; erro transitório sobe para a interface');
 }
 
 // ── ④ os DOIS caminhos de busca vão ao servidor ────────────────────────────
@@ -92,7 +96,7 @@ const db = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), '
 // ── ⑤ ⛔ a consulta não pode virar uma por TECLA ────────────────────────────
 {
   const i = dash.indexOf('window._buscaNoServidor = function');
-  const corpo = dash.slice(i, i + 1600);
+  const corpo = dash.slice(i, i + 2800);
   ok(/setTimeout\(function \(\)/.test(corpo) && /320\)/.test(corpo),
      '⭐ espera de 320ms — sem isso seria uma consulta por tecla digitada');
   ok(/clearTimeout\(_buscaTimer\)/.test(corpo), 'e a anterior é cancelada');
@@ -100,6 +104,9 @@ const db = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), '
      '⛔ resposta que chega tarde é DESCARTADA (a pessoa já mudou a busca)');
   ok(/!tem\[String\(t\.id\)\]/.test(corpo),
      '⛔ e o resultado entra sem DUPLICAR o que já estava na tela');
+  ok(/catch\(function \(e\)[\s\S]{0,500}_buscaUltima = ''/.test(corpo) &&
+     /Busca temporariamente indisponível/.test(corpo),
+     'falha temporária avisa a pessoa e permite tentar novamente com o mesmo termo');
 }
 
 // ── ⑥ o resumo carrega mesmo o que a busca precisa ─────────────────────────

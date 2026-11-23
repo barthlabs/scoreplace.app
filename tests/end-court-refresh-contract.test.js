@@ -10,6 +10,12 @@ assert.match(script,/operation-source-digest\.js functions-autodraw endMatchOnCo
 assert.match(script,/central-source-digest\.js "\$source_commit"/);
 assert.match(script,/git archive "\$source_commit" functions-autodraw/);
 assert.doesNotMatch(script,/git archive HEAD functions-autodraw/);
+for (const source of [
+  'functions-autodraw/test-canonical-sandbox-emu.js',
+  'functions-autodraw/test-draw-checkpoint-emu.js',
+  'functions-autodraw/tournament-draw-checkpoint.js',
+  'functions-autodraw/vendor/tournaments-draw.js'
+]) assert(script.includes(source),`refresh deve cobrir fonte já alterada desde a base: ${source}`);
 assert.doesNotMatch(script,/generate-operation-regions-(?:v3-)?config\.js --check/,
   'preflight não compara os JSONs públicos antigos antes da regeneração');
 assert.match(script,/checkTargetedPublication\(manifest,receipt,commit,exports\)/);

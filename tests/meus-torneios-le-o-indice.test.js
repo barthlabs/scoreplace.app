@@ -40,6 +40,8 @@ ok(/collection\('tournaments'\)/.test(corpo),
   'o caminho antigo continua existindo como rede — lista vazia por migração seria pior que lista pesada');
 ok(/_viaResumo\.length/.test(corpo) || /if \(\s*_viaResumo/.test(corpo),
   'só devolve pelo resumo quando ele trouxe algo; vazio cai na rede');
+ok(/_loadCompleteTournamentFromServer\(id\)/.test(corpo),
+  'resumo marcado hidrata raiz e subcoleções antes de mostrar o cartão');
 
 // ③ a SENTINELA marca o documento leve
 ok(/_marcaResumo/.test(corpo),

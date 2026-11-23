@@ -783,6 +783,7 @@ const SUITES = [
   // O risco tem nome — torneio sem resumo SOME da lista — então a rede (cai no caminho
   // antigo) e a sentinela são obrigatórias, e é isso que o teste trava.
   'tests/meus-torneios-le-o-indice.test.js',
+  'tests/meus-torneios-resumo-dividido.test.js',
   // ⭐ FASE 2a — o leitor sabe montar o torneio das SUBCOLEÇÕES. Ainda não muda nada:
   // enquanto o documento carregar os jogos, é dele que saem. É o que permite tirar os
   // jogos do documento torneio a torneio, sem release — e é isso que remove o TETO de 1 MB.

@@ -118,7 +118,8 @@ const lista = Array.isArray(arr) ? arr : (arr.tournaments || []);
      '⛔ e cai no caminho ANTIGO quando o resumo não responde');
   const iR = corpo.indexOf('tournaments_summary');
   const iA = corpo.indexOf("collection('tournaments')");
-  ok(iR > 0 && iA > iR, 'nessa ordem: resumo primeiro, documento completo só como rede');
+  ok(iR > 0 && (iA > iR || /_tRef\(id\)\.get\(\{ source: 'server' \}\)/.test(corpo)),
+     'resumo primeiro; documento completo entra só como fallback de rede ou marcador incompleto');
 }
 
 /* ── ⑥ enquete vai inteira MENOS O MAPA DE VOTOS (24/set/2026) ───────────────

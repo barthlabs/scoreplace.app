@@ -446,6 +446,29 @@ window.FirestoreDB = {
   /* A referência de uma SUBCOLEÇÃO do torneio, já roteada. */
   _tSub(idOuT, sub) { return this._tRef(idOuT).collection(this._subNome(idOuT, sub)); },
 
+  // Hydrate the root and its split collections for rare summary fallbacks.
+  // Reading only the root can make a split tournament look like it has no
+  // participants or matches, even though the canonical data is in subcollections.
+  async _loadCompleteTournamentFromServer(id) {
+    var snap = await this._tRef(id).get({ source: 'server' });
+    if (!snap.exists) return null;
+    var tournament = snap.data() || {};
+    tournament.id = tournament.id || snap.id || String(id);
+    var split = typeof window !== 'undefined' ? window._tSplit : null;
+    var parts = split && typeof split.partesDe === 'function' ? split.partesDe(tournament) : [];
+    if (parts.length) tournament = await this._montaDeSubcolecoes(id, tournament, parts);
+    if (typeof this._mergePlaceholderReservationsIntoRoster === 'function') {
+      tournament = this._mergePlaceholderReservationsIntoRoster(tournament);
+    }
+    try {
+      if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') {
+        window._hydrateMonarchGroups(tournament);
+      }
+    } catch (e) {}
+    return typeof window !== 'undefined' && typeof window._projectTournamentPhasesForRead === 'function'
+      ? window._projectTournamentPhasesForRead(tournament) : tournament;
+  },
+
   async saveTournament(tourData, options) {
     if (!this.db) return;
     var docId = String(tourData.id);
@@ -2450,9 +2473,8 @@ window.FirestoreDB = {
     if (_resumosFullRead.length) {
       var completos = await Promise.all(_resumosFullRead.map(async (id) => {
         try {
-          var doc = await this._tRef(id).get({ source: 'server' });
-          if (!doc.exists) return null;
-          var d = doc.data();
+          var d = await this._loadCompleteTournamentFromServer(id);
+          if (!d) return null;
           if (!d || d.testModeEnabled === true) return null;
           var hosts = Array.isArray(d.coHosts) ? d.coHosts : [];
           var relacionado = d.creatorUid === uid || d.organizerUid === uid || d.organizerId === uid ||
@@ -2461,9 +2483,9 @@ window.FirestoreDB = {
             (Array.isArray(d.refereeUids) && d.refereeUids.indexOf(uid) !== -1) ||
             hosts.some((host) => host && (host.uid || host) === uid && host.status !== 'revoked');
           if (!relacionado) return null;
-          d._docId = doc.id;
-          if (!d.id) d.id = doc.id;
-          return typeof window._projectTournamentPhasesForRead === 'function' ? window._projectTournamentPhasesForRead(d) : d;
+          d._docId = d._docId || id;
+          if (!d.id) d.id = id;
+          return d;
         } catch (error) {
           window._warn('[meus torneios] canônico indisponível para resumo incompleto:', id, error && error.message);
           var code = String(error && error.code || '').toLowerCase();
@@ -2545,9 +2567,11 @@ window.FirestoreDB = {
     if (termo.length < 3) return [];      // 1-2 letras casaria com meio banco
     var lim = Math.max(1, Math.min(40, limite || 20));
     var achados = {};
+    var fullReadIds = [];
     var colher = function (snap) {
       snap.forEach(function (doc) {
         var d = doc.data(); if (!d) return;
+        if (d.requiresFullRead === true) { fullReadIds.push(doc.id); return; }
         d._docId = doc.id; if (!d.id) d.id = doc.id;
         achados[String(d.id)] = d;
       });
@@ -2563,6 +2587,26 @@ window.FirestoreDB = {
     } catch (e) {
       window._warn('[busca] falhou:', e && e.message);
       return [];
+    }
+    if (fullReadIds.length) {
+      var fullRead = await Promise.all(fullReadIds.map(async (id) => {
+        try {
+          var d = await this._loadCompleteTournamentFromServer(id);
+          if (!d) return null;
+          if (!d || d.testModeEnabled === true) return null;
+          d._docId = d._docId || String(id);
+          return d;
+        } catch (error) {
+          window._warn('[busca] canônico indisponível para resumo incompleto:', id, error && error.message);
+          var code = String(error && error.code || '').toLowerCase().replace(/^firestore\//, '');
+          // Ausência e regras de acesso significam que esse marcador não pode
+          // ser exibido. Falhas de rede/servidor precisam chegar à UI para que
+          // a busca não esconda silenciosamente um torneio válido.
+          if (code === 'permission-denied' || code === 'not-found' || code === '7' || code === '5') return null;
+          throw error;
+        }
+      }));
+      fullRead.forEach(function (d) { if (d) achados[String(d.id)] = d; });
     }
     return Object.keys(achados).map(function (k) { return achados[k]; });
   },
@@ -2594,6 +2638,7 @@ window.FirestoreDB = {
       // novo), cai no caminho ANTIGO. Vitrine vazia por causa de migração seria pior
       // que vitrine pesada.
       var tournaments = [];
+      var _resumosFullRead = [];
       var _viaResumo = false;
       /* ⛔ R1.3 · A CONTAGEM TEM QUE SOBREVIVER AOS DOIS CAMINHOS. O log final lia
        * `snap.size` — e `snap` só nasce dentro do `if (!_viaResumo)`. Quando o caminho do
@@ -2616,6 +2661,13 @@ window.FirestoreDB = {
           if (!d) return;
           d._docId = doc.id;
           if (!d.id) d.id = doc.id;
+          // A fallback marker is an index-only document, not a card projection.
+          // Hydrate these rare cases from the canonical server document so the
+          // public list never renders a plausible but incomplete tournament.
+          if (d.requiresFullRead === true) {
+            _resumosFullRead.push(doc.id);
+            return;
+          }
           // ⭐ sentinela: se alguém pedir jogo/inscrito a este documento leve, o app
           // avisa com o rastro de quem pediu (ver `_marcaResumo` em store.js).
           if (typeof window._marcaResumo === 'function') window._marcaResumo(d);
@@ -2624,6 +2676,32 @@ window.FirestoreDB = {
         _viaResumo = tournaments.length > 0;
       } catch (eR) {
         window._warn('[vitrine] resumo indisponível, caindo no caminho antigo:', eR && eR.message);
+      }
+
+      if (_resumosFullRead.length) {
+        var fullReadFailed = false;
+        var completosResumo = await Promise.all(_resumosFullRead.map(async (id) => {
+          try {
+            var d = await this._loadCompleteTournamentFromServer(id);
+            if (!d) return null;
+            if (!d || d.isPublic !== true || d.testModeEnabled === true || d.organizerOnly === true) return null;
+            d._docId = d._docId || String(id);
+            return d;
+          } catch (error) {
+            fullReadFailed = true;
+            window._warn('[vitrine] canônico indisponível para resumo incompleto:', id, error && error.message);
+            return null;
+          }
+        }));
+        completosResumo.forEach(function (d) { if (d) tournaments.push(d); });
+        _lidos += _resumosFullRead.length;
+        _viaResumo = tournaments.length > 0;
+        if (fullReadFailed) {
+          // Don't silently hide a public tournament if its canonical fallback
+          // was temporarily unavailable; use the existing complete-list path.
+          tournaments = [];
+          _viaResumo = false;
+        }
       }
 
       if (!_viaResumo) {

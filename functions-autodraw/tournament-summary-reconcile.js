@@ -40,8 +40,9 @@ async function buildProjectionReadOnly({ tx, db, tournamentId, split, summaryCor
   if (root.testModeEnabled === true) return { action: 'test-excluded', tournamentId, reads: 1 };
 
   let reads = 1;
-  const readCollection = async (name) => {
-    const collectionName = split.colecaoDaParte(name);
+  // montarDoBanco already translates logical parts (for example `participants`)
+  // to their physical collection before invoking this callback.
+  const readCollection = async (collectionName, part) => {
     const remaining = maxDocs - reads;
     const snap = await tx.get(rootRef.collection(collectionName).limit(Math.max(1, remaining + 1)));
     reads += snap.size;
@@ -123,6 +124,9 @@ async function commitProjection({ tx, db, projection, eventTime, rehearsal, even
 /** Marks an existing summary for canonical fallback without changing its values/version. */
 async function markRequiresFullRead({ tx, db, tournamentId, rehearsal, eventBefore, eventAfter,
   summaryCore, helpers }) {
+  // Keep this fallback safe for older callers that don't inject the projection
+  // module. The marker still uses the same canonical index calculation.
+  summaryCore = summaryCore || require('./tournament-summary-core');
   const rootRef = db.collection('tournaments').doc(tournamentId);
   const summaryRef = db.collection('tournaments_summary').doc(tournamentId);
   const rootSnap = await tx.get(rootRef);
@@ -132,17 +136,38 @@ async function markRequiresFullRead({ tx, db, tournamentId, rehearsal, eventBefo
   if (rehearsalBlocks(root, rehearsal, eventBefore, eventAfter)) return { action: 'rehearsal-locked' };
   if (root.testModeEnabled === true) return { action: 'test-excluded' };
   if (!summarySnap.exists) {
-    const fallback = summaryCore.buildSummary(root, tournamentId, helpers);
-    if (!fallback) return { action: 'missing-summary' };
-    fallback.requiresFullRead = true;
-    fallback.sourceVersionMicros = 0;
-    tx.set(summaryRef, fallback);
+    // This document is only an index marker. A split tournament's root may
+    // intentionally omit matches and participants, so deriving a projection
+    // here would publish plausible but false zero counts. The client sees the
+    // marker and reads the canonical tournament from the server.
+    const index = summaryCore.summaryIndexFields(root, tournamentId);
+    tx.set(summaryRef, {
+      id: index.id,
+      name: String(root.name || ''),
+      creatorUid: index.creatorUid,
+      adminUids: index.adminUids,
+      memberUids: index.memberUids,
+      refereeUids: index.refereeUids,
+      isPublic: index.isPublic,
+      organizerOnly: index.organizerOnly,
+      membersOnly: index.membersOnly,
+      isSandbox: index.isSandbox,
+      nameLower: index.nameLower,
+      tokens: index.tokens,
+      requiresFullRead: true,
+      sourceVersionMicros: 0
+    });
     return { action: 'created-full-read-fallback' };
   }
   const current = summarySnap.data() || {};
-  if (current.requiresFullRead === true) return { action: 'already-marked' };
-  tx.update(summaryRef, { requiresFullRead: true });
-  return { action: 'requires-full-read' };
+  const index = summaryCore.summaryIndexFields(root, tournamentId);
+  const indexChanged = ['creatorUid', 'adminUids', 'memberUids', 'refereeUids', 'isPublic',
+    'organizerOnly', 'membersOnly', 'isSandbox', 'nameLower', 'tokens'].some((field) =>
+    JSON.stringify(current[field] == null ? null : current[field]) !== JSON.stringify(index[field]));
+  const markerChanged = current.requiresFullRead !== true;
+  if (!indexChanged && !markerChanged) return { action: 'already-marked' };
+  tx.update(summaryRef, Object.assign({}, index, { requiresFullRead: true }));
+  return { action: markerChanged ? 'requires-full-read' : 'index-refreshed' };
 }
 
 async function reconcile({ db, tournamentId, split, summaryCore, helpers, eventTime, rehearsal,

@@ -28,6 +28,7 @@ const docs = new Map([
     Summary.helpersComInscricoes(root, helpers, [])), { sourceVersionMicros: 100 })]
 ]);
 const writes = [];
+const collectionReads = [];
 function ref(path) {
   return { path, collection: name => ({ path: path + '/' + name,
     limit: count => ({ path: path + '/' + name, limit: count }) }) };
@@ -36,6 +37,7 @@ const db = { collection: name => ({ doc: id => ref(name + '/' + id) }) };
 const tx = {
   async get(target) {
     if (target.limit == null) return { exists: docs.has(target.path), data: () => docs.get(target.path) };
+    collectionReads.push(target.path);
     const matches = [...docs.entries()].filter(([path]) => path.startsWith(target.path + '/'))
       .slice(0, target.limit).map(([path, data]) => ({ id: path.split('/').pop(), data: () => data }));
     return { size: matches.length, docs: matches };
@@ -60,6 +62,8 @@ db.runTransaction = async (callback, options) => {
   assert.equal(writes.length, 0, 'reconciliação idempotente não regrava');
   assert.deepEqual(transactionOptions[0], { readOnly: true }, 'projeção lê snapshot sem locks de escrita');
   assert.deepEqual(transactionOptions[1], { maxAttempts: 5 }, 'commit transacional curto');
+  assert(collectionReads.includes('tournaments/' + root.id + '/inscritos'),
+    'callback lê a coleção física mapeada para participantes sem remapeá-la');
 
   docs.set('tournaments/' + root.id + '/matches/m1', {
     _chave: 'm1', _loc: { tipo: 'matches', mi: 0 }, jogo: { id: 'm1', p1: 'A', p2: 'B', score1: 6, score2: 3 }
@@ -93,7 +97,8 @@ db.runTransaction = async (callback, options) => {
   assert.equal(docs.has('tournaments_summary/' + root.id), true);
 
   const beforeFlag = docs.get('tournaments_summary/' + root.id);
-  const fullRead = await markRequiresFullRead({ tx, db, tournamentId: root.id });
+  const fullRead = await markRequiresFullRead({ tx, db, tournamentId: root.id,
+    summaryCore: Summary, helpers });
   assert.equal(fullRead.action, 'requires-full-read');
   const afterFlag = docs.get('tournaments_summary/' + root.id);
   assert.equal(afterFlag.requiresFullRead, true);
@@ -103,13 +108,55 @@ db.runTransaction = async (callback, options) => {
     'fallback não avança versão à frente de eventos em trânsito');
   assert.equal(writes.at(-1)[0], 'update', 'fallback marca o resumo sem substituir a projeção');
 
-  docs.delete('tournaments_summary/' + root.id);
-  const missing = await markRequiresFullRead({ tx, db, tournamentId: root.id,
+  const metricsBeforeIndexRefresh = {
+    matchesTotal: afterFlag.matchesTotal,
+    matchesDone: afterFlag.matchesDone,
+    competitors: afterFlag.competitors,
+    sourceVersionMicros: afterFlag.sourceVersionMicros
+  };
+  root.memberUids = ['owner', 'new-member'];
+  root.adminUids = ['admin'];
+  root.refereeUids = ['referee'];
+  docs.set('tournaments/' + root.id, root);
+  const writesBeforeIndexRefresh = writes.length;
+  const refreshedIndex = await markRequiresFullRead({ tx, db, tournamentId: root.id,
     summaryCore: Summary, helpers });
+  assert.equal(refreshedIndex.action, 'index-refreshed',
+    'marcador já existente ainda atualiza índice de membros');
+  const refreshedSummary = docs.get('tournaments_summary/' + root.id);
+  assert.deepEqual(refreshedSummary.memberUids, ['owner', 'new-member']);
+  assert.deepEqual(refreshedSummary.adminUids, ['admin']);
+  assert.deepEqual(refreshedSummary.refereeUids, ['referee']);
+  assert.deepEqual({
+    matchesTotal: refreshedSummary.matchesTotal,
+    matchesDone: refreshedSummary.matchesDone,
+    competitors: refreshedSummary.competitors,
+    sourceVersionMicros: refreshedSummary.sourceVersionMicros
+  }, metricsBeforeIndexRefresh, 'atualizar índice preserva métricas e versão de origem');
+  assert.equal(writes.length, writesBeforeIndexRefresh + 1);
+  const noOpRefresh = await markRequiresFullRead({ tx, db, tournamentId: root.id,
+    summaryCore: Summary, helpers });
+  assert.equal(noOpRefresh.action, 'already-marked');
+  assert.equal(writes.length, writesBeforeIndexRefresh + 1,
+    'índice atualizado não é regravado sem mudança');
+
+  docs.delete('tournaments_summary/' + root.id);
+  const missing = await markRequiresFullRead({ tx, db, tournamentId: root.id });
   assert.equal(missing.action, 'created-full-read-fallback');
   const fallback = docs.get('tournaments_summary/' + root.id);
   assert.equal(fallback.requiresFullRead, true, 'resumo ausente recebe marcador de leitura canônica');
   assert.equal(fallback.id, root.id, 'fallback ausente mantém metadados para localizar o torneio');
   assert.equal(fallback.sourceVersionMicros, 0, 'fallback não finge ter versão de evento');
+  const fallbackIndex = Summary.summaryIndexFields(root, root.id);
+  assert.equal(fallback.nameLower, fallbackIndex.nameLower, 'marcador mantém índice de busca por nome');
+  assert.deepEqual(fallback.tokens, fallbackIndex.tokens, 'marcador mantém tokens para busca');
+  assert.equal(Object.hasOwn(fallback, 'matchesTotal'), false,
+    'marcador de leitura completa não publica contagem parcial de jogos');
+  assert.equal(Object.hasOwn(fallback, 'matchesDone'), false,
+    'marcador de leitura completa não publica progresso parcial');
+  assert.equal(Object.hasOwn(fallback, 'competitors'), false,
+    'marcador de leitura completa não publica contagem parcial de atletas');
+  assert.deepEqual(fallback.memberUids, root.memberUids,
+    'marcador mantém os campos de índice necessários para localizar o torneio');
   console.log('✓ tournament-summary-reconcile: frescor, filtro e transação consistentes');
 })().catch(error => { console.error(error); process.exitCode = 1; });
