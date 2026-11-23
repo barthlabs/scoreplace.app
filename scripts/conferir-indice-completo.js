@@ -22,8 +22,8 @@ async function todos(colecao, tk) {
   let pageToken = '';
   do {
     const campos = colecao === 'tournaments'
-      ? ['memberUids', 'adminUids', 'creatorUid', 'organizerOnly', 'membersOnly', 'testModeEnabled']
-      : ['memberUids', 'requiresFullRead'];
+      ? ['memberUids', 'adminUids', 'creatorUid', 'organizerOnly', 'membersOnly', 'testModeEnabled', 'isSandbox', 'refereeUids']
+      : ['memberUids', 'refereeUids', 'requiresFullRead', 'isSandbox'];
     const mask = campos.map((campo) => '&mask.fieldPaths=' + encodeURIComponent(campo)).join('');
     const url = BASE + '/' + colecao + '?pageSize=300' + mask +
       (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
@@ -42,6 +42,7 @@ async function todos(colecao, tk) {
         return null;
       };
       out.set(id, { memberUids: arr('memberUids'), adminUids: arr('adminUids'),
+        refereeUids: arr('refereeUids'), isSandbox: scalar('isSandbox'),
         creatorUid: scalar('creatorUid') || '', organizerOnly: scalar('organizerOnly') === true,
         membersOnly: scalar('membersOnly') === true, testModeEnabled: scalar('testModeEnabled') === true,
         requiresFullRead: scalar('requiresFullRead') === true });
@@ -77,6 +78,16 @@ async function todos(colecao, tk) {
     return normalizar(expected) !== normalizar(novo.get(id).memberUids);
   });
   const fallback = elegiveis.filter((id) => novo.has(id) && novo.get(id).requiresFullRead);
+  const semSandboxExplicito = elegiveis.filter((id) => velho.get(id).isSandbox == null);
+  const arbitrosSemSandboxExplicito = elegiveis.filter((id) => velho.get(id).refereeUids.length && velho.get(id).isSandbox == null);
+  const arbitrosLegadosForaDaMembresia = arbitrosSemSandboxExplicito.filter((id) =>
+    velho.get(id).refereeUids.some((uid) => !velho.get(id).memberUids.includes(uid)));
+  const resumosSemSandboxExplicito = elegiveis.filter((id) => novo.has(id) && novo.get(id).isSandbox == null);
+  const arbitrosResumoSemSandboxExplicito = elegiveis.filter((id) => novo.has(id) &&
+    novo.get(id).refereeUids.length && novo.get(id).isSandbox == null &&
+    novo.get(id).refereeUids.some((uid) => !novo.get(id).memberUids.includes(uid)));
+  const refereeMismatch = elegiveis.filter((id) => novo.has(id) &&
+    normalizar(velho.get(id).refereeUids) !== normalizar(novo.get(id).refereeUids));
 
   console.log('  ✗ SEM resumo (sumiriam da lista) ... ' + faltando.length);
   faltando.slice(0, 10).forEach((id) => console.log('       ' + id));
@@ -88,9 +99,16 @@ async function todos(colecao, tk) {
     '\n         resumo : ' + normalizar(novo.get(id).memberUids).slice(0, 100)));
   console.log('  ⚠ resumo exige leitura completa .... ' + fallback.length);
   fallback.slice(0, 10).forEach((id) => console.log('       ' + id));
+  console.log('  torneios elegíveis sem isSandbox explícito ... ' + semSandboxExplicito.length);
+  console.log('  desses, com árbitros (fallback filtrado pode omitir) ... ' + arbitrosSemSandboxExplicito.length);
+  console.log('  árbitros fora de memberUids nesses legados ... ' + arbitrosLegadosForaDaMembresia.length);
+  console.log('  resumos sem isSandbox explícito ............. ' + resumosSemSandboxExplicito.length);
+  console.log('  resumos de árbitros fora de memberUids sem isSandbox ... ' + arbitrosResumoSemSandboxExplicito.length);
+  console.log('  ✗ refereeUids DIFERENTE ............. ' + refereeMismatch.length);
 
   console.log('');
-  const ok = faltando.length === 0 && divergem.length === 0 && fallback.length === 0;
+  const ok = faltando.length === 0 && divergem.length === 0 && fallback.length === 0 &&
+    refereeMismatch.length === 0 && arbitrosResumoSemSandboxExplicito.length === 0;
   console.log(ok ? '✅ todos os torneios elegíveis têm resumo e membros compatíveis'
                  : '⛔ cobertura do resumo incompleta ou marcada para leitura canônica');
   process.exit(ok ? 0 : 1);

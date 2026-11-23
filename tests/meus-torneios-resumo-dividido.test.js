@@ -26,14 +26,17 @@ const root = {
 const docs = [{ id: marker.id, data: () => ({ ...marker }) }];
 const summarySnap = { size: 1, forEach: fn => docs.forEach(fn) };
 const db = {
-  collection: name => ({
-    where: (field, op, uid) => ({
+  collection: name => {
+    const filters = [];
+    const query = {
+      where: (field, op, uid) => { filters.push({ field, op, uid }); return query; },
       get: async () => {
-        calls.push({ name, field, op, uid });
+        calls.push({ name, filters: filters.slice() });
         return name === 'tournaments_summary' ? summarySnap : { size: 0, forEach() {} };
       }
-    })
-  })
+    };
+    return query;
+  }
 };
 
 const window = {

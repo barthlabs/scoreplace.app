@@ -19,6 +19,22 @@
       ]
     },
     {
+      "collectionGroup": "tournaments_summary",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "refereeUids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "isSandbox", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tournaments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "memberUids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "testModeEnabled", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "casualMatches",
       "queryScope": "COLLECTION",
       "fields": [

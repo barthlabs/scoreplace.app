@@ -85,7 +85,7 @@ function torneio(o) {
 
 /* ── O BANCO DE MENTIRA guarda o que o Firestore guarda: MAGRO + partes em subcoleção ── */
 const PARTES_FORA = ['matches', 'participants', 'opponentHistory'];   // igual ao Confra
-const BANCO = { tournaments: {}, sandboxes: {} };
+const BANCO = { tournaments: {}, tournaments_summary: {}, sandboxes: {} };
 const PARTES = {};
 function guardar(colecao, t) {
   const partes = S.dividir(t, PARTES_FORA);
@@ -98,25 +98,40 @@ function guardar(colecao, t) {
   BANCO[colecao][String(t.id)] = magro;
   return magro;
 }
-const magroReal = guardar('tournaments', torneio({ id: 'real' }));
+const torneioReal = torneio({ id: 'real' });
+torneioReal.testModeEnabled = true;
+const magroReal = guardar('tournaments', torneioReal);
 const magroSb = guardar('sandboxes', torneio({ id: 'sb', sandbox: DONO.uid }));
 const magroAlheio = guardar('sandboxes', torneio({ id: 'sb-alheio', sandbox: 'uOutro', creatorUid: 'uOutro' }));
+BANCO.tournaments_summary.real = { id: 'real', _resumo: true, name: 'Confra equivalente', memberUids: [DONO.uid], isSandbox: false };
 
 /* ── o `db` de mentira: só a REDE. `onSnapshot` guarda o callback do ouvinte REAL ────── */
 const CB = {};
+const CB_ROOT = {};
+const CB_ERROR = {};
+const CB_QUERY = {};
 const snapDe = (colecao, ids) => {
   const docs = ids.map((id) => ({ id: String(id), exists: true, data: () => JSON.parse(JSON.stringify(BANCO[colecao][String(id)])) }));
   return { docs: docs, size: docs.length, forEach(f) { docs.forEach(f); }, docChanges() { return docs.map((d) => ({ type: 'added', doc: d })); } };
 };
 const q = (nome) => ({
-  where() { return this; }, limit() { return this; }, orderBy() { return this; },
-  onSnapshot(opts, cb) { const receber = typeof opts === 'function' ? opts : cb; (CB[nome] = CB[nome] || []).push(receber); return function () {}; },
+  filters: [],
+  where(field, op, value) { this.filters.push([field, op, value]); return this; }, limit() { return this; }, orderBy() { return this; },
+  onSnapshot(opts, cb, err) {
+    const receber = typeof opts === 'function' ? opts : cb;
+    (CB[nome] = CB[nome] || []).push(receber);
+    const sig = nome + '|' + this.filters.map((x) => x.join(':')).join('|');
+    (CB_QUERY[sig] = CB_QUERY[sig] || []).push(receber);
+    (CB_ERROR[sig] = CB_ERROR[sig] || []).push(typeof opts === 'function' ? cb : err);
+    return function () {};
+  },
   get() { return Promise.resolve(snapDe(nome, [])); },
   doc(id) { return { get: () => Promise.resolve({ exists: false, data: () => null }), collection: () => q(nome) }; }
 });
 let leituras = 0;
 W.FirestoreDB = W.FirestoreDB || {};
 W.FirestoreDB.db = { collection: (nome) => q(nome) };
+W._isTestIdentity = () => true;
 W.FirestoreDB._ehSandbox = function (idOuT) {
   if (idOuT && typeof idOuT === 'object') return idOuT.isSandbox === true;
   const id = String(idOuT || '');
@@ -127,7 +142,10 @@ W.FirestoreDB._tRef = function (idOuT) {
   const id = String((idOuT && idOuT.id) || idOuT || '');
   const col = W.FirestoreDB._ehSandbox(idOuT) ? 'sandboxes' : 'tournaments';
   const doc = BANCO[col][id];
-  return { get: () => Promise.resolve({ exists: !!doc, data: () => (doc ? JSON.parse(JSON.stringify(doc)) : null) }) };
+  return {
+    get: () => Promise.resolve({ exists: !!doc, data: () => (doc ? JSON.parse(JSON.stringify(doc)) : null) }),
+    onSnapshot(opts, cb) { const receber = typeof opts === 'function' ? opts : cb; (CB_ROOT[id] = CB_ROOT[id] || []).push(receber); return function () {}; }
+  };
 };
 W.FirestoreDB._montaDeSubcolecoes = function (id, config) {
   return W._tSplit.montarDoBanco(config, async function (colecao) {
@@ -186,12 +204,41 @@ W._sbIdsConhecidos = {};
   .forEach((m) => { W.AppStore[m] = {}; });
 W.AppStore.startRealtimeListener();
 const cbT = (CB.tournaments || [])[0];
+const cbSummary = CB.tournaments_summary || [];
 const cbSb = (CB.sandboxes || [])[0];
-ok('o ouvinte de `tournaments` abriu', typeof cbT === 'function');
+ok('os dois feeds de resumos abriram', cbSummary.length === 2);
+ok('o feed privado de teste abriu', typeof cbT === 'function');
 ok('o ouvinte de `sandboxes` abriu (é outro, em outra coleção)', typeof cbSb === 'function');
+cbSummary[0](snapDe('tournaments_summary', ['real']));
+await esperar(10);
+ok('a lista atual aparece sem esperar o feed secundário de árbitros',
+  W.AppStore.tournaments.some((t) => String(t.id) === 'real'));
+// Um cartão conhecido apenas pelo feed de árbitros não pode desaparecer nem
+// disparar navegação/aviso falso enquanto o snapshot secundário ainda está pendente.
+const refPendente = { id: 'ref-pendente', name: 'Torneio arbitrado', _resumo: true };
+W.AppStore.tournaments.push(refPendente);
+W.AppStore.tournaments.push({ id: 'sb-pendente', name: 'Sandbox conhecido', isSandbox: true, sbState: 'ready' });
+W.location.hash = '#tournaments/ref-pendente';
+avisos.length = 0;
+cbSummary[0](snapDe('tournaments_summary', ['real']));
+await esperar(10);
+ok('feed principal não remove cartão cuja fonte secundária ainda está pendente',
+  W.AppStore.tournaments.some((t) => String(t.id) === 'ref-pendente'));
+ok('sandbox conhecido não duplica durante a pendência do feed secundário',
+  W.AppStore.tournaments.filter((t) => String(t.id) === 'sb-pendente').length === 1);
+ok('feed pendente não redireciona nem avisa remoção falsa',
+  W.location.hash === '#tournaments/ref-pendente' && avisos.length === 0,
+  'hash=' + W.location.hash + ' avisos=' + JSON.stringify(avisos));
+BANCO.tournaments_summary['ref-pendente'] = {
+  id: 'ref-pendente', _resumo: true, name: 'Torneio arbitrado', memberUids: [],
+  refereeUids: [DONO.uid], isSandbox: false
+};
+cbSummary[1](snapDe('tournaments_summary', ['real', 'ref-pendente']));
 cbT(snapDe('tournaments', ['real']));
 await esperar(40);
 ok('o torneio real montou sozinho', foto('real').jogos === 115);
+ok('a fonte secundária atualiza o torneio sem duplicá-lo',
+  W.AppStore.tournaments.filter((t) => String(t.id) === 'ref-pendente').length === 1);
 
 console.log('\n── ③ snapshot de `sandboxes` → montagem das partes ──');
 cbSb(snapDe('sandboxes', ['sb']));
@@ -208,6 +255,7 @@ console.log('\n── ④ ECO COMUM de `tournaments`, com a rota do sandbox ABER
 /* ⛔ É AQUI QUE O HEAD c094737e FALHA: o eco tratava o sandbox como removido. */
 W.location.hash = '#tournaments/sb';
 avisos.length = 0;
+cbSummary.forEach((cb) => cb(snapDe('tournaments_summary', ['real'])));
 cbT(snapDe('tournaments', ['real']));
 await esperar(20);
 const f4 = foto('sb');
@@ -240,6 +288,7 @@ ok('  → e UM contextual', f5.contextual === 1);
 
 console.log('\n── ⑥ outro eco de `tournaments` depois de reabrir ──');
 avisos.length = 0;
+cbSummary.forEach((cb) => cb(snapDe('tournaments_summary', ['real'])));
 cbT(snapDe('tournaments', ['real']));
 await esperar(20);
 const f6 = foto('sb');
@@ -247,6 +296,66 @@ ok('⭐⭐ intacto: 152/115/35, fase concluída, 1 atalho, 1 contextual',
   f6.inscritos === 152 && f6.jogos === 115 && f6.religados === 35 && f6.completa === true &&
   f6.atalho === 1 && f6.contextual === 1);
 ok('⭐⭐ sem dashboard e sem aviso', W.location.hash === '#tournaments/sb' && avisos.length === 0);
+
+console.log('\n── ⑥b marcador de resumo: hidrata o canônico e nunca vira cartão ──');
+BANCO.tournaments_summary.fallback = { id: 'fallback', _resumo: true, requiresFullRead: true,
+  name: 'Resumo incompleto', memberUids: [DONO.uid], isSandbox: false };
+let fullReadCalls = 0;
+W.FirestoreDB._loadCompleteTournamentFromServer = async function (id) {
+  fullReadCalls++;
+  return { id, name: 'Resumo incompleto', memberUids: [DONO.uid], creatorUid: DONO.uid,
+    isSandbox: false, testModeEnabled: false, matches: [{ id: 'canonical-match' }] };
+};
+cbSummary.forEach((cb) => cb(snapDe('tournaments_summary', ['real', 'fallback'])));
+await esperar(20);
+const hidrReal = (W.AppStore.tournaments || []).find((t) => String(t.id) === 'fallback');
+ok('marcador nunca aparece como cartão/resumo', !hidrReal || hidrReal.requiresFullRead !== true);
+ok('resumo incompleto é substituído pelo documento canônico', fullReadCalls === 1 && !!hidrReal && hidrReal._resumo !== true && Array.isArray(hidrReal.matches) && hidrReal.matches[0].id === 'canonical-match', 'loads=' + fullReadCalls + ' encontrou=' + !!hidrReal);
+// An unchanged marker echo must reuse the canonical hydration rather than start
+// another large read or remove the hydrated card from the list.
+cbSummary.forEach((cb) => cb(snapDe('tournaments_summary', ['real', 'fallback'])));
+await esperar(20);
+const hidrEco = (W.AppStore.tournaments || []).find((t) => String(t.id) === 'fallback');
+ok('eco repetido mantém a ficha hidratada e não relê o documento', fullReadCalls === 1 && !!hidrEco && hidrEco._resumo !== true,
+  'loads=' + fullReadCalls + ' encontrou=' + !!hidrEco);
+
+// Hydrated marker entries still need the canonical realtime root listener when
+// their detail route opens; leaving that route must not restore the index marker.
+BANCO.tournaments.fallback = { id: 'fallback', name: 'Canônico inicial', creatorUid: DONO.uid,
+  memberUids: [DONO.uid], isSandbox: false, testModeEnabled: false, matches: [] };
+W.AppStore.ouvirTorneioAberto('fallback');
+const rootCb = (CB_ROOT.fallback || [])[0];
+ok('ficha hidratada abre listener canônico', typeof rootCb === 'function');
+if (rootCb) rootCb({ exists: true, data: () => Object.assign({}, BANCO.tournaments.fallback, { name: 'Canônico atualizado' }) });
+await esperar(10);
+const rootAtualizado = (W.AppStore.tournaments || []).find((t) => String(t.id) === 'fallback');
+ok('eco do documento aberto atualiza o cartão em tempo real', !!rootAtualizado && rootAtualizado.name === 'Canônico atualizado');
+W.AppStore.pararDeOuvirTorneioAberto();
+const aposSair = (W.AppStore.tournaments || []).find((t) => String(t.id) === 'fallback');
+ok('sair da ficha não restaura o marcador como cartão', !!aposSair && aposSair._resumo !== true && aposSair.requiresFullRead !== true);
+ok('sair da ficha conserva o último eco canônico', !!aposSair && aposSair.name === 'Canônico atualizado');
+W.AppStore.ouvirTorneioAberto('fallback');
+ok('reabrir ficha hidratada recria listener canônico', (CB_ROOT.fallback || []).length === 2);
+W.AppStore.pararDeOuvirTorneioAberto();
+delete BANCO.tournaments_summary.fallback;
+
+console.log('\n── ⑥c fallback: falha do feed secundário de árbitros não bloqueia a lista ──');
+let fallbackLoadCalls = 0;
+W.AppStore.loadFromFirestore = function () { fallbackLoadCalls++; };
+const summaryMemberSig = 'tournaments_summary|memberUids:array-contains:' + DONO.uid;
+const summaryMemberError = (CB_ERROR[summaryMemberSig] || []).filter(Boolean)[0];
+if (summaryMemberError) summaryMemberError(new Error('simulated summary query denial'));
+const fullMemberSig = 'tournaments|memberUids:array-contains:' + DONO.uid;
+const fullRefereeSig = 'tournaments|refereeUids:array-contains:' + DONO.uid;
+const fullMemberCb = (CB_QUERY[fullMemberSig] || []).slice(-1)[0];
+const fullRefereeError = (CB_ERROR[fullRefereeSig] || []).filter(Boolean).slice(-1)[0];
+if (fullMemberCb) fullMemberCb(snapDe('tournaments', ['real']));
+if (fullRefereeError) fullRefereeError(new Error('simulated legacy referee query denial'));
+await esperar(10);
+ok('fallback completo inicia com o feed de membros sem aguardar árbitros', typeof fullMemberCb === 'function');
+ok('falha do feed opcional de árbitros não chama recuperação global', fallbackLoadCalls === 0,
+  'loadFromFirestore=' + fallbackLoadCalls);
+ok('lista mantém o torneio trazido pelo feed principal', W.AppStore.tournaments.some((t) => String(t.id) === 'real'));
 
 console.log('\n── ⑦ remoção VERDADEIRA de sandbox: quem remove é o ouvinte de `sandboxes` ──');
 avisos.length = 0;
@@ -272,6 +381,7 @@ ok('⭐⭐ e o ouvinte deste dono NÃO o removeu (não é assunto dele)',
 console.log('\n── ⑨ remoção VERDADEIRA de torneio real: ainda remove, navega e avisa ──');
 W.location.hash = '#tournaments/real';
 avisos.length = 0;
+cbSummary.forEach((cb) => cb(snapDe('tournaments_summary', [])));
 cbT(snapDe('tournaments', []));            // o torneio real sumiu do snapshot
 await esperar(10);
 ok('⭐ saiu da memória', !W.AppStore.tournaments.some((t) => String(t.id) === 'real'));
@@ -290,12 +400,14 @@ W.AppStore.tournaments = [];
 W._sbIdsConhecidos = {};
 ['_montandoPesados', '_ultimaMontagem', '_tentativasDePartes', '_retentandoPartes', '_partesEmErro']
   .forEach((m) => { W.AppStore[m] = {}; });
+cbSummary.forEach((cb) => cb(snapDe('tournaments_summary', ['real'])));
 cbT(snapDe('tournaments', ['real']));
 cbSb(snapDe('sandboxes', ['sb']));
 await esperar(60);
 ok('controle: com as portas desligadas o sandbox ainda monta', foto('sb').jogos === 115);
 W.location.hash = '#tournaments/sb';
 avisos.length = 0;
+cbSummary.forEach((cb) => cb(snapDe('tournaments_summary', ['real'])));
 cbT(snapDe('tournaments', ['real']));
 await esperar(20);
 const fr = foto('sb');
@@ -304,6 +416,18 @@ ok('⛔ REPRODUZIDO: navegou pro dashboard', W.location.hash === '#dashboard');
 ok('⛔ REPRODUZIDO: com o aviso falso "Torneio removido"',
   avisos.length === 1 && /Torneio removido/.test(avisos[0]), JSON.stringify(avisos));
 W._idsDaColecaoTorneios = _idsReal; W._preservaSandboxes = _presReal;
+
+console.log('\n── ⑪ callback atrasado após encerrar a sessão ──');
+W.AppStore.stopRealtimeListener();
+const stoppedGeneration = W.AppStore._realtimeGeneration;
+W.AppStore.tournaments = [{ id: 'session-sentinel' }];
+cbSummary.forEach((cb) => cb(snapDe('tournaments_summary', ['real'])));
+cbT(snapDe('tournaments', ['real']));
+await esperar(10);
+ok('snapshot da sessão anterior não substitui os torneios da sessão atual',
+  W.AppStore._realtimeGeneration === stoppedGeneration && W.AppStore.tournaments.some((t) => t.id === 'session-sentinel') &&
+    !W.AppStore.tournaments.some((t) => t.id === 'real'),
+  'generation=' + W.AppStore._realtimeGeneration + ' ids=' + (W.AppStore.tournaments || []).map((t) => t.id).join(','));
 
 console.log(falhas === 0
   ? '\n✅ eco-de-tournaments-nao-expulsa-sandbox: OK'

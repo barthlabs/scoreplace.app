@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const { sourceDescriptor, sourceDigest } = require('../scripts/operation-source-digest');
+const { validateRows } = require('../scripts/check-operation-regions-mixed');
 const { legacyFixtureAvailability, legacyFixtureRows } = require('./operation-regions-legacy-fixture');
 const root = path.join(__dirname, '..');
 const script = path.join(root, 'scripts/check-operation-regions-mixed.js');
@@ -42,12 +43,13 @@ const scoreDigest = skipReason ? '' : execFileSync('node',
 
 for (const version of ['v2', 'v3']) {
   const run = (rows, allowLegacyCourt = false, extraEnv = {}, requireCurrent = false, requireScoreRefresh = false, requireCourtControlRefresh = false) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-region-test-'));
-    const file = path.join(dir, 'manifest.json');
-    fs.writeFileSync(file, JSON.stringify(rows));
-    try { return spawnSync('node', [script, version, ...(allowLegacyCourt ? ['--allow-legacy-court'] : []), ...(requireCurrent ? ['--require-current'] : []), ...(requireScoreRefresh ? ['--require-score-refresh'] : []), ...(requireCourtControlRefresh ? ['--require-court-control-refresh'] : [])],
-      { cwd: root, env: { ...process.env, ...extraEnv, SP_REGION_MANIFEST: file }, encoding: 'utf8' }); }
-    finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    try {
+      validateRows(rows, version, { allowLegacyCourt, requireCurrent, requireScoreRefresh,
+        requireCourtControlRefresh, gitEnv: { ...process.env, ...extraEnv } });
+      return { status: 0, stdout: '' };
+    } catch (error) {
+      return { status: 1, stderr: String(error && error.message || error) };
+    }
   };
   test(`${version}: corte antigo e atualização só da quadra`, { skip: historicalSkipReason }, () => {
     const original = baselineRows(version);

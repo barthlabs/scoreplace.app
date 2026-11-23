@@ -470,6 +470,7 @@ window.FirestoreDB = {
   },
 
   async saveTournament(tourData, options) {
+    if (tourData && (tourData._resumo === true || tourData.requiresFullRead === true)) throw new Error('Resumo de torneio é somente leitura; carregue o documento canônico antes de salvar.');
     if (!this.db) return;
     var docId = String(tourData.id);
     var cleanData = this._cleanUndefined(tourData);
@@ -2444,6 +2445,7 @@ window.FirestoreDB = {
         .get({ source: 'server' });
       var refereeSnapS = await this.db.collection('tournaments_summary')
         .where('refereeUids', 'array-contains', uid)
+        .where('isSandbox', '==', false)
         .get({ source: 'server' });
       try { if (window._noteFsReads) window._noteFsReads(snapS.size, 'meus-torneios-resumo'); } catch (e) {}
       var seenSummaryIds = Object.create(null);

@@ -5,11 +5,14 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const root = path.join(__dirname, '..');
+const descriptorCache = new Map();
 
 function sourceDescriptor(codebase, commit, fromGit = false) {
   if (!['functions', 'functions-autodraw'].includes(codebase) || !/^[0-9a-f]{40}$/.test(commit || '')) {
     throw new Error('codebase ou commit inválido');
   }
+  const cacheKey = `${fromGit ? 'git' : 'worktree'}:${codebase}:${commit}`;
+  if (descriptorCache.has(cacheKey)) return descriptorCache.get(cacheKey);
   const files = execFileSync('git', fromGit
     ? ['ls-tree', '-r', '-z', '--name-only', commit, '--', codebase]
     : ['ls-files', '-z', '--', codebase], { cwd: root })
@@ -18,10 +21,12 @@ function sourceDescriptor(codebase, commit, fromGit = false) {
   const readFile = file => fromGit
     ? execFileSync('git', ['show', `${commit}:${file}`], { cwd: root, maxBuffer: 16 * 1024 * 1024 })
     : fs.readFileSync(path.join(root, file));
-  return {
+  const descriptor = {
     runtime: JSON.parse(readFile(`${codebase}/package.json`)).engines.node,
     hashes: files.map(file => [file, crypto.createHash('sha256').update(readFile(file)).digest('hex')])
   };
+  descriptorCache.set(cacheKey, descriptor);
+  return descriptor;
 }
 
 function sourceDigest(target, commit, descriptor) {

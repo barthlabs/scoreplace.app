@@ -11168,7 +11168,7 @@ window._autoCloseExpiredEnrollments = function() {
   if (!window.AppStore || !window.AppStore.tournaments) return;
   var now = new Date();
   window.AppStore.tournaments.forEach(function(t) {
-    if (!t.registrationLimit) return;
+    if (!t || t._resumo === true || !t.registrationLimit) return;
     if (t.status === 'closed' || t.status === 'finished') return;
     // Skip if draw already done
     var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) ||
@@ -11986,6 +11986,9 @@ window.AppStore = {
   _syncDebounce: null,
   _loading: false,
   _realtimeUnsubscribe: null,  // Real-time listener unsubscribe function
+  _summaryUnsubs: [],
+  _summariesById: Object.create(null),
+  _hydratedSummaryTournamentsById: Object.create(null),
   _cacheKey: 'scoreplace_tournaments_cache',
 
   // --- Local Cache ---
@@ -13033,8 +13036,13 @@ window.AppStore = {
     }, 5000);
 
     var store = this;
+    // Each auth/session listener owns its callbacks. Firestore may deliver one last
+    // queued snapshot after unsubscribe; the generation prevents an old identity
+    // from replacing the current user's list or tearing down the new listeners.
+    var listenerGeneration = (Number(this._realtimeGeneration) || 0) + 1;
+    this._realtimeGeneration = listenerGeneration;
+    function _isCurrentListener() { return store._realtimeGeneration === listenerGeneration; }
     var isFirstSnapshot = true;
-    var coll = window.FirestoreDB.db.collection('tournaments');
     // v1.2.2: UID ONLY. O branch por memberEmails saiu — quem chega aqui está logado, logo
     // tem uid; era fallback pra um cenário que não existe. Pior: memberEmails NUNCA capturou
     // e-mail de slot de dupla (_computeMemberEmails só olhava o solo), então a query por
@@ -13047,7 +13055,6 @@ window.AppStore = {
       window._warn('[realtime] sem uid — listener não inicia (identidade é uid)');
       return;
     }
-    var query = coll.where('memberUids', 'array-contains', _uid);
     /* ═══ O OUVINTE DE SANDBOX É OUTRO, E EM OUTRA COLEÇÃO (FIX.SANDBOX.P2, 2.1.87) ═══
      * ⭐ O ouvinte acima fica EXCLUSIVO de torneio real: o sandbox não está mais em
      * `tournaments`, então ele nunca mais é entregue no aparelho de participante nenhum —
@@ -13123,7 +13130,7 @@ window.AppStore = {
      * `window._preservaPartesMontadas`. O nome local fica só pra não mexer nos call sites. */
     var _enxertaJogos = function (novo, velho) { return window._preservaPartesMontadas(novo, velho, true); };
 
-    function _aplicaSnapTorneios(snap) {
+    function _aplicaSnapTorneios(snap, preservarAusentesPorFeedsPendentes) {
         var _paraMontar = [];
         try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-tournaments'); } catch (e) {}
         // v1.9.81: IDs antes do rebuild — pra detectar torneios REMOVIDOS
@@ -13165,6 +13172,73 @@ window.AppStore = {
           } else {
             data = doc.data();
             _reparseados.push(data);
+          }
+          if (data && (data._resumo === true || data.requiresFullRead === true)) {
+            if (!data.id) data.id = doc.id;
+            _novoParsed[doc.id] = data;
+            if (data.requiresFullRead === true) {
+              // This is an index-only marker, never a tournament/card. Keep the
+              // last valid summary visible while the canonical document hydrates.
+              // If none exists yet, omit it until canonical data is available.
+              var _markerId = String(data.id);
+              var _hydratedById = store._hydratedSummaryTournamentsById || (store._hydratedSummaryTournamentsById = Object.create(null));
+              var _markerSignature = data.sourceVersionMicros != null
+                ? String(data.sourceVersionMicros)
+                : JSON.stringify(Object.keys(data).filter(function (key) {
+                    return key !== '_resumo' && key !== 'requiresFullRead';
+                  }).sort().map(function (key) { return [key, data[key]]; }));
+              var _hydratedRecord = _hydratedById[_markerId];
+              var _hydratedCurrent = _hydratedRecord && _hydratedRecord.signature === _markerSignature
+                ? _hydratedRecord.tournament : null;
+              var _oldSummary = (store.tournaments || []).find(function (item) {
+                return item && String(item.id) === _markerId && item._resumo === true && item.requiresFullRead !== true;
+              });
+              var _openSub = store._tournamentOpenSub;
+              var _openFull = _openSub && String(_openSub.id) === _markerId
+                ? (store.tournaments || []).find(function (item) { return item && String(item.id) === _markerId && item._resumo !== true; })
+                : null;
+              var _visibleHydrated = _openFull || _hydratedCurrent || (_hydratedRecord && _hydratedRecord.tournament);
+              if (_visibleHydrated) tournaments.push(_visibleHydrated);
+              else if (_oldSummary) tournaments.push(_oldSummary);
+              if (!store._summaryFullReadLoads) store._summaryFullReadLoads = Object.create(null);
+              if ((!_hydratedCurrent || (_hydratedRecord && _hydratedRecord.signature !== _markerSignature)) &&
+                  !store._summaryFullReadLoads[_markerId] && window.FirestoreDB &&
+                  typeof window.FirestoreDB._loadCompleteTournamentFromServer === 'function') {
+                var _loadPromise = window.FirestoreDB._loadCompleteTournamentFromServer(_markerId).then(function (full) {
+                  if (!_isCurrentListener() || !full || full.testModeEnabled === true) return;
+                  full.id = full.id || _markerId;
+                  var uidNow = store.currentUser && store.currentUser.uid;
+                  var belongs = full.creatorUid === uidNow || full.organizerUid === uidNow || full.organizerId === uidNow ||
+                    (Array.isArray(full.memberUids) && full.memberUids.indexOf(uidNow) !== -1) ||
+                    (Array.isArray(full.adminUids) && full.adminUids.indexOf(uidNow) !== -1) ||
+                    (Array.isArray(full.refereeUids) && full.refereeUids.indexOf(uidNow) !== -1) ||
+                    (Array.isArray(full.coHosts) && full.coHosts.some(function (host) { return host && (host.uid || host) === uidNow && host.status !== 'revoked'; }));
+                  if (!belongs) return;
+                  full._hidratadoDeMarcador = true;
+                  _hydratedById[_markerId] = { signature: _markerSignature, tournament: full };
+                  var list = store.tournaments || (store.tournaments = []);
+                  var index = list.findIndex(function (item) { return item && String(item.id) === _markerId; });
+                  if (index >= 0) list[index] = full; else list.push(full);
+                  store._parsedById = store._parsedById || Object.create(null);
+                  store._parsedById[_markerId] = full;
+                  if (typeof window._softRefreshView === 'function') window._softRefreshView();
+                }).catch(function (error) {
+                  if (_isCurrentListener() && window._warn) window._warn('[realtime] marcador de resumo sem leitura canônica:', _markerId, error && error.message);
+                }).then(function () {
+                  if (_isCurrentListener()) delete store._summaryFullReadLoads[_markerId];
+                });
+                store._summaryFullReadLoads[_markerId] = _loadPromise;
+              }
+              return;
+            }
+            store._summariesById = store._summariesById || Object.create(null);
+            store._summariesById[String(data.id)] = data;
+            var _hashParts = (window.location.hash || '').replace('#', '').split('/');
+            var _isOpenRoute = ['tournaments', 'bracket'].indexOf(_hashParts[0]) !== -1 && String(_hashParts[1] || '') === String(data.id);
+            var _openSubscription = store._tournamentOpenSub;
+            var _existingFull = (store.tournaments || []).find(function (item) { return item && String(item.id) === String(data.id) && item._resumo !== true; });
+            tournaments.push((_isOpenRoute || (_openSubscription && String(_openSubscription.id) === String(data.id))) && _existingFull ? _existingFull : data);
+            return;
           }
           // ⛔ doc sem os jogos NUNCA entra assim na tela — ver _enxertaJogos.
           // Enxerta do objeto que JÁ ESTÁ no store (montado), não do parse anterior:
@@ -13211,6 +13285,28 @@ window.AppStore = {
           if (data && data.isSandbox === true && !_devSeesSb) return;
           tournaments.push(data);
         });
+        /* Feeds secundários de árbitros/teste não atrasam a primeira pintura. Enquanto
+         * ainda não responderam, porém, a ausência deles não prova remoção: preserva
+         * brevemente os cartões já conhecidos. Ao chegar snapshot ou erro do feed, a
+         * próxima reconciliação volta a refletir a união autoritativa das fontes. */
+        if (preservarAusentesPorFeedsPendentes) {
+          var _idsPresentes = Object.create(null);
+          tournaments.forEach(function (t) { if (t && t.id != null) _idsPresentes[String(t.id)] = true; });
+          function _ehSandboxConhecido(t) {
+            if (!t) return false;
+            if (t.isSandbox === true) return true;
+            return !!(t.id != null && window.FirestoreDB &&
+              typeof window.FirestoreDB._ehSandbox === 'function' &&
+              window.FirestoreDB._ehSandbox(String(t.id)));
+          }
+          (store.tournaments || []).forEach(function (t) {
+            // Sandboxes têm reconciliação própria pelo feed `sandboxes` abaixo; deixá-los
+            // aqui também faria a preservação temporária duplicar o cartão.
+            if (!t || t.id == null || _ehSandboxConhecido(t) || _idsPresentes[String(t.id)]) return;
+            tournaments.push(t);
+            _idsPresentes[String(t.id)] = true;
+          });
+        }
         store._parsedById = _novoParsed;
         /* ⭐ 2.1.91: o rebuild da lista PRESERVA os sandboxes. O eco de `tournaments` não
          * fala sobre eles — nem pra remover, nem pra esvaziar. Id, partes montadas,
@@ -13218,8 +13314,8 @@ window.AppStore = {
         store.tournaments = window._preservaSandboxes(tournaments, _sbGuardados);
         // A consulta por memberUids já é a fonte do torneio para um membro.
         // Solte a escuta direta usada por quem abriu o link sem ser membro.
-        if (store._tournamentOpenSub && tournaments.some(function (t) {
-          return t && String(t.id) === store._tournamentOpenSub.id;
+        if (store._tournamentOpenSub && !store._tournamentOpenSub.member && tournaments.some(function (t) {
+          return t && t._resumo !== true && String(t.id) === store._tournamentOpenSub.id;
         })) store.pararDeOuvirTorneioAberto();
         /* ⛔ A migração pode chegar DURANTE uma tela aberta. Nesse caso o
          * listener legado de `inscritos` já está ativo; cancelá-lo no mesmo eco
@@ -13371,22 +13467,135 @@ window.AppStore = {
         // Subsequent snapshots = remote changes → soft refresh (preserve UX)
         window._softRefreshView();
     }
-    this._realtimeUnsubscribe = query
-      .onSnapshot({ includeMetadataChanges: true }, function(snap) {
-        // O IndexedDB pode responder antes da rede. Nunca use essa resposta para pintar
-        // estado operacional; aguardamos a confirmação remota, mesmo que ela só altere
-        // metadata e não tenha delta de documentos.
-        if (!window._isRemoteFirestoreSnapshot(snap)) return;
-        if (typeof window._setServerFreshness === 'function') window._setServerFreshness('current');
-        window._snapCount = (window._snapCount || 0) + 1;
-        if (window._medirTrecho) return window._medirTrecho('snapshot-torneios', function () { _aplicaSnapTorneios(snap); });
-        return _aplicaSnapTorneios(snap);
-      }, function(err) {
-        window._warn('Real-time listener error:', err);
-        if (typeof window._setServerFreshness === 'function') window._setServerFreshness('unavailable');
-        // Fallback to one-time load, que só aceita resposta do servidor.
-        store.loadFromFirestore();
+    var db = window.FirestoreDB.db;
+    var feeds = { primary: null, referees: null, developerTests: null };
+    var ready = { primary: false, referees: false, developerTests: false };
+    var developerTestsActive = !!(window._isTestIdentity && window._isTestIdentity());
+    var previousDocs = Object.create(null);
+    var activeMode = 'summary';
+    var fallbackStarted = false;
+    var sessionUnsubs = [];
+    store._summaryUnsubs = sessionUnsubs;
+    store._realtimeUnsubscribe = function () {
+      if (store._realtimeGeneration === listenerGeneration) store._realtimeGeneration++;
+      sessionUnsubs.forEach(function (un) { try { un(); } catch (e) {} });
+      if (store._summaryUnsubs === sessionUnsubs) store._summaryUnsubs = [];
+      if (store._realtimeUnsubscribe === unsubscribeSession) store._realtimeUnsubscribe = null;
+    };
+    var unsubscribeSession = store._realtimeUnsubscribe;
+
+    function _sameDoc(a, b) {
+      try { if (a && typeof a.isEqual === 'function') return a.isEqual(b); } catch (e) {}
+      return a === b;
+    }
+    function _makeCombinedSnapshot() {
+      var byId = Object.create(null);
+      // Primary member feed first; referee feed fills in the remaining documents.
+      // Referee documents may overlap members; member snapshots win, and the
+      // optional canonical developer-test document has highest precedence.
+      [feeds.referees, feeds.primary, feeds.developerTests].forEach(function (snap) {
+        if (!snap || !Array.isArray(snap.docs)) return;
+        snap.docs.forEach(function (doc) { if (doc) byId[doc.id] = doc; });
       });
+      var docs = Object.keys(byId).map(function (id) { return byId[id]; });
+      var changes = [];
+      var nextDocs = Object.create(null);
+      docs.forEach(function (doc) {
+        nextDocs[doc.id] = doc;
+        if (!previousDocs[doc.id]) changes.push({ type: 'added', doc: doc });
+        else if (!_sameDoc(previousDocs[doc.id], doc)) changes.push({ type: 'modified', doc: doc });
+      });
+      Object.keys(previousDocs).forEach(function (id) {
+        if (!nextDocs[id]) changes.push({ type: 'removed', doc: previousDocs[id] });
+      });
+      previousDocs = nextDocs;
+      return {
+        docs: docs,
+        size: docs.length,
+        metadata: { fromCache: false, hasPendingWrites: false },
+        forEach: function (fn) { docs.forEach(fn); },
+        docChanges: function () { return changes; }
+      };
+    }
+    function _applyRemoteSnapshot() {
+      if (!_isCurrentListener()) return;
+      if (activeMode === 'summary' && !ready.primary) return;
+      // The canonical member feed is sufficient for readiness. Referee-only
+      // records fill in opportunistically; a denied legacy query must not block
+      // every tournament in the dashboard.
+      if (activeMode === 'full' && !ready.primary) return;
+      var snap = _makeCombinedSnapshot();
+      var optionalFeedsPending = !ready.referees ||
+        (activeMode === 'summary' && developerTestsActive && !ready.developerTests);
+      if (typeof window._setServerFreshness === 'function') window._setServerFreshness('current');
+      window._snapCount = (window._snapCount || 0) + 1;
+      if (window._medirTrecho) return window._medirTrecho('snapshot-resumos-torneios', function () { _aplicaSnapTorneios(snap, optionalFeedsPending); });
+      return _aplicaSnapTorneios(snap, optionalFeedsPending);
+    }
+    function _listen(queryRef, key, required, mode) {
+      var unsub = queryRef.onSnapshot({ includeMetadataChanges: true }, function (snap) {
+        if (!_isCurrentListener()) return;
+        if (!window._isRemoteFirestoreSnapshot(snap)) return;
+        feeds[key] = snap;
+        ready[key] = true;
+        try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, mode === 'summary' ? 'rt-tournament-summaries' : 'rt-tournaments-fallback'); } catch (e) {}
+        _applyRemoteSnapshot();
+      }, function (err) {
+        if (!_isCurrentListener()) return;
+        if (!required) {
+          if (window._warn) window._warn('[realtime] feed opcional ' + key + ' indisponível:', err);
+          // Um erro também fecha a fonte: permite convergir com as fontes disponíveis.
+          ready[key] = true;
+          _applyRemoteSnapshot();
+          return;
+        }
+        if (mode === 'summary') {
+          if (window._warn) window._warn('[realtime] feed obrigatório de resumos indisponível; ativando fallback integral:', err);
+          _startFullFallback();
+        } else {
+          if (window._warn) window._warn('[realtime] fallback integral indisponível:', err);
+          if (typeof window._setServerFreshness === 'function') window._setServerFreshness('unavailable');
+          store.loadFromFirestore();
+        }
+      });
+      sessionUnsubs.push(unsub);
+      return unsub;
+    }
+    function _startFullFallback() {
+      if (!_isCurrentListener() || fallbackStarted) return;
+      fallbackStarted = true;
+      activeMode = 'full';
+      sessionUnsubs.forEach(function (un) { try { un(); } catch (e) {} });
+      sessionUnsubs.length = 0;
+      if (store._summaryUnsubs === sessionUnsubs) store._summaryUnsubs = sessionUnsubs;
+      feeds = { primary: null, referees: null, developerTests: null };
+      ready = { primary: false, referees: false, developerTests: !developerTestsActive };
+      previousDocs = Object.create(null);
+      if (typeof window._setServerFreshness === 'function') window._setServerFreshness('waiting');
+      _listen(db.collection('tournaments').where('memberUids', 'array-contains', _uid), 'primary', true, 'full');
+      // Legacy root tournaments may omit isSandbox; the rules default it to false.
+      // Filtering for explicit false would silently omit those referee-only records.
+      _listen(db.collection('tournaments').where('refereeUids', 'array-contains', _uid), 'referees', false, 'full');
+    }
+
+    // Two rule-compatible server feeds form the full current list. Each emits only
+    // small card projections; terminal and hidden tournament details stay unloaded.
+    try {
+      _listen(db.collection('tournaments_summary').where('memberUids', 'array-contains', _uid), 'primary', true, 'summary');
+      _listen(db.collection('tournaments_summary').where('refereeUids', 'array-contains', _uid).where('isSandbox', '==', false), 'referees', false, 'summary');
+    } catch (e) {
+      if (window._warn) window._warn('[realtime] não consegui abrir feeds de resumos; ativando fallback integral:', e);
+      _startFullFallback();
+    }
+    // The developer's private test tournament is deliberately a separate optional
+    // full-document feed. It never delays current-data readiness for regular tournaments.
+    try {
+      if (window._isTestIdentity && window._isTestIdentity()) {
+        _listen(db.collection('tournaments').where('memberUids', 'array-contains', _uid)
+          .where('testModeEnabled', '==', true), 'developerTests', false, 'summary');
+      }
+    } catch (e) { if (window._warn) window._warn('[realtime] feed opcional de teste indisponível:', e); }
+
 
     // v1.9.92: gatilho tempo-real da descoberta pública (camada ADITIVA;
     // se falhar, o polling de 25s da dashboard assume — nada quebra).
@@ -13403,29 +13612,38 @@ window.AppStore = {
     if (!id || !window.FirestoreDB || !window.FirestoreDB.db) return;
     if (this._tournamentOpenSub && this._tournamentOpenSub.id === id) return;
     this.pararDeOuvirTorneioAberto();
-    if ((this.tournaments || []).some(function (t) { return t && String(t.id) === id; })) return;
+    var memberIndex = (this.tournaments || []).findIndex(function (t) { return t && String(t.id) === id; });
+    var memberObject = memberIndex >= 0 ? this.tournaments[memberIndex] : null;
+    // An open route needs the canonical root listener even when the list already
+    // contains a summary; a complete document already has its parts listener.
+    if (memberObject && memberObject._resumo !== true && memberObject._hidratadoDeMarcador !== true) return;
     var self = this;
-    var sub = { id: id, un: null };
+    var sub = { id: id, un: null, member: memberIndex >= 0 };
     this._tournamentOpenSub = sub;
     try {
       sub.un = window.FirestoreDB._tRef(id).onSnapshot({ includeMetadataChanges: true }, function (snap) {
         if (self._tournamentOpenSub !== sub || !window._isRemoteFirestoreSnapshot(snap)) return;
         if (!snap.exists) return;
-        if ((self.tournaments || []).some(function (t) { return t && String(t.id) === id; })) {
-          self.pararDeOuvirTorneioAberto();
-          return;
-        }
         var data = snap.data();
         if (!data) return;
         if (!data.id) data.id = id;
-        var list = self.publicDiscovery || (self.publicDiscovery = []);
+        var list = sub.member ? (self.tournaments || (self.tournaments = [])) : (self.publicDiscovery || (self.publicDiscovery = []));
         var index = list.findIndex(function (t) { return t && String(t.id) === id; });
         var old = index >= 0 ? list[index] : null;
-        data = window._preservaPartesMontadas(data, old, true);
+        var oldFull = old && old._resumo !== true ? old : null;
+        data = window._preservaPartesMontadas(data, oldFull, true);
         if (typeof window._projectTournamentPhasesForRead === 'function') data = window._projectTournamentPhasesForRead(data);
+        // Keep the hydrated card in sync with the canonical listener while its
+        // detail route is open, so leaving the route cannot restore its first read.
+        if (oldFull && oldFull._hidratadoDeMarcador === true) {
+          var hydratedRecord = self._hydratedSummaryTournamentsById && self._hydratedSummaryTournamentsById[id];
+          if (hydratedRecord) hydratedRecord.tournament = data;
+          data._hidratadoDeMarcador = true;
+        }
         if (index >= 0) list[index] = data;
         else list.push(data);
-        if (old && old._resumo !== true && data._faltamPesados !== true) self.ouvirPartesDoTorneio(id);
+        if (data._faltamPesados === true && typeof self._montaPesadosQueFaltam === 'function') self._montaPesadosQueFaltam([id]);
+        else if (data._resumo !== true && !sub.partsStarted) { sub.partsStarted = true; self.ouvirPartesDoTorneio(id); }
         if (typeof window._softRefreshView === 'function') window._softRefreshView();
       }, function (err) {
         if (window._warn) window._warn('[torneio] ouvinte do detalhe falhou em ' + id, err);
@@ -13435,11 +13653,22 @@ window.AppStore = {
       if (window._warn) window._warn('[torneio] não consegui ouvir o detalhe de ' + id, e);
     }
   },
-
   pararDeOuvirTorneioAberto() {
     var sub = this._tournamentOpenSub;
     this._tournamentOpenSub = null;
     if (sub && typeof sub.un === 'function') { try { sub.un(); } catch (e) {} }
+    if (sub && sub.member) {
+      var summary = this._summariesById && this._summariesById[String(sub.id)];
+      if (summary && summary.requiresFullRead === true) summary = null;
+      var hydrated = this._hydratedSummaryTournamentsById && this._hydratedSummaryTournamentsById[String(sub.id)];
+      var index = (this.tournaments || []).findIndex(function (t) { return t && String(t.id) === String(sub.id); });
+      var current = index >= 0 ? this.tournaments[index] : null;
+      var replacement = summary || (current && current._hidratadoDeMarcador === true ? current : null) || (hydrated && hydrated.tournament);
+      if (replacement && index >= 0 && current && current._resumo !== true) {
+        this.tournaments[index] = replacement;
+        this._agendarSaveCache();
+      }
+    }
   },
 
   // v1.9.92: listener leve em `discoveryFeed`. NÃO é a fonte de dados — quando
@@ -13493,6 +13722,12 @@ window.AppStore = {
       this._realtimeUnsubscribe();
       this._realtimeUnsubscribe = null;
     }
+    (this._summaryUnsubs || []).forEach(function (un) { try { un(); } catch (e) {} });
+    this._summaryUnsubs = [];
+    // These are session-scoped full-document hydrations, not a cross-account cache.
+    this._hydratedSummaryTournamentsById = Object.create(null);
+    this._summaryFullReadLoads = Object.create(null);
+    if (window._sbUnsub) { try { window._sbUnsub(); } catch (e) {} window._sbUnsub = null; }
     if (this._discoveryUnsub) {
       this._discoveryUnsub();
       this._discoveryUnsub = null;
@@ -14357,6 +14592,10 @@ window.AppStore = {
      * significa duas coisas opostas é onde este projeto mais perde tempo.
      *
      * ⇒ agora: torneio ausente RETENTA — é espera, não resposta. E cada desistência tem voz. */
+    if (t && t._resumo === true) {
+      if (window._warn) window._warn('[torneio] listener de partes aguardando documento canônico para ' + id);
+      return;
+    }
     if (!t) {
       var _self0 = this;
       this._tentouOuvirPartes = this._tentouOuvirPartes || {};

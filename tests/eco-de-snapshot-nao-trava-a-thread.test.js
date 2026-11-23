@@ -29,7 +29,7 @@ console.log('──── eco de snapshot não trava a thread ────');
 
 const iFn = src.indexOf('function _aplicaSnapTorneios');
 ok(iFn > 0, 'o corpo do listener é uma função NOMEADA (_aplicaSnapTorneios)');
-const fim = src.indexOf('this._realtimeUnsubscribe = query', iFn);
+const fim = src.indexOf('    var db = window.FirestoreDB.db;', iFn);
 const corpo = src.slice(iFn, fim);
 
 // 1. reuso incremental
@@ -55,8 +55,8 @@ ok(/pagehide/.test(ag) && /visibilitychange/.test(ag) && /hidden/.test(ag),
 ok(/_medirTrecho\('cache-torneios'/.test(ag), 'a gravação é MEDIDA (cache-torneios)');
 
 // 4. o callback é medido
-ok(/_medirTrecho\('snapshot-torneios', function \(\) \{ _aplicaSnapTorneios\(snap\); \}\)/.test(src),
-   'o listener é MEDIDO (snapshot-torneios) — travada futura terá nome');
+ok(/_medirTrecho\('snapshot-resumos-torneios', function \(\) \{ _aplicaSnapTorneios\(snap\); \}\)/.test(src),
+   'o listener de resumos é MEDIDO — travada futura terá nome');
 
 // 5. hidratação R/R seletiva
 ok(/\(_reparseados\.length \? _reparseados : tournaments\)\.forEach/.test(corpo),
