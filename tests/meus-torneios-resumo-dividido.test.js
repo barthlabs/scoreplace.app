@@ -56,7 +56,8 @@ loader._tRef = id => ({
 });
 loader._montaDeSubcolecoes = async (id, config, parts) => {
   calls.push({ assemble: [id, config._semPesados, parts] });
-  return { ...config, participants: [{ uid: 'organizer' }], rounds: [{ matches: [{ id: 'm1' }] }] };
+  return { ...config, participants: [{ uid: 'organizer' }], rounds: [{ matches: [{ id: 'm1' }] }],
+    competitors: 1, matchesTotal: 1, matchesDone: 0 };
 };
 
 (async () => {
@@ -70,6 +71,8 @@ loader._montaDeSubcolecoes = async (id, config, parts) => {
   ok(result.length === 1 && result[0].rounds[0].matches[0].id === 'm1',
     'Meus torneios devolve jogos da subcoleção, não a raiz vazia');
   ok(result[0].participants.length === 1, 'o cartão usa inscrições montadas da parte canônica');
+  ok(result[0].matchesTotal === 1 && result[0].matchesDone === 0 && result[0].competitors === 1,
+    'o índice marcado não expõe contagens vazias: a lista devolve contagens após hidratar o canônico');
   ok(assembled && assembled.assemble[0] === 'tour_split' &&
     assembled.assemble[1].join(',') === 'matches,participants' &&
     assembled.assemble[2].join(',') === 'matches,participants',
@@ -78,6 +81,6 @@ loader._montaDeSubcolecoes = async (id, config, parts) => {
     'a raiz é lida do servidor antes de montar as partes');
   ok(calls.filter(call => call.name === 'tournaments_summary').length === 2,
     'continua consultando os índices de membros e árbitros');
-  console.log((failed ? '❌' : '✅') + ' meus-torneios-resumo-dividido: ' + (5 - failed) + '/5');
+  console.log((failed ? '❌' : '✅') + ' meus-torneios-resumo-dividido: ' + (6 - failed) + '/6');
   process.exit(failed ? 1 : 0);
 })().catch(error => { console.error(error); process.exit(1); });

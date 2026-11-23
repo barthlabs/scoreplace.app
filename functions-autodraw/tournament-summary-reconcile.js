@@ -136,6 +136,9 @@ async function markRequiresFullRead({ tx, db, tournamentId, rehearsal, eventBefo
   if (rehearsalBlocks(root, rehearsal, eventBefore, eventAfter)) return { action: 'rehearsal-locked' };
   if (root.testModeEnabled === true) return { action: 'test-excluded' };
   if (!summarySnap.exists) {
+    // This is a query-only marker, not a card projection: consumers must hydrate
+    // `requiresFullRead` from the canonical document/subcollections before rendering.
+    // Do not attach guessed progress fields (a split root can truthfully contain none).
     // This document is only an index marker. A split tournament's root may
     // intentionally omit matches and participants, so deriving a projection
     // here would publish plausible but false zero counts. The client sees the
