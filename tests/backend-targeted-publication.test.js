@@ -28,20 +28,14 @@ assert(!dry.stdout.includes('--force'), 'export sem retry não deve receber --fo
 const after = fs.existsSync(receiptPath) ? fs.readFileSync(receiptPath) : null;
 assert.deepStrictEqual(after, before);
 
-const autodrawSource = fs.readFileSync(path.join(root, 'functions-autodraw/index.js'), 'utf8');
-const retryExports = autodrawSource.split(/(?=^exports\.[A-Za-z0-9_]+\s*=)/m)
-  .filter(block => /retry:\s*true/.test(block))
-  .map(block => (block.match(/^exports\.([A-Za-z0-9_]+)\s*=/m) || [])[1])
-  .filter(Boolean);
 const wrapper = fs.readFileSync(path.join(root, 'scripts/deploy-functions.sh'), 'utf8');
-const configuredRetry = (wrapper.match(/local retry_exports='([^']+)'/) || [])[1]
-  .split(/\s+/).filter(Boolean).sort();
-assert.deepStrictEqual(configuredRetry, [...new Set(retryExports)].sort(),
-  'a lista de retry do deploy deve acompanhar exatamente os exports retry:true');
+assert(!/firebase_args\s*\+=\(.*--force/.test(wrapper), 'o comando de deploy nunca injeta --force');
+assert(!wrapper.includes('_batch_needs_retry_force'), 'nenhuma condição pode reabilitar --force');
 
 const retryDry = spawnSync('bash', ['scripts/deploy-functions.sh', 'autodraw', '--only', 'tournamentSummaryMatch', '--dry-run'], { cwd:root, encoding:'utf8' });
 assert.strictEqual(retryDry.status, 0, retryDry.stderr);
-assert.match(retryDry.stdout, /--only functions:tournamentSummaryMatch --force/);
+assert.match(retryDry.stdout, /--only functions:tournamentSummaryMatch(?:\n|$)/);
+assert(!retryDry.stdout.includes('--force'), 'nenhum alvo pode contornar o bloqueio de --force');
 const mainDry = spawnSync('bash', ['scripts/deploy-functions.sh', 'main', '--only', 'cleanupOldNotifications', '--dry-run'], { cwd:root, encoding:'utf8' });
 assert.strictEqual(mainDry.status, 0, mainDry.stderr);
 assert(!mainDry.stdout.includes('--force'), 'codebase principal nunca deve receber --force');

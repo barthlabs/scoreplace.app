@@ -130,30 +130,13 @@ selected_targets() { # $1=todos os alvos, $2=prefixo do codebase
   printf '%s' "$out"
 }
 
-_batch_needs_retry_force() { # $1=targets já validados (CSV)
-  [ "$ALVO" = "autodraw" ] && [ -n "$ONLY" ] && [ "$ALL" = "0" ] || return 1
-  local target retry_name
-  # Não herdar o IFS vírgula do loop de lotes chamador.
-  local IFS=$' \t\n'
-  local retry_exports='applyQueuedResult tournamentSummary tournamentSummaryMatch tournamentSummaryParticipant tournamentSummaryRegistration tournamentSummaryLegacyGroup'
-  IFS=',' read -r -a batch_targets <<< "$1"
-  for target in "${batch_targets[@]}"; do
-    for retry_name in $retry_exports; do
-      [ "$target" = "functions:$retry_name" ] && return 0
-    done
-  done
-  return 1
-}
-
 deploy_dir() { # $1=dir(de onde rodar o firebase) $2=targets $3=descrição $4=pkgdir(deps; default=$1)
   local dir="$1" targets="$2" desc="$3" pkgdir="${4:-$1}"
   [ -n "$targets" ] || die "$desc: nenhum export encontrado — lista de alvos vazia (abortando por segurança)"
   local n; n=$(echo "$targets" | tr ',' '\n' | wc -l | tr -d ' ')
   echo "── $desc: $n função(ões) alvejada(s)"
   if [ "$DRY" = 1 ]; then
-    local force_display=""
-    _batch_needs_retry_force "$targets" && force_display=" --force"
-    echo "   (dry-run) cd $dir && firebase deploy --project $PROJECT --non-interactive --only $targets$force_display"
+    echo "   (dry-run) cd $dir && firebase deploy --project $PROJECT --non-interactive --only $targets"
     return 0
   fi
   # As deps do CODEBASE, não as de onde o firebase roda — no principal os dois diretórios
@@ -189,9 +172,6 @@ deploy_dir() { # $1=dir(de onde rodar o firebase) $2=targets $3=descrição $4=p
 _deploy_batch() { # $1=dir $2=targets (máx. 10) $3=descrição
   local dir="$1" targets="$2" desc="$3" _rc=0 _log
   local -a firebase_args=(deploy --project "$PROJECT" --non-interactive --only "$targets")
-  # O Firebase exige --force para habilitar failure policy (retry). Com a
-  # seleção nominal validada, esta flag só alcança os alvos explícitos do lote.
-  _batch_needs_retry_force "$targets" && firebase_args+=(--force)
   _log="$(mktemp)"
   echo "   · publicando lote: $(echo "$targets" | tr ',' '\n' | wc -l | tr -d ' ') função(ões)"
   if (cd "$dir" && firebase "${firebase_args[@]}") >"$_log" 2>&1; then
