@@ -149,6 +149,7 @@ function makeService({ db, HttpsError, loadTournament }) {
     if (uid !== 'B17n7JCXYOfqahlcLZ0fKxGGyUu1') fail('permission-denied', 'Reset de torneio em teste reservado ao desenvolvedor.');
     const ref = rootRef(id), cpRef = checkpointRef(id);
     let epoch = '';
+    let initialState = '';
     await db.runTransaction(async tx => {
       const [rootSnap, manifestSnap] = await Promise.all([tx.get(ref), tx.get(cpRef)]);
       if (!rootSnap.exists) fail('not-found', 'Torneio não encontrado.');
@@ -157,6 +158,7 @@ function makeService({ db, HttpsError, loadTournament }) {
         fail('permission-denied', 'O torneio não está habilitado para preservar o sorteio em teste.');
       }
       const state = marker(t);
+      initialState = state;
       const rootEpoch = t.drawCheckpoint && t.drawCheckpoint.epoch;
       // During capture/recovery the root marker belongs to the newest draw. The
       // manifest may still point at an older, valid checkpoint until this one
@@ -180,7 +182,7 @@ function makeService({ db, HttpsError, loadTournament }) {
     });
     const rootSnap = await ref.get();
     const pendingSnapshot = await snapshotRef(id, epoch).get();
-    if (marker(rootSnap.data()) === 'resetting' && (!pendingSnapshot.exists || pendingSnapshot.data().state !== 'active')) {
+    if (initialState === 'capturing' && (!pendingSnapshot.exists || pendingSnapshot.data().state !== 'active')) {
       await capture(id, epoch, { keepLocked: true });
     }
     const cp = (await cpRef.get()).data() || {};

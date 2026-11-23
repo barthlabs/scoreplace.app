@@ -336,7 +336,7 @@ window._restoreTournamentPrePublication = function (tId) {
   var n = (typeof window._countCompetitors === 'function') ? window._countCompetitors(t).people : (t.participants || []).length;
   showAlertDialog('🔄 Resetar sorteio?',
     preserveDraw
-      ? 'Apaga jogos, placares e resultados lançados no teste e restaura exatamente a chave e os confrontos definidos no sorteio. Mantém os <strong>' + n + ' inscritos</strong>. O teste recomeça depois do sorteio.'
+      ? 'Apaga os dados do teste e restaura exatamente o torneio como estava no momento do sorteio preservado. Inscrições, duplas e configurações alteradas depois desse momento também serão revertidas. O teste recomeça depois do sorteio.'
       : 'Apaga todos os jogos, placares e resultados do teste. Mantém os <strong>' + n +
         ' inscritos</strong> e a configuração. As inscrições continuam fechadas e o torneio volta para antes do sorteio.',
     function () {
@@ -386,7 +386,7 @@ window._restoreTournamentPrePublication = function (tId) {
           }
           if (typeof showNotification === 'function') showNotification('🔄 Teste resetado',
             preserveDraw
-              ? 'A chave original do sorteio foi restaurada; placares e alterações do teste foram removidos.'
+              ? 'O estado completo do torneio no momento do sorteio foi restaurado; alterações posteriores foram revertidas.'
               : 'O torneio voltou para antes do sorteio; inscritos e configuração foram mantidos.', 'success');
         })
         .catch(function (err) {

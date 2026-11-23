@@ -106,6 +106,9 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
   var draw = fs.readFileSync(path.join(root, 'js', 'views', 'tournaments-draw.js'), 'utf8');
   var db = fs.readFileSync(path.join(root, 'js', 'firebase-db.js'), 'utf8');
   var server = fs.readFileSync(path.join(root, 'functions-autodraw', 'index.js'), 'utf8');
+  var configStart = server.indexOf('exports.updateTournamentConfiguration = onCall');
+  var configEnd = server.indexOf('exports.', configStart + 12);
+  var configServer = server.slice(configStart, configEnd);
   var resetStart = server.indexOf('exports.resetTournamentToEnrollment = onCall');
   var resetEnd = server.indexOf('// ─── Rodada extra manual', resetStart);
   var resetServer = server.slice(resetStart, resetEnd);
@@ -121,6 +124,8 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
     'a callable do codebase functions-autodraw devolve a fotografia pós-transação efetivamente persistida para a UI refletir');
   ok(/async _callFn\(name, payload, msgs\)/.test(db) && resetStart >= 0,
     'o transporte canônico e a callable de restauração existem');
+  ok(/const turningTestOff = t\.testModeEnabled === true && patch\.testModeEnabled === false;[\s\S]*?if \(turningTestOff && !Object\.prototype\.hasOwnProperty\.call\(patch, 'preserveDrawOnTestReset'\)\) \{\s*patch\.preserveDrawOnTestReset = false;\s*\}[\s\S]*?const preserveDraw =/.test(configServer),
+    'desligar teste limpa a preferência preservada antes de validar a configuração final');
   ok(/isSandboxRestore/.test(server) && /isPrePublicationRestore/.test(server) && /!isSandboxRestore && !mayRestorePrePublication/.test(server),
     'o servidor só aceita restauração de Sandbox ou a pré-publicação explicitamente habilitada');
   ok(/const mayRestorePrePublication = [\s\S]*?!t\.tournamentStarted[\s\S]*?!drawWindow\._hasAnyMatchResult\(t\)/.test(resetServer),

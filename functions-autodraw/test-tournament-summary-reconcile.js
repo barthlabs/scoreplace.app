@@ -102,5 +102,14 @@ db.runTransaction = async (callback, options) => {
   assert.equal(afterFlag.sourceVersionMicros, beforeFlag.sourceVersionMicros,
     'fallback não avança versão à frente de eventos em trânsito');
   assert.equal(writes.at(-1)[0], 'update', 'fallback marca o resumo sem substituir a projeção');
+
+  docs.delete('tournaments_summary/' + root.id);
+  const missing = await markRequiresFullRead({ tx, db, tournamentId: root.id,
+    summaryCore: Summary, helpers });
+  assert.equal(missing.action, 'created-full-read-fallback');
+  const fallback = docs.get('tournaments_summary/' + root.id);
+  assert.equal(fallback.requiresFullRead, true, 'resumo ausente recebe marcador de leitura canônica');
+  assert.equal(fallback.id, root.id, 'fallback ausente mantém metadados para localizar o torneio');
+  assert.equal(fallback.sourceVersionMicros, 0, 'fallback não finge ter versão de evento');
   console.log('✓ tournament-summary-reconcile: frescor, filtro e transação consistentes');
 })().catch(error => { console.error(error); process.exitCode = 1; });

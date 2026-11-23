@@ -6339,6 +6339,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     }
     const turningTestOn = t.testModeEnabled !== true && patch.testModeEnabled === true;
     const turningTestOff = t.testModeEnabled === true && patch.testModeEnabled === false;
+    if (turningTestOff && !Object.prototype.hasOwnProperty.call(patch, 'preserveDrawOnTestReset')) {
+      patch.preserveDrawOnTestReset = false;
+    }
     const preserveDraw = Object.prototype.hasOwnProperty.call(patch, 'preserveDrawOnTestReset')
       ? patch.preserveDrawOnTestReset : t.preserveDrawOnTestReset === true;
     const testEnabledAfter = Object.prototype.hasOwnProperty.call(patch, 'testModeEnabled')
@@ -6349,9 +6352,6 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     if (preserveDraw && hasDrawnBracket(t) &&
         !(_drawCheckpoint.marker(t) === 'active' && t.drawCheckpoint.hash)) {
       throw new HttpsError('failed-precondition', 'Ative “Preservar sorteio” antes de sortear; não há fotografia pós-sorteio disponível.');
-    }
-    if (turningTestOff && !Object.prototype.hasOwnProperty.call(patch, 'preserveDrawOnTestReset')) {
-      patch.preserveDrawOnTestReset = false;
     }
     const testVisibilityBefore = turningTestOn ? {
       isPublic: t.isPublic === true,
@@ -9980,7 +9980,8 @@ async function _markSummaryFullRead(id, cause) {
   if (!_REQUIRES_FULL_READ_WRITER) return;
   const db = getFirestore();
   const result = await db.runTransaction(async (tx) => {
-    return _summaryReconcile.markRequiresFullRead({ tx, db, tournamentId: id, rehearsal: _rehearsal });
+    return _summaryReconcile.markRequiresFullRead({ tx, db, tournamentId: id, rehearsal: _rehearsal,
+      summaryCore: _tourSummary, helpers: _tourSummary.helpersDe(drawWindow) });
   });
   console.error('[tournamentSummary] excedeu teto de leitura; fallback canônico:',
     id, result.action, cause && cause.message);
