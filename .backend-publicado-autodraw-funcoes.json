@@ -3,31 +3,31 @@
   "entries": {
     "drawRound": {
       "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
-      "deployedAt": "2026-11-22T23:54:46.491Z",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "dbe255293a5fd40f2e3eafdc3d8c30ab7d4e5428",
-      "deployedAt": "2026-11-19T11:48:20.849Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "resolvePendingDraw": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "setPendingInitialSchedule": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "getPendingInitialDraw": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
@@ -44,8 +44,8 @@
       "mode": "only"
     },
     "autoDraw": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
@@ -92,32 +92,32 @@
       "mode": "only"
     },
     "startTournament": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "applyTournamentFormat": {
-      "backendCommit": "dbe255293a5fd40f2e3eafdc3d8c30ab7d4e5428",
-      "deployedAt": "2026-11-19T11:48:20.849Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "advanceTournamentPhase": {
-      "backendCommit": "dbe255293a5fd40f2e3eafdc3d8c30ab7d4e5428",
-      "deployedAt": "2026-11-19T11:48:20.849Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "setTournamentEnrollmentStatus": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "runEnrollmentSlotsDraw": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
@@ -134,8 +134,8 @@
       "mode": "only"
     },
     "assignMatchCourt": {
-      "backendCommit": "be2deb107dba5fc0d1621afc9d6f3fb2474f29df",
-      "deployedAt": "2026-11-18T23:53:35.241Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
@@ -146,14 +146,14 @@
       "mode": "only"
     },
     "resetTournamentToEnrollment": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "applyTournamentWO": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
@@ -164,26 +164,26 @@
       "mode": "only"
     },
     "endMatchOnCourt": {
-      "backendCommit": "17302fee1f2043dc93613e4998824d2331d8ac45",
-      "deployedAt": "2026-11-22T08:55:57.341Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "applyQueuedResult": {
-      "backendCommit": "dbe255293a5fd40f2e3eafdc3d8c30ab7d4e5428",
-      "deployedAt": "2026-11-19T12:02:12.024Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "closeRound": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "setTournamentPresenceWithWOSubstitution": {
-      "backendCommit": "be2deb107dba5fc0d1621afc9d6f3fb2474f29df",
-      "deployedAt": "2026-11-18T23:53:35.241Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
@@ -194,38 +194,38 @@
       "mode": "only"
     },
     "setTournamentCategoryConfig": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "generateExtraTournamentRound": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "integrateLateEntries": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "closePhaseLeagueRound": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "setDrawBalanceChoice": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "closeExpiredEnrollment": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
@@ -284,332 +284,332 @@
       "mode": "only"
     },
     "acceptLigaSubstitutionInvite": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "addTournamentPlaceholders": {
       "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
-      "deployedAt": "2026-11-22T23:54:46.491Z",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "applyCategoryCommunicationMarkers": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "applyDrawPollResult": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "applyEnrollmentAssignments": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "applyLigaGroupWO": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "assignCompetitionTeams": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "autoAssignTournamentCategories": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "cancelDrawPreparation": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "cancelLigaSubstitutionInvites": {
       "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
-      "deployedAt": "2026-11-22T23:54:46.491Z",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "cancelTournamentPairRequest": {
       "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
-      "deployedAt": "2026-11-22T23:54:46.491Z",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "castDrawPollVote": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "closeDrawPoll": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "createDrawPoll": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "declineLigaSubstitutionInvite": {
       "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
-      "deployedAt": "2026-11-22T23:54:46.491Z",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "deduplicateTournamentParticipants": {
       "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
-      "deployedAt": "2026-11-22T23:54:46.491Z",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "deleteEmptyTournamentCategory": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "dissolveIncompleteTeams": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "drainTournamentWaitlists": {
       "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
-      "deployedAt": "2026-11-22T23:54:46.491Z",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "finishTournament": {
-      "backendCommit": "dbe255293a5fd40f2e3eafdc3d8c30ab7d4e5428",
-      "deployedAt": "2026-11-19T11:48:20.849Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "formLatePair": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "healOrphanTournamentMatchLabels": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "inviteLigaSubstitutes": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "manageWOClaim": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "markDrawPollNotificationsRead": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "mergeTournamentCategories": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "normalizeTournamentCategories": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "occupyTournamentPlaceholder": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "reconcileBracket": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "reconcileMonarchEnrollment": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "removeTournamentParticipant": {
       "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
-      "deployedAt": "2026-11-22T23:54:46.491Z",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "reopenDrawEnrollment": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "reopenDrawPoll": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "reopenEnrollmentForTarget": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "reopenTournament": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "requestParticipantMerge": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "requestTournamentPair": {
       "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
-      "deployedAt": "2026-11-22T23:54:46.491Z",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "resetTournamentCheckIn": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "resolveParticipantMerge": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "resolvePendingLateBye": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "resolvePhaseInactives": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "resolveProfileTournamentCategoryChange": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "resolveWOSubstitutionChoice": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "revertLigaGroupWO": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "setDefaultTournamentScoring": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "setDrawPreparationSuspension": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "setLateDrawDecision": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "setPhaseLateEnrollment": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "setPhasePromotion": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "setTournamentBranding": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "setTournamentFlyerPrefs": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "setTournamentWOAbsence": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "splitLatePair": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "splitTournamentParticipant": {
       "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
-      "deployedAt": "2026-11-22T23:54:46.491Z",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "syncProfileTournamentCategory": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
@@ -620,44 +620,44 @@
       "mode": "only"
     },
     "undoInferredTournamentCategoryMerge": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "undoTournamentCategoryMerge": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "undoTournamentParticipantMerge": {
-      "backendCommit": "6116d60d93a924a70f6354aa68e340a951cf9ff5",
-      "deployedAt": "2026-11-18T22:57:09.207Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "applyMonarchGroupWO": {
-      "backendCommit": "a5f138ea30cb4abb3184783390917af48b48cf97",
-      "deployedAt": "2026-11-04T02:53:54.186Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "revertMonarchGroupWO": {
-      "backendCommit": "a5f138ea30cb4abb3184783390917af48b48cf97",
-      "deployedAt": "2026-11-04T02:53:54.186Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "substituteLigaGroupDirect": {
-      "backendCommit": "a5f138ea30cb4abb3184783390917af48b48cf97",
-      "deployedAt": "2026-11-04T02:53:54.186Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
     "fillLigaGuest": {
-      "backendCommit": "a5f138ea30cb4abb3184783390917af48b48cf97",
-      "deployedAt": "2026-11-04T02:53:54.186Z",
+      "backendCommit": "058d8e006663217065c02b098fe0eeb6a723c643",
+      "deployedAt": "2026-11-23T00:09:46.991Z",
       "result": "success",
       "mode": "only"
     },
