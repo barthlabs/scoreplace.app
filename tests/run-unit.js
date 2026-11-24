@@ -2534,6 +2534,10 @@ const MEXEM_NO_REPO = [
  * ⛔ Se estas duas voltarem a falhar com "Port ... is not open", procure emulador órfão
  *      (`lsof -ti :8097`) antes de suspeitar do paralelismo. */
 const PRENDEM_PORTA = [
+  // A porta dinâmica do Firestore não isola o hub/logging compartilhado do CLI.
+  'tests/category-rotation-sliders-emulator.test.js',
+  'tests/group-category-config-emulator.test.js',
+  'tests/end-court-remaining-emulator.test.js',
   'tests/rules-e20-old-web-compat.test.js', // Firestore 8199; web 2.5.83 contra as Rules novas
   'tests/migrar-uid-jogos-e05.test.js', // Firestore Emulator e transação CAS E05
   'tests/e29-ordem-confra.test.js', // inicia Firestore Emulator para CAS do lote E29

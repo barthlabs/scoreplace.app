@@ -1346,7 +1346,7 @@
     // MÉRITO (é isso que dá as cabeças de chave).
     if (hasElimination && cfg.eliminatoria.openReiRainha && isDupla) {
       var eRR = cfg.eliminatoria;
-      var perGroupRR = (isGroupRotation(cfg.parceria) || cfg.grupos > 1 || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) && cfg.classifScope === 'per_group';
+      var perGroupRR = (isGroupRotation(cfg.parceria) || cfg.grupos > 1 || cfg.groupCategoryRules?.length > 0) && cfg.classifScope === 'per_group';
       var destsRR = _lineDests(eRR.linhas);
       var mapClassif = !!eRR.qualifyAll
         ? destsRR.map(function (dst, di) { return { dest: dst, rankFrom: 1, rankTo: 999, label: (eRR.nomes && eRR.nomes[di]) || '' }; })
@@ -1392,7 +1392,7 @@
       // grupo" não significa nada — aí continua valendo o ranking geral plano.
       // [[project_formato_da_partida_por_fase]] · [[feedback_behavior_is_pure_function_of_config]]
       var _rrRodadaUnica = (cfg.parceria === 'rei_rainha') && (((cfg.rodadas || {}).n || 1) === 1);
-      var perGroup = _rrRodadaUnica || ((isGroupRotation(cfg.parceria) || cfg.grupos > 1 || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) && cfg.classifScope === 'per_group');
+      var perGroup = _rrRodadaUnica || ((isGroupRotation(cfg.parceria) || cfg.grupos > 1 || cfg.groupCategoryRules?.length > 0) && cfg.classifScope === 'per_group');
       var nLines = e.linhas;
       var dests = _lineDests(nLines);
       var topN = cfg.classificados;            // quantos classificam = valor do SLIDER
