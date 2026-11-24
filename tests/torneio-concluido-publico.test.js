@@ -92,6 +92,13 @@ assert(!remoteCalls.includes('resetTournamentToEnrollment'), 'ação antiga não
 rehearsed.isPublic = false; rehearsed.organizerOnly = true;
 const privateTest = box();
 W.renderTournaments(privateTest, rehearsed.id);
-assert(privateTest.innerHTML.includes('Resetar teste'), 'reset de ensaio segue disponível no teste privado');
+assert(!privateTest.innerHTML.includes('_realTournamentRehearsalAction'), 'ensaio ativo não oferece reset antigo');
+W._isDeveloperIdentity = () => true;
+rehearsed.rehearsal.state = 'resetting';
+W.renderTournaments(privateTest, rehearsed.id);
+assert(privateTest.innerHTML.includes('_realTournamentRehearsalAction'), 'reset interrompido no teste privado pode ser retomado');
+rehearsed.isPublic = true;
+W.renderTournaments(privateTest, rehearsed.id);
+assert(!privateTest.innerHTML.includes('_realTournamentRehearsalAction'), 'torneio público mantém a restrição da callable de recuperação');
 
 console.log('✅ torneio concluído: classificação pública e operação encerrada');

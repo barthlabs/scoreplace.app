@@ -432,45 +432,7 @@ const { chromium } = require('@playwright/test');
     const closeFirstPopup = popup.waitForEvent('close');
     await page.evaluate(() => window._tvLiveToggle());
     await closeFirstPopup;
-    await page.evaluate(() => {
-      Object.defineProperty(window.screen, 'isExtended', { configurable:true, value:false });
-      window.getScreenDetails = async () => ({ screens:[
-        { label:'Principal', isPrimary:true, availLeft:0, availTop:0, availWidth:1400, availHeight:1000, width:1400, height:1000 },
-        { label:'Projetor', isPrimary:false, availLeft:1400, availTop:0, availWidth:1280, availHeight:720, width:1280, height:720 }
-      ] });
-    });
-    await page.locator('#open-tv-test').click();
-    await page.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
-    assert.equal(await page.getByRole('button', { name:/Tela principal.*Principal/ }).count(), 1);
-    assert.equal(await page.getByRole('button', { name:/Tela secundária.*Projetor/ }).count(), 1,
-      'a lista da API prevalece mesmo quando isExtended informa falso');
-    const secondaryPopupPromise = page.waitForEvent('popup');
-    await page.getByRole('button', { name:/Tela secundária.*Projetor/ }).click();
-    const secondPopup = await secondaryPopupPromise;
-    await secondPopup.waitForSelector('#tv-root');
-    assert.equal(await page.evaluate(() => document.fullscreenElement), null,
-      'abrir na tela secundária não desloca a tela de controle');
-    assert.match(await page.evaluate(() => window._tvLiveWindow ? 'active' : ''), /active/);
-    assert.equal(await secondPopup.locator('#tv-exit-action').count(), 0,
-      'a apresentação não mostra Sair da TV');
-    const closeSecondPopup = secondPopup.waitForEvent('close');
-    await page.evaluate(() => window._tvLiveToggle());
-    await closeSecondPopup;
-    await page.evaluate(() => { window.getScreenDetails = async () => ({ screens:[
-      { label:'Principal', isPrimary:true, availLeft:0, availTop:0, availWidth:1400, availHeight:1000, width:1400, height:1000 }
-    ] }); });
-    await page.locator('#open-tv-test').click();
-    await page.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
-    assert.equal(await page.getByRole('button', { name:/Tela secundária/ }).count(), 0);
-    await page.evaluate(() => { window.getScreenDetails = async () => ({ screens:[
-      { label:'Principal', isPrimary:true, width:1400, height:1000 },
-      { label:'Projetor', isPrimary:false, width:1280, height:720 }
-    ] }); });
-    await page.getByRole('button', { name:'Detectar novamente' }).click();
-    assert.equal(await page.getByRole('button', { name:/Tela secundária.*Projetor/ }).count(), 1,
-      'a lista pode ser atualizada quando o HDMI aparece depois da primeira leitura');
-    await page.getByRole('button', { name:'Cancelar' }).click();
-    await page.evaluate(() => { window.getScreenDetails = undefined; });
+    // Seleção e redetecção de monitores no documento filho são testadas em tv-live-monitor-picker.test.js.
     await page.evaluate(() => {
       const actualMatchMedia = window.matchMedia.bind(window);
       window.matchMedia = query => query === '(display-mode: standalone)'

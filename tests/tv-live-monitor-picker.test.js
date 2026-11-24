@@ -11,7 +11,7 @@ const { chromium } = require('@playwright/test');
     const origin = 'https://tv.example.test';
     const { targetInfo } = await cdp.send('Target.getTargetInfo');
     const permission = { permission:{ name:'window-management' }, origin, browserContextId:targetInfo.browserContextId };
-    await cdp.send('Emulation.addScreen', { left:1600, top:0, width:1280, height:720, label:'HDMI virtual' });
+    const { screenInfo } = await cdp.send('Emulation.addScreen', { left:1600, top:0, width:1280, height:720, label:'HDMI virtual' });
     await cdp.send('Browser.setPermission', { ...permission, setting:'granted' });
     await context.route(origin + '/**', route => route.request().resourceType() === 'script'
       ? route.fulfill({ path:'js/domain/match-timing.js', contentType:'application/javascript' })
@@ -38,6 +38,14 @@ const { chromium } = require('@playwright/test');
     assert.equal(await page.evaluate(() => !!document.fullscreenElement), false);
     assert.equal(new URL(page.url()).pathname, '/');
     await tv.close();
+    await cdp.send('Emulation.removeScreen', { screenId:screenInfo.id });
+    const hotplug = await openTv();
+    await hotplug.getByRole('button', { name:'Detectar novamente' }).waitFor();
+    assert.equal(await hotplug.locator('[data-tv-monitor="1"]').count(), 0);
+    await cdp.send('Emulation.addScreen', { left:1600, top:0, width:1280, height:720, label:'Projetor' });
+    await hotplug.getByRole('button', { name:'Detectar novamente' }).click();
+    await hotplug.getByRole('button', { name:/Projetor/ }).waitFor();
+    await hotplug.close();
     await cdp.send('Browser.setPermission', { ...permission, setting:'denied' });
     const manual = await openTv();
     await manual.locator('[data-tv-monitor="manual"]').click();

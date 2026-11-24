@@ -3,8 +3,8 @@ const root=path.join(__dirname,'../');
 const source=fs.readFileSync(root+'js/views/create-tournament.js','utf8');
 const storeSource=fs.readFileSync(root+'js/store.js','utf8');
 const storeMethod=storeSource.slice(storeSource.indexOf('  addTournament(data) {'),storeSource.indexOf('\n  logAction(',storeSource.indexOf('  addTournament(data) {'))).replace(/,\s*$/,'');
-let handler,branding,discard,askBalance,scoring,chooseCover;
-function visit(n){if(!n||typeof n!=='object')return;if(n.type==='FunctionDeclaration'&&n.id&&n.id.name==='_perguntarEquilibrio')askBalance=source.slice(n.start,n.end);if(n.type==='AssignmentExpression'){const left=source.slice(n.left.start,n.left.end);if(left==='window._saveTournamentClickHandler')handler=source.slice(n.start,n.end)+';';if(left==='window._readTournamentBrandingPatch')branding=source.slice(n.start,n.end)+';';if(left==='window._discardCreateTournament')discard=source.slice(n.start,n.end)+';';if(left==='window._maybeShowScoringReconcile')scoring=source.slice(n.start,n.end)+';';if(left==='window._chooseCoverMode')chooseCover=source.slice(n.start,n.end)+';';}for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object')visit(v);}}
+let testSettings,handler,branding,discard,askBalance,scoring,chooseCover;
+function visit(n){if(!n||typeof n!=='object')return;if(n.type==='FunctionDeclaration'&&n.id?.name==='editedTestSettings')testSettings=source.slice(n.start,n.end);if(n.type==='FunctionDeclaration'&&n.id&&n.id.name==='_perguntarEquilibrio')askBalance=source.slice(n.start,n.end);if(n.type==='AssignmentExpression'){const left=source.slice(n.left.start,n.left.end);if(left==='window._saveTournamentClickHandler')handler=source.slice(n.start,n.end)+';';if(left==='window._readTournamentBrandingPatch')branding=source.slice(n.start,n.end)+';';if(left==='window._discardCreateTournament')discard=source.slice(n.start,n.end)+';';if(left==='window._maybeShowScoringReconcile')scoring=source.slice(n.start,n.end)+';';if(left==='window._chooseCoverMode')chooseCover=source.slice(n.start,n.end)+';';}for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object')visit(v);}}
 visit(acorn.parse(source,{ecmaVersion:'latest'}));
 (async()=>{const b=await chromium.launch();try{const p=await b.newPage();await p.setContent('<form id="form-create-tournament"></form><button id="btn-save-tournament">Salvar</button>');
 await p.evaluate((src)=>{
@@ -23,7 +23,7 @@ await p.evaluate((src)=>{
  window._error=(...x)=>window._notes.push(x.map(y=>String(y)));
  window.AppStore={currentUser:{uid:'owner'},tournaments:[{id:'e',name:'Antigo',format:'Eliminatórias Simples'}],addTournament:async data=>{window._sent=data;return data.id||'CREATED';}};
 },handler);
-await p.addScriptTag({content:fs.readFileSync(root+'js/views/format2.js','utf8')});await p.addScriptTag({content:askBalance+';'+scoring+branding+handler+discard+chooseCover});
+await p.addScriptTag({content:fs.readFileSync(root+'js/views/format2.js','utf8')});await p.addScriptTag({content:testSettings+';'+askBalance+';'+scoring+branding+handler+discard+chooseCover});
 await p.addScriptTag({content:'window._actualStoreAdd=({' + storeMethod + '}).addTournament;'});
 await p.evaluate(()=>{window._realMaybeShowScoringReconcile=window._maybeShowScoringReconcile;window._maybeShowScoringReconcile=()=>false;});
 await p.evaluate(()=>{
@@ -45,7 +45,7 @@ await p.evaluate(()=>window._saveTournamentClickHandler());
 assert.deepEqual(await p.evaluate(()=>Object.keys(window._sent).sort()),['id','logoData'],
  'salvar novo logo envia só o logo, sem grade, jogos ou campos da ficha');
 assert(await p.evaluate(()=>window._notes.some(n=>n[0]==='Personalização salva')));
-await p.evaluate(()=>{document.getElementById('tourn-logo-data').value='';window._notes=[];});
+await p.evaluate(()=>{document.getElementById('tourn-logo-data').value='';window._notes=[];window._sent=undefined;});
 await p.evaluate(()=>window._saveTournamentClickHandler());
 const edited=await p.evaluate(()=>({sent:window._sent,notes:window._notes}));
 assert.equal(edited.sent.id,'e','edição envia ID: sem ele o store criava outro torneio');
