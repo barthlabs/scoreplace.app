@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "backendCommit": "b7b63e146ba02997837d4e2ef04a1b12d5280ef9",
+  "backendCommit": "b159a697d5e5cbe2f5db805ae7d1e3cfd9e7bcb8",
   "scopeNote": "Resumos atuais do painel, criação atômica de resumos e reconciliação; controle end-court validado com os mesmos sete fontes centrais.",
   "functions": [
     "createTournament",
