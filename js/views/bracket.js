@@ -394,13 +394,7 @@ function _limparCamadasTransitóriasDaChave(container) {
     // abas. Antes de apagar a raiz da chave, devolva cada wrapper ao seu
     // placeholder; caso contrário um save de placar no meio da agenda deixaria
     // os cards vivos fora do container que a nova pintura substitui.
-    try { _bracketGeneralView(root, false); } catch (eG) {}
-    var generalView = root._bracketGeneralView;
-    if (generalView && generalView.parentNode) generalView.parentNode.removeChild(generalView);
-    var operationsStrip = root._bracketOperationsStrip;
-    if (operationsStrip && operationsStrip.parentNode) operationsStrip.parentNode.removeChild(operationsStrip);
-    var operationsProgress = root._bracketOperationsProgress;
-    if (operationsProgress && operationsProgress.parentNode) operationsProgress.parentNode.removeChild(operationsProgress);
+    _bracketDisposeOperationalRoot(root);
     // A busca vive dentro da navegação, que é irmã do container da chave.
     // Recolocá-la no host antes de remover a navegação mantém o mesmo input
     // disponível para a remontagem seguinte, inclusive depois de salvar placar.
@@ -421,7 +415,7 @@ function _limparCamadasTransitóriasDaChave(container) {
   // nós órfãos de uma pintura anterior antes de montar a próxima.
   var detail = container.closest && container.closest('#view-container');
   if (detail) detail.querySelectorAll('[data-bracket-operations-strip], [data-bracket-general-view], [data-bracket-operations-progress]').forEach(function (surface) {
-    surface.remove();
+    _bracketDisposeOperationalSurface(surface);
   });
 }
 window._limparCamadasTransitóriasDaChave = _limparCamadasTransitóriasDaChave;
@@ -1041,9 +1035,7 @@ function _bracketFindTabsRoot(host, scope, tournamentId) {
   var root = candidates[0] || null;
   for (var i = 1; i < candidates.length; i++) {
     if (candidates[i]._bracketRoundHeadingPortal) candidates[i]._bracketRoundHeadingPortal.remove();
-    if (candidates[i]._bracketGeneralView) candidates[i]._bracketGeneralView.remove();
-    if (candidates[i]._bracketOperationsStrip) candidates[i]._bracketOperationsStrip.remove();
-    if (candidates[i]._bracketOperationsProgress) candidates[i]._bracketOperationsProgress.remove();
+    _bracketDisposeOperationalRoot(candidates[i]);
     candidates[i].remove();
   }
   return root;
@@ -1563,9 +1555,59 @@ window._bracketOperationsSimulate = async function (tId, categoryFilter) {
   return done === games.length;
 };
 
-function _bracketReconcileOperationalOrder(root) {
-  if (!root) return;
+function _bracketOperationalDetailCard(root) {
+  var detail = root.closest('#view-container');
+  if (detail) return detail.querySelector('#tourn-grid-container');
   var card = document.getElementById('tourn-grid-container');
+  return card && !card.closest('#view-container') ? card : null;
+}
+
+function _bracketDisposeOperationalSurface(surface, root) {
+  if (!surface) return;
+  var owner = surface._bracketOperationsOwner;
+  if (owner && owner !== root && owner.isConnected && !owner._bracketTornDown) return;
+  if (surface._spOperationsOnResize) window.removeEventListener('resize', surface._spOperationsOnResize);
+  clearTimeout(surface._spOperationsResizeTimer);
+  surface._spOperationsResizeTimer = null;
+  if (surface._spNextScrollRestoreObserver) surface._spNextScrollRestoreObserver.disconnect();
+  if (surface._spSeriesLabelObserver) surface._spSeriesLabelObserver.disconnect();
+  surface._spNextScrollRestoreObserver = null;
+  surface._spSeriesLabelObserver = null;
+  if (owner) {
+    if (owner._bracketOperationsStrip === surface) owner._bracketOperationsStrip = null;
+    if (owner._bracketOperationsProgress === surface) owner._bracketOperationsProgress = null;
+    if (owner._bracketGeneralView === surface) owner._bracketGeneralView = null;
+  }
+  surface._bracketOperationsOwner = null;
+  surface.remove();
+}
+
+function _bracketDisposeOperationalRoot(root) {
+  root._bracketTornDown = true;
+  if (root._bracketOperationalOrderFrame != null) cancelAnimationFrame(root._bracketOperationalOrderFrame);
+  root._bracketOperationalOrderFrame = null;
+  if (root._bracketGeneralEntries && root._bracketGeneralEntries.length) _bracketRestoreGeneralEntries(root);
+  _bracketDisposeOperationalSurface(root._bracketGeneralView, root);
+  _bracketDisposeOperationalSurface(root._bracketOperationsStrip, root);
+  _bracketDisposeOperationalSurface(root._bracketOperationsProgress, root);
+  root._bracketGeneralView = null;
+  root._bracketOperationsStrip = null;
+  root._bracketOperationsProgress = null;
+}
+
+function _bracketAdoptOperationalSurface(root, key, surface) {
+  var previous = surface._bracketOperationsOwner;
+  if (previous && previous !== root) {
+    if (previous[key] === surface) previous[key] = null;
+    if (surface._spAdoptOperationsRoot) surface._spAdoptOperationsRoot(root);
+  }
+  surface._bracketOperationsOwner = root;
+  root[key] = surface;
+}
+
+function _bracketReconcileOperationalOrder(root) {
+  if (!root || !root.isConnected || root._bracketTornDown) return;
+  var card = _bracketOperationalDetailCard(root);
   var strip = root._bracketOperationsStrip;
   var progress = root._bracketOperationsProgress;
   var general = root._bracketGeneralView;
@@ -2430,7 +2472,7 @@ window._bracketOperationsRefresh = function (t, root) {
   root = root || Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
     return t && node.getAttribute('data-tournament-id') === String(t.id);
   });
-  if (!root || !t || root.getAttribute('data-tournament-id') !== String(t.id)) return;
+  if (!root || !root.isConnected || root._bracketTornDown || !t || root.getAttribute('data-tournament-id') !== String(t.id)) return;
   // A raiz das abas pode ser reconstruída durante um refresh enquanto a faixa
   // operacional continua como irmã do container. Se a nova raiz não herdou a
   // referência JS, criar outra seção em cada atualização deixa cópias visíveis
@@ -2445,37 +2487,30 @@ window._bracketOperationsRefresh = function (t, root) {
   var existing = root._bracketOperationsStrip;
   if (!existing || !existing.isConnected || strips.indexOf(existing) === -1) existing = strips[0] || null;
   strips.forEach(function (node) {
-    if (node === existing) return;
-    if (node._spOperationsOnResize) window.removeEventListener('resize', node._spOperationsOnResize);
-    node.remove();
+    if (node !== existing) _bracketDisposeOperationalSurface(node, node._bracketOperationsOwner);
   });
-  if (existing) {
-    root._bracketOperationsStrip = existing;
-    Array.prototype.forEach.call(detail.querySelectorAll('[data-bracket-tabs-root]'), function (tabsRoot) {
-      if (tabsRoot.getAttribute('data-tournament-id') === tournamentId) tabsRoot._bracketOperationsStrip = existing;
-    });
-  }
-  var progresses = Array.prototype.slice.call(detail.querySelectorAll('[data-bracket-operations-progress]'));
+  if (existing) _bracketAdoptOperationalSurface(root, '_bracketOperationsStrip', existing);
+  var progresses = Array.prototype.filter.call(detail.querySelectorAll('[data-bracket-operations-progress]'), function (node) {
+    var id = node.getAttribute('data-operations-tournament-id');
+    return !id || id === tournamentId;
+  });
   var progress = root._bracketOperationsProgress;
   if (!progress || !progress.isConnected || progresses.indexOf(progress) === -1) progress = progresses[0] || null;
-  progresses.forEach(function (node) { if (node !== progress) node.remove(); });
+  progresses.forEach(function (node) {
+    if (node !== progress) _bracketDisposeOperationalSurface(node, node._bracketOperationsOwner);
+  });
   if (progress) {
     progress.setAttribute('data-operations-tournament-id', tournamentId);
-    root._bracketOperationsProgress = progress;
-    Array.prototype.forEach.call(detail.querySelectorAll('[data-bracket-tabs-root]'), function (tabsRoot) {
-      if (tabsRoot.getAttribute('data-tournament-id') === tournamentId) tabsRoot._bracketOperationsProgress = progress;
-    });
-  }
+    _bracketAdoptOperationalSurface(root, '_bracketOperationsProgress', progress);
+  } else root._bracketOperationsProgress = null;
   var user = window.AppStore && window.AppStore.currentUser;
   var authorized = typeof window._isUserAuthority === 'function' && window._isUserAuthority(t, user);
   var concentrated = typeof window._isConcentratedTournament === 'function' && window._isConcentratedTournament(t);
   if (!authorized || !concentrated ||
       (window._tournamentResultsComplete && window._tournamentResultsComplete(t)) ||
-      !document.getElementById('tourn-grid-container')) {
-    if (existing && existing._spOperationsOnResize) window.removeEventListener('resize', existing._spOperationsOnResize);
-    if (existing && existing._spSeriesLabelObserver) { existing._spSeriesLabelObserver.disconnect(); existing._spSeriesLabelObserver = null; }
-    if (existing && existing.parentNode) existing.remove();
-    if (root._bracketOperationsProgress) root._bracketOperationsProgress.remove();
+      !_bracketOperationalDetailCard(root)) {
+    _bracketDisposeOperationalSurface(existing, root);
+    _bracketDisposeOperationalSurface(root._bracketOperationsProgress, root);
     root._bracketOperationsProgress = null;
     root._bracketOperationsStrip = null;
     _bracketReconcileOperationalOrder(root);
@@ -2514,7 +2549,13 @@ window._bracketOperationsRefresh = function (t, root) {
     existing.setAttribute('data-bracket-operations-strip', '1');
     existing.setAttribute('data-operations-tournament-id', String(t.id));
     existing.setAttribute('aria-label', 'Jogos que precisam de atenção');
-    root._bracketOperationsStrip = existing;
+    _bracketAdoptOperationalSurface(root, '_bracketOperationsStrip', existing);
+    // Os listeners delegados continuam na mesma seção se a navegação for substituída.
+    existing._spAdoptOperationsRoot = function (nextRoot) {
+      nextRoot._bracketOperationsDrafts = nextRoot._bracketOperationsDrafts || root._bracketOperationsDrafts;
+      nextRoot._bracketTieDrafts = nextRoot._bracketTieDrafts || root._bracketTieDrafts;
+      root = nextRoot;
+    };
     existing._spOperationsOnResize = function () {
       clearTimeout(existing._spOperationsResizeTimer);
       existing._spOperationsResizeTimer = setTimeout(function () {
@@ -2932,7 +2973,7 @@ window._bracketOperationsRefresh = function (t, root) {
     compactProgress.setAttribute('data-bracket-operations-progress', '1');
     compactProgress.setAttribute('data-operations-tournament-id', tournamentId);
     compactProgress.setAttribute('aria-label', 'Progresso realizado e previsto');
-    root._bracketOperationsProgress = compactProgress;
+    _bracketAdoptOperationalSurface(root, '_bracketOperationsProgress', compactProgress);
     existing.parentNode.insertBefore(compactProgress, existing);
   }
   var progressMarkup = typeof window._buildProgressInner === 'function' ? window._buildProgressInner(t, true) : '';
@@ -3283,8 +3324,23 @@ function _scrollBracketEntryMatchToTop(card, behavior) {
   window.scrollTo({ top: top, behavior: behavior || 'auto' });
 }
 
+function _bracketRestoreGeneralEntries(root) {
+  var entries = root._bracketGeneralEntries || [];
+  for (var r = 0; r < entries.length; r++) {
+    var old = entries[r];
+    if (old.card && old.card.style) old.card.style.minHeight = '';
+    if (old.placeholder && old.placeholder.parentNode && old.wrapper) old.placeholder.parentNode.replaceChild(old.wrapper, old.placeholder);
+  }
+  var oldSources = root._bracketGeneralSources || [];
+  for (var s = 0; s < oldSources.length; s++) oldSources[s].hidden = false;
+  root._bracketGeneralEntries = [];
+  root._bracketGeneralSources = [];
+  root._bracketGeneralSlotTimes = [];
+  _bracketToggleEmptySourceRounds(root, false);
+}
+
 function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categoryFilter) {
-  if (!root) return false;
+  if (!root || !root.isConnected || root._bracketTornDown) return false;
   var scope = root._bracketTabsScope || (root.closest && root.closest('#view-container, #inline-bracket-container'));
   if (!scope) return false;
   // A visão operacional (Geral/Próximos jogos) é conteúdo da chave, não um
@@ -3294,8 +3350,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
   // `scope` pode ser só o trilho da chave; o cartão do torneio é irmão dele
   // em `#view-container`. Procurar apenas dentro do scope fazia Geral/Próximos
   // nascerem antes do cartão quando a tela ainda estava terminando de montar.
-  var detailsCard = document.getElementById('tourn-grid-container') ||
-    (scope.querySelector ? scope.querySelector('#tourn-grid-container') : null);
+  var detailsCard = _bracketOperationalDetailCard(root);
   var operationalAnchor = detailsCard || root;
   var view = root._bracketGeneralView;
   if (!view) {
@@ -3308,16 +3363,19 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     // [[regression_general_agenda_never_leaks_past_full_width]]
     view.style.cssText = 'display:none;margin:12px 0 18px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow-x:clip;isolation:isolate;';
     operationalAnchor.insertAdjacentElement('afterend', view);
-    root._bracketGeneralView = view;
+    _bracketAdoptOperationalSurface(root, '_bracketGeneralView', view);
   }
   _bracketReconcileOperationalOrder(root);
   // A montagem do detalhe pode terminar depois das abas. Reconciliamos no
   // próximo quadro para que a visão operacional nunca permaneça acima dele.
   // Não depende de timing de render, nem recria os cards já movidos.
   // [[regression_operational_view_waits_for_tournament_details]]
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () {
-    _bracketReconcileOperationalOrder(root);
-  });
+  if (typeof requestAnimationFrame === 'function' && root._bracketOperationalOrderFrame == null) {
+    root._bracketOperationalOrderFrame = requestAnimationFrame(function () {
+      root._bracketOperationalOrderFrame = null;
+      _bracketReconcileOperationalOrder(root);
+    });
+  }
   var entries = root._bracketGeneralEntries || [];
   if (show && entries.length && root._bracketGeneralDay === gender &&
       root._bracketGeneralCategory === (categoryFilter || '') &&
@@ -3344,17 +3402,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     }
   }
   if (!show) {
-    for (var r = 0; r < entries.length; r++) {
-      var old = entries[r];
-      if (old.card && old.card.style) old.card.style.minHeight = '';
-      if (old.placeholder && old.placeholder.parentNode && old.wrapper) old.placeholder.parentNode.replaceChild(old.wrapper, old.placeholder);
-    }
-    var oldSources = root._bracketGeneralSources || [];
-    for (var s = 0; s < oldSources.length; s++) oldSources[s].hidden = false;
-    root._bracketGeneralEntries = [];
-    root._bracketGeneralSources = [];
-    root._bracketGeneralSlotTimes = [];
-    _bracketToggleEmptySourceRounds(root, false);
+    _bracketRestoreGeneralEntries(root);
     view.style.display = 'none';
     view.innerHTML = '';
     return true;

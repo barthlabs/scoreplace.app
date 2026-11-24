@@ -85,6 +85,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     await page.addScriptTag({ path: 'js/domain/court-occupancy.js' });
     await page.addScriptTag({ path: 'js/views/bracket-model.js' });
     await page.addScriptTag({ content: source.slice(start, end) });
+    await page.addScriptTag({ content: source.slice(source.indexOf('function _limparCamadasTransitóriasDaChave('), source.indexOf('function _pintarEmEtapas(')) });
+    await page.addScriptTag({ content: source.slice(source.indexOf('function _bracketToggleEmptySourceRounds('), source.indexOf('function _bracketGeneralRefreshStandings(')) });
     const state = await page.evaluate(async () => {
       window._matchCardTimestamp = value => value ? Date.parse(value) : 0;
       window._bracketSyncRoundHeadingOffsets = () => {};
@@ -123,11 +125,86 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         window._bracketOperationsRefresh(t, root);
       };
       window._adjustMatchCourtClock = (button, tid, mid, action) => { window.clock = [tid, mid, action]; };
-      const root = document.querySelector('[data-bracket-tabs-root]');
-      root._bracketCardsScope = document.getElementById('view-container');
-      root._bracketGeneralView = document.createElement('section');
-      document.getElementById('tourn-grid-container').after(root._bracketGeneralView);
+      let root = document.querySelector('[data-bracket-tabs-root]');
+      const detail = document.getElementById('view-container');
+      const rounds = document.getElementById('rounds');
+      const resizeListeners = new Set();
+      const oldRows = [];
+      const oldObservers = new Set();
+      const NativeObserver = window.ResizeObserver;
+      window.ResizeObserver = class extends NativeObserver {
+        observe(target) { super.observe(target); oldObservers.add(this); }
+        disconnect() { super.disconnect(); oldObservers.delete(this); }
+      };
+      const addListener = window.addEventListener;
+      const removeListener = window.removeEventListener;
+      window.addEventListener = function(type, fn, ...args) {
+        if (type === 'resize') resizeListeners.add(fn);
+        return addListener.call(this, type, fn, ...args);
+      };
+      window.removeEventListener = function(type, fn, ...args) {
+        if (type === 'resize') resizeListeners.delete(fn);
+        return removeListener.call(this, type, fn, ...args);
+      };
+      function mountOperations(nav) {
+        nav._bracketCardsScope = detail;
+        nav._bracketTabsScope = rounds;
+        _bracketGeneralView(nav, false);
+        window._bracketOperationsRefresh(t, nav);
+      }
+      detail.hidden = true;
+      mountOperations(root);
+      for (let cycle = 0; cycle < 10; cycle++) {
+        const nextNav = root.cloneNode(false);
+        const row = root._bracketOperationsStrip;
+        row._spOperationsOnResize();
+        oldRows.push({ root, row, progress:root._bracketOperationsProgress, agenda:root._bracketGeneralView });
+        _limparCamadasTransitóriasDaChave(rounds);
+        rounds.before(nextNav);
+        root = nextNav;
+        mountOperations(root);
+      }
+      detail.hidden = false;
       window._bracketOperationsRefresh(t, root);
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const onlyCurrent = () => [
+        ['[data-bracket-operations-strip]',root._bracketOperationsStrip],
+        ['[data-bracket-operations-progress]',root._bracketOperationsProgress],
+        ['[data-bracket-general-view]',root._bracketGeneralView]
+      ].every(([selector,node]) => detail.querySelectorAll(selector).length === 1 && detail.querySelector(selector) === node);
+      const retired = oldRows.every(({root:old,row,progress,agenda}) => !old.isConnected && !row.isConnected &&
+        !progress.isConnected && !agenda.isConnected && old._bracketOperationalOrderFrame == null &&
+        row._spOperationsResizeTimer == null && !resizeListeners.has(row._spOperationsOnResize));
+      const stale = oldRows[0].root;
+      root.setAttribute('data-tournament-id', 'different-tournament');
+      window._bracketOperationsRefresh(t, stale);
+      _bracketGeneralView(stale, false);
+      _bracketReconcileOperationalOrder(stale);
+      root.setAttribute('data-tournament-id', t.id);
+      const singleton = onlyCurrent() && retired && !oldObservers.size &&
+        resizeListeners.size === 1 && !detail.querySelector('.sp-operations-replica [data-bracket-operations-strip]');
+      // A nova navegação recebe a faixa ainda viva. Uma limpeza restrita ao
+      // render antigo não pode matar essa faixa nem os seus handlers de ação.
+      const prior = root;
+      const priorScope = document.createElement('section');
+      const adoptedRow = prior._bracketOperationsStrip;
+      prior._bracketTabsScope = priorScope;
+      rounds.before(priorScope);
+      root = prior.cloneNode(false);
+      rounds.before(root);
+      mountOperations(root);
+      _limparCamadasTransitóriasDaChave(priorScope);
+      root._bracketOperationsStrip.dispatchEvent(new Event('pointerdown', { bubbles:true }));
+      window.dispatchEvent(new Event('resize'));
+      await new Promise(resolve => setTimeout(resolve, 110));
+      const adoption = root._bracketFocusToken === 1 && adoptedRow === root._bracketOperationsStrip &&
+        onlyCurrent() && resizeListeners.has(adoptedRow._spOperationsOnResize) && resizeListeners.size === 1;
+      if (!singleton || !adoption) throw new Error('Faixa operacional após remontagem: ' +
+        JSON.stringify({ singleton, adoption, retired, live:onlyCurrent(), observers:oldObservers.size, listeners:resizeListeners.size }));
+      window.addEventListener = addListener;
+      window.removeEventListener = removeListener;
+      window.ResizeObserver = NativeObserver;
       const strip = root._bracketOperationsStrip;
       const simulate = strip.querySelector('[data-operations-simulate]');
       const heading = strip.querySelector('.sp-operations-courts-heading .sp-operations-section-title');

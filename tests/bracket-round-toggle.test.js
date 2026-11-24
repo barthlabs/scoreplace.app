@@ -6,7 +6,8 @@ const { chromium } = require('@playwright/test');
 
 const source = fs.readFileSync(path.join(__dirname, '../js/views/bracket.js'), 'utf8');
 const toggle = source.slice(source.indexOf('window._toggleBracketRound = function'), source.indexOf('function _bracketEnsureRoundHeadingResizeListener'));
-const findTabs = source.slice(source.indexOf('function _bracketFindTabsRoot'), source.indexOf('function _bracketIsEliminationTree'));
+const lifecycle = source.slice(source.indexOf('function _bracketDisposeOperationalSurface('), source.indexOf('function _bracketReconcileOperationalOrder('));
+const findTabs = lifecycle + source.slice(source.indexOf('function _bracketFindTabsRoot'), source.indexOf('function _bracketIsEliminationTree'));
 const portal = source.slice(source.indexOf('function _bracketUpdateRoundHeadingPortal'), source.indexOf('function _bracketEnsureRoundHeadingResizeListener'));
 const primaryTabs = source.slice(source.indexOf('window._bracketPrimaryTabsHtml = function'), source.indexOf('window._bracketCategoryTabsMount = function'));
 assert.match(source, /--bracket-round-reveal-top/, 'controle lateral usa base inferior da faixa fixa');
