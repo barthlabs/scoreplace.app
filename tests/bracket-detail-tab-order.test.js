@@ -23,7 +23,7 @@ const { chromium } = require('@playwright/test');
       const names = ['Fem Ouro','Fem Prata'];
       const t = { id:'fixture-detail',creatorUid:'org',courtNames:['Quadra 1','Quadra 2'],_nJogos:2,
         matches:names.map((category,i)=>({id:'m'+i,category,p1:'Time A'+i,p2:'Time B'+i,
-          court:'Quadra '+(i+1),_gameNum:i+1,scheduledAt:'2026-11-14T16:00:00Z'})) };
+          court:'Quadra '+(i+1),_gameNum:i===0 ? 13 : 1,scheduledAt:'2026-11-14T16:00:00Z'})) };
       window._currentBracketTournament = t;
       window._findTournamentById = () => t;
       window.AppStore = {currentUser:{uid:'org'}};
@@ -34,13 +34,13 @@ const { chromium } = require('@playwright/test');
       window._buildProgressInner = () => 'Progresso';
       window._bracketEnsureCourtReleaseListener = window._bracketEnsureCourtCapability = () => {};
       window.renderMatchCard = m => '<article class="sp-match-card"><div class="sp-mc-head">Jogo</div>'+
-        '<div>'+m.p1+'</div><div>'+m.p2+'</div><div class="sp-match-operational"><button class="sp-match-confirm">OK</button></div></article>';
+        '<div>'+m.p1+'</div><div>'+m.p2+'</div><div class="sp-match-operational"><label class="sp-match-court"><select><option>Quadra 1</option></select></label><button class="sp-match-confirm">OK</button></div></article>';
       const scope = document.getElementById('inline-bracket-container');
       window.__paint = () => {
         window._limparCamadasTransitóriasDaChave(scope);
         scope.innerHTML = '<div class="bracket-scroll-container"><div class="fixture-round">' + t.matches.map((m,i) =>
           '<div><article class="sp-match-card" id="card-'+m.id+'" data-bracket-tab-category="'+m.category+
-          '" data-bracket-tab-gender="fem" data-bracket-tab-round="1" data-match-num="'+(i+1)+'" data-bracket-scheduled-at="'+
+          '" data-bracket-tab-gender="fem" data-bracket-tab-round="1" data-match-num="'+m._gameNum+'" data-bracket-scheduled-at="'+
           Date.parse(m.scheduledAt)+'" data-bracket-court="'+m.court+'">'+m.p1+'</article></div>').join('')+'</div></div>';
         window._bracketCategoryTabsMount();
       };
@@ -48,6 +48,15 @@ const { chromium } = require('@playwright/test');
       window.__input.focus();
       window.__paint();
     });
+    const categoryTabs = page.locator('[data-bracket-subtab]');
+    const labels = () => categoryTabs.evaluateAll(nodes => nodes.map(node => node.dataset.bracketSubtab)
+      .filter(label => /^(Fem |__all_categories)/.test(label)));
+    assert.deepEqual(await labels(), ['__all_categories','Fem Prata','Fem Ouro'], 'número 1 antes de 13 no mesmo horário');
+    await page.evaluate(() => {
+      window._currentBracketTournament.matches[0].scheduledAt = '2026-11-14T14:00:00Z';
+      window.__paint();
+    });
+    assert.deepEqual(await labels(), ['__all_categories','Fem Ouro','Fem Prata'], 'a categoria que passa a abrir a programação sobe');
     async function order(expectedOperations) {
       const result = await page.evaluate(() => {
         const detail = document.querySelector('#view-container');
@@ -65,6 +74,24 @@ const { chromium } = require('@playwright/test');
     }
     await order(true);
     assert(await page.locator('#bracket-search').evaluate(el=>el===document.activeElement));
+    await page.evaluate(() => {
+      const original = window._confirmMatchCourtCall;
+      window.__courtClicks = 0;
+      window._confirmMatchCourtCall = () => { window.__courtClicks++; window._confirmMatchCourtCall = original; };
+    });
+    const firstOperation = page.locator('.sp-operations-next .sp-match-operational').first();
+    await firstOperation.locator('select').focus();
+    await firstOperation.locator('button.sp-match-confirm').scrollIntoViewIfNeeded();
+    const confirmBounds = await firstOperation.locator('button.sp-match-confirm').boundingBox();
+    await page.mouse.move(confirmBounds.x + confirmBounds.width / 2, confirmBounds.y + confirmBounds.height / 2);
+    await page.mouse.down();
+    await page.evaluate(() => new Promise(resolve => setTimeout(() => {
+      window._bracketOperationsRefresh(window._currentBracketTournament);
+      resolve();
+    }, 20)));
+    await page.mouse.up();
+    assert.equal(await page.evaluate(() => window.__courtClicks), 1, 'refresh entre pressionar e soltar preserva o primeiro clique em OK');
+    await page.evaluate(() => { window.scrollTo(0,0); window.__input.focus({preventScroll:true}); });
     const geometry = () => page.evaluate(() => {
       const bar=document.querySelector('#fbwrap-chaves'), nav=document.querySelector('[data-bracket-tabs-root]');
       const r=nav.getBoundingClientRect(), b=bar.getBoundingClientRect();

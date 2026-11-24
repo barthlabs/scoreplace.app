@@ -767,6 +767,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     const real = await browser.newPage();
     try {
       await real.addScriptTag({ path: 'js/domain/court-occupancy.js' });
+      await real.addScriptTag({ path: 'js/domain/match-timing.js' });
+      await real.addScriptTag({ path: 'js/domain/next-match.js' });
       await real.addScriptTag({ path: 'js/views/bracket-model.js' });
       await real.addScriptTag({ content: source });
       const names = [...new Set((source.slice(source.indexOf('function renderMatchCard('), source.indexOf('// ─── Highlight winner based on score'))
@@ -826,6 +828,64 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       assert.deepEqual(courtState.rollback, [['Quadra 5', 'Quadra 4'], ['Quadra 5', 'Quadra 4']]);
       assert.deepEqual(courtState.saved, [['Quadra 5', 'Quadra 5'], ['Quadra 5', 'Quadra 5']]);
       assert.equal(courtState.modelCourt, 'Quadra 5');
+      const races = await real.evaluate(async () => {
+        const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+        async function scenario(mode) {
+          const target = { id:'change', court:'Quadra 1', p1:'A', p2:'B', scheduledAt:new Date().toISOString() };
+          const other = { id:'other', court:'Quadra 4', p1:'C', p2:'D' };
+          const t = { id:'sb_race', matches:[target, other], courtNames:['Quadra 1','Quadra 2','Quadra 3','Quadra 4'], scoring:{ type:'simple' } };
+          window._findTournamentById = () => t;
+          const calls = [], deferred = [], errors = [];
+          window.showNotification = (title, message, type) => { if (type === 'error') errors.push(message); };
+          window._callCF = (_name, payload) => {
+            calls.push([payload.matchId, payload.court, !!payload.confirmCall]);
+            return new Promise((resolve, reject) => deferred.push({ resolve, reject }));
+          };
+          document.body.innerHTML = window.renderMatchCard(target, true, t.id, 1, false, null);
+          const select = document.querySelector('.sp-match-court select');
+          const button = document.querySelector('button.sp-match-confirm');
+          function choose(value) {
+            select.value = value;
+            select.dispatchEvent(new Event('change', { bubbles:true }));
+          }
+          choose('Quadra 2');
+          choose('Quadra 3');
+          await tick();
+          const before = calls.slice();
+          _syncMatchCourtCopies(t.id, target.id);
+          button.click();
+          window._confirmMatchCourtCall(button, t.id, target.id);
+          deferred[0].resolve({ data:{ ok:true } });
+          await tick();
+          const interim = [select.value, select.dataset.persistedCourt, button.disabled];
+          if (mode === 'occupied') { other.court = 'Quadra 3'; other.courtCalledAt = new Date().toISOString(); }
+          if (mode === 'failure') deferred[1].reject(new Error('erro de atribuição'));
+          else deferred[1].resolve({ data:{ ok:true } });
+          await tick();
+          const duringCall = button.disabled;
+          if (deferred[2]) deferred[2].resolve({ data:{ ok:true, courtCalledAt:new Date().toISOString() } });
+          await tick();
+          return { before, calls, interim, duringCall, value:select.value, persisted:select.dataset.persistedCourt,
+            called:!!target.courtCalledAt, other:other.court, errors };
+        }
+        const success = await scenario('success');
+        const failure = await scenario('failure');
+        const occupied = await scenario('occupied');
+        return { success, failure, occupied };
+      });
+      const assignments = [['change','Quadra 2',false], ['change','Quadra 3',false]];
+      for (const race of Object.values(races)) {
+        assert.deepEqual(race.before, assignments.slice(0, 1), 'segunda troca aguarda a primeira');
+        assert.deepEqual(race.interim, ['Quadra 3', 'Quadra 2', true], 'resposta anterior preserva seleção e bloqueio do OK');
+      }
+      assert.deepEqual(races.success.calls, [...assignments, ['change','Quadra 3',true]]);
+      assert(races.success.called && races.success.duringCall && !races.success.errors.length, JSON.stringify(races.success));
+      assert.equal(races.success.other, 'Quadra 4');
+      assert.deepEqual(races.failure.calls, assignments);
+      assert.deepEqual([races.failure.value, races.failure.persisted, races.failure.called], ['Quadra 2','Quadra 2',false]);
+      assert(races.failure.errors.includes('erro de atribuição'));
+      assert.deepEqual(races.occupied.calls, assignments);
+      assert(!races.occupied.called && races.occupied.errors.some(message => message.includes('ocupada')));
     } finally { await real.close(); }
     const scoringPage = await browser.newPage();
     try {
@@ -1158,17 +1218,6 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       }
       strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
       camisUi.nextTitle = strip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent;
-      window.skipCalls = [];
-      window._callCF = (name, payload) => { window.skipCalls.push([name, payload.matchId]); return Promise.resolve({ ok: true }); };
-      window._bracketReloadCourtState = () => Promise.resolve();
-      window._bracketCourtReleaseCache = { sb_test: { ready: true, revision: 7, released: {}, postponed: [] } };
-      root._bracketOperationsNav = {};
-      window._bracketOperationsRefresh(t, root);
-      for (let screen = 0; screen < 4; screen++) {
-        strip.querySelector('.sp-operations-next [data-postpone-next]').click();
-        await new Promise(resolve => setTimeout(resolve, 0));
-        if (screen < 3) strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
-      }
       window._renderCamisFixture = window.renderMatchCard;
       window.renderMatchCard = simpleRender;
       const categoryCounts = [['Fem Diamante', 8], ['Fem Ouro', 16], ['Fem Prata', 12]];
@@ -1186,7 +1235,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const fullNumbers = fullMatches.map(game => game._gameNum);
       const fullLabels = fullMatches.filter(game => game.id.endsWith('-j0')).map(game =>
         window._bracketMonarchGroupLabel(fullTournament, { name: game.groupName, matches: [game] }));
-      return { states, called: window.called, groupCalls: window.groupCalls, skipCalls: window.skipCalls,
+      return { states, called: window.called, groupCalls: window.groupCalls,
         arrows, survivesRefresh, liveMatch, multiDayHasNav, incompleteHasNav, standingsInset,
         groupChecks: { numeric: numeric?.name, distinct: distinct?.name, missing: !!missing,
           tieBreak: !!tieBreak, nonMonarch: !!nonMonarch, refs: refs?.matches.map(m => m.id),
@@ -1218,15 +1267,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(carousel.states[3].category, 'Fem Diamante · A');
     assert(carousel.states[3].footerBelowTable && carousel.states[3].categoryAboveStandings && !carousel.states[3].callGameLabel,
       'a classificação deixa quadra e OK no rodapé, categoria no cabeçalho e nenhum Jogo 1');
-    assert.deepEqual(carousel.states.slice(0, 4).map(item => item.postpone),
-      ['group-1', 'group-1', 'group-1', 'group-1'],
-      'Pular jogo acompanha as quatro telas, mas preserva o primeiro jogo pendente');
-    assert.deepEqual(carousel.skipCalls, [
-      ['endMatchOnCourt', 'match-rr-r1-g0-0-Fem_Diamante-1794172435574'],
-      ['endMatchOnCourt', 'match-rr-r1-g0-0-Fem_Diamante-1794172435574'],
-      ['endMatchOnCourt', 'match-rr-r1-g0-0-Fem_Diamante-1794172435574'],
-      ['endMatchOnCourt', 'match-rr-r1-g0-0-Fem_Diamante-1794172435574']
-    ], 'Pular jogo nas quatro telas adia sempre o primeiro jogo pendente da série');
+    assert(carousel.states.every(item => !item.postpone), 'nenhuma página do bloco ou da classificação exibe Pular jogo');
     assert.deepEqual(carousel.states.slice(0, 3).map(item => item.teams), [
       ['Ana / Bia', 'Carla / Dora'], ['Ana / Carla', 'Bia / Dora'], ['Ana / Dora', 'Bia / Carla']
     ]);
@@ -1481,32 +1522,28 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       t._nJogos = t.matches.length;
       const entry = { ready:true, revision:0, released:{}, postponed:[], postponedReady:[] };
       window._bracketCourtReleaseCache = { [t.id]:entry };
-      window._callCF = async (name,data) => {
-        if (data.action !== 'postpone' || data.expectedRevision !== entry.revision) throw Error('revisão inválida');
-        entry.postponed = entry.postponed.filter(id => id !== data.matchId).concat(data.matchId);
-        entry.revision++;
-        return { data:{ ok:true } };
+      const readOnly = new Map();
+      const render = window.renderMatchCard;
+      window.renderMatchCard = function(m, canEnter, tid, num, compact, pending, opts) {
+        readOnly.set(m.id, opts.readOnly);
+        return render.apply(this, arguments);
       };
-      window._bracketReloadCourtState = async () => {};
       window._bracketOperationsRefresh(t,root);
       const strip = root._bracketOperationsStrip;
-      strip.querySelector('.sp-operations-next-scroll').scrollTop = 0;
-      const seen = [];
-      for (let i = 0; i < 7; i++) {
+      function snapshot() {
         const scroller = strip.querySelector('.sp-operations-next-scroll');
-        const first = scroller.querySelector('.sp-operations-replica');
-        const skip = first?.querySelector('[data-postpone-next]');
-        seen.push({ id:skip?.dataset.postponeNext, enabled:!!skip && !skip.disabled, scroll:scroller.scrollTop,
-          available:window._bracketOperationsSelect(t).freeCourts.length });
-        if (!skip || skip.disabled) break;
-        skip.click();
-        await new Promise(resolve => setTimeout(resolve,0));
+        return { ids:[...scroller.querySelectorAll('.sp-operations-replica')].map(card => card.dataset.operationsBaseMatch),
+          skip:!!scroller.querySelector('[data-postpone-next]'), free:window._bracketOperationsSelect(t).freeCourts.length,
+          readOnly:[...scroller.querySelectorAll('.sp-operations-replica')].every(card => readOnly.get(card.dataset.operationsBaseMatch)) };
       }
-      return seen;
+      const full = snapshot();
+      entry.released.busy = new Date().toISOString();
+      window._bracketOperationsRefresh(t,root);
+      return { full, released:snapshot() };
     });
-    assert.deepEqual(saturated.map(entry => entry.id), ['a','b','c','a','b','c','a']);
-    assert(saturated.every(entry => entry.enabled && entry.available === 0 && entry.scroll === 0),
-      'Pular permanece na primeira posição visível, mesmo com filtro, lotação e atletas bloqueados: ' + JSON.stringify(saturated));
+    assert.deepEqual(saturated.full, { ids:['a','b','c'], skip:false, free:0, readOnly:true });
+    assert.deepEqual(saturated.released.ids, ['a','b','c']);
+    assert.equal(saturated.released.free, 1);
     console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

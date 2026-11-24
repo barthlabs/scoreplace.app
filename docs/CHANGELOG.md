@@ -1,3 +1,9 @@
+## 2.7.57 — 24/nov/2026 (escolha de jogos, quadra e ordem da programação)
+
+- A lista rolável de Próximos jogos permite escolher e chamar um confronto posterior elegível; o botão Pular jogo foi removido.
+- Ao trocar a quadra, o OK aguarda a última atribuição e confirma uma única chamada. Atualizações durante o clique preservam o botão; falhas mantêm a quadra confirmada anteriormente.
+- Nos torneios concentrados, grupos e categorias seguem o horário e o número oficial dos jogos, preservando a identificação completa dos grupos.
+
 ## 2.7.55 — 24/nov/2026 (abas das chaves e controles de tempo)
 
 - Na ficha do torneio, Geral e as categorias aparecem entre a operação e as chaves. Ao rolar, as abas ficam logo abaixo dos filtros. Os botões do relógio têm setas brancas e círculos menores, azuis na chamada, âmbar no aquecimento, verdes no jogo e vermelhos no atraso.

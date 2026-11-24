@@ -14,20 +14,31 @@ console.log('\n== Rei/Rainha — saída observável ==');
 
 (function () {
   const t = hydrateMonarchGroups(buildViaDraw('Liga', 16, { ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true }));
+  t.scheduleWindow = { days:[{ day:'2026-11-29', startTime:'08:00', endTime:'18:00' }] };
   ['B2', 'A2', 'B1', 'A1'].forEach((code, i) => { t.groups[i].name = 'Grupo ' + code; });
   t.groups.reverse();
   t.groups.forEach((g, i) => g.matches.forEach((m) => {
     m.scheduledAt = '2026-11-29T08:00:00-03:00';
     m.court = 'Quadra ' + (i + 1);
+    m.scheduledGameNumber = [13, 1, 16, 4][i];
+    m.category = i % 2 ? 'Zulu' : 'Alfa';
   }));
   const previousWoChip = W._woClaimChip;
   W._woClaimChip = (_t, ctx) => '<button data-test-wo="' + ctx.matchId + '">W.O.</button>';
   const html = W._renderMonarchStage(t, true, false) || '';
   W._woClaimChip = previousWoChip;
-  const groupCodes = [...html.matchAll(/data-group-code="([^"]+)"/g)].map((match) => match[1]);
-  ok(groupCodes.join(',') === 'A1,A2,B1,B2', 'grupos agendados aparecem na ordem A1, A2, B1, B2');
+  const firstInDraw = t.groups.map(g => html.indexOf('id="card-' + g.matches[0].id + '"'));
+  ok(firstInDraw.every(i => i >= 0) && firstInDraw[1] < firstInDraw[3] && firstInDraw[3] < firstInDraw[0] && firstInDraw[0] < firstInDraw[2],
+    'horários iguais seguem os números 1, 4, 13, 16 da programação: ' + firstInDraw);
   ok((html.match(/id="card-/g) || []).length === 12, 'cada grupo agendado mantém seus três cards de jogo');
   ok((html.match(/data-test-wo=/g) || []).length === 12, 'cada jogo do grupo oferece W.O. conforme a permissão canônica');
+  t.matches = t.groups.flatMap((g, i) => g.matches.map(m => ({ ...m, phaseIndex:1, groupName:g.name, groupIdx:i, bracket:'monarch' })));
+  t.phases = [{}, { name:'Segunda fase' }];
+  t.currentPhaseIndex = 1;
+  const phaseHtml = W._renderPhaseBracket(t, false, '') || '';
+  const firstCards = t.groups.map(g => phaseHtml.indexOf('id="card-' + g.matches[0].id + '"'));
+  ok(firstCards.every(i => i >= 0) && firstCards[1] < firstCards[3] && firstCards[3] < firstCards[0] && firstCards[0] < firstCards[2],
+    'reconstrução da segunda fase usa a mesma sequência oficial: ' + firstCards);
   ok(/max-width:380px/.test(html), 'grupo usa a largura do card operacional');
 })();
 

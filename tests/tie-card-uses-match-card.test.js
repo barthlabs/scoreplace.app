@@ -62,8 +62,8 @@ const { chromium } = require('playwright');
       }
       const waiting = render(tie);
       window._tieWaitingScreenshot = document.querySelector('main').innerHTML;
-      const postponable = render(tie, { postponeReady:true, tieCanPostpone:true });
-      const finalTie = render(tie, { postponeReady:true, tieCanPostpone:false });
+      const postponable = render(tie, { finalTie:false });
+      const finalTie = render(tie, { finalTie:true });
       const waitingCard = document.querySelector('.sp-operations-tie-card');
       const liveWidth = waitingCard.querySelector('[data-tie-action="live"]').getBoundingClientRect().width;
       waitingCard.querySelector('[data-tie-score="p1"]').value = '6';
@@ -158,7 +158,7 @@ const { chromium } = require('playwright');
       'Confirmar mantém exatamente a largura do Ao Vivo');
     assert(cards.waiting.actions.includes('call'), 'chamada OK no próprio card');
     assert.equal(cards.waiting.nav, 0, 'dois atletas: um jogo, sem setas');
-    assert(cards.postponable.postpone, 'Pular jogo aparece quando há outro jogo chamável na fase');
+    assert(!cards.postponable.postpone && !cards.postponable.finalNotice, 'outro confronto disponível não exibe Pular jogo nem aviso de fase');
     assert(!cards.finalTie.postpone && /próxima fase depende deste desempate/.test(cards.finalTie.finalNotice),
       'no último jogo, o botão some e a dependência da fase fica explícita');
     assert.equal(cards.called.court, 'Quadra 8');

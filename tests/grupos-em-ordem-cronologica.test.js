@@ -147,10 +147,28 @@ ok(wOrd[0].sg === gAlfa && wOrd[0].originalIdx === 1,
 // de grupos, rota Liga); se um deles voltar a ordenar por conta própria, a mesma tela
 // mostra ordens diferentes conforme a rota que a desenhou. Isto acusa.
 const srcB = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
-const usos = (srcB.match(/window\._schOrdenarGrupos\(/g) || []).length;
-ok(usos >= 3, 'os 3 pontos que listam grupos em bracket.js chamam window._schOrdenarGrupos (achei ' + usos + ')');
+const usos = (srcB.match(/= _bracketGroupsInOrder\(/g) || []).length;
+ok(usos >= 3, 'os 3 pontos que listam grupos em bracket.js chamam _bracketGroupsInOrder (achei ' + usos + ')');
 ok(!/\.sort\(function\(a, b\) \{\s*var aMe = _groupHasMe/.test(srcB),
    'o sort "só meu grupo" da rota Liga não voltou a existir em paralelo');
+
+const concentrated = { scheduleWindow:{ days:[{ day:'2026-11-29', startTime:'08:00', endTime:'18:00' }] } };
+const orderGroups = (groups, opts = {}) => {
+  W._souOrganizador = () => opts.organizador !== false;
+  return Array.from(W._bracketGroupsInOrder(concentrated, groups, opts.meu || (() => false)), g => g.name);
+};
+const eq = (a, b, message) => ok(JSON.stringify(a) === JSON.stringify(b), message);
+const scheduled = (name, openingTime, number, winner) => ({ name, rounds:[{matches:[{ scheduledAt:openingTime, scheduledGameNumber:number, winner }]}] });
+const openingTime = '2026-11-29T11:00:00Z';
+const alfa = scheduled('Alfa', openingTime, 13), zulu = scheduled('Zulu', openingTime, 1);
+eq(orderGroups([alfa,zulu]), ['Zulu','Alfa'], 'o número oficial decide o empate de horário');
+alfa.rounds[0].matches[0].scheduledAt = '2026-11-29T10:00:00Z';
+eq(orderGroups([zulu,alfa]), ['Alfa','Zulu'], 'a categoria mais cedo passa à frente');
+const noDate = [scheduled('Zulu'), scheduled('Alfa')];
+eq(orderGroups(noDate), ['Zulu','Alfa'], 'sem agenda ou número mantém a formação recebida');
+eq(orderGroups([scheduled('Concluído',openingTime,1,'A'), ...noDate, alfa]), ['Alfa','Zulu','Alfa','Concluído'],
+   'pendentes com horário precedem pendentes sem horário e realizados');
+eq(orderGroups([alfa,zulu], { organizador:false, meu:g => g === zulu }), ['Zulu','Alfa'], 'participante conserva seu grupo no topo');
 
 console.log(pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

@@ -43,6 +43,16 @@ function pairKey(a, b) { return [a, b].sort().join(' x '); }
   const t = hydrateGroups(buildViaDraw('Fase de Grupos + Eliminatórias', 16));
   t.currentStage = 'groups';
   const html = W.renderGroupStage(t, false, false) || '';
+  t.scheduleWindow = { days:[{ day:'2026-11-29', startTime:'08:00', endTime:'18:00' }] };
+  t.groups.forEach((g, i) => g.matches.forEach((m, j) => {
+    m.category = i < 2 ? 'Alfa' : 'Zulu';
+    m.scheduledAt = '2026-11-29T08:00:00-03:00';
+    m.scheduledGameNumber = [13, 19, 1, 7][i] + j;
+  }));
+  const scheduledHtml = W.renderGroupStage(t, false, false) || '';
+  const firstCards = t.groups.map(g => scheduledHtml.indexOf('id="card-' + g.matches[0].id + '"'));
+  ok(firstCards.every(i => i >= 0) && firstCards[2] < firstCards[3] && firstCards[3] < firstCards[0] && firstCards[0] < firstCards[1],
+    'grupos seguem o primeiro jogo oficial, inclusive quando a segunda categoria abre a programação: ' + firstCards);
   ok(html.length > 100, 'renderGroupStage produz HTML');
   ok(/<table/.test(html), 'render tem tabela(s) de classificação');
   // 4 grupos → 4 títulos "Grupo"
