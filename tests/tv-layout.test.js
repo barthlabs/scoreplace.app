@@ -14,7 +14,22 @@ const art = 'https://firebasestorage.googleapis.com/v0/b/scoreplace-app.firebase
 const maxURL = art.padEnd(2048,'a');
 rotation.slides[0].assets = [maxURL, 'https://storage.googleapis.com/scoreplace-app.firebasestorage.app/tournamentTvArt/torneio/a.gif'];
 for (const core of [browser,server,callable]) {
-  assert.deepEqual(core.normalizeRotation(rotation,'torneio'),rotation);
+  assert.equal(JSON.stringify(core.normalizeRotation(rotation,'torneio')),JSON.stringify(rotation));
+  const court = {...rotation,placement:'court'};
+  assert.equal(JSON.stringify(core.normalizeRotation({...rotation,placement:'screen'},'torneio')),JSON.stringify(rotation));
+  assert.equal(JSON.stringify(core.normalizeRotation(court,'torneio')),JSON.stringify(court));
+  for(const placement of [null,'banana',[],1,true,{}]) assert.throws(()=>core.normalizeRotation({...rotation,placement},'torneio'));
+  const limit = {...court, slides:Array.from({length:5},(_,i)=>({ ...court.slides[0], id:String(i),
+    assets:Array(12).fill(art) }))};
+  let fill = 102400 - Buffer.byteLength(JSON.stringify(limit));
+  for(const slide of limit.slides) for(let i=0;i<slide.assets.length;i++) {
+    const amount = Math.min(fill,2048-art.length-1);
+    slide.assets[i]+='a'.repeat(amount); fill-=amount;
+  }
+  assert.equal(Buffer.byteLength(JSON.stringify(limit)),102400);
+  assert.deepEqual(core.normalizeRotation(limit,'torneio'),limit);
+  limit.slides.at(-1).assets[0]+='a';
+  assert.throws(()=>core.normalizeRotation(limit,'torneio'),/100 KB/);
   assert.deepEqual(core.normalizeRotation(rotation,'clone',rotation),rotation);
   assert.throws(() => core.normalizeRotation(rotation,'clone'));
   for (const bad of [maxURL+'x', art.replace('https:','http:'),art.replace('googleapis.com','googleapis.com.other.test'),

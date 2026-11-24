@@ -141,6 +141,7 @@ const SUITES = [
   'tests/super8-game-duration-form-contract.test.js',
   'tests/tournament-titles.test.js',
   'tests/super-eight-core.test.js',
+  'tests/rotation-category-rules.test.js',
   'tests/super-eight-standings-presence.test.js',
   'tests/dupla-final-option.test.js',
   'tests/final-series.test.js',

@@ -86,6 +86,63 @@ async function run() {
   assert.deepEqual(remaining.releasedMatchIds,['j3'],'concluído e liberado preservados');
   assert.equal((await state()).data().released.j2,original.released.j2);
   assert.deepEqual((await physical('j1').get()).data(),initial);
+
+  // Uma rodada A–H tem dois quartetos independentes, não a série de três
+  // acima. Chamar/encerrar um deles não desloca o outro nem seus relógios.
+  const draw = backend('./draw-core.js');
+  const fmt = draw._window.FORMAT2;
+  const cfg = fmt.defaultConfig('beach_tennis');
+  cfg.parceria = 'rotation_groups_8';
+  cfg.rodadas.n = 5;
+  cfg.eliminatoria.ativa = false;
+  const compiled = fmt.compileToPhases(cfg, {sport:'beach_tennis'});
+  const people = Array.from({length:8}, (_, i) => ({uid:'rotation-' + i, displayName:'Atleta ' + i}));
+  const rotation = draw._window._phasesEngine.genGroupsFromPool(people, compiled.phases[0], 'court-rotation');
+  const rotationGames = rotation.matches.map((m, i) => Object.assign({}, m, {
+    category:'Rodízio', phaseIndex:0, _gameNum:i + 1
+  }));
+  const firstRound = rotationGames.filter(m => m.round === 1);
+  assert.equal(firstRound.length, 2);
+  assert.equal(new Set(firstRound.flatMap(m => m.team1Uids.concat(m.team2Uids))).size, 8);
+  const rotationRef = db.collection('tournaments').doc('tour_rotation_' + randomUUID());
+  const rotationParts = backend('./vendor/tournament-split-core.js').dividir({matches:rotationGames}, ['matches']);
+  const write = db.batch();
+  write.set(rotationRef, { creatorUid:'owner', name:'Rodízio sintético', status:'active',
+    testModeEnabled:true, format:'Liga', sport:'beach_tennis', resultEntry:'organizer',
+    phases:compiled.phases, currentPhaseIndex:0, fmt2:cfg, combinedCategories:['Rodízio'],
+    _nJogos:rotationGames.length, _nPartes:{matches:rotationGames.length}, matches:[],
+    courtNames:['Quadra 1','Quadra 2'], participants:[] });
+  rotationParts.matches.forEach(record => write.set(rotationRef.collection('matches').doc(record._chave), record));
+  await write.commit();
+  const functions = backend('./index.js');
+  const invoke = (handler, data) => handler.run({auth:{uid:'owner',token:{uid:'owner'}},
+    data:Object.assign({tournamentId:rotationRef.id,operationId:randomUUID()},data), rawRequest:{headers:{}}});
+  for (let i = 0; i < firstRound.length; i++) {
+    const called = await invoke(functions.assignMatchCourt, {matchId:firstRound[i].id, court:'Quadra ' + (i + 1), confirmCall:true});
+    assert.equal(called.ok, true);
+  }
+  const secondRef = rotationRef.collection('matches').doc(firstRound[1].id);
+  const secondCalled = (await secondRef.get()).data().jogo;
+  assert(secondCalled.courtCalledAt);
+  await invoke(functions.endMatchOnCourt, {matchId:firstRound[0].id, action:'release'});
+  const rotationState = rotationRef.collection('courtState').doc('main');
+  const releasedOne = (await rotationState.get()).data().released;
+  assert.deepEqual(Object.keys(releasedOne), [firstRound[0].id]);
+  assert.deepEqual((await secondRef.get()).data().jogo, secondCalled,
+    'encerrar o primeiro deixa a outra quadra e chamada intactas');
+  const resultOne = await invoke(functions.applyMatchResult, {matchId:firstRound[0].id,
+    payload:{s1:4,s2:3,useSets:false}});
+  assert.equal(resultOne.ok, true, JSON.stringify(resultOne));
+  const scored = (await rotationRef.collection('matches').doc(firstRound[0].id).get()).data().jogo;
+  assert.equal(scored.scoreP1, 4);
+  assert.equal(scored.scoreP2, 3);
+  assert(scored.winner);
+  assert.equal((await rotationState.get()).data().released[firstRound[0].id], undefined,
+    'o placar confirmado retira somente sua própria pendência');
+  assert.equal((await secondRef.get()).data().jogo.courtCalledAt, secondCalled.courtCalledAt);
+  assert.equal((await secondRef.get()).data().jogo.court, 'Quadra 2');
+  assert.equal((await rotationRef.get()).data().testModeEnabled, true);
+  console.log('✓ rodízio: duas quadras, encerramento individual, placar físico e teste preservado');
   console.log('end-court physical: OK');
 }
 run().then(() => console.log('✓ callable real e documentos físicos de quadra')).catch(error => {

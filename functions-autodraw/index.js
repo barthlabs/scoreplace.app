@@ -6349,8 +6349,14 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           Object.prototype.hasOwnProperty.call(patch, key) && patch[key] !== t[key])) {
       throw new HttpsError('failed-precondition', 'Desative o teste antes de mudar a visibilidade.');
     }
-    if ('tvRotation' in raw) {
-      try { patch.tvRotation = require('./tv-layout-core').normalizeRotation(raw.tvRotation, tId, t.tvRotation, getStorage().bucket().name); }
+    if (Object.hasOwn(raw, 'tvRotation')) {
+      const proposal = raw.tvRotation;
+      // Uma aba anterior ao modo por quadra pode enviar um mapa completo sem conhecer placement.
+      if (t.tvRotation?.placement === 'court' && (!proposal || typeof proposal !== 'object' ||
+          Array.isArray(proposal) || !Object.hasOwn(proposal, 'placement') || !['screen','court'].includes(proposal.placement))) {
+        throw new HttpsError('failed-precondition', 'Atualize o aplicativo para editar o patrocínio por quadra.');
+      }
+      try { patch.tvRotation = require('./tv-layout-core').normalizeRotation(proposal, tId, t.tvRotation, getStorage().bucket().name); }
       catch (error) { throw new HttpsError('invalid-argument', error.message); }
     }
     if ('tvActiveScreen' in patch || 'tvScreens' in patch) {
@@ -6650,6 +6656,15 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     // continuar protegida mesmo quando o patch não traz fmt2.
     const fmt2Present = Object.prototype.hasOwnProperty.call(patch, 'fmt2');
     const requestedTeamSize = Object.prototype.hasOwnProperty.call(patch, 'teamSize') ? patch.teamSize : t.teamSize;
+    const rotationRules = (t.fmt2 && t.fmt2.rotationCategoryRules) || (patch.fmt2 && patch.fmt2.rotationCategoryRules);
+    const nextCategories = patch.combinedCategories || t.combinedCategories || [];
+    if (rotationRules && hasDraw && ((fmt2Present && !_configAtiva.igual(t.fmt2 && t.fmt2.rotationCategoryRules || [], patch.fmt2 && patch.fmt2.rotationCategoryRules || [])) ||
+        !_configAtiva.igual(t.combinedCategories, nextCategories))) {
+      throw new HttpsError('failed-precondition', 'As regras por categoria estão fixadas pelo sorteio.');
+    }
+    if (rotationRules && !hasDraw && patch.combinedCategories) {
+      require('./format-intent-validation-core').validateNewFormatIntent(patch.fmt2 || t.fmt2, HttpsError, t, requestedTeamSize, nextCategories);
+    }
     if (!hasDraw) {
       const formatGate = require('./format-intent-validation-core');
       if (fmt2Present) {
@@ -6658,12 +6673,33 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           formatGate.validateCompletedMixedIdentity(t, requestedTeamSize, HttpsError);
           delete patch.fmt2;
         } else {
-          formatGate.validateNewFormatIntent(patch.fmt2, HttpsError, t, requestedTeamSize);
+          formatGate.validateNewFormatIntent(patch.fmt2, HttpsError, t, requestedTeamSize, nextCategories);
         }
       } else {
         formatGate.validateHistoricalSinglesIdentity(t, requestedTeamSize, HttpsError);
         formatGate.validateCompletedMixedIdentity(t, requestedTeamSize, HttpsError);
       }
+    }
+    // Uma ficha antiga pode reenviar phases sem a extensão. O intent fresco
+    // define a geometria; pontuação e datas continuam com a configuração da fase.
+    const phaseRules = patch.phases?.[0]?.classification?.rotationCategoryRules;
+    if (!hasDraw && (rotationRules || phaseRules) && (fmt2Present || patch.phases || patch.combinedCategories)) {
+      const intent = fmt2Present ? patch.fmt2 : t.fmt2;
+      if (!intent) throw new HttpsError('invalid-argument', 'As regras de rodízio exigem a configuração de formato.');
+      const projected = drawWindow.FORMAT2.compileToPhases(intent, { sport:patch.sport || t.sport,
+        categories:nextCategories, resultEntry:patch.resultEntry || t.resultEntry,
+        lateEnrollment:patch.lateEnrollment || t.lateEnrollment, newMatchups:patch.newMatchups ?? t.newMatchups });
+      const supplied = patch.phases || t.phases || [];
+      patch.phases = projected.phases.map((phase, i) => {
+        const copy = Object.assign({}, phase);
+        const previous = supplied[i];
+        if (previous && previous.kind === phase.kind) {
+          for (const key of [..._CONFIG_FASE_ATIVA, 'scoring', 'advancedScoring', 'resultEntry'])
+            if (Object.hasOwn(previous, key)) copy[key] = previous[key];
+        }
+        return copy;
+      });
+      Object.assign(patch, projected.topLevel);
     }
     if (!hasDraw && (fmt2Present || 'tiebreakers' in patch || 'tiebreakersExcluded' in patch)) {
       const effectiveTie = { fmt2: patch.fmt2 || t.fmt2,
@@ -7041,6 +7077,7 @@ exports.applyTournamentFormat = onCall(async (request) => {
     let out;
     try {
       out = drawWindow.FORMAT2.compileToPhases(fmt2Clone, {
+        categories: t.combinedCategories || [],
         sport: t.sport,
         resultEntry: t.resultEntry || ['organizer'],
         lateEnrollment: t.lateEnrollment,
@@ -7090,20 +7127,22 @@ function _buildPhaseTieRuntime(t, current, sourceGroups, currentCfg, phaseEngine
     throw new HttpsError('failed-precondition', 'Origem da próxima fase indisponível para o desempate.');
   }
 
+  const customized = t.phases[0].classification && t.phases[0].classification.rotationCategoryRules;
+  const eligibleGroups = customized ? sourceGroups.filter(group => !phaseEngine.categoryEndsInRanking(t, group.category)) : sourceGroups;
   const previousSingleMonarch = !!(phaseEngine.ehReiRainhaRodadaUnica &&
     phaseEngine.ehReiRainhaRodadaUnica(currentCfg));
   const overall = !!(phaseEngine.usaRankingGeral && phaseEngine.usaRankingGeral(
     nextCfg.source.scope || 'per_group',
-    (nextCfg.source.mapping || []).length, sourceGroups.length,
+    (nextCfg.source.mapping || []).length, eligibleGroups.length,
     nextCfg.source.flatOverall === true, previousSingleMonarch));
   const pools = overall
-    ? [{ id: 'overall', rows: phaseEngine.globalStandings(sourceGroups, calculateStandings) }]
-    : sourceGroups.map((g, index) => ({ id: 'group-' + index, rows: calculateStandings(g), group: g }));
+    ? [{ id: 'overall', rows: phaseEngine.globalStandings(eligibleGroups, calculateStandings) }]
+    : eligibleGroups.map(g => ({ id: 'group-' + sourceGroups.indexOf(g), rows: calculateStandings(g), group: g }));
   const criterionList = Array.isArray(tieConfig.tiebreakers) ? tieConfig.tiebreakers.filter(k => k !== 'sorteio') : null;
   const advanced = !!(phaseEngine.effectiveAdvancedScoring &&
     (phaseEngine.effectiveAdvancedScoring(t, current) || {}).enabled);
   const sourceMatches = pool => {
-    const groupsToRead = pool.group ? [pool.group] : sourceGroups;
+    const groupsToRead = pool.group ? [pool.group] : eligibleGroups;
     const seen = new Set(), out = [];
     groupsToRead.forEach(g => {
       (g.matches || []).concat((g.rounds || []).reduce((a, r) => a.concat((r && r.matches) || []), [])).forEach(m => {
@@ -7224,13 +7263,14 @@ function _refreshAutomaticPhaseTies(t, matchId, nowIso) {
   const plannedMonarchRounds = Number.parseInt((t.phases[current] || {}).rounds, 10) || 1;
   const resolved = entry => !!(entry.match && (entry.match.winner ||
     (entry.match.isBye && !entry.match.sobraAguardaDecisao) || entry.match.isSitOut));
-  const groupIdx = touched.groupIdx != null ? Number(touched.groupIdx)
+  const customized = currentCfg.classification && currentCfg.classification.rotationCategoryRules;
+  const groupIdx = !customized && touched.groupIdx != null ? Number(touched.groupIdx)
     : sourceGroups.findIndex(group => (group.matches || []).some(match =>
       match && String(match.id) === String(matchId)));
   const poolId = 'group-' + groupIdx;
   const groupMatchIds = new Set(((sourceGroups[groupIdx] || {}).matches || [])
     .filter(match => match && match.id != null).map(match => String(match.id)));
-  const groupGames = games.filter(entry => entry.groupIdx != null
+  const groupGames = games.filter(entry => !customized && entry.groupIdx != null
     ? Number(entry.groupIdx) === groupIdx
     : entry.match && groupMatchIds.has(String(entry.match.id)));
   if (monarchRounds.length && monarchRounds.length < plannedMonarchRounds) {
@@ -7295,7 +7335,7 @@ function _refreshAutomaticPhaseTies(t, matchId, nowIso) {
 function _materializeInterleavedReadyCategories(t, tId, nowIso) {
   if (t && t.phaseBracketPlanVersion === 1) return [];
   const plan = t && t.scheduleWindow && t.scheduleWindow.interleavedPlan;
-  if (!plan || Number(t.currentPhaseIndex || 0) !== 0) return [];
+  if (!plan || Number(t.currentPhaseIndex || 0) !== 0 || (t.phases?.[0]?.classification?.rotationCategoryRules && !t.phases[1])) return [];
   const phaseEngine = drawWindow && drawWindow._phasesEngine;
   if (!phaseEngine || typeof phaseEngine.prevPhaseGroups !== 'function' ||
       typeof phaseEngine.materializeNextPhase !== 'function' ||
@@ -7320,7 +7360,7 @@ function _materializeInterleavedReadyCategories(t, tId, nowIso) {
   });
   const materialized = [];
   for (const category of (t.combinedCategories || []).map(String)) {
-    if (t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[category]) continue;
+    if ((currentCfg.classification && currentCfg.classification.rotationCategoryRules && phaseEngine.categoryEndsInRanking(t, category)) || (t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[category])) continue;
     // Uma chave oficial pode ter sido instalada pela operação antes do último
     // placar classificatório. Se seus jogos já ocupam todos os slots publicados,
     // reparar o marcador em vez de tentar gerar a chave outra vez: a segunda
@@ -7341,19 +7381,25 @@ function _materializeInterleavedReadyCategories(t, tId, nowIso) {
       continue;
     }
     const pools = tieRuntime.pools.filter(pool => categoryOf(pool.group) === category);
-    if (!expectedGroups[category] || pools.length !== expectedGroups[category]) continue;
+    const rotation = currentCfg.classification && currentCfg.classification.partnerRotation === 'unique_8' &&
+      currentCfg.classification.rotationCategoryRules;
+    const rule = rotation && drawWindow.FORMAT2.rotationRuleForCategory(currentCfg.classification, category);
+    if (!pools.length || (!rotation && (!expectedGroups[category] || pools.length !== expectedGroups[category]))) continue;
     const done = pools.every(pool => {
       const matches = (pool.group && pool.group.matches) || [];
-      return matches.length === 3 && matches.every(m => m && (m.winner || m.isBye));
+      const expected = rotation ? 2 * (rule ? rule.rounds : currentCfg.classification.rotationRounds) : 3;
+      return matches.length === expected && matches.every(m => m && (m.winner || m.isBye));
     });
     if (!done) continue;
     // A planilha oficial já fixou as duplas desta categoria. Uma simples
     // automática da classificação não pode voltar a bloquear suas oitavas.
-    const flow = officialBracket
+    const tieRule = t.fmt2 && t.fmt2.tieResolution;
+    const useConfiguredTie = ['draw_order', 'singles_then_draw', 'singles_draw_two'].includes(tieRule);
+    const flow = officialBracket || (rotation && !useConfiguredTie)
       ? { status:'ready', orderedPools:pools.map(pool => ({ id:pool.id, rows:standings(pool.group) })) }
       : _phaseTieCore.resolvePhaseTies(t, 0, pools, tieRuntime.nextCfg,
-        tieRuntime.compareForPool, null, 1, false, tieRuntime.numberForPool, nowIso,
-        { autoPlay:true, retainOtherDecisions:true });
+        tieRuntime.compareForPool, null, 1, !!rotation && tieRule === 'draw_order', tieRuntime.numberForPool, nowIso,
+        { autoPlay:!rotation || tieRule === 'singles_then_draw', retainOtherDecisions:true });
     if (flow.status !== 'ready') continue;
     const byPool = new Map(flow.orderedPools.map(pool => [pool.id, pool.rows]));
     // materializeNextPhase lê os grupos de novo. A identidade do objeto muda,
@@ -7588,16 +7634,17 @@ exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) =
         });
       } else {
         const byName = new Map();
-        tieFlow.orderedPools.forEach((pool, index) => {
-          const g = sourceGroups[index];
-          byName.set(String(g && g.name || ('Grupo ' + index)), pool.rows);
+        const byPool = new Map(pools.map(pool => [pool.id, pool.group]));
+        tieFlow.orderedPools.forEach(pool => {
+          const g = byPool.get(pool.id);
+          if (g) byName.set(String(g.name || ''), pool.rows);
         });
         calculateStandings = g => byName.get(String(g && g.name || '')) || phaseStandingsFn(g, t, tbOpts, hasMonarch);
       }
       const bestNext = !overall && nextCfg.source.bestNextByGroup;
       if (bestNext && Number(bestNext.count) > 0) {
         const rank = Number(nextCfg.source.qualifyTopN || 0);
-        const wildcardRows = sourceGroups.map(g => (calculateStandings(g) || [])[rank]).filter(Boolean);
+        const wildcardRows = pools.map(pool => (calculateStandings(pool.group) || [])[rank]).filter(Boolean);
         if (wildcardRows.length < Number(bestNext.count)) {
           throw new HttpsError('failed-precondition', 'Não há colocados seguintes suficientes para as vagas extras.');
         }
@@ -8354,7 +8401,9 @@ function _resolveFinalClassificationTie(t, action, nowIso, releasedMatches) {
     delete t.phaseTieDecisions[String(current)];
     return true;
   };
-  if (!phase || phase.kind !== 'classification' || current !== t.phases.length - 1 ||
+  const customized = t.phases && t.phases[0] && t.phases[0].classification?.rotationCategoryRules;
+  const rankingPools = customized ? drawWindow._phasesEngine.rotationRankingPools(t) : [];
+  if (!phase || (!rankingPools.length && phase.kind !== 'classification') || current !== t.phases.length - 1 ||
       !['draw_order', 'singles_then_draw', 'singles_draw_two'].includes(rule)) {
     if (action) throw new HttpsError('failed-precondition', 'Este torneio não prevê desempate extra no encerramento.');
     return { status: 'ready', changed: phase && phase.kind === 'classification' &&
@@ -8379,13 +8428,13 @@ function _resolveFinalClassificationTie(t, action, nowIso, releasedMatches) {
       typeof engine.phaseGames !== 'function') {
     throw new HttpsError('failed-precondition', 'Motor de desempate indisponível para o encerramento.');
   }
-  const grouped = phase.classification && phase.classification.structure === 'groups' &&
+  const grouped = !rankingPools.length && phase.classification && phase.classification.structure === 'groups' &&
     Number(phase.gruposCount || t.gruposCount || 1) > 1;
   const groups = grouped ? engine.prevPhaseGroups(t) : [];
   if (grouped && groups.length !== Number(phase.gruposCount || t.gruposCount)) {
     throw new HttpsError('failed-precondition', 'Grupos incompletos para definir os títulos.');
   }
-  const pools = grouped ? groups.map((g, index) => ({
+  const pools = rankingPools.length ? rankingPools : grouped ? groups.map((g, index) => ({
     id: 'group-' + index, group: g,
     rows: engine.groupTeamStandings(g, { tiebreakers: tieConfig.tiebreakers })
   })) : [{ id: 'overall', rows: standings(Object.assign({}, t, { tiebreakers: tieConfig.tiebreakers })) }];
@@ -8402,7 +8451,8 @@ function _resolveFinalClassificationTie(t, action, nowIso, releasedMatches) {
   if (action && useDrawOrder) {
     throw new HttpsError('failed-precondition', 'Esta classificação usa a ordem do sorteio original.');
   }
-  const phaseGames = engine.phaseGames(t, current);
+  const rankingPhase = rankingPools.length ? 0 : current;
+  const phaseGames = engine.phaseGames(t, rankingPhase);
   const originalGames = _phaseTieCore.originalDrawMatches(phaseGames);
   const slotKeys = (match, side) => {
     const ids = typeof drawWindow._slotUids === 'function' ? drawWindow._slotUids(match, side) : [];
@@ -8443,7 +8493,7 @@ function _resolveFinalClassificationTie(t, action, nowIso, releasedMatches) {
     }
     const snapshot = JSON.parse(JSON.stringify(t));
     drawWindow._assignGlobalGameNumbers(snapshot);
-    numberedGames = engine.phaseGames(snapshot, current);
+    numberedGames = engine.phaseGames(snapshot, rankingPhase);
   }
   const numberForPool = pool => {
     const ids = pool.group
@@ -8542,6 +8592,7 @@ exports.finishTournament = onCall(async request => {
         throw new HttpsError('internal', 'O resolvedor de títulos está indisponível.');
       }
       const result = resolver.resolve(t, {
+        rotationTiesChecked:true,
         engine: drawWindow._phasesEngine,
         teamCore: drawWindow.ScoreplaceTeamCompetition,
         standings: drawWindow._computeStandings

@@ -84,9 +84,27 @@ function validateCompletedMixedIdentity(stored, requestedTeamSize, HttpsError) {
   }
 }
 
-function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize) {
+function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, categories) {
   if (!fmt2 || typeof fmt2 !== 'object' || Array.isArray(fmt2)) {
     throw new HttpsError('invalid-argument', 'Configuração de formato inválida.');
+  }
+  if (Object.prototype.hasOwnProperty.call(fmt2, 'rotationCategoryRules')) {
+    const rules = fmt2.rotationCategoryRules;
+    const available = new Set(categories || (stored && stored.combinedCategories) || []);
+    const seen = new Set();
+    if (fmt2.parceria !== 'rotation_groups_8' || fmt2.disputa !== 'dupla' || fmt2.classifAtiva === false ||
+        (fmt2.teamCompetition && fmt2.teamCompetition.enabled) || !Array.isArray(rules) || !rules.length || available.size < 2) {
+      throw new HttpsError('invalid-argument', 'As regras por categoria exigem rodízio A–H com várias categorias.');
+    }
+    for (const rule of rules) {
+      if (!rule || Object.keys(rule).some(key => !['category','rounds','destination'].includes(key)) || typeof rule.category !== 'string' || !available.has(rule.category) || seen.has(rule.category) ||
+          !Number.isInteger(rule.rounds) || rule.rounds < 1 || rule.rounds > 7 ||
+          !['ranking', 'elimination'].includes(rule.destination) ||
+          (rule.destination === 'elimination' && !(fmt2.eliminatoria && fmt2.eliminatoria.ativa === true))) {
+        throw new HttpsError('invalid-argument', 'Categoria, número de partidas ou destino do rodízio inválido.');
+      }
+      seen.add(rule.category);
+    }
   }
   const historicalField = explicitValue(fmt2, 'historicalSinglesOverride');
   const storedHistorical = !!(stored && stored.fmt2 && stored.fmt2.historicalSinglesOverride === true);

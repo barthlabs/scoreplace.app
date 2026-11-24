@@ -91,7 +91,9 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
   for(let i=0;i<2;i++) await db.doc('tournaments/orig_ruim/matches/m'+i).set({_chave:'m'+i,jogo:{id:'m'+i}});
 
   // ── ORIGINAL INTEIRO ──
-  await db.doc('tournaments/orig_int').set({ name:'Inteiro', isPublic:true, creatorUid:DEV,
+  const rotationCourt={...baseDiv.tvRotation,placement:'court',slides:[{...baseDiv.tvRotation.slides[0],
+    assets:['https://storage.googleapis.com/demo-scoreplace.appspot.com/tournamentTvArt/orig_int/logo.png']}]};
+  await db.doc('tournaments/orig_int').set({ name:'Inteiro', tvRotation:rotationCourt, isPublic:true, creatorUid:DEV,
     memberUids:[DEV,REAL], coHosts:[], adminUids:[DEV],
     participants:[{uid:'p1'},{uid:'p2'}], matches:[{id:'m1',winner:'p1'}], rounds:[] });
   await db.doc('tournaments/orig_int/results/m1').set({playerUids:[DEV],winner:'p1',updatedAt:1});
@@ -140,9 +142,10 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
   R['fidelidade DIVIDIDO (campos fora do envelope)']={ok:true,difs:await cmp('tournaments/orig_div','sandboxes/'+sbDivId)};
   R['fidelidade INTEIRO']={ok:true,difs:await cmp('tournaments/orig_int','sandboxes/'+sbIntId)};
   const sbDiv=(await db.doc('sandboxes/'+sbDivId).get()).data()||{};
-  R.rotacaoCopiada=canon(sbDiv.tvRotation)===canon(baseDiv.tvRotation);
+  R.rotacaoCopiada=canon(sbDiv.tvRotation)===canon(baseDiv.tvRotation) && !Object.hasOwn(sbDiv.tvRotation,'placement');
   R['forma persistida DIVIDIDO']={ok:true,_semPesados:sbDiv._semPesados,_nPartes:sbDiv._nPartes,_nJogos:sbDiv._nJogos,sbState:sbDiv.sbState};
   const sbInt=(await db.doc('sandboxes/'+sbIntId).get()).data()||{};
+  R.rotacaoPorQuadra=canon(sbInt.tvRotation)===canon(rotationCourt);
   R['forma persistida INTEIRO']={ok:true,_semPesados:sbInt._semPesados===undefined?'(ausente)':sbInt._semPesados,sbState:sbInt.sbState};
   /* ⛔ O RETRATO DA CÓPIA RECÉM-NASCIDA, guardado ANTES do fluxo da seção ⑨ — que grava
    * placar e avança fase de propósito. Comparar o original com o sandbox JÁ OPERADO
@@ -411,6 +414,7 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
 const J = (v) => JSON.stringify(v);
 console.log('──── createSandbox no Emulator real ────');
 ok('Sandbox herda as telas e URLs canônicas de patrocinadores da origem', R.rotacaoCopiada === true);
+ok('Sandbox conserva patrocínio por quadra da origem', R.rotacaoPorQuadra === true);
 
 console.log('\n── ① autorização server-side ──');
 ok('⛔ REAL (não é identidade de teste) é RECUSADO',

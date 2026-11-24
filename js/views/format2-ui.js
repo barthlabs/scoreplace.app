@@ -749,6 +749,37 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ? Math.ceil(Math.max(0, Number(gi && gi.units) || 0) / 8)
       : Math.max(1, Number(cfg && cfg.grupos) || 1);
   }
+  function _rotationEstimate(cfg, gi, capacities) {
+    var categories = _rotationCategories();
+    var groups = [], groupGames = 0, incomplete = false;
+    var players = gi.t && gi.t.participants || [];
+    categories.forEach(function (category, ci) {
+      var roster = players.filter(function (p) {
+        return (window._getParticipantCategories(p) || [])[0] === category && p.ligaActive !== false;
+      });
+      if (capacities) {
+        var capacity = Number(capacities[category]);
+        if (!Number.isSafeInteger(capacity) || capacity < 1 || capacity > 4096) { incomplete = true; return; }
+        roster = Array.from({length:capacity}, function (_, i) { return 'Vaga ' + ci + '-' + i; });
+      }
+      var rule = window.FORMAT2.rotationRuleForCategory(cfg, category);
+      if (roster.length % 8) incomplete = true;
+      for (var i = 0; i + 8 <= roster.length; i += 8) {
+        groups.push({ category:category, name:category + ' · ' + (i / 8 + 1), players:roster.slice(i, i + 8) });
+        groupGames += 2 * (rule ? rule.rounds : cfg.rodadas.n);
+      }
+    });
+    if (incomplete || !groups.length) return null;
+    var phases = window.FORMAT2.compileToPhases(cfg, { sport:S.sport, categories:categories }).phases;
+    var projection = { combinedCategories:categories, groups:groups, phases:phases };
+    var next = phases[1] && window._sumulaUpcomingBracket(projection, 1);
+    if (phases[1] && (!next || next.pending || !next.categories || next.categories.some(function (c) { return c.partial; }))) return null;
+    return { groupGames:groupGames, elimGames:next ? next.categories.reduce(function (total,c) { return total + c.matches.length; }, 0) : 0 };
+  }
+  window._f2ProjectedRotation = function (capacities) {
+    if (!S || !S.cfg.rotationCategoryRules) return null;
+    return _rotationEstimate(S.cfg, _groupInfo(S.cfg), capacities);
+  };
   // Linha de estimativa (inscritos + tempo de jogos).
   function _estimateLine(cfg) {
     var gi = _groupInfo(cfg);
@@ -762,6 +793,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       q = Math.min(q, gi.units);
       if (q >= 2) elimGames = (q - 1) + (q >= 4 ? 1 : 0);   // 3º lugar sempre (≥4 tem 2 semis)
     }
+    if (cfg.rotationCategoryRules) {
+      var projection = _rotationEstimate(cfg, gi);
+      if (!projection) return '<div role="status">A estimativa depende de grupos completos de oito por categoria e da chave projetada.</div>';
+      groupGames = projection.groupGames;
+      elimGames = projection.elimGames;
+    }
     var cc = parseInt((document.getElementById('tourn-court-count') || {}).value, 10) || (gi.t && gi.t.courtCount) || 1;
     // ⛔ grupos e eliminatória podem ter formatos DIFERENTES: cada metade usa o
     // tempo da SUA partida em vez de um minuto único pro total.
@@ -773,7 +810,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var timeStr = hh > 0 ? (hh + 'h' + (mm ? ' ' + mm + 'min' : '')) : (mm + 'min');
     var gdTxt = (gdG === gdE) ? (gdG + 'min') : (gdG + '/' + gdE + 'min');
     return '<div style="margin-top:8px;font-size:0.78rem;color:var(--sp-c-a5b4fc,#a5b4fc);background:rgba(99,102,241,0.08);border-radius:8px;padding:9px 11px;line-height:1.5;">' +
-      '👥 <b>' + gi.people + '</b> inscritos' + (gi.isDupla ? (' → <b>' + gi.units + '</b> duplas') : '') +
+      '👥 <b>' + gi.people + '</b> inscritos' + (gi.isDupla && !cfg.rotationCategoryRules ? (' → <b>' + gi.units + '</b> duplas') : '') +
       ' · ⏱️ ~<b>' + timeStr + '</b> de jogos <span style="opacity:0.8;">(' + totalGames + ' jogos · ' + gdTxt + ' · ' + cc + ' quadra' + (cc > 1 ? 's' : '') + ')</span></div>';
   }
   // Resumo da eliminatória (abaixo do slider de classificados): pessoas/equipes, jogos, tempo.
@@ -781,6 +818,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!cfg.eliminatoria || !cfg.eliminatoria.ativa) return '';
     var gi = _groupInfo(cfg);
     var isDupla = cfg.disputa === 'dupla';
+    if (cfg.rotationCategoryRules) {
+      var projection = _rotationEstimate(cfg, gi);
+      return projection ? '<div>' + projection.elimGames + (projection.elimGames === 1 ? ' jogo' : ' jogos') + ' na eliminatória</div>' : '';
+    }
     var effectiveGroups = _effectiveGroupCount(cfg, gi);
     var perGroupScope = (effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8') && cfg.classifScope !== 'overall';
     // v4.4.40: "Todos" → o total é o nº REAL de inscritos (não o classificados). Sem inscritos,
@@ -815,6 +856,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // Apresentação abaixo do slider: rótulo (1 grupo) OU números grandes (N grupos).
   function _estruturaBlock(cfg) {
     var gi = _groupInfo(cfg);
+    if (cfg.rotationCategoryRules) return _estimateLine(cfg);
     var superEight = window.FORMAT2.superEightVariant(cfg,
       cfg.parceria === 'super_eight' ? gi.people : gi.units);
     // Categorias distintas geram grades separadas; oito duplas no total não
@@ -934,6 +976,39 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     Object.keys(saved || {}).forEach(add);
     Object.keys((tc && tc.schedule && tc.schedule.gamesPerPairByCategory) || {}).forEach(add);
     return categories;
+  }
+  function _rotationCategories() {
+    if (S && S.mode === 'form' && document.getElementById('tourn-gender-categories') && typeof window._getCreateFormCategoryData === 'function') {
+      var data = window._getCreateFormCategoryData();
+      if (data && Array.isArray(data.combinedCategories)) return data.combinedCategories;
+    }
+    return _teamCompetitionCategories();
+  }
+  function _rotationCategoryControls(cfg) {
+    var categories = _rotationCategories();
+    var rules = cfg.rotationCategoryRules || [];
+    if (cfg.teamCompetition && cfg.teamCompetition.enabled) return '';
+    if (categories.length < 2 && !rules.length) return '';
+    var locked = _hasDrawnGames() ? ' disabled' : '';
+    var html = '<label><input type="checkbox"' + locked + (rules.length ? ' checked' : '') +
+      ' onchange="window._f2RotationByCategory(this.checked)"> Personalizar partidas e classificação por categoria</label>';
+    if (!rules.length) return html;
+    var removed = rules.filter(function (rule) { return categories.indexOf(rule.category) < 0; });
+    if (removed.length) html += '<div role="status">Categorias removidas ou renomeadas: ' +
+      removed.map(function (rule) { return _safe(rule.category); }).join(', ') +
+      '. <button type="button"' + locked + ' onclick="window._f2RotationByCategory(true)">Aplicar às categorias atuais</button></div>';
+    categories.forEach(function (category, index) {
+      var rule = window.FORMAT2.rotationRuleForCategory(cfg, category);
+      var rounds = rule ? rule.rounds : cfg.rodadas.n;
+      var ranking = rule ? rule.destination === 'ranking' : !cfg.eliminatoria.ativa;
+      html += '<fieldset><legend>' + _safe(category) + '</legend><label>Partidas por atleta <input type="number" min="1" max="7" value="' +
+        rounds + '"' + locked + ' onchange="window._f2RotationRule(' + index + ',this.value,null)"></label> ' +
+        '<label>Classificação <select' + locked + ' onchange="window._f2RotationRule(' + index + ',null,this.value)">' +
+        '<option value="ranking"' + (ranking ? ' selected' : '') + '>Encerrar no ranking individual</option>' +
+        (cfg.eliminatoria.ativa ? '<option value="elimination"' + (!ranking ? ' selected' : '') +
+          '>Avançar à eliminatória configurada</option>' : '') + '</select></label></fieldset>';
+    });
+    return html;
   }
   function _teamCategoryPairControls(tc) {
     var categories = _teamCompetitionCategories(tc);
@@ -1119,8 +1194,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (cfg.parceria === 'rotation_groups_8') {
       var rotationCount = Math.max(1, Math.min(7, parseInt(cfg.rodadas.n, 10) || 5));
       rInner = '<label style="display:block;font-size:.74rem;color:var(--text-muted);margin-bottom:6px;">Partidas por atleta em cada grupo</label>' +
-        '<input type="number" min="1" max="7" value="' + rotationCount + '" onchange="window._f2RotationRounds(this.value)" style="width:82px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);">' +
-        '<div style="font-size:.72rem;color:var(--text-muted);margin-top:7px;line-height:1.45;">No rodízio A–H, cada grupo tem 8 atletas. O sorteio atribui as letras A–H; cada rodada tem 2 jogos e cada atleta joga uma vez com parceiro diferente. Os grupos são separados por categoria.</div>';
+        '<input type="number" min="1" max="7" value="' + rotationCount + '"' + (cfg.rotationCategoryRules && _hasDrawnGames() ? ' disabled' : '') + ' onchange="window._f2RotationRounds(this.value)" style="width:82px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);">' +
+        '<div style="font-size:.72rem;color:var(--text-muted);margin-top:7px;line-height:1.45;">No rodízio A–H, cada grupo tem 8 atletas. O sorteio atribui as letras A–H; cada rodada tem 2 jogos e cada atleta joga uma vez com parceiro diferente. Os grupos são separados por categoria.</div>' + '<div id="f2-rotation-categories">' + _rotationCategoryControls(cfg) + '</div>';
     } else if (rotativo) {
       // Rei/Rainha (ou sorteio a cada rodada): SEMPRE nº de rodadas + agendamento (rotativo por
       // rodada). "Todos contra todos" não se aplica — mas o Nº de rodadas FICA (pedido do dono).
@@ -1638,8 +1713,33 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     _norm(); _rerender();
   };
+  function _currentRotationRules() {
+    return _rotationCategories().map(function (category) {
+      return Object.assign({ category:category, rounds:S.cfg.rodadas.n,
+        destination:S.cfg.eliminatoria.ativa ? 'elimination' : 'ranking' }, window.FORMAT2.rotationRuleForCategory(S.cfg, category));
+    });
+  }
+  window._f2RotationByCategory = function (enabled) {
+    if (!S || _hasDrawnGames() || S.cfg.parceria !== 'rotation_groups_8') return;
+    if (enabled && _rotationCategories().length > 1) S.cfg.rotationCategoryRules = _currentRotationRules();
+    else delete S.cfg.rotationCategoryRules;
+    _norm(); _rerender();
+  };
+  window._f2RefreshRotationCategories = function () {
+    var controls = document.getElementById('f2-rotation-categories');
+    if (controls && S && S.cfg.parceria === 'rotation_groups_8') controls.innerHTML = _rotationCategoryControls(S.cfg);
+  };
+  window._f2RotationRule = function (index, rounds, destination) {
+    if (!S || _hasDrawnGames() || !S.cfg.rotationCategoryRules) return;
+    var rules = _currentRotationRules(), rule = rules[index];
+    if (!rule) return;
+    if (rounds != null) rule.rounds = Math.max(1, Math.min(7, parseInt(rounds, 10) || S.cfg.rodadas.n));
+    if (destination === 'ranking' || (destination === 'elimination' && S.cfg.eliminatoria.ativa)) rule.destination = destination;
+    S.cfg.rotationCategoryRules = rules;
+    _norm(); _rerender();
+  };
   window._f2RotationRounds = function (value) {
-    if (!S || S.cfg.parceria !== 'rotation_groups_8') return;
+    if (!S || S.cfg.parceria !== 'rotation_groups_8' || (S.cfg.rotationCategoryRules && _hasDrawnGames())) return;
     var n = Math.max(1, Math.min(7, parseInt(value, 10) || 5));
     S.cfg.rodadas.n = n; _norm(); _rerender();
   };
@@ -1973,8 +2073,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     S.cfg.teamCompetition.scoring[field] = value; _norm(); _rerenderSemAtrapalhar(el);
   };
   window._f2Elim = function (checked) {
-    if (!S || _faseLockState(S).elimLocked || (!checked && !S.cfg.classifAtiva)) { _rerender(); return; }
+    if (!S || _faseLockState(S).elimLocked || (!checked && (!S.cfg.classifAtiva || (S.cfg.rotationCategoryRules && _hasDrawnGames())))) { _rerender(); return; }
     S.cfg.eliminatoria.ativa = !!checked;
+    if (!checked && S.cfg.rotationCategoryRules) S.cfg.rotationCategoryRules.forEach(function (rule) { rule.destination = 'ranking'; });
     _norm(); _rerender();
   };
   window._f2ClassifAtiva = function (checked) {

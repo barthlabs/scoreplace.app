@@ -35,7 +35,7 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
         window.testImages.push(image);
         const source = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
         Object.defineProperty(image,'src',{set(url) {
-          window.loadedUrls.push(url);
+          window.loadedUrls.push(url); image.dataset.sourceUrl=url;
           source.set.call(image, 'data:image/png;base64,'+(url.includes('broken') ? 'ZmFsYQ==' : encoded));
         }});
         return image;
@@ -96,6 +96,87 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
       await configure({enabled:false,mode,mainDurationSeconds:4,slides});
       await see('main'); assert.equal(await tv.evaluate(()=>window.rotationTimers()),0);
     }
+    const courtConfig = { enabled:true, placement:'court', mode:'sequential', mainDurationSeconds:2,
+      slides:[{ id:'partners',name:'Parceiros',durationSeconds:3,assets:[art('alpha'),art('beta')] }] };
+    const currentCourt = () => tv.locator('#tv-sponsor').getAttribute('data-court');
+    const boxOf = async selector => tv.locator(selector).first().boundingBox();
+    await page.evaluate(()=>{
+      const t=window._currentBracketTournament;
+      t.courtNames=['Central','Leste','Oeste'];
+      t.matches.push({id:'ao-vivo',court:'Central',p1:'Ana',p2:'Bea',scoreP1:1,scoreP2:2,courtCalledAt:new Date().toISOString()});
+    });
+    await configure(courtConfig);
+    await tick(2000); await see('partners');
+    for (const [i,court] of ['Central','Leste','Oeste','Central','Leste','Oeste'].entries()) {
+      assert.equal(await currentCourt(),court);
+      assert.equal(await tv.locator('#tv-sponsor img').count(),1);
+      assert.equal(await tv.locator('#tv-sponsor img').evaluate(img=>img.dataset.sourceUrl),art(i%2?'beta':'alpha'));
+      const activeBox = await boxOf('[data-tv-court="'+court+'"]');
+      const adBox = await boxOf('#tv-sponsor');
+      assert.ok(Math.abs(adBox.x-activeBox.x)<1 && Math.abs(adBox.width-activeBox.width)<1 && Math.abs(adBox.height-activeBox.height)<1);
+      await tick(2000);
+      const score=await page.evaluate(()=>{
+        const match=window._currentBracketTournament.matches.find(m=>m.id==='ao-vivo');
+        match.scoreP1++;window._tvLiveRefresh();return match.scoreP1;
+      });
+      assert.equal(await tv.locator('[data-tv-court="Central"] .tv-score').first().textContent(),String(score));
+      await tick(999); assert.equal(await currentCourt(),court);
+      await tick(1);
+    }
+    await configure({...courtConfig,mode:'interleaved'});
+    await tick(2000); await see('partners'); await tick(3000); await see('main');
+    await tick(1999); await see('main'); await tick(1); await see('partners'); assert.equal(await currentCourt(),'Leste');
+    // A grade personalizada recria cards e clones para manter a rolagem contínua.
+    await tv.emulateMedia({reducedMotion:'reduce'});
+    await page.evaluate(()=>{
+      const t=window._currentBracketTournament;
+      t.courtNames=Array.from({length:8},(_,i)=>'Q'+(i+1));
+      t.tvLayout=window.ScoreplaceTvLayout.defaults();t.tvLayout.card.court=false;
+      t.tvRotation={...t.tvRotation,mode:'sequential',mainDurationSeconds:1};window._tvLiveRefresh();
+    });
+    await tv.evaluate(()=>{
+      const style=document.createElement('style');style.id='court-test-size';
+      style.textContent='.tv-custom-courts .tv-courts{height:240px!important;grid-auto-rows:120px!important}';document.head.append(style);
+      window.dispatchEvent(new Event('resize'));
+    });
+    await tick(1000); await see('partners');
+    const original = await currentCourt();
+    assert.ok(original);
+    await tv.waitForFunction(()=>!!document.querySelector('[data-tv-court][data-tv-loop-repeat]'));
+    await tv.evaluate(name=>{
+      const loop=document.querySelector('[data-tv-autoscroll="courts"]');
+      const copy=Array.from(loop.children).find(n=>n.dataset.tvCourt===name && n.hasAttribute('data-tv-loop-repeat'));
+      loop.scrollTop += copy.getBoundingClientRect().top-loop.getBoundingClientRect().top+18;
+      loop.dispatchEvent(new Event('scroll'));
+    },original);
+    await tv.waitForFunction(name=>{
+      const section=document.querySelector('[data-tv-autoscroll="courts"]'),view=section.getBoundingClientRect();
+      const copy=Array.from(section.children).find(n=>n.dataset.tvCourt===name&&n.hasAttribute('data-tv-loop-repeat')).getBoundingClientRect();
+      const ad=document.querySelector('#tv-sponsor').getBoundingClientRect();
+      return copy.top<view.top-1 && Math.abs(ad.top-view.top)<1 && Math.abs(ad.bottom-copy.bottom)<1;
+    },original,{timeout:3000});
+    assert.equal(await tv.locator('#tv-sponsor').count(),1);
+    await tick(1500);
+    await page.evaluate(()=>{window._currentBracketTournament.name+='Z';window._tvLiveRefresh();});
+    await tv.evaluate(()=>{window.__tvReplaceMarkup(window.__tvLastMarkup);window.dispatchEvent(new Event('resize'));});
+    await tick(1499); assert.equal(await currentCourt(),original);
+    await tick(1); assert.notEqual(await currentCourt(),original);
+    await page.evaluate(()=>{window._currentBracketTournament.tvLayout.sections.courts.visible=false;window._tvLiveRefresh();});
+    await see('main'); await tick(20000); await see('main');
+    await page.evaluate(()=>{window._currentBracketTournament.tvLayout.sections.courts.visible=true;window._tvLiveRefresh();});
+    await see('partners');
+    await configure({...courtConfig,enabled:false}); await see('main');
+    await page.evaluate(()=>{const t=window._currentBracketTournament;t.tvLayout=null;t.courtNames=['Única'];t.matches.pop();});
+    const sparse={...courtConfig,mainDurationSeconds:1,slides:[{id:'single',name:'',durationSeconds:2,assets:[art('broken-court'),art('healthy')]}]};
+    await configure(sparse);await tick(1000);await see('single');
+    assert.equal(await currentCourt(),'Única');
+    assert.equal(await tv.locator('#tv-sponsor img').evaluate(img=>img.dataset.sourceUrl),art('healthy'));
+    await tick(2000);await see('single');assert.equal(await currentCourt(),'Única');
+    await configure({...sparse,slides:[{...sparse.slides[0],assets:[art('broken-court')]}]});
+    await tick(1000);await see('main');await tv.waitForFunction(()=>window.rotationTimers()===0);
+    const failedCourtRequests=await tv.evaluate(()=>window.loadedUrls.length);
+    await tick(20000);await page.evaluate(()=>window._tvLiveRefresh());await see('main');
+    assert.equal(await tv.evaluate(()=>window.loadedUrls.length),failedCourtRequests);
     const many = { enabled:true, mode:'sequential', mainDurationSeconds:1, slides:Array.from({ length:12 },(_,i) => ({
       id:'full'+i, name:'', durationSeconds:1, assets:Array.from({length:12},(_,j)=>art('full-'+i+'-'+j))
     })) };

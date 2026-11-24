@@ -94,7 +94,7 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       try { config.registrationSettings = require('./registration-settings-core').validate(config.registrationSettings, config.combinedCategories); }
       catch (error) { fail('invalid-argument', error.message); }
     }
-    if (config.fmt2 && validateIntent) validateIntent(config.fmt2, HttpsError, undefined, undefined);
+    if (config.fmt2 && validateIntent) validateIntent(config.fmt2, HttpsError, undefined, undefined, config.combinedCategories);
     if (config.lateEnrollment === 'closed' && config.newMatchups === true) {
       fail('invalid-argument', 'Novos confrontos exigem inscrições abertas.');
     }

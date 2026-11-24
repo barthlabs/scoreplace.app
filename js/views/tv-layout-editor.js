@@ -31,21 +31,23 @@
     savedDefaultLayout = JSON.stringify(screens[0].layout);
     activeLiveScreen = savedActiveLiveScreen = null;
   }
-  var rotation, savedRotation, artwork = new Map(), rotationNotice = '';
+  var rotation, savedRotation, rotationLocked = false, artwork = new Map(), rotationNotice = '';
   function resetRotation(value, id) {
     artwork.forEach(function (_, url) { URL.revokeObjectURL(url); });
     artwork = new Map();
+    rotationLocked = false;
     try { rotation = Core.normalizeRotation(value, id, value) || Core.rotationDefaults(); }
-    catch (error) { rotation = Core.rotationDefaults(); }
+    catch (error) { rotationLocked = true; rotation = value; }
     savedRotation = JSON.stringify(rotation);
     rotationNotice = '';
   }
-  function rotationChanged() { return !!rotation && JSON.stringify(rotation) !== savedRotation; }
+  function rotationChanged() { return !rotationLocked && !!rotation && JSON.stringify(rotation) !== savedRotation; }
   function prepareRotation() {
     if (!rotationChanged()) return null;
     // O retry conserva os arquivos selecionados e os uploads já confirmados.
     var captured = JSON.parse(JSON.stringify(rotation)), files = new Map(artwork);
     var original = window._editingTournament && window._editingTournament.tvRotation;
+    var switchingToScreen = JSON.parse(savedRotation).placement === 'court' && captured.placement !== 'court';
     return async function (id) {
       var resolved = JSON.parse(JSON.stringify(captured));
       for (var slide of resolved.slides) {
@@ -68,12 +70,21 @@
           catch (error) { entry.upload = null; throw error; }
         }
       }
-      return Core.normalizeRotation(resolved, id, original);
+      var canonical = Core.normalizeRotation(resolved, id, original);
+      if (switchingToScreen) canonical.placement = 'screen'; // intenção explícita no pedido, omitida pelo servidor no documento
+      return canonical;
     };
   }
   function paintRotation(host) {
     var panel = host.querySelector('[data-tv-rotation]');
     if (!panel) return;
+    panel.disabled = rotationLocked;
+    if (rotationLocked) {
+      panel.innerHTML = '<legend>Patrocinadores</legend><p role="status">Atualize o aplicativo para editar esta configuração de patrocinadores.</p>';
+      panel.oninput = panel.onchange = panel.onclick = null;
+      return;
+    }
+    var byCourt = rotation.placement === 'court';
     var sequence = ['1'];
     rotation.slides.forEach(function (_, i) {
       if (i && rotation.mode === 'interleaved') sequence.push('1');
@@ -86,18 +97,31 @@
     function seconds(key, val, label) {
       return '<label>' + label + ' <input data-rotation-seconds="' + key + '" type="number" min="1" max="3600" required value="' + val + '" style="width:5.5em"> s</label>';
     }
-    panel.innerHTML = '<legend>Telas de patrocinadores</legend><div class="toggle-row"><span>Alternar placar e patrocinadores</span>' +
+    var preview = '<span aria-label="Sequência de exibição">' + sequence.join(' → ') + (sequence.length > 1 ? ' → 1…' : '') + '</span>';
+    if (byCourt) {
+      var images = rotation.slides.flatMap(function (slide) { return slide.assets; });
+      var courts = (snapshot && snapshot.courts || []).map(function (card) { return card.name; });
+      if (!courts.length) courts = ['Quadra 1','Quadra 2'];
+      var sample = images.length ? Array.from({length:Math.min(3,Math.max(courts.length,images.length))}, function (_, i) {
+        return '<span style="display:inline-flex;align-items:center;gap:.4em">' + esc(courts[i % courts.length]) +
+          ' <img alt="Arte ' + (i % images.length + 1) + '" src="' + esc(images[i % images.length]) + '" style="width:3em;height:2em;object-fit:contain"></span>';
+      }).join(rotation.mode === 'interleaved' ? ' → Placar → ' : ' → ') : 'Adicione imagens para visualizar a sequência.';
+      preview = '<div data-rotation-court-preview aria-label="Prévia da sequência por quadra">' + sample + '</div>';
+    }
+    panel.innerHTML = '<legend>Patrocinadores</legend><div class="toggle-row"><span>Alternar placar e patrocinadores</span>' +
       '<label class="toggle-switch"><input type="checkbox" role="switch" aria-label="Alternar placar e patrocinadores" data-rotation-enabled' +
       (rotation.enabled ? ' checked' : '') + '><span class="toggle-slider"></span></label></div>' +
       '<div style="display:flex;gap:1em;align-items:center;flex-wrap:wrap;margin:.7em 0">' +
-      seconds('main', rotation.mainDurationSeconds, 'Tela 1 · Placar') + '<label>Ordem <select data-rotation-mode><option value="sequential">Em sequência</option>' +
+      '<label>Exibição <select data-rotation-placement><option value="screen">Tela inteira</option><option value="court"' +
+      (byCourt ? ' selected' : '') + '>Uma quadra por vez</option></select></label>' +
+      seconds('main', rotation.mainDurationSeconds, byCourt ? 'Tempo do placar' : 'Tela 1 · Placar') + '<label>Ordem <select data-rotation-mode><option value="sequential">Em sequência</option>' +
       '<option value="interleaved"' + (rotation.mode === 'interleaved' ? ' selected' : '') + '>Placar entre patrocinadores</option></select></label>' +
-      '<span aria-label="Sequência de exibição">' + sequence.join(' → ') + (sequence.length > 1 ? ' → 1…' : '') + '</span></div>' +
+      preview + '</div>' +
       rotation.slides.map(function (slide, i) {
         var columns = Math.ceil(Math.sqrt(slide.assets.length || 1));
         return '<fieldset data-rotation-slide="' + i + '" style="min-width:0;margin:.6rem 0"><legend>Tela ' + (i + 2) + '</legend>' +
           '<div style="display:flex;gap:.6em;align-items:center;flex-wrap:wrap"><label>Nome <input data-rotation-name maxlength="80" value="' + esc(slide.name) + '"></label>' +
-          seconds(i, slide.durationSeconds, 'Duração') + button('up','Mover para cima',i === 0) + button('down','Mover para baixo',i + 1 === rotation.slides.length) +
+          seconds(i, slide.durationSeconds, byCourt ? 'Duração de cada imagem' : 'Duração') + button('up','Mover para cima',i === 0) + button('down','Mover para baixo',i + 1 === rotation.slides.length) +
           button('remove','Excluir tela') + '</div>' +
           (slide.assets.length ? '<div aria-label="Prévia da tela ' + (i+2) + '" style="display:grid;width:min(100%,30rem);aspect-ratio:16/9;background:#080c14;margin:.6em 0;grid-template-columns:repeat(' +
             columns + ',minmax(0,1fr));grid-auto-rows:minmax(0,1fr)">' + slide.assets.map(function (url,index) {
@@ -127,6 +151,10 @@
     panel.onchange = function (event) {
       var input = event.target, slide = rotation.slides[slideIndex(input)];
       if (input.hasAttribute('data-rotation-enabled')) rotation.enabled = input.checked;
+      else if (input.hasAttribute('data-rotation-placement')) {
+        if (input.value === 'court') rotation.placement = 'court';
+        else delete rotation.placement;
+      }
       else if (input.hasAttribute('data-rotation-mode')) rotation.mode = input.value;
       else if (input.hasAttribute('data-rotation-files')) {
         var selected = Array.from(input.files);
@@ -162,7 +190,9 @@
     try {
       var cfg = typeof window._f2GetConfig === 'function' ? window._f2GetConfig() : null;
       if (cfg && window.FORMAT2 && typeof window.FORMAT2.compileToPhases === 'function')
-        phases = window.FORMAT2.compileToPhases(cfg).phases || phases;
+        phases = window.FORMAT2.compileToPhases(cfg, { categories:
+          (typeof window._getCreateFormCategoryData === 'function' && (window._getCreateFormCategoryData() || {}).combinedCategories) ||
+          (window._editingTournament && window._editingTournament.combinedCategories) || [] }).phases || phases;
     } catch (e) { /* o formato ainda pode estar sendo editado */ }
     return phases.map(function (phase, i) { return String(phase && phase.name || 'Fase ' + (i + 1)); });
   }
@@ -320,7 +350,7 @@
       Core.CARD_IDS.map(function (id) { return '<label><input type="checkbox" data-tv-card="' + id + '" ' + (layout.card[id] ? 'checked' : '') + '> ' + cardLabels[id] + '</label>'; }).join('') + '</div></fieldset>' +
       '<fieldset data-tv-rotation style="min-width:0;border:1px solid #475569;border-radius:8px;margin:.8rem 0"></fieldset>' +
       '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.8rem 0"><button type="button" data-tv-save-live class="btn btn-primary">Salvar tela No ar</button><button type="button" data-tv-default class="btn btn-secondary">Restaurar padrão</button><button type="button" data-tv-save-template class="btn btn-primary">Salvar modelo de TV</button><select data-tv-template-list aria-label="Modelos de TV" style="max-width:220px;background:#0f172a;color:white;border:1px solid #64748b"><option value="">Modelos de TV...</option></select><button type="button" data-tv-load-template class="btn btn-secondary">Usar modelo</button><button type="button" data-tv-delete-template class="btn btn-secondary">Excluir modelo</button></div></div>';
-    if (!rotation) resetRotation(null);
+    if (rotation === undefined) resetRotation(null);
     paintRotation(host);
     var frame = host.querySelector('[data-tv-frame]');
     if (frame) {

@@ -173,7 +173,8 @@
   // O servidor fornece apenas a rotação lida dentro da transação como referência de herança.
   function normalizeRotation(input, tournamentId, stored, bucket) {
     if (input == null) return null;
-    exactKeys(input, ['enabled', 'mode', 'mainDurationSeconds', 'slides']);
+    exactKeys(input, ['enabled', 'mode', 'mainDurationSeconds', 'slides', 'placement']);
+    if (Object.prototype.hasOwnProperty.call(input, 'placement') && !['screen','court'].includes(input.placement)) fail();
     if (typeof input.enabled !== 'boolean' || ['sequential','interleaved'].indexOf(input.mode) < 0 ||
         !Array.isArray(input.slides) || input.slides.length > 12) fail();
     var inherited = new Set();
@@ -194,6 +195,7 @@
             return asset;
           }) };
       }) };
+    if (input.placement === 'court') rotation.placement = 'court';
     if (new TextEncoder().encode(JSON.stringify(rotation)).length > MAX_ROTATION_BYTES) throw new Error('As telas de patrocinadores excedem 100 KB.');
     return rotation;
   }

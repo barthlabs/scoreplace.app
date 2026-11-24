@@ -667,7 +667,7 @@ assert.match(tvRoot.innerHTML, /<h2>Quadra 4 · JOGO 1<\/h2><b class="tv-court-p
 assert.match(tvRoot.innerHTML, /class="tv-court-footer"><strong data-tv-start=/,
   'timer aparece sozinho abaixo do confronto');
 assert.doesNotMatch(tvRoot.innerHTML, /ÚLTIMOS 3 RESULTADOS/);
-assert.match(tvRoot.innerHTML, /<article class="tv-court tv-court-active tv-court-latest">/, 'slot da transição mais recente recebe destaque');
+assert.match(tvRoot.innerHTML, /<article class="tv-court tv-court-active tv-court-latest" data-tv-court=/, 'slot da transição mais recente recebe destaque');
 assert.match(popupHtml, /\.tv-result>div\.tv-result-match \.tv-result-left \.tv-result-players span\{text-align:left\}/,
   'os dois nomes à esquerda, inclusive o último, vencem a regra herdada por especificidade');
 assert.match(popupHtml, /\.tv-result-right \.tv-result-players span\{text-align:right\}/,

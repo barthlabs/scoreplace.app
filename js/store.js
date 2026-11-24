@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.57';
+window.SCOREPLACE_VERSION = '2.7.58';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -16297,9 +16297,8 @@ window._linePodiumHtml = function (t, lineMatches, title, color) {
 // avançou fica sozinho depois de todas as vagas da eliminatória,
 // ordenado pelo mesmo comparador usado na transição entre fases.
 window._categoryFinalPlacements = function (t) {
-  if (!t || !Array.isArray(t.phases) || t.phases.length < 2 ||
+  if (!t || !Array.isArray(t.phases) || !t.phases[0] ||
       t.phases[0].kind !== 'classification' ||
-      !t.phases.some(function (p) { return p && p.kind === 'elimination'; }) ||
       typeof window._phasesEngine === 'undefined' ||
       typeof window._computeMonarchStandings !== 'function') return [];
   var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
@@ -16314,10 +16313,17 @@ window._categoryFinalPlacements = function (t) {
     return !m.isMonarch && m.bracket !== 'group' && m.bracket !== 'grandfinal' &&
       m.bracket !== 'thirdplace' && !m.isThirdPlace;
   });
-  if (!tierMatches.length) return [];
+  var terminal = (t.combinedCategories || []).filter(function (category) {
+    return window._phasesEngine.categoryEndsInRanking && window._phasesEngine.categoryEndsInRanking(t, category);
+  });
+  if (!tierMatches.length && !terminal.length) return [];
   if (!all.some(function (m) { return m && Number(m.phaseIndex || 0) === 0 && m.isMonarch; })) return [];
   var categories = [];
   tierMatches.forEach(function (m) { var c = String(m.category || ''); if (categories.indexOf(c) < 0) categories.push(c); });
+  terminal.forEach(function (category) {
+    var games = all.filter(function (m) { return m && Number(m.phaseIndex || 0) === 0 && m.category === category; });
+    if (games.length && games.every(function (m) { return m.winner || m.isBye; }) && categories.indexOf(category) < 0) categories.push(category);
+  });
   var raw = window._phasesEngine.prevPhaseGroups(Object.assign({}, t, { matches: all }));
   function idOf(row) { return row && row.uid ? 'uid:' + String(row.uid) : 'name:' + String(row && (row.name || row.displayName) || ''); }
   function positionalUids(m, side) {
@@ -16379,9 +16385,30 @@ window._categoryFinalPlacements = function (t) {
         return uids.length ? uids : (m[side === 'p1' ? 'team1' : 'team2'] || []).filter(Boolean);
       });
     }
-    var compare = typeof window._standingsCompareConfig === 'function'
+    var decidedOrder = null;
+    if (terminal.indexOf(category) >= 0) {
+      var poolId = 'ranking-' + t.combinedCategories.indexOf(category);
+      var decisions = (t.phaseTieDecisions || {})[String(t.currentPhaseIndex || 0)] || {};
+      Object.keys(decisions).forEach(function (id) {
+        var decision = decisions[id];
+        if (id.indexOf(poolId + ':0:') === 0 && decision.status === 'complete') decidedOrder = decision.order;
+      });
+      compareOpts.birth = typeof window._tbBirthByName === 'function' ? window._tbBirthByName(t) : {};
+      compareOpts.ordem = typeof window._standingsOrdemChave === 'function' ? window._standingsOrdemChave(groupMatches, function (m, side) {
+        var uids = positionalUids(m, side);
+        return uids.length ? uids : m[side === 'p1' ? 'team1' : 'team2'] || [];
+      }) : null;
+    }
+    var baseCompare = typeof window._standingsCompareConfig === 'function'
       ? function (a, b) { return window._standingsCompareConfig(a, b, compareOpts); }
       : function (a, b) { return window._standingsCompare(a, b, false); };
+    var compare = function (a, b) {
+      if (decidedOrder) {
+        var left = decidedOrder.indexOf(idOf(a)), right = decidedOrder.indexOf(idOf(b));
+        if (left >= 0 && right >= 0) return left - right;
+      }
+      return baseCompare(a, b);
+    };
     standings.sort(compare);
     var byId = {}, statsById = {}, people = [];
     standings.forEach(function (row) {

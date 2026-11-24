@@ -1,3 +1,9 @@
+## 2.7.58 — 24/nov/2026 (patrocinadores por quadra e regras por categoria)
+
+- As artes de patrocinadores podem ocupar a tela No ar inteira ou alternar entre as quadras, uma por vez, com duração e sequência configuráveis. O placar continua atualizando sob a arte; a janela, o monitor e a tela cheia são preservados.
+- No rodízio, cada categoria pode definir suas partidas por atleta e seu destino: classificação direta ou eliminatória. A organização pode configurar cinco partidas e final entre os grupos para as categorias femininas e sete partidas com classificação direta para as masculinas, usando os mesmos controles em qualquer torneio.
+- Os jogos independentes do rodízio mantêm chamadas, encerramentos e placares próprios. A série de três jogos Rei/Rainha preserva seu comando de bloco.
+
 ## 2.7.57 — 24/nov/2026 (escolha de jogos, quadra e ordem da programação)
 
 - A lista rolável de Próximos jogos permite escolher e chamar um confronto posterior elegível; o botão Pular jogo foi removido.

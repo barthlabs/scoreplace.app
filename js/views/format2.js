@@ -713,6 +713,8 @@
       // (montadas ou sorteadas). Pedido do dono: "rei/rainha só aparece se for 1 grupo".
       if (!umGrupo && out.parceria !== 'fixa' && out.parceria !== 'rotation_groups_8') out.parceria = 'fixa';
     }
+    if (out.parceria !== 'rotation_groups_8' || out.teamCompetition.enabled || out.classifAtiva === false || !Array.isArray(out.rotationCategoryRules) || !out.rotationCategoryRules.length)
+      delete out.rotationCategoryRules;
     if (out.formacaoDupla !== 'manual' && out.formacaoDupla !== 'sorteio') out.formacaoDupla = 'sorteio';
     out.manualPairingOpen = !!out.manualPairingOpen;
     if (['organizer_only', 'athletes_only', 'open'].indexOf(out.manualPairingPolicy) < 0) {
@@ -912,7 +914,12 @@
     parts.push(groupLabel);
     if (cfg.disputa === 'dupla') {
       if (cfg.parceria === 'super_eight') parts.push('Super 8 individual · todas as parcerias');
-      else if (cfg.parceria === 'rotation_groups_8') parts.push('Rodízio A–H · ' + cfg.rodadas.n + ' partidas por atleta · parceiros sem repetição');
+      else if (cfg.rotationCategoryRules) {
+        parts.push('Rodízio A–H · ' + cfg.rotationCategoryRules.map(function (rule) {
+          return rule.category + ' (' + rule.rounds + ' partidas por atleta, ' +
+            (rule.destination === 'ranking' ? 'ranking individual' : 'eliminatória') + ')';
+        }).join(' · '));
+      } else if (cfg.parceria === 'rotation_groups_8') parts.push('Rodízio A–H · ' + cfg.rodadas.n + ' partidas por atleta · parceiros sem repetição');
       else if (cfg.parceria === 'rei_rainha') parts.push('Rei/Rainha');
       else if (cfg.parceria === 'sorteio_rodada') parts.push('sorteio/rodada');
       else parts.push(cfg.formacaoDupla === 'manual' ? 'duplas montadas' : 'duplas sorteadas');
@@ -1045,12 +1052,27 @@
     return [pRR, pElimRR];
   }
 
+  // Ausência de regra específica conserva integralmente o formato global.
+  function rotationRuleForCategory(config, category, defaultDestination) {
+    var rules = config && config.rotationCategoryRules;
+    if (!Array.isArray(rules)) return null;
+    var exact = rules.find(function (rule) { return rule.category === category; });
+    return exact || { category:category, rounds:config.rotationRounds || (config.rodadas && config.rodadas.n) || 5,
+      destination:defaultDestination || (config.eliminatoria && !config.eliminatoria.ativa ? 'ranking' : 'elimination') };
+  }
+
   // COMPILADOR: config → { topLevel: {t.* p/ stage-0}, phases: [p0 (+p1 elim)] }.
   function compileToPhases(cfg, opts) {
     opts = opts || {};
     cfg = normalize(cfg, opts.sport);
     var isDupla = cfg.disputa === 'dupla';
     var teamSize = teamSizeFor(cfg.disputa);
+    var rotationCategories = Array.isArray(opts.categories) ? opts.categories : [];
+    var hasElimination = cfg.eliminatoria.ativa && !(cfg.rotationCategoryRules && rotationCategories.length &&
+      rotationCategories.every(function (category) {
+        var rule = rotationRuleForCategory(cfg, category);
+        return rule && rule.destination === 'ranking';
+      }));
     var scoreInd = cfg._scoreBy === 'individual';
     var re = opts.resultEntry || ['organizer'];
     var top = {}, p0;
@@ -1219,6 +1241,7 @@
       if (cfg.parceria === 'rotation_groups_8') {
         _classification.partnerRotation = 'unique_8';
         _classification.rotationRounds = cfg.rodadas.n;
+        if (cfg.rotationCategoryRules) _classification.rotationCategoryRules = cfg.rotationCategoryRules;
       }
       if (cfg.classificationSchedule) _classification.schedule = cfg.classificationSchedule;
       p0 = Object.assign(_phaseBase(re), {
@@ -1264,7 +1287,7 @@
     // É o MESMO arranjo da eliminação direta que abre com Rei/Rainha (_parReiRainhaMaisElim);
     // muda só de onde vem o pool — aqui, os classificados da fase anterior, ORDENADOS POR
     // MÉRITO (é isso que dá as cabeças de chave).
-    if (cfg.eliminatoria.ativa && cfg.eliminatoria.openReiRainha && isDupla) {
+    if (hasElimination && cfg.eliminatoria.openReiRainha && isDupla) {
       var eRR = cfg.eliminatoria;
       var perGroupRR = (cfg.parceria === 'rotation_groups_8' || cfg.grupos > 1) && cfg.classifScope === 'per_group';
       var destsRR = _lineDests(eRR.linhas);
@@ -1288,7 +1311,7 @@
       return { topLevel: top, phases: phases, cfg: cfg };
     }
 
-    if (cfg.eliminatoria.ativa) {
+    if (hasElimination) {
       var e = cfg.eliminatoria;
       // Escopo vem do TOGGLE (classifScope), não do nº de grupos: com 2+ grupos o org escolhe
       // por-grupo (melhores de cada) OU geral (tabela única). 1 grupo é sempre geral.
@@ -1422,6 +1445,7 @@
       completedMixedGroupOnly: historicalMixed
     });
     var derived = compileToPhases(cfg, {
+      categories: t.combinedCategories || [],
       sport: sport,
       resultEntry: t.resultEntry,
       lateEnrollment: t.lateEnrollment,
@@ -1523,6 +1547,7 @@
     assessGroupSchedule: assessGroupSchedule,
     resolveTurnos: resolveTurnos,
     resolveGroupFormation: resolveGroupFormation,
+    rotationRuleForCategory: rotationRuleForCategory,
     superEightVariant: superEightVariant
   };
 })();

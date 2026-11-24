@@ -4024,6 +4024,7 @@ function setupCreateTournamentModal() {
 
   window._updateCategoryPreview = function(options) {
     options = options || {};
+    if (typeof window._f2RefreshRotationCategories === 'function') window._f2RefreshRotationCategories();
     // ⭐ 2.1: a seção de proporção depende das categorias de gênero — ligar "Fem" faz o sorteio
     // rodar homogêneo e a seção sai de cena. Repintar aqui é o que casa as duas coisas, e é o
     // mesmo gancho que serve pra abertura do form e pra edição.
@@ -5131,6 +5132,21 @@ function setupCreateTournamentModal() {
     try { f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) {}
     var setupScopeWrap = document.getElementById('setup-scope-wrap');
     if (setupScopeWrap) setupScopeWrap.style.display = 'block';
+    if (f2cfg && f2cfg.rotationCategoryRules && typeof window._f2ProjectedRotation === 'function') {
+      var capacities = null;
+      if (configuredMax > 0) {
+        var custom = document.getElementById('tourn-custom-category-capacity');
+        var overrides = custom && custom.checked ? JSON.parse(gv('tourn-max-by-category') || '{}') : {};
+        capacities = Object.fromEntries((catData.combinedCategories || []).map(function (category) {
+          return [category, Object.hasOwn(overrides, category) ? overrides[category] : iv('tourn-max-per-category', 0)];
+        }));
+      }
+      var plan = window._f2ProjectedRotation(capacities);
+      ladder.textContent = plan ? (plan.groupGames + plan.elimGames) + ' jogos · ' +
+        plan.groupGames + ' na classificatória · ' + plan.elimGames + ' na eliminatória' :
+        'A estimativa depende de grupos completos de oito por categoria e da chave projetada.';
+      return;
+    }
     var tc = f2cfg && f2cfg.teamCompetition;
     var effectiveTurnos = f2cfg && window.FORMAT2 && typeof window.FORMAT2.resolveTurnos === 'function'
       ? window.FORMAT2.resolveTurnos(f2cfg) : null;

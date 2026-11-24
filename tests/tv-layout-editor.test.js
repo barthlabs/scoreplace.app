@@ -547,6 +547,10 @@ const { chromium } = require('@playwright/test');
     await page.locator('[data-rotation-files]').first().setInputFiles(['a','b'].map(name => ({
       name:name+'.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgo=','base64') })));
     assert.equal(await page.locator('[data-tv-rotation] img').count(),2);
+    await page.locator('[data-rotation-placement]').selectOption('court');
+    assert.match(await page.locator('[data-rotation-court-preview]').textContent(),/Quadra/);
+    assert.ok(await page.locator('[data-rotation-court-preview] img').count() >= 2);
+    assert.equal(await page.getByText('Duração de cada imagem',{ exact:false }).count() >= 2,true);
     await page.locator('[data-rotation-action="down"]').first().click();
     await page.locator('[data-rotation-action="remove"]').first().click();
     await page.locator('[data-tv-save-live]').click();
@@ -554,15 +558,43 @@ const { chromium } = require('@playwright/test');
     const stored = await page.evaluate(()=>window.artPatch.tvRotation);
     assert.deepEqual([stored.mode,stored.slides[0].name,stored.slides[0].durationSeconds,stored.slides[0].assets.length],
       ['interleaved','Arena',8,2]);
+    assert.equal(stored.placement,'court');
     assert.ok(stored.slides[0].assets.every(url=>url.startsWith('https://')));
     await page.evaluate(()=>window._tvEditorSetRotation(window.artPatch.tvRotation,window._editingTournament.id));
     assert.equal(await page.locator('[data-rotation-name]').first().inputValue(),'Arena');
+    assert.equal(await page.locator('[data-rotation-placement]').inputValue(),'court');
+    await page.locator('[data-rotation-placement]').selectOption('screen');
+    assert.equal(await page.locator('[data-rotation-court-preview]').count(),0);
+    assert.equal(await page.locator('[data-tv-rotation] img').count(),2);
     await page.locator('[data-rotation-asset="1"]').click();
     await page.locator('[data-rotation-enabled]').uncheck();
     await page.locator('[data-tv-save-live]').click();
     await page.waitForFunction(()=>window.artPatch.tvRotation.enabled===false);
     assert.equal((await page.evaluate(()=>window.artPatch.tvRotation)).slides[0].assets.length,1);
     assert.equal(await page.evaluate(()=>window.artUploads),2);
+    assert.equal(await page.evaluate(()=>window.artPatch.tvRotation.placement),'screen','a transição intencional é explícita no pedido');
+    await page.locator('[data-rotation-placement]').selectOption('court');
+    const refusal = await page.evaluate(async()=>{
+      window.AppStore.addTournament = async()=>{throw new Error('Servidor incompatível');};
+      try { await window._tvEditorSaveChanges(); } catch(e) {return {message:e.message,changed:window._tvEditorHasChanges()};}
+    });
+    assert.deepEqual(refusal,{message:'Servidor incompatível',changed:true});
+    await page.evaluate(()=>{
+      window._editingTournament.tvRotation={...window.artPatch.tvRotation,placement:'court'};
+      const core=window.ScoreplaceTvLayout, valid=core.normalizeRotation;
+      core.normalizeRotation=()=>{throw new Error('Versão desconhecida');};
+      try {window._tvEditorSetRotation(window._editingTournament.tvRotation,window._editingTournament.id);}
+      finally {core.normalizeRotation=valid;}
+      window.artPatch=null;
+      window.AppStore.addTournament=async patch=>{window.artPatch=patch; Object.assign(window._editingTournament,patch);};
+    });
+    assert.equal(await page.locator('[data-tv-rotation]').evaluate(panel=>panel.disabled),true);
+    await page.locator('[data-tv-background-mode]').selectOption('custom');
+    await page.locator('[data-tv-background]').fill('#13376a');
+    await page.locator('[data-tv-save-live]').click();
+    await page.waitForFunction(()=>!!window.artPatch);
+    assert.equal(await page.evaluate(()=>Object.hasOwn(window.artPatch,'tvRotation')),false);
+    assert.equal(await page.evaluate(()=>window._editingTournament.tvRotation.placement),'court');
     console.log('✓ editor TV: dados reais, layout, upload múltiplo, prévia, ordem e configuração persistida');
   } finally { await browser.close(); }
 })().catch(err => { console.error(err); process.exitCode = 1; });

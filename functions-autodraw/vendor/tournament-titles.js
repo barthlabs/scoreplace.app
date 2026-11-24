@@ -101,6 +101,19 @@
       return decision && decision.status !== 'complete';
     })) return { ok: false, reason: 'tie-pending', titles: [] };
     var titles = [];
+    var categoryRanking = phases[0].classification && phases[0].classification.rotationCategoryRules;
+    if (categoryRanking) {
+      var rankings = deps.engine.rotationRankingPools(t);
+      for (var pool of rankings) {
+        if (pool.titleTie && t.fmt2 && t.fmt2.tieResolution && !deps.rotationTiesChecked &&
+            !Object.keys(phaseTies || {}).some(function (id) { return id.indexOf(pool.id + ':0:') === 0; }))
+          return { ok:false, reason:'tie-pending', titles:[] };
+        var chosen = titleRowAfterTie(pool.rows, pool.id, phaseTies);
+        if (!chosen.row) return { ok:false, reason:chosen.error || 'standings-unavailable', titles:[] };
+        titles.push(awardFromRow(chosen.row, 'category', pool.group.category));
+      }
+      if (phase.kind === 'classification' && rankings.length) return { ok:true, titles:titles };
+    }
     if (phase.kind === 'elimination') {
       var grandMatches = matches.filter(function (m) { return m.bracket === 'grandfinal' || m.bracket === 'grand'; });
       var gf = grandMatches.filter(function (m) { return m.winner; }).sort(function (a, b) {
@@ -113,7 +126,7 @@
         var byLine = {};
         var categories = new Set(matches.filter(function (m) { return m && !m.isThirdPlace; })
           .map(function (m) { return String(m.category || ''); }));
-        var multipleCategories = categories.size > 1;
+        var multipleCategories = categories.size > 1 || titles.length > 0;
         matches.forEach(function (m) {
           if (!m || m.isThirdPlace || m.bracket === 'thirdplace' || m.bracket === 'finalstage') return;
           var key = String(m.category || '') + '\u0000' + String(m.bracket || 'main');

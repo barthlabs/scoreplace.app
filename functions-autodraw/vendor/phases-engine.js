@@ -1233,8 +1233,45 @@
     }).filter(function (bucket) { return bucket.items.length > 0; });
   }
 
+  function categoryEndsInRanking(t, category) {
+    var classification = t && t.phases && t.phases[0] && t.phases[0].classification;
+    if (!classification || !classification.rotationCategoryRules) return false;
+    var rule = window.FORMAT2.rotationRuleForCategory(classification, category, t.phases.length > 1 ? 'elimination' : 'ranking');
+    return !!rule && rule.destination === 'ranking';
+  }
+
+  // Os títulos e o encerramento usam o mesmo ranking individual da categoria,
+  // inclusive quando a última fase do torneio pertence às outras categorias.
+  function rotationRankingPools(t) {
+    var groups = prevPhaseGroups(t);
+    return (t.combinedCategories || []).flatMap(function (category, index) {
+      if (!categoryEndsInRanking(t, category)) return [];
+      var matches = groups.filter(function (g) { return _groupCategory(g) === category; })
+        .flatMap(function (g) { return g.matches || []; });
+      if (!matches.length) return [];
+      var group = { category:category, matches:matches, players:[], playersUids:[] };
+      matches.forEach(function (m) {
+        group.players.push.apply(group.players, (m.team1 || []).concat(m.team2 || []));
+        group.playersUids.push.apply(group.playersUids, (m.team1Uids || []).concat(m.team2Uids || []));
+      });
+      var rows = standingsDaFaseAnterior(group, t, {}, true, 0).filter(function (row) { return !row.isGhost; });
+      var criteria = Array.isArray(t.tiebreakers) ? t.tiebreakers.filter(function (k) { return k !== 'sorteio'; }) : null;
+      var options = { tiebreakers:criteria, primaryField:['wins','games_diff'].includes(t.rankingPrimary) ? t.rankingPrimary : 'points',
+        birth:typeof window._tbBirthByName === 'function' ? window._tbBirthByName(t) : {} };
+      if (criteria && criteria.includes('confronto_direto')) options.h2h = window._standingsBuildH2H(matches, function (m, side) {
+        var ids = m[side === 'p1' ? 'team1Uids' : 'team2Uids'];
+        return ids && ids.length ? ids : m[side === 'p1' ? 'team1' : 'team2'] || [];
+      });
+      var titleTie = rows.length > 1 && (criteria ? window._standingsCompareConfig(rows[0], rows[1], options) :
+        window._standingsCompare(rows[0], rows[1], false)) === 0;
+      return [{ id:'ranking-' + index, group:group, rows:rows, titleTie:titleTie }];
+    });
+  }
+
   // O avanço real, o contador e a súmula usam este mesmo particionamento.
   function buildCategorizedPhaseBrackets(t, groups, phaseCfg, computeStandings, idPrefix, det) {
+    groups = groups.filter(function (group) { return !categoryEndsInRanking(t, _groupCategory(group)); });
+    if (!groups.length) return { matches:[], waitlist:[], categoryBuilds:[] };
     var loneCategory = t && Array.isArray(t.combinedCategories) && t.combinedCategories.length === 1
       ? String(t.combinedCategories[0]) : _groupCategory(groups[0]);
     var officialSingle = !!(phaseCfg && Array.isArray(phaseCfg.officialGroupBracketOrder) &&
@@ -1625,7 +1662,9 @@
         try { rotationCore = require('./super-eight-core.js'); } catch (e) { rotationCore = null; }
       }
       if (!rotationCore || typeof rotationCore.build !== 'function') throw new Error('Motor de rodízio para grupos de oito indisponível.');
-      var rotationRounds = Math.max(1, Math.min(7, parseInt(rotationCfg.rotationRounds, 10) || 5));
+      var rule = Array.isArray(rotationCfg.rotationCategoryRules)
+        ? window.FORMAT2.rotationRuleForCategory(rotationCfg, phaseCfg.category) : null;
+      var rotationRounds = rule ? rule.rounds : Math.max(1, Math.min(7, parseInt(rotationCfg.rotationRounds, 10) || 5));
       var entryName = function (entry) { return typeof entry === 'string' ? entry : (entry.displayName || entry.name || ''); };
       var entryUid = function (entry) { return entry && typeof entry === 'object' ? (entry.uid || null) : null; };
       groups.forEach(function (g) {
@@ -2318,6 +2357,9 @@
           (one.groups || []).forEach(function (group) {
             group.category = cat;
             group.name = String(cat) + (stratum.day ? ' · ' + stratum.day : '') + ' · ' + String(group.name || 'Grupo');
+            if (groupCfg.classification && groupCfg.classification.rotationCategoryRules) {
+              (group.matches || []).forEach(function (match) { match.groupName = group.name; });
+            }
           });
           allGroupMatches = allGroupMatches.concat(one.matches || []);
           allGroups = allGroups.concat(one.groups || []);
@@ -2957,6 +2999,8 @@
     // Fases de chave: todas as partidas da fase atual decididas (inclui grande final).
     // Aqui folga NÃO conta como resolvida (numa chave ela não existe) — o 2º argumento
     // false preserva exatamente o comportamento que a golden congela.
+    if (t.phases[0].classification && t.phases[0].classification.rotationCategoryRules &&
+        phaseGames(t, 0).some(function (entry) { return !_jogoResolvido(entry.match, true); })) return false;
     var _uK = phaseGames(t, cur);
     if (!_uK.length) return false;
     return _uK.every(function (u) { return _jogoResolvido(u.match, false); });
@@ -3224,6 +3268,7 @@
     var nextIdx = cur + 1;
     var interleavedCategory = t.scheduleWindow && t.scheduleWindow.interleavedPlan &&
       opts.category ? String(opts.category) : '';
+    if (interleavedCategory && categoryEndsInRanking(t, interleavedCategory)) return { ok:false, error:'no-next-phase' };
     if (interleavedCategory && (cur !== 0 || nextIdx !== 1 ||
         (t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[interleavedCategory]))) {
       return { ok:false, error:'already-materialized' };
@@ -3247,6 +3292,8 @@
       groups = opts.usarClassificacaoCongelada ? opts.sourceGroups : bracketPhaseGroups(t, cur);
       cs = opts.usarClassificacaoCongelada ? opts.standingsForGroup : function (g) { return g.standings || []; };
     }
+    if (cur === 0 && t.phases[0].classification && t.phases[0].classification.rotationCategoryRules)
+      groups = groups.filter(function (g) { return !categoryEndsInRanking(t, _groupCategory(g)); });
     if (interleavedCategory) groups = groups.filter(function (g) { return _groupCategory(g) === interleavedCategory; });
     if (!groups.length) return { ok: false, error: 'no-groups' };
     // v3.1.15: roteamento por FORMATO (classifyPhaseFormat → league/groups/elim). O
@@ -3325,7 +3372,7 @@
       t.phaseCategoryMaterialized = t.phaseCategoryMaterialized || {};
       t.phaseCategoryMaterialized[interleavedCategory] = { at:det.agoraIso || new Date().toISOString(),
         count:built.matches.filter(function (m) { return !m.isBye; }).length };
-      var categories = (t.combinedCategories || []).map(String);
+      var categories = (t.combinedCategories || []).map(String).filter(function (category) { return !categoryEndsInRanking(t, category); });
       if (categories.length && categories.every(function (c) { return !!t.phaseCategoryMaterialized[c]; })) {
         t.currentPhaseIndex = nextIdx;
         t._phaseMaterialized = nextIdx;
@@ -3781,7 +3828,7 @@
     // no navegador: apenas o recibo canônico altera a tela.
     if (_nextCfg && (((_nextCfg.politicaDaChave || t.politicaDaChave) === 'sobra_unica') ||
         _nextCfg.bracketSeeding === 'draw' || ['draw_among', 'seed'].indexOf(_nextCfg.pairingStrategy) >= 0 ||
-        (t.fmt2 && t.fmt2.tieResolution) || pendingIrrelevantForAdvance(t) || seedOnlyIds.length)) {
+        (t.fmt2 && (t.fmt2.tieResolution || t.fmt2.rotationCategoryRules)) || pendingIrrelevantForAdvance(t) || seedOnlyIds.length)) {
       if (typeof window._callCF !== 'function') {
         if (window.showNotification) window.showNotification('Não foi possível avançar',
           'Conexão com o servidor indisponível. Nenhuma nova chave foi criada nesta tela.', 'error');
@@ -4154,6 +4201,8 @@
     buildPhaseBrackets: buildPhaseBrackets,
     prepareOfficialGroupBracket: prepareOfficialGroupBracket,
     resolveOfficialGroupSlot: resolveOfficialGroupSlot,
+    categoryEndsInRanking: categoryEndsInRanking,
+    rotationRankingPools: rotationRankingPools,
     buildCategorizedPhaseBrackets: buildCategorizedPhaseBrackets,
     buildPhaseGroupStage: buildPhaseGroupStage,
     buildPhaseLeagueStage: buildPhaseLeagueStage,
