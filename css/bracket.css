@@ -241,6 +241,9 @@
   pointer-events:none;
   z-index:-1;
 }
+/* Na ficha as abas só cobrem a sua faixa, mesmo antes de alcançar a toolbar. */
+[data-bracket-tabs-root][data-bracket-detail-tabs]::before { content:none; }
+#fbwrap-chaves[data-bracket-detail-toolbar] { z-index:32!important; }
 /* Controles primeiro; abas da chave em faixa própria, inclusive em TV. */
 [data-bracket-tabs-root][data-bracket-search-layout="inline"] > [data-bracket-tabs-primary] {
   display:grid!important;
@@ -456,8 +459,20 @@ summary::-webkit-details-marker { display: none; }
 .sp-match-clock-label { grid-column:2; min-width:0; text-align:center; white-space:normal; overflow-wrap:anywhere; }
 .sp-match-call-timer { display:inline-block; white-space:nowrap; text-align:right; font-variant-numeric:tabular-nums; }
 .sp-match-clock-next-slot { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; }
-.sp-match-clock-action { display:inline-flex; align-items:center; justify-content:center; flex:none; align-self:center; box-sizing:border-box; width:44px; min-width:44px; height:44px; min-height:44px; aspect-ratio:1; border:1px solid currentColor; border-radius:50%; background:transparent; color:inherit; padding:4px; cursor:pointer; }
-.sp-match-clock-action svg { display:block; width:17px; height:17px; flex:none; }
+.sp-match-clock-action {
+  position:relative;isolation:isolate;display:inline-flex;align-items:center;justify-content:center;
+  flex:none;align-self:center;box-sizing:border-box;width:44px;min-width:44px;height:44px;min-height:44px;
+  border:0;border-radius:50%;padding:0;background:transparent;color:#fff;cursor:pointer;
+}
+.sp-match-clock-action::before {
+  content:'';position:absolute;z-index:-1;width:27px;height:27px;border-radius:50%;
+  background:var(--sp-clock-button-fill,#0369a1);pointer-events:none;
+}
+.sp-match-clock-action svg { display:block;width:17px;height:17px;flex:none;pointer-events:none; }
+.sp-match-phase-warmup, .sp-match-operational:has(> .sp-match-phase-warmup) { --sp-clock-button-fill:#a16207; }
+.sp-match-phase-game, .sp-match-operational:has(> .sp-match-phase-game) { --sp-clock-button-fill:#15803d; }
+.sp-match-phase-overdue, .sp-match-operational:has(> .sp-match-phase-overdue) { --sp-clock-button-fill:#b91c1c; }
+.sp-match-clock-action:focus-visible { outline:2px solid var(--text-bright,currentColor);outline-offset:1px; }
 .sp-match-clock-action:disabled { opacity:.45; cursor:wait; }
 .sp-court-occupied { color:#9ca3af; background:#374151; }
 .sp-match-player-busy { color:var(--sp-c-fca5a5, #fca5a5); font-size:.78rem; font-weight:800; }

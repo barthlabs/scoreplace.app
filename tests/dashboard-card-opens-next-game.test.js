@@ -28,6 +28,8 @@ function section(from, to) {
   await page.addScriptTag({ content: section('window._scrollToBracketSection = function', '// v2.7.85: funções de DUPLA') });
   await page.addScriptTag({ content: bracket.slice(bracket.indexOf('window._bracketFocusOperationsStrip = function'), bracket.indexOf('/* A LARGURA ÚTIL DA CHAVE', bracket.indexOf('window._bracketFocusOperationsStrip = function'))) });
 
+  await page.addScriptTag({ content: bracket.slice(bracket.indexOf('function _bracketPinnedChromeBottom('), bracket.indexOf('function _bracketOperationalSafeTop(')) });
+
   const result = await page.evaluate(async () => {
     const card = (id, at, court, resultAt, num, upcoming, presence) =>
       '<article id="card-' + id + '" data-bracket-scheduled-at="' + at + '" data-bracket-court="' + court +

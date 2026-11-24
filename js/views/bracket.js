@@ -937,7 +937,7 @@ window._bracketFocusOperationsStrip = function(tId, behavior) {
   if (!root || !strip || !strip.isConnected) return false;
   try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
   var top = Math.max(0, (window.scrollY || window.pageYOffset || 0) + strip.getBoundingClientRect().top -
-    Math.max(12, root.getBoundingClientRect().bottom + 12));
+    Math.max(12, _bracketPinnedChromeBottom(root, false) + 12));
   try { window.scrollTo({ top: top, behavior: behavior || 'auto' }); }
   catch (eScroll) { try { window.scrollTo(0, top); } catch (eFallback) {} }
   return true;
@@ -1584,6 +1584,14 @@ function _bracketDisposeOperationalSurface(surface, root) {
 
 function _bracketDisposeOperationalRoot(root) {
   root._bracketTornDown = true;
+  if (root._bracketTabsResizeObserver) root._bracketTabsResizeObserver.disconnect();
+  if (root._bracketTabsResizeFrame != null) cancelAnimationFrame(root._bracketTabsResizeFrame);
+  root._bracketTabsResizeObserver = null;
+  root._bracketTabsResizeFrame = null;
+  if (window._bracketTabsFallbackRoot === root) {
+    clearTimeout(window._bracketTabsFallbackResizeTimer);
+    window._bracketTabsFallbackRoot = window._bracketTabsFallbackSearch = null;
+  }
   if (root._bracketOperationalOrderFrame != null) cancelAnimationFrame(root._bracketOperationalOrderFrame);
   root._bracketOperationalOrderFrame = null;
   if (root._bracketGeneralEntries && root._bracketGeneralEntries.length) _bracketRestoreGeneralEntries(root);
@@ -1615,7 +1623,11 @@ function _bracketReconcileOperationalOrder(root) {
   if (progress && progress.previousElementSibling !== card) card.insertAdjacentElement('afterend', progress);
   var beforeStrip = progress && progress.parentNode === card.parentNode ? progress : card;
   if (strip && strip.previousElementSibling !== beforeStrip) beforeStrip.insertAdjacentElement('afterend', strip);
-  var anchor = strip && strip.parentNode === card.parentNode ? strip : card;
+  var anchor = strip && strip.parentNode === card.parentNode ? strip : beforeStrip;
+  if (root.hasAttribute('data-bracket-detail-tabs')) {
+    if (root.previousElementSibling !== anchor) anchor.insertAdjacentElement('afterend', root);
+    anchor = root;
+  }
   if (general && general.previousElementSibling !== anchor) anchor.insertAdjacentElement('afterend', general);
   _bracketSyncRoundHeadingOffsets();
 }
@@ -2088,8 +2100,8 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         }
         tieCourt.innerHTML = courtHtml + (released ? '<button type="button" class="cancel-x-btn" data-tie-action="restore">Restaurar</button>' : '') +
           (role.active && footer && footer.childElementCount ? footer.outerHTML : '') +
-          (selected.courtCalledAt && !released && !finished ? '<button type="button" class="sp-match-clock-action" data-tie-action="clock-restart" aria-label="Reiniciar etapa do relógio">◀◀</button>' +
-            '<button type="button" class="sp-match-clock-action sp-match-clock-next" data-tie-action="clock-next" aria-label="Próxima etapa do relógio">▶▶</button>' : '') + clockHtml;
+          (selected.courtCalledAt && !released && !finished ? '<button type="button" class="sp-match-clock-action" data-tie-action="clock-restart" aria-label="Reiniciar etapa do relógio">' + _spCourtClockIcon(false) + '</button>' +
+            '<button type="button" class="sp-match-clock-action sp-match-clock-next" data-tie-action="clock-next" aria-label="Próxima etapa do relógio">' + _spCourtClockIcon(true) + '</button>' : '') + clockHtml;
         if (selected.courtCalledAt && !released && !finished) tieCard.style.border = '3px solid #22c55e';
         if (!finished) {
           var scoreNodes = tieCard.querySelectorAll('.sp-mc-sc');
@@ -3228,7 +3240,8 @@ function _bracketFocusOperationalCard(root, card, behavior) {
   if (root._bracketCompactFocusCard && root._bracketCompactFocusCard !== card)
     root._bracketCompactFocusCard.classList.remove('sp-match-card--entry-focus');
   card.classList.remove('sp-match-card--entry-focus');
-  var availableHeight = window.innerHeight - root.getBoundingClientRect().bottom - 12;
+  var pinnedBottom = _bracketPinnedChromeBottom(root, true);
+  var availableHeight = window.innerHeight - pinnedBottom - 12;
   if (card.getBoundingClientRect().height > availableHeight) {
     card.classList.add('sp-match-card--entry-focus');
     root._bracketCompactFocusCard = card;
@@ -3250,7 +3263,7 @@ function _bracketFocusOperationalCard(root, card, behavior) {
   // foco exato, escondemos apenas o espelho da rodada; a próxima rolagem
   // manual o restaura. [[regression_dashboard_match_whole_card]]
   var heading = card.closest && card.closest('.bracket-round-column')?.querySelector('.bracket-round-heading');
-  var reservedTop = root.getBoundingClientRect().bottom + (heading ? Math.ceil(heading.getBoundingClientRect().height || 0) + 30 : 68);
+  var reservedTop = pinnedBottom + (heading ? Math.ceil(heading.getBoundingClientRect().height || 0) + 30 : 68);
   root._bracketPortalFocus = safeTop < reservedTop - 2 ? { card: card, top: safeTop } : null;
   var currentTop = window.scrollY || window.pageYOffset || 0;
   var targetTop = Math.max(0, currentTop + cardRect.top - safeTop);
@@ -3261,8 +3274,17 @@ function _bracketFocusOperationalCard(root, card, behavior) {
   _bracketSyncRoundHeadingOffsets();
   return targetTop;
 }
+function _bracketPinnedChromeBottom(root, includeTabs) {
+  var rect = root.getBoundingClientRect();
+  if (!root.hasAttribute('data-bracket-detail-tabs')) return rect.bottom;
+  var toolbar = root._bracketDetailToolbar;
+  var scale = root.offsetWidth ? rect.width / root.offsetWidth : 1;
+  var top = toolbar && toolbar.isConnected ? toolbar.getBoundingClientRect().bottom :
+    (parseFloat(getComputedStyle(root).top) || 0) * scale;
+  return top + (includeTabs ? rect.height : 0);
+}
 function _bracketOperationalSafeTop(root, card) {
-  var rootRect = root.getBoundingClientRect();
+  var pinnedBottom = _bracketPinnedChromeBottom(root, true);
   var roundColumn = card.closest ? card.closest('.bracket-general-round-column, .bracket-round-column') : null;
   var roundHeading = roundColumn && roundColumn.querySelector ? roundColumn.querySelector('.bracket-round-heading') : null;
   var headingHeight = roundHeading ? Math.ceil(roundHeading.getBoundingClientRect().height || 0) : 0;
@@ -3270,7 +3292,7 @@ function _bracketOperationalSafeTop(root, card) {
   // altura que ele ocuparia e, se ele já existe, usamos a sua borda real.
   // [[regression_operational_focus_reserves_round_heading]]
   var portalReserve = headingHeight ? headingHeight + 30 : 68;
-  var safeTop = rootRect.bottom + Math.max(12, portalReserve);
+  var safeTop = pinnedBottom + Math.max(12, portalReserve);
   var portal = root._bracketRoundHeadingPortal;
   if (portal && portal.style.display !== 'none') {
     var portalBottom = Math.ceil(portal.getBoundingClientRect().bottom || 0) + 12;
@@ -3278,8 +3300,8 @@ function _bracketOperationalSafeTop(root, card) {
   }
   var cardHeight = Math.ceil(card.getBoundingClientRect().height || 0);
   var wholeCardTop = window.innerHeight - cardHeight - 10;
-  if (wholeCardTop >= rootRect.bottom + 2 && wholeCardTop < safeTop) safeTop = wholeCardTop;
-  else if (cardHeight > window.innerHeight - safeTop - 10) safeTop = rootRect.bottom + 2;
+  if (wholeCardTop >= pinnedBottom + 2 && wholeCardTop < safeTop) safeTop = wholeCardTop;
+  else if (cardHeight > window.innerHeight - safeTop - 10) safeTop = pinnedBottom + 2;
   return safeTop;
 }
 window._bracketFocusOperationalCard = _bracketFocusOperationalCard;
@@ -4138,6 +4160,12 @@ function _bracketTabsPlaceSearch(root, searchWrap, force) {
   var inlineSlot = root.querySelector('[data-bracket-search-slot="inline"]');
   var stackSlot = root.querySelector('[data-bracket-search-slot="stack"]');
   if (!inlineSlot || !stackSlot) return '';
+  if (root.hasAttribute('data-bracket-detail-tabs')) {
+    inlineSlot.hidden = stackSlot.hidden = true;
+    root.removeAttribute('data-bracket-search-layout');
+    root.style.setProperty('--bracket-detail-toolbar-height', searchWrap.offsetHeight + 'px');
+    return 'external';
+  }
   // 2 abas primárias (264px), busca mínima (220px), margens/gaps e folga de
   // leitura. Abaixo disso, uma linha exclusiva é mais estável do que flex-wrap.
   var mode = _bracketTabsHostWidth(root) >= 760 ? 'inline' : 'stack';
@@ -4174,6 +4202,11 @@ function _bracketTabsObserveSearchLayout(root, searchWrap) {
       root._bracketTabsResizeObserver = null;
       return;
     }
+    if (root.hasAttribute('data-bracket-detail-tabs')) {
+      _bracketTabsPlaceSearch(root, searchWrap, false);
+      _bracketSyncRoundHeadingOffsets();
+      return;
+    }
     var width = _bracketTabsHostWidth(root);
     if (Math.abs(width - Number(root._bracketTabsObservedWidth || 0)) < 2) return;
     root._bracketTabsObservedWidth = width;
@@ -4181,14 +4214,14 @@ function _bracketTabsObserveSearchLayout(root, searchWrap) {
   };
   if (typeof ResizeObserver !== 'undefined') {
     root._bracketTabsResizeObserver = new ResizeObserver(function () {
-      if (root._bracketTabsResizeFrame) return;
+      if (!root.isConnected || root._bracketTornDown || root._bracketTabsResizeFrame) return;
       var schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : function (fn) { return setTimeout(fn, 16); };
       root._bracketTabsResizeFrame = schedule(function () {
         root._bracketTabsResizeFrame = null;
         relayout();
       });
     });
-    root._bracketTabsResizeObserver.observe(root);
+    root._bracketTabsResizeObserver.observe(root.hasAttribute('data-bracket-detail-tabs') ? searchWrap : root);
     return;
   }
   // Reserva apenas para navegadores sem ResizeObserver. O caminho moderno não
@@ -4221,7 +4254,7 @@ function _bracketTabsHostReference(host, searchWrap) {
 }
 window._bracketCategoryTabsMount = function () {
   var cards = Array.prototype.filter.call(document.querySelectorAll('[data-bracket-tab-category]'), function (card) {
-    return !(card.closest && card.closest('[data-bracket-historical-phase]'));
+    return !(card.closest && card.closest('[data-bracket-historical-phase], [data-bracket-operations-strip]'));
   });
   if (!cards.length) return;
   // Ouro/Prata (ou linhas) só ganham abas quando são trilhas independentes. Se
@@ -4253,20 +4286,10 @@ window._bracketCategoryTabsMount = function () {
   // A categoria pode ter sido encontrada primeiro dentro de uma chave inline
   // sem cards jogáveis. Para a navegação operacional, a fonte é sempre o
   // detalhe inteiro do torneio — é nele que a agenda publicada mora.
-  var detailScope = document.getElementById('view-container') || scope || document.body;
+  var detailScope = first.closest('#view-container') || scope || document.body;
   if (!scope) scope = detailScope;
-  // A busca da chave é a primeira superfície fixa do detalhe. No celular, a
-  // faixa de abas precisa ser sua irmã imediata: deixá-la dentro do trilho que
-  // nasce muito abaixo permitia cards e títulos atravessarem o espaço entre as
-  // duas barras enquanto a aba ainda não tinha alcançado o seu ponto sticky.
-  // A chave continua no #inline-bracket-container; somente sua navegação sobe
-  // para a borda estável do detalhe.
-  var searchWrap = document.getElementById('fbwrap-chaves');
-  // A busca passa a morar num slot DENTRO da navegação. Na próxima montagem,
-  // seu parentNode é o slot, não o host das abas: procurar/criar ali produz
-  // uma segunda faixa Ouro/Prata (e pode aninhar mais faixas a cada filtro).
-  // Volte ao host da navegação mais externa antes de localizar e reconstruir
-  // a faixa. Mover o mesmo nó preserva valor, foco e listeners da busca.
+  // A ficha mantém a toolbar junto de Voltar; somente a navegação vai para a chave.
+  var searchWrap = detailScope.querySelector('#fbwrap-chaves');
   var mountedTabs = searchWrap && searchWrap.closest ? searchWrap.closest('[data-bracket-tabs-root]') : null;
   while (mountedTabs && mountedTabs.parentElement && mountedTabs.parentElement.closest) {
     var parentTabs = mountedTabs.parentElement.closest('[data-bracket-tabs-root]');
@@ -4278,13 +4301,25 @@ window._bracketCategoryTabsMount = function () {
   // [[regression_operational_tabs_stay_outside_hidden_group]]
   var stableHost = detailScope && detailScope.id === 'view-container' && detailScope.contains(first) ? detailScope : null;
   var tabsHost = stableHost || (mountedTabs ? mountedTabs.parentNode : (searchWrap && searchWrap.parentNode));
+  var detailCard = stableHost && stableHost.querySelector(':scope > #tourn-grid-container');
+  if (detailCard && searchWrap) {
+    searchWrap.setAttribute('data-bracket-detail-toolbar', '');
+    if (searchWrap.hasAttribute('data-bracket-tabs-original-style')) {
+      searchWrap.style.cssText = searchWrap.dataset.bracketTabsOriginalStyle;
+      delete searchWrap.dataset.bracketTabsOriginalStyle;
+    }
+  }
   if (searchWrap && tabsHost && searchWrap.parentNode !== tabsHost) {
+    var focusedSearch = searchWrap.contains(document.activeElement) && document.activeElement;
     tabsHost.insertBefore(searchWrap, _bracketTabsHostReference(tabsHost, null));
+    if (focusedSearch) focusedSearch.focus({ preventScroll:true });
   }
   var tid = (window._currentBracketTournament && window._currentBracketTournament.id) || scope.getAttribute('data-tournament-id') || 'current';
   var id = String(tid);
   var isOnlyLines = order.length === 1 && order[0] === 'linhas';
   var root = _bracketFindTabsRoot(tabsHost, scope, id);
+  if (root && root._bracketTabsScope && root._bracketTabsScope.isConnected && first.closest('[data-bracket-general-view]'))
+    scope = root._bracketTabsScope;
   if (!root) {
     root = document.createElement('nav');
     root.setAttribute('data-bracket-tabs-root', '1');
@@ -4308,8 +4343,9 @@ window._bracketCategoryTabsMount = function () {
     // Isso é pintura sobreposta de 2px — não cria margem nem desloca abas — e
     // impede cards da matriz de aparecerem nessas frestas em fullscreen.
     // [[regression_tabs_full_width_seams_are_opaque]]
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin:0;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:visible;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 -2px 0 #111114,0 2px 0 #111114,0 8px 12px -12px rgba(0,0,0,.95);';
-    if (tabsHost) tabsHost.insertBefore(root, _bracketTabsHostReference(tabsHost, searchWrap));
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin:0;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:visible;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--bracket-detail-toolbar-height,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 -2px 0 #111114,0 2px 0 #111114,0 8px 12px -12px rgba(0,0,0,.95);';
+    if (detailCard) detailCard.insertAdjacentElement('afterend', root);
+    else if (tabsHost) tabsHost.insertBefore(root, _bracketTabsHostReference(tabsHost, searchWrap));
     else {
       var anchor = _bracketTabsAnchor(first);
       // Fora do detalhe, a faixa de Ouro/Prata precede a seção inteira.
@@ -4323,7 +4359,9 @@ window._bracketCategoryTabsMount = function () {
     // O mount pode ser chamado depois de uma atualização de placar que recriou
     // o trilho. Reancora a mesma navegação acima das rodadas, sem deixá-la
     // presa à primeira coluna antiga.
-    if (tabsHost) {
+    if (detailCard) {
+      if (root.parentNode !== tabsHost) detailCard.insertAdjacentElement('afterend', root);
+    } else if (tabsHost) {
       var reference = _bracketTabsHostReference(tabsHost, searchWrap);
       if (root.parentNode !== tabsHost || root.nextSibling !== reference) tabsHost.insertBefore(root, reference);
     } else {
@@ -4346,9 +4384,13 @@ window._bracketCategoryTabsMount = function () {
   // Um root reutilizado depois de trocar de torneio não pode manter o id antigo:
   // a seleção de aba e a âncora da dashboard filtram pelo torneio atual.
   if (id !== 'current') root.setAttribute('data-tournament-id', id);
+  root.toggleAttribute('data-bracket-detail-tabs', !!detailCard);
+  root._bracketDetailToolbar = detailCard ? searchWrap : null;
+  if (!root._bracketDetailToolbar) root.style.removeProperty('--bracket-detail-toolbar-height');
   root._bracketTabsScope = scope;
   root._bracketCardsScope = detailScope;
   window._bracketOperationsRefresh(currentTournament, root);
+  if (detailCard) _bracketReconcileOperationalOrder(root);
   // Fase classificatória comum pode trocar de rodada. Já a agenda concentrada
   // por times (Neon) precisa deixar R1–R4 visíveis lado a lado: esconder cada
   // coluna atrás de uma terceira aba apaga justamente os jogos futuros.
@@ -4790,7 +4832,7 @@ function _applyMyMatchesFilter() {
             var _entryTabs = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(node) {
               return node.getAttribute('data-tournament-id') === _el.getAttribute('data-operations-tournament-id');
             });
-            _recuo = _entryTabs ? Math.round(Math.max(12, _entryTabs.getBoundingClientRect().bottom + 12)) : 0;
+            _recuo = _entryTabs ? Math.round(Math.max(12, _bracketPinnedChromeBottom(_entryTabs, false) + 12)) : 0;
           } else if (_operationalRoot) _recuo = Math.round(window._bracketOperationalSafeTop(_operationalRoot, _el));
           else {
             var _cs = getComputedStyle(document.documentElement).getPropertyValue('--scroll-anchor');
@@ -6583,15 +6625,17 @@ window._spCourtClockHtml = function(start, tournament, now, tId, matchId, contro
   if (Number.isFinite(frozenAt) && frozenAt >= start) now = Math.min(now, frozenAt);
   else frozenAt = 0;
   var state = clock.phaseAt(start, timing, now);
-  var rewindIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="M11 5 3 12l8 7V5Zm9 0-8 7 8 7V5Z"/></svg>';
-  var forwardIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="m4 5 8 7-8 7V5Zm9 0 8 7-8 7V5Z"/></svg>';
-  var restartBtn = controls ? '<button type="button" class="sp-match-clock-action" aria-label="Reiniciar etapa do relógio" title="REW · reiniciar tempo" onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'restart\')">' + rewindIcon + '</button>' : '';
+  var restartBtn = controls ? '<button type="button" class="sp-match-clock-action" aria-label="Reiniciar etapa do relógio" title="REW · reiniciar tempo" onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'restart\')">' + _spCourtClockIcon(false) + '</button>' : '';
   var canAdvance = state.phase === 'call' || state.phase === 'warmup';
-  var nextBtn = controls && canAdvance ? '<button type="button" class="sp-match-clock-action sp-match-clock-next" aria-label="Próxima etapa do relógio" title="FF · próxima etapa" onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'next\')">' + forwardIcon + '</button>' : '';
+  var nextBtn = controls && canAdvance ? '<button type="button" class="sp-match-clock-action sp-match-clock-next" aria-label="Próxima etapa do relógio" title="FF · próxima etapa" onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'next\')">' + _spCourtClockIcon(true) + '</button>' : '';
   var timerHtml = '<span class="sp-match-clock-label">' + clock.label(state.phase) + '</span><span class="sp-match-clock-next-slot">' + nextBtn + '</span><span class="sp-match-call-timer" data-start-ms="' + start + '" data-tournament-id="' + window._safeHtml(String(tId)) + '" data-match-id="' + window._safeHtml(String(matchId)) + '" data-call-min="' + timing.call + '" data-warmup-min="' + timing.warmup + '" data-game-min="' + timing.game + '">' + clock.elapsed(state.phaseStart, now) + '</span>';
   return '<span class="sp-match-estimated-time sp-match-court-clock sp-match-phase-' + state.phase + '" title="' + clock.title(state.phase) + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;">' +
     restartBtn + timerHtml + '</span>';
 };
+function _spCourtClockIcon(next) {
+  return next ? '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="m4 5 8 7-8 7V5Zm9 0 8 7-8 7V5Z"/></svg>' :
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="M11 5 3 12l8 7V5Zm9 0-8 7 8 7V5Z"/></svg>';
+}
 window._spRefreshCourtClocks = function() {
   var clock = window.ScoreplaceMatchTiming;
   var now = Date.now();

@@ -591,6 +591,7 @@ function trecho(inicio, fim) {
   await page.addScriptTag({ content: trecho('_bracketFindTabsRoot', '_bracketIsEliminationTree') });
   await page.addScriptTag({ content: trecho('_bracketCategoryOrder', '_bracketLineSection') });
   await page.addScriptTag({ content: src.slice(src.indexOf('function _bracketTabsHostReference'), src.indexOf('// O filtro pode encontrar jogos', src.indexOf('function _bracketTabsHostReference'))) });
+  await page.addScriptTag({ content: trecho('_bracketTabsHostWidth', '_bracketTabsObserveSearchLayout') });
   const stickyMount = await page.evaluate(async () => {
     document.body.style.zoom = '';
     document.body.style.margin = '0';
@@ -616,7 +617,6 @@ function trecho(inicio, fim) {
     window._bracketScheduledDay = () => '2026-10-22';
     window._bracketTabLabel = (cat) => cat;
     window._bracketIsEliminationTree = () => false;
-    window._bracketTabsPlaceSearch = (root, search) => { if (search) root.querySelector('[data-bracket-search-slot="inline"]').appendChild(search); };
     window._bracketTabsObserveSearchLayout = () => {};
     window._bracketEnsureRoundHeadingResizeListener = () => {};
     window._bracketTabsRefreshRoundRail = () => {};
@@ -639,7 +639,7 @@ function trecho(inicio, fim) {
     const portalRect = portal.getBoundingClientRect();
     const mounted = {
       rootInDetail: root.parentNode.id === 'view-container',
-      afterHeader: root.previousElementSibling.classList.contains('sticky-back-header'),
+      afterDetails: root.previousElementSibling.id === 'tourn-grid-container',
       singleRoot: document.querySelectorAll('[data-bracket-tabs-root]').length === 1,
       singleGenderHidden: root.querySelectorAll('[data-bracket-primary-tab]').length === 0,
       categoriesVisible: !!root.querySelector('[data-bracket-subtab="Light"]') &&
@@ -662,15 +662,15 @@ function trecho(inicio, fim) {
     root.appendChild(search);
     window._bracketCategoryTabsMount();
     mounted.searchRecovered = document.querySelectorAll('#fbwrap-chaves').length === 1 &&
-      document.querySelector('#fbwrap-chaves').closest('[data-bracket-tabs-root]') === root;
+      document.querySelector('#fbwrap-chaves') === search && search.parentNode === document.getElementById('view-container') && !root.contains(search);
     mounted.singleAfterRemount = document.querySelectorAll('[data-bracket-tabs-root]').length === 1 &&
       root._bracketRoundHeadingPortal.parentNode === root.parentNode;
     return mounted;
   });
-  if (!stickyMount.rootInDetail || !stickyMount.afterHeader || !stickyMount.singleRoot ||
+  if (!stickyMount.rootInDetail || !stickyMount.afterDetails || !stickyMount.singleRoot ||
       !stickyMount.portalTogether || !stickyMount.portalVisible || !stickyMount.clicked ||
       !stickyMount.searchRecovered || !stickyMount.singleAfterRemount) console.error('  diagnóstico sticky:', stickyMount);
-  ok(stickyMount.rootInDetail && stickyMount.afterHeader && stickyMount.singleRoot &&
+  ok(stickyMount.rootInDetail && stickyMount.afterDetails && stickyMount.singleRoot &&
     stickyMount.portalTogether && stickyMount.stickyTop >= 58 && stickyMount.stickyTop <= 61 &&
     stickyMount.portalVisible && stickyMount.clicked,
     'abas e títulos das rodadas ficam fixos, visíveis e clicáveis quando o grupo original está oculto');

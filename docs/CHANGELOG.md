@@ -1,3 +1,7 @@
+## 2.7.55 — 24/nov/2026 (abas das chaves e controles de tempo)
+
+- Na ficha do torneio, Geral e as categorias aparecem entre a operação e as chaves. Ao rolar, as abas ficam logo abaixo dos filtros. Os botões do relógio têm setas brancas e círculos menores, azuis na chamada, âmbar no aquecimento, verdes no jogo e vermelhos no atraso.
+
 ## 2.7.54 — 24/nov/2026 (largura dos cartões de operação)
 
 - Próximo jogo, Placares pendentes e Em quadra mostram cartões da mesma largura. Quando o espaço é menor, as seções passam para a linha seguinte e os cabeçalhos têm espaço para quebrar o texto.

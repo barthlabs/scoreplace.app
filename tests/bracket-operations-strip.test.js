@@ -631,7 +631,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     const narrow = await browser.newPage();
     await narrow.addStyleTag({ path:'css/bracket.css' });
     await narrow.addScriptTag({ path:'js/domain/match-timing.js' });
-    await narrow.addScriptTag({ content:source.slice(source.indexOf('window._spCourtClockHtml ='), source.indexOf('window._spRefreshCourtClocks = function')) });
+    await narrow.addScriptTag({ content:source.slice(source.indexOf('window._spCourtClockHtml ='), source.indexOf('// ─── Formação de duplas',source.indexOf('window._spRefreshCourtClocks = function'))) });
     for (const width of [320, 360]) {
       await narrow.setViewportSize({ width, height:900 });
       for (const zoom of [1, 1.25]) {
@@ -663,6 +663,40 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
           assert(result, 'relógio e controles dentro dos cards de chave e quadra em ' + width + 'px zoom ' + zoom + ' tema ' + theme);
         }
       }
+    }
+    for (const theme of ['light','dark']) {
+      const phases = await narrow.evaluate(theme => {
+        document.documentElement.dataset.theme=theme;
+        document.documentElement.style.zoom='';
+        const t={callTime:1,warmupTime:1,gameDuration:1};
+        const start=Date.now();
+        document.body.innerHTML='<div class="sp-match-operational">'+window._spCourtClockHtml(start,t,start,'t','m',true)+'</div>'+
+          '<div class="sp-match-operational"><button class="sp-match-clock-action" data-tie-action="clock-restart">'+
+          _spCourtClockIcon(false)+'</button>'+window._spCourtClockHtml(start,t,start,'t','tie',false)+'</div>';
+        const realNow=Date.now;
+        try {
+          return [0,60000,120000,180000].map(offset=>{
+            Date.now=()=>start+offset;
+            window._spRefreshCourtClocks();
+            const buttons=[...document.querySelectorAll('.sp-match-clock-action')];
+            const style=getComputedStyle(buttons[0],'::before');
+            const rgb=style.backgroundColor.match(/\d+/g).map(Number);
+            const linear=rgb.map(c=>{const v=c/255; return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});
+            return { count:buttons.length, fill:style.backgroundColor,
+              contrast:1.05/(.05+.2126*linear[0]+.7152*linear[1]+.0722*linear[2]),
+              fits:buttons.every(b=>{
+                const disc=getComputedStyle(b,'::before'),glyph=b.querySelector('svg'),r=b.getBoundingClientRect();
+                return disc.width==='27px' && disc.height==='27px' && disc.backgroundColor===style.backgroundColor &&
+                  getComputedStyle(glyph).color==='rgb(255, 255, 255)' && glyph.getBoundingClientRect().width===17 &&
+                  glyph.getBoundingClientRect().height===17 && r.width===44 && r.height===44 &&
+                  document.elementFromPoint(r.left+2,r.top+22)===b;
+              }) };
+          });
+        } finally { Date.now=realNow; }
+      },theme);
+      assert.deepEqual(phases.map(p=>p.fill),['rgb(3, 105, 161)','rgb(161, 98, 7)','rgb(21, 128, 61)','rgb(185, 28, 28)']);
+      assert.deepEqual(phases.map(p=>p.count),[3,3,2,2]);
+      assert(phases.every(p=>p.fits && p.contrast>=4.5),JSON.stringify({theme,phases}));
     }
     await narrow.close();
     const endStart = source.indexOf('function _courtOperationId()');
