@@ -69,11 +69,16 @@ assert(!box.innerHTML.includes('f2-elim-round-bounds-box'), 'eliminação direta
 assert(titles().every(x => x >= 0), 'classificatória off conserva cabeçalho');
 assert.equal(F.compileToPhases(get(), { sport: 'Beach Tennis' }).phases.length, 1);
 headless.window._f2Elim(false);
-assert.equal(get().eliminatoria.ativa, true, 'última fase eliminatória não pode desligar');
+assert.equal(get().eliminatoria.ativa, false, 'antes do sorteio o organizador pode desligar a eliminatória direta');
+assert.equal(get().classifAtiva, true, 'a classificatória se torna a fase ativa ao desligar a eliminatória direta');
+assert.equal(F.compileToPhases(get(), { sport: 'Beach Tennis' }).phases[0].kind, 'classification');
 assert.equal(get().eliminatoria.lineAssignment, 'rank_ranges', 'desligar fase não altera faixas configuradas');
 assert.equal(get().eliminatoria.endDate, '2026-12-15', 'desligar fase não zera data configurada');
 assert.equal(get().eliminatoria.scoring.setsToWin, 2, 'desligar fase não zera formato de placar');
 assert.equal(get().teamCompetition.enabled, true, 'decisão interna de times permanece guardada');
+// A opção de voltar à eliminação direta também conserva sua configuração interna.
+headless.window._f2Elim(true);
+headless.window._f2ClassifAtiva(false);
 const direct = F.compileToPhases(get(), { sport: 'Beach Tennis' });
 assert.equal(direct.phases[0].scoring || null, null, 'eliminação direta usa o formato inicial, não o formato preservado da segunda fase');
 assert.equal(direct.phases[0].endDate || '', '', 'eliminação direta usa datas iniciais, não a data preservada da segunda fase');
