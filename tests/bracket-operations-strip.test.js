@@ -512,7 +512,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(endFeedback.calls[1][1].sandbox, true);
     assert.equal(endFeedback.calls[0][1].monarchEndWholeBlock, false, 'Encerra envia intenção individual mesmo com preferência antiga');
     assert.equal(endFeedback.calls[1][1].monarchEndWholeBlock, true, 'Bloco envia intenção explícita de bloco');
-    assert.match(endFeedback.confirmations[0][1], /Placares pendentes.*próximo jogo continua/i);
+    assert.match(endFeedback.confirmations[0][1], /Placares pendentes.*demais jogos permanecem em suas quadras/i);
     assert.match(endFeedback.confirmations[1][1], /três jogos.*Placares pendentes/i);
     assert(endFeedback.notices.some(args => args[0] === 'Quadra liberada' && args[2] === 'success'));
     assert(endFeedback.notices.some(args => args[0] === 'Quadra não liberada' && args[2] === 'error'));
