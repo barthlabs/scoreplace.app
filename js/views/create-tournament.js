@@ -111,9 +111,19 @@ window._allowSelfDeactEl = function () {
 };
 
 
+// Helper: o torneio já foi sorteado? (usado por checks de compat, ex.: monarch legado).
+window._tournamentHasDraw = function(t) {
+  return Number(t && t._nJogos || 0) > 0 ||
+         Number(t && t._nPartes && t._nPartes.matches || 0) > 0 ||
+         (Array.isArray(t.matches) && t.matches.length > 0) ||
+         (Array.isArray(t.rounds) && t.rounds.length > 0) ||
+         (Array.isArray(t.groups) && t.groups.length > 0) ||
+         (Array.isArray(t.rodadas) && t.rodadas.length > 0);
+};
+
 // A mesma janela diária que o planejamento do sorteio lê e confirma. Não há uma
 // segunda regra de horários no editor; sem alteração, o campo nem entra no patch.
-function _estimatedGameDays() {
+function _estimatedGameDays(determinedOnly) {
   var start = (document.getElementById('tourn-start-date') || {}).value || '';
   var end = (document.getElementById('tourn-end-date') || {}).value || '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end < start) return [];
@@ -127,9 +137,8 @@ function _estimatedGameDays() {
     return /^\d{4}-\d{2}-\d{2}$/.test(day || '') && day >= start && day <= end;
   }))).sort();
   if (valid.length) return valid;
-  // Em períodos longos, proponha somente o primeiro dia; nos curtos,
-  // conserve a proposta diária para editores legados.
-  if (span > 8) return [start];
+  // Em uma temporada longa, o início é uma sugestão para o editor, não um dia de jogo já definido.
+  if (span > 8) return determinedOnly ? [] : [start];
   var days = [], cursor = start;
   while (cursor <= end) {
     days.push(cursor);
@@ -163,6 +172,7 @@ window._setEstimatedScheduleMode = function (mode) {
   var state = window._estimatedGameHoursState;
   if (!state || state.locked || (mode !== 'organizer' && mode !== 'participants')) return;
   if (mode === 'participants' && state.saved && state.saved.interleavedPlan) return;
+  state.chosenMode = mode;
   if (state.mode === mode) return;
   state.mode = mode;
   state.touched = true;
@@ -177,8 +187,8 @@ window._renderEstimatedGameHours = function (datesChanged) {
   if (datesChanged && !state.locked) state.touched = true;
   var days = _estimatedGameDays();
   var savedDays = state.saved && Array.isArray(state.saved.days) ? state.saved.days : [];
-  if (!state.mode) state.mode = state.saved && state.saved.mode ||
-    (savedDays.length ? 'organizer' : 'participants');
+  state.mode = state.chosenMode || state.saved?.mode ||
+    (savedDays.length || (!state.locked && _estimatedGameDays(true).length) ? 'organizer' : 'participants');
   var modeToggle = document.getElementById('estimated-games-mode-toggle');
   if (modeToggle) {
     modeToggle.checked = state.mode === 'organizer';
@@ -290,7 +300,7 @@ window._readEstimatedGameHours = function () {
   var currentCats = (typeof window._getCreateFormCategoryData === 'function' && window._getCreateFormCategoryData().combinedCategories) || [];
   var oldWindows = state.saved && Array.isArray(state.saved.categoryWindows) ? state.saved.categoryWindows : [];
   if (oldWindows.some(function (item) { return item && currentCats.indexOf(item.category) < 0; })) state.touched = true;
-  if (!state.touched) return null;
+  if (!state.touched && (state.saved?.mode || state.saved?.days?.length)) return null;
   var days = _estimatedGameDays();
   if (!days.length) return { error:'Informe as datas de início e fim da fase antes de definir os jogos.' };
   var saved = (state.saved && Array.isArray(state.saved.days)) ? state.saved.days : [];
@@ -6081,8 +6091,6 @@ function setupCreateTournamentModal() {
     window._estimatedGameHoursState = {
       saved:t.scheduleWindow || null, valuesByDay:{}, categoryByKey:{}, touched:false,
       locked:typeof window._tournamentHasDraw === 'function' && window._tournamentHasDraw(t),
-      mode:t.scheduleWindow && t.scheduleWindow.mode ||
-        (t.scheduleWindow && Array.isArray(t.scheduleWindow.days) && t.scheduleWindow.days.length ? 'organizer' : 'participants'),
       isNew:false
     };
     window._renderEstimatedGameHours();
@@ -6759,16 +6767,6 @@ function setupCreateTournamentModal() {
       function onCancel() { window._logoRemovalRequested = false; window._coverModeChosenByUser = false; window._coverRemovalRequested = false; }
     );
     return true;
-  };
-
-  // Helper: o torneio já foi sorteado? (usado por checks de compat, ex.: monarch legado).
-  window._tournamentHasDraw = function(t) {
-    return Number(t && t._nJogos || 0) > 0 ||
-           Number(t && t._nPartes && t._nPartes.matches || 0) > 0 ||
-           (Array.isArray(t.matches) && t.matches.length > 0) ||
-           (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-           (Array.isArray(t.groups) && t.groups.length > 0) ||
-           (Array.isArray(t.rodadas) && t.rodadas.length > 0);
   };
 
   // v4.4.56: _writeFormatToForm / _showFormatChangePreview / _maybeShowFormatReconcile

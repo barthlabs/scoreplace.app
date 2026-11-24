@@ -4,6 +4,19 @@
   var model = window.ScoreplacePhaseGridPlan;
   var overlayOpen = false, previousBodyOverflow = '', previousFocus = null;
   var preDrawPreviousState = null;
+  function datedOrganizer(t) {
+    var schedule=t?.scheduleWindow;
+    return Array.isArray(schedule?.days) && schedule.days.length>0 && (!schedule.mode || schedule.mode==='organizer');
+  }
+  var priorReview=window._requiresMonarchPreDrawReview;
+  if (typeof priorReview==='function' && !priorReview.phaseGridBaseReview) {
+    window._requiresMonarchPreDrawReview=function (t) {
+      if (!t || Number(t.currentPhaseIndex || 0)>0 || window._tournamentHasDraw?.(t)) return false;
+      return datedOrganizer(t) || priorReview(t);
+    };
+    window._requiresMonarchPreDrawReview.phaseGridBaseReview=priorReview;
+  }
+  if (window._renderPhaseGridEditor?.datedGridInstalled) return;
   function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];
   }); }
@@ -117,7 +130,10 @@
     var scheduleState = state && state.preDrawId ? null : window._estimatedGameHoursState;
     if (scheduleState && scheduleState.mode === 'participants') {
       if (overlayOpen) window._closePhaseGridEditor();
-      mount.innerHTML = ''; return;
+      var dated=typeof window._estimatedGameDays==='function' && window._estimatedGameDays(true).length;
+      mount.innerHTML = dated && !scheduleState.locked && !state?.locked
+        ? '<button type="button" class="btn btn-secondary" onclick="window._phaseGridPrepareDated()">Definir horários e preparar grade de quadras</button>' : '';
+      return;
     }
     if (!state || !state.plan || !model || !state.tiles.length) {
       // Depois do sorteio, a agenda já é a grade publicada. Não ofereça novamente
@@ -231,6 +247,11 @@
     redraw(true);
   }
   window._renderPhaseGridEditor = redraw;
+  redraw.datedGridInstalled=true;
+  window._phaseGridPrepareDated=function () {
+    window._setEstimatedScheduleMode('organizer');
+    if (window._estimatedGameHoursState?.mode==='organizer') window._phaseGridSuggest();
+  };
   window._phaseGridSuggest = function () {
     var message = document.getElementById('phase-grid-proposal-message');
     function fail(value) { if (message) { message.hidden = false; message.textContent = value; } }
@@ -319,7 +340,17 @@
     var tournament = typeof window._findTournamentById === 'function' && window._findTournamentById(tId);
     var plan = tournament && tournament.scheduleWindow && tournament.scheduleWindow.interleavedPlan;
     var days = tournament && tournament.scheduleWindow && tournament.scheduleWindow.days;
-    if (!tournament || !plan || !Array.isArray(plan.blocks) || !plan.blocks.length || !Array.isArray(days) || !days.length) {
+    if (!tournament || Number(tournament.currentPhaseIndex || 0)>0 || window._tournamentHasDraw?.(tournament)) return false;
+    var draft;
+    if (!plan && datedOrganizer(tournament)) {
+      draft=model.suggestProjected(tournament,days,window);
+      if (draft.error) {
+        window.showAlertDialog?.('Confira a grade antes do sorteio',draft.error,null,{type:'warning'});
+        return false;
+      }
+      plan=draft.plan;
+    }
+    if (!plan || !Array.isArray(plan.blocks) || !plan.blocks.length || !Array.isArray(days) || !days.length) {
       if (typeof window.showAlertDialog === 'function') window.showAlertDialog('Grade de jogos ausente',
         'Configure as categorias, vagas, quadras e horários na edição do torneio antes de sortear.', null, { type:'warning' });
       return false;
@@ -329,7 +360,7 @@
     var mount = document.createElement('div'); mount.id = 'phase-grid-predraw-mount'; mount.hidden = true;
     document.body.appendChild(mount);
     window._phaseCallOrderState = { tournament:tournament, plan:plan, day:days[0], activeDay:days[0].day,
-      tiles:model.expand(plan, tournament), locked:false, touched:false, preDrawId:String(tId) };
+      tiles:draft ? draft.tiles : model.expand(plan,tournament), locked:false, touched:!!draft, preDrawId:String(tId) };
     window._openPhaseGridEditor();
     return true;
   };
@@ -390,7 +421,7 @@
           tournamentId:state.preDrawId, sandbox:db._ehSandbox(state.preDrawId),
           patch:{ scheduleWindow:{ interleavedPlan:plan } }
         });
-        if (!result || result.ok === false) throw new Error(result && result.message || 'A grade não foi salva.');
+        if (!result || result.ok !== true) throw new Error(result && result.message || 'A grade não foi salva.');
         state.tournament.scheduleWindow.interleavedPlan = plan;
       }
       var id = state.preDrawId;

@@ -2,7 +2,7 @@
 const fs = require('fs');
 const vm = require('vm');
 const source = fs.readFileSync('js/views/create-tournament.js', 'utf8');
-const start = source.indexOf('function _estimatedGameDays()');
+const start = source.indexOf('function _estimatedGameDays(');
 const end = source.indexOf('function setupCreateTournamentModal()', start);
 let failures = 0;
 function ok(value, label) { console.log((value ? '✓ ' : '✗ ') + label); if (!value) failures++; }
@@ -36,7 +36,7 @@ if (start >= 0 && end > start) {
   context.window._estimatedGameHoursState = { saved:null, valuesByDay:{}, categoryByKey:{}, touched:false, locked:false };
   context.window._renderEstimatedGameHours(true);
   ok(context.window._estimatedGameHoursState.mode === 'participants' && context.window._readEstimatedGameHours().mode === 'participants',
-    'editar as datas de uma fase longa preserva a escolha dos participantes');
+    'temporada longa sem datas de jogo conserva a combinação entre participantes');
   context.window._setEstimatedScheduleMode('organizer');
   context.window._addEstimatedGameDay();
   const longResult = context.window._readEstimatedGameHours();
@@ -45,14 +45,15 @@ if (start >= 0 && end > start) {
   context.window._setEstimatedScheduleMode('participants');
   ok(context.window._readEstimatedGameHours().mode === 'participants', 'a escolha dos participantes é gravada explicitamente');
   context.window._estimatedGameHoursState = { saved:null, valuesByDay:{}, categoryByKey:{}, touched:false, locked:false, isNew:false };
+  context.window._estimatedGameHoursState.selectedDays=['2027-01-14'];
   context.window._renderEstimatedGameHours();
-  ok(context.window._readEstimatedGameHours().mode === 'participants',
-    'ao salvar torneio legado sem modo a escolha exibida desliga a grade inferida');
+  ok(context.window._readEstimatedGameHours().mode === 'organizer' && context.window._readEstimatedGameHours().days[0].day==='2027-01-14',
+    'ao salvar um torneio datado sem modo nem dias o formulário envia a janela exibida');
   nodes['tourn-end-date'].value = '2026-11-13';
   context.window._estimatedGameHoursState = { saved:null, valuesByDay:{}, categoryByKey:{}, touched:false, locked:false, isNew:true };
   context.window._renderEstimatedGameHours();
-  ok(context.window._estimatedGameHoursState.mode === 'participants' && context.window._readEstimatedGameHours().mode === 'participants',
-    'torneio novo de um dia também exige escolha explícita e grava modo por participantes');
+  ok(context.window._estimatedGameHoursState.mode === 'organizer' && context.window._readEstimatedGameHours().mode === 'organizer',
+    'torneio novo de um dia oferece grade e grava a janela sem exigir outro gesto');
   context.window._setEstimatedScheduleMode('organizer');
   ok(context.window._readEstimatedGameHours().mode === 'organizer', 'o organizador pode escolher grade num torneio de um dia');
   nodes['tourn-end-date'].value = '2026-11-19';
