@@ -11,8 +11,12 @@ import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.DisplayMetrics;
-import android.util.TypedValue;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.text.SpannableString;
+import android.text.style.ForegroundColorSpan;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
@@ -67,14 +71,15 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private int courtLeft = 1; // qual time está à esquerda (vem do estado)
-    private float mScale = 1f;  // fator do cânone de escala por área (ver applyScale)
+    private View scorePage;
 
-    private LinearLayout halfLeft, halfRight, btnUndo;
-    private TextView pointLeft, pointRight, gamesLeft, gamesRight, setLabel, gamesLabel;
-    private TextView nameL1, nameL2, nameR1, nameR2, ballL1, ballL2, ballR1, ballR2;
+    private LinearLayout halfLeft, halfRight;
+    private TextView btnUndo;
+    private TextView pointLeft, pointRight, gamesLeft, gamesRight, gamesLabel;
+    private TextView nameL1, nameL2, nameR1, nameR2;
     private View winnerOverlay, replayControls, reshuffleRow, tieOverlay;
     private TextView winnerLabel, winnerNames, winnerScoreL, winnerScoreR;
-    private androidx.wear.widget.CurvedTextView setsArcL, setsArcR, setsWordArc;
+    private TextView setsLeft, setsRight;
     private TextView winnerSport;
     private TextView hrPill;      // ♥ BPM em cápsula no topo-centro (cor da faixa de queima)
     private int hrMax = 0;        // FCmáx vinda do celular (220 − idade do perfil); 0 = sem faixa
@@ -93,13 +98,12 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private View startOverlay;
     private View idleOverlay;
     private TextView btnStart;
-    private androidx.wear.widget.CurvedTextView startArcSport, startArcPrompt;
+    private TextView startSport;
     private LinearLayout startPlayers;
     // Seletor de sacador
-    private LinearLayout serveBar, serveList;
-    private View serveScroll;
-    private TextView serveBarName, btnServeConfirm;
-    private androidx.wear.widget.CurvedTextView serveArcPrompt, serveArcSport;
+    private LinearLayout serveList;
+    private TextView btnServeConfirm;
+    private TextView servePrompt, serveSport;
     private View serveOverlay;
     // Rei/Rainha (na tela de vencedor)
     private TextView rrSeriesLabel, btnRrNext, rrFinalTitle, winnerWaiting;
@@ -123,16 +127,28 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        /* ⛔ ABERTURA COM MARCA — e a troca de tema tem de vir ANTES do super/setContentView.
-         * A activity NASCE com `ScoreplaceWearSplash` (manifesto): fundo preto + a bola de
-         * 48dp no centro, que é o que o Play exigiu ao recusar a versão 109
-         * ("Missing app icon in splash screen"). Assim que o processo está de pé, ela volta
-         * para o tema normal — senão o `windowBackground` do splash ficaria atrás da tela
-         * inteira do placar pelo resto da sessão. */
-        setTheme(R.style.ScoreplaceWearTheme);
+        androidx.core.splashscreen.SplashScreen splash = androidx.core.splashscreen.SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        splash.setOnExitAnimationListener(provider -> {
+            // The Wear launcher may scale its own icon during its entry animation.
+            // Hand off with the app's 48dp mark at its intrinsic size on pure black.
+            View surface = provider.getView();
+            provider.getIconView().setVisibility(View.INVISIBLE);
+            surface.setBackgroundColor(Color.BLACK);
+            surface.setForeground(getDrawable(R.drawable.splash_icon));
+            android.animation.ObjectAnimator exit = android.animation.ObjectAnimator.ofInt(
+                    surface.getForeground(), "alpha", 255, 0);
+            exit.setDuration(getResources().getInteger(android.R.integer.config_shortAnimTime));
+            exit.addListener(new android.animation.AnimatorListenerAdapter() {
+                @Override public void onAnimationEnd(android.animation.Animator animation) {
+                    provider.remove();
+                }
+            });
+            exit.start();
+        });
 
+        scorePage = findViewById(R.id.score_page);
         halfLeft = findViewById(R.id.half_left);
         halfRight = findViewById(R.id.half_right);
         btnUndo = findViewById(R.id.btn_undo);
@@ -140,24 +156,11 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         pointRight = findViewById(R.id.point_right);
         gamesLeft = findViewById(R.id.games_left);
         gamesRight = findViewById(R.id.games_right);
-        setLabel = findViewById(R.id.set_label);
         nameL1 = findViewById(R.id.name_l1); nameL2 = findViewById(R.id.name_l2);
         nameR1 = findViewById(R.id.name_r1); nameR2 = findViewById(R.id.name_r2);
-        ballL1 = findViewById(R.id.ball_l1); ballL2 = findViewById(R.id.ball_l2);
-        ballR1 = findViewById(R.id.ball_r1); ballR2 = findViewById(R.id.ball_r2);
-        setsArcL = findViewById(R.id.sets_arc_left);
-        setsArcR = findViewById(R.id.sets_arc_right);
-        // SETS na borda curva: esquerdo às 11h (330°), direito à 1h (30°). Tentei
-        // agrupá-los à esquerda (318°/334°) pra imitar a faixa reta do Apple e ficou
-        // RUIM: no bezel, dois números a 16° um do outro saem tortos e quase
-        // ilegíveis. Num mostrador redondo o cromo mora na CURVA; o que o Apple
-        // resolve com uma linha reta, aqui se resolve deixando os sets nas pontas e
-        // pondo o ♥ no meio, logo abaixo do 12h (cápsula reta, ver hr_pill).
-        setsArcL.setAnchorType(1); setsArcL.setAnchorAngleDegrees(330f); setsArcL.setClockwise(true);
-        setsArcR.setAnchorType(1); setsArcR.setAnchorAngleDegrees(30f);  setsArcR.setClockwise(true);
-        hrPill = findViewById(R.id.hr_pill);   // cápsula no topo-centro (layout_gravity)
-        setsWordArc = findViewById(R.id.sets_word_arc);
-        setsWordArc.setAnchorType(1); setsWordArc.setAnchorAngleDegrees(316f); setsWordArc.setClockwise(true); // perto do "1" (11h)
+        setsLeft = findViewById(R.id.sets_arc_left);
+        setsRight = findViewById(R.id.sets_arc_right);
+        hrPill = findViewById(R.id.hr_pill);
         winnerOverlay = findViewById(R.id.winner_overlay);
         winnerLabel = findViewById(R.id.winner_label);
         winnerNames = findViewById(R.id.winner_names);
@@ -183,29 +186,13 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         gamesLabel = findViewById(R.id.games_label);
         startOverlay = findViewById(R.id.start_overlay);
         idleOverlay = findViewById(R.id.idle_overlay);
-        startArcSport = findViewById(R.id.start_arc_sport);
-        startArcPrompt = findViewById(R.id.start_arc_prompt);
+        startSport = findViewById(R.id.start_arc_sport);
         startPlayers = findViewById(R.id.start_players);
         btnStart = findViewById(R.id.btn_start);
-        // Cromo curvo no topo (0° = 12h, horário; 30°/hora → 11h = 330°, 1h = 30°).
-        // ⚡+modalidade (fonte menor) TERMINA às 11h (topo-esquerda); "1º sacador"
-        // COMEÇA à 1h (topo-direita) — simétrico, respiro no 12h, centro livre.
-        // anchorType: 0=start, 1=center, 2=end (enum anchorPosition da lib).
-        startArcSport.setAnchorType(2);              // END: modalidade termina no ângulo
-        startArcSport.setAnchorAngleDegrees(330f);   // 11h (esquerda)
-        startArcSport.setClockwise(true);
-        startArcPrompt.setAnchorType(1);             // CENTER: centrado no ângulo
-        startArcPrompt.setAnchorAngleDegrees(0f);    // 12h (topo, centrado)
-        startArcPrompt.setClockwise(true);
-        serveBar = findViewById(R.id.serve_bar);
-        serveBarName = findViewById(R.id.serve_bar_name);
         serveOverlay = findViewById(R.id.serve_overlay);
         serveList = findViewById(R.id.serve_list);
-        serveScroll = findViewById(R.id.serve_scroll);
-        serveArcPrompt = findViewById(R.id.serve_arc_prompt);
-        serveArcPrompt.setAnchorType(1); serveArcPrompt.setAnchorAngleDegrees(0f); serveArcPrompt.setClockwise(true); // 12h
-        serveArcSport = findViewById(R.id.serve_arc_sport);
-        serveArcSport.setAnchorType(2); serveArcSport.setAnchorAngleDegrees(330f); serveArcSport.setClockwise(true); // 11h (igual ao Iniciar)
+        servePrompt = findViewById(R.id.serve_arc_prompt);
+        serveSport = findViewById(R.id.serve_arc_sport);
         btnServeConfirm = findViewById(R.id.btn_serve_confirm);
         rrSeriesLabel = findViewById(R.id.rr_series_label);
         btnRrNext = findViewById(R.id.btn_rr_next);
@@ -226,8 +213,6 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             pendingPickName = null;
             sendIntent("start", 0);
         });
-        // Barra do sacador abre o seletor (fase 0, antes de qualquer jogo).
-        serveBar.setOnClickListener(v -> { serveOpen = true; renderServeOverlay(); });
         // Confirmar aplica a escolha (ou mantém a atual) e fecha.
         btnServeConfirm.setOnClickListener(v -> {
             int team = pendingPickTeam, idx = pendingPickIdx;
@@ -235,6 +220,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             if (team == 1 || team == 2) if (idx >= 0) sendSetServer(team, idx);
             serveOpen = false; pendingPickName = null;
             serveOverlay.setVisibility(View.GONE);
+            scorePage.setVisibility(View.VISIBLE);
         });
 
         // Toque por POSIÇÃO → intenção pra o TIME que está naquele lado.
@@ -280,8 +266,6 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         btnTieExtend.setOnClickListener(v -> sendResolveTie("extend"));
         btnTieTiebreak.setOnClickListener(v -> sendResolveTie("tiebreak"));
 
-        applyScale();
-        applyRoundSafeInsets();
         applyPreviewExtras();
     }
 
@@ -306,101 +290,10 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         if (bpm > 0) { lastBpm = bpm; renderHeartRate(); }
     }
 
-    // ── CÂNONE DE ESCALA POR ÁREA (equivalente Wear do GeometryReader do iOS —
-    // ver project_web_area_scaling_canon / feedback_maximize_screen_area) ──
-    // Lê a largura REAL em dp e escala TUDO (fonte + padding + margem + dimensões
-    // fixas) de CADA view, recursivamente. O layout XML é desenhado na referência
-    // (~195dp de largura); telas menores encolhem, maiores dão zoom. Via ÚNICA:
-    // nada no XML reage à área sozinho (dp engana entre densidades), então o
-    // cânone é a alavanca única. scale = clamp(widthDp/195, 0.60, 1.35).
-    private void applyScale() {
-        DisplayMetrics dm = getResources().getDisplayMetrics();
-        float widthDp = dm.widthPixels / dm.density;
-        mScale = Math.max(0.60f, Math.min(1.35f, widthDp / 195f));
-        if (Math.abs(mScale - 1f) < 0.001f) return; // referência → no-op
-        scaleTree(findViewById(android.R.id.content), mScale);
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
-    // ── FOLGA DO DISCO (Wear App Quality Guidelines · Font size) ──
-    // ⛔ O Google recusou a 109 com "text and controls are not cut off by screen edges".
-    // As linhas de NOME vivem no terço de baixo, onde a corda do círculo já é bem mais
-    // curta que a largura da tela: medido no emulador 454×454 com `font_scale 1.30`, a
-    // 2ª linha começava em x≈37px e a borda do disco só abre em x≈47px — "Wanderleia"
-    // perdia o W e "Bartolomeu" perdia o u. `maxWidth` em dp NÃO resolve: é medida fixa,
-    // não sabe onde está a borda do disco (e o scaleTree nem a escala).
-    //
-    // ⭐ A régua é o QUADRADO INSCRITO no círculo: recuar (1 − √2/2)/2 ≈ 0,1465 da largura
-    //    em cada lado põe o conteúdo dentro do disco em QUALQUER altura, em qualquer
-    //    mostrador. O recuo entra como padding EXTERNO das linhas de nome (o lado que
-    //    aponta pra fora), descontando o que a metade já recua — a caixa do nome é
-    //    `0dp + weight`, então o autosize encolhe o texto até caber nela.
-    // ⚠️ Mostrador QUADRADO não paga esse pedágio (isScreenRound() == false).
-    private int roundInsetPx() {
-        if (!getResources().getConfiguration().isScreenRound()) return 0;
-        return Math.round(0.1465f * getResources().getDisplayMetrics().widthPixels);
-    }
-
-    private void applyRoundSafeInsets() {
-        int inset = roundInsetPx();
-        if (inset <= 0) return;
-        View halfL = findViewById(R.id.half_left), halfR = findViewById(R.id.half_right);
-        int folgaL = Math.max(0, inset - (halfL != null ? halfL.getPaddingStart() : 0));
-        int folgaR = Math.max(0, inset - (halfR != null ? halfR.getPaddingEnd() : 0));
-        padStart(findViewById(R.id.name_row_l1), folgaL);
-        padStart(findViewById(R.id.name_row_l2), folgaL);
-        padEnd(findViewById(R.id.name_row_r1), folgaR);
-        padEnd(findViewById(R.id.name_row_r2), folgaR);
-    }
-
-    private void padStart(View v, int start) {
-        if (v == null) return;
-        v.setPaddingRelative(start, v.getPaddingTop(), v.getPaddingEnd(), v.getPaddingBottom());
-    }
-
-    private void padEnd(View v, int end) {
-        if (v == null) return;
-        v.setPaddingRelative(v.getPaddingStart(), v.getPaddingTop(), end, v.getPaddingBottom());
-    }
-
-    // Multiplica recursivamente fonte/padding/margem/dimensões fixas de v e filhos.
-    private void scaleTree(View v, float s) {
-        if (v == null) return;
-        if (v instanceof androidx.wear.widget.CurvedTextView) {
-            // CurvedTextView não é TextView; escala em px (ângulos são ⊥ ao tamanho).
-            androidx.wear.widget.CurvedTextView cv = (androidx.wear.widget.CurvedTextView) v;
-            cv.setTextSize(cv.getTextSize() * s);
-        } else if (v instanceof TextView) {
-            TextView tv = (TextView) v;
-            if (tv.getAutoSizeTextType() == TextView.AUTO_SIZE_TEXT_TYPE_UNIFORM) {
-                // Autosize: escala o min/max (setTextSize direto brigaria com ele).
-                int mn = Math.max(1, Math.round(tv.getAutoSizeMinTextSize() * s));
-                int mx = Math.max(mn + 1, Math.round(tv.getAutoSizeMaxTextSize() * s));
-                int st = Math.max(1, Math.round(tv.getAutoSizeStepGranularity() * s));
-                tv.setAutoSizeTextTypeUniformWithConfiguration(mn, mx, st, TypedValue.COMPLEX_UNIT_PX);
-            } else {
-                tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, tv.getTextSize() * s);
-            }
-        }
-        v.setPadding(Math.round(v.getPaddingLeft() * s), Math.round(v.getPaddingTop() * s),
-                     Math.round(v.getPaddingRight() * s), Math.round(v.getPaddingBottom() * s));
-        ViewGroup.LayoutParams lp = v.getLayoutParams();
-        if (lp != null) {
-            if (lp.width > 0) lp.width = Math.round(lp.width * s);   // >0 = dimensão fixa (não MATCH/WRAP)
-            if (lp.height > 0) lp.height = Math.round(lp.height * s);
-            if (lp instanceof ViewGroup.MarginLayoutParams) {
-                ViewGroup.MarginLayoutParams m = (ViewGroup.MarginLayoutParams) lp;
-                m.setMargins(Math.round(m.leftMargin * s), Math.round(m.topMargin * s),
-                             Math.round(m.rightMargin * s), Math.round(m.bottomMargin * s));
-            }
-            v.setLayoutParams(lp);
-        }
-        if (v instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) v;
-            for (int i = 0; i < vg.getChildCount(); i++) scaleTree(vg.getChildAt(i), s);
-        }
-    }
-
-    // Intenção "resolveTie" — escolha do desempate no empate (5-5, 6-6…).
     private void sendResolveTie(String rule) {
         if (localFirst("resolveTie", 0, -1, rule)) return;
         try {
@@ -438,7 +331,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     // Rei/Rainha aceito → o Iniciar fica DOURADO (vai começar a série).
     private void pintarIniciar() {
         boolean gold = rrSuggestNow && rrSwitch.isChecked();
-        btnReplayConfirm.setBackgroundColor(getColor(gold ? R.color.rr_amber : R.color.start_green));
+        btnReplayConfirm.setBackgroundTintList(getColorStateList(gold ? R.color.rr_amber : R.color.start_green));
         btnReplayConfirm.setTextColor(getColor(gold ? R.color.rr_amber_text : R.color.start_green_text));
     }
 
@@ -671,7 +564,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             android.graphics.drawable.GradientDrawable pill = new android.graphics.drawable.GradientDrawable();
             pill.setCornerRadius(999 * d);
             pill.setColor(withAlpha(zc, 46));                                  // ~18% de fill
-            pill.setStroke(Math.max(1, (int) (1.2f * d * mScale)), withAlpha(zc, 217));
+            pill.setStroke(Math.max(1, (int) (1.2f * d)), withAlpha(zc, 217));
             hrPill.setBackground(pill);
             hrPill.setTextColor(zc);
         } else {
@@ -843,7 +736,6 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         applySide(true, leftTeam, points, games, teams, server);
         applySide(false, rightTeam, points, games, teams, server);
 
-        int setsToWin = s.optInt("setsToWin", 1);
         JSONArray sets = s.optJSONArray("sets");
         boolean finished = s.optBoolean("isFinished", false);
 
@@ -859,31 +751,17 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             gamesLabel.setTextColor(getColor(R.color.meta_dim));
         }
 
-        // #1: SETS no lugar do rótulo do set — 0-0 no início, preenche conforme
-        // os sets fecham. Ativo → mostra sets; inativo → "Aguardando…".
-        if (active) {
-            setLabel.setVisibility(View.GONE);
-            setsArcL.setVisibility(View.VISIBLE); setsArcR.setVisibility(View.VISIBLE);
-            setsWordArc.setVisibility(View.VISIBLE);
-            setsArcL.setText(String.valueOf(sets != null ? sets.optInt(leftTeam - 1, 0) : 0));
-            setsArcL.setTextColor(getColor(leftTeam == 1 ? R.color.team_blue : R.color.team_red));
-            setsArcR.setText(String.valueOf(sets != null ? sets.optInt(rightTeam - 1, 0) : 0));
-            setsArcR.setTextColor(getColor(rightTeam == 1 ? R.color.team_blue : R.color.team_red));
-        } else {
-            setsArcL.setVisibility(View.GONE); setsArcR.setVisibility(View.GONE);
-            setsWordArc.setVisibility(View.GONE);
-            setLabel.setVisibility(View.VISIBLE);
-            // Diz O QUE FAZER: "Aguardando…" sozinho lia como "o relógio não conversou com
-            // o celular". A partida tem que estar montada/rolando no celular (relógio burro).
-            setLabel.setText("Aguardando…\nabra a partida no celular");
-        }
+        setsLeft.setText(String.valueOf(sets != null ? sets.optInt(leftTeam - 1, 0) : 0));
+        setsLeft.setTextColor(getColor(leftTeam == 1 ? R.color.team_blue : R.color.team_red));
+        setsRight.setText(String.valueOf(sets != null ? sets.optInt(rightTeam - 1, 0) : 0));
+        setsRight.setTextColor(getColor(rightTeam == 1 ? R.color.team_blue : R.color.team_red));
 
         // ── Iniciar: montagem aberta no celular e nada ao vivo ──
         boolean canStart = s.optBoolean("canStart", false);
         if (!active && !finished && canStart) {
             boolean isCasual = s.optBoolean("isCasual", false);
             String sport = s.optString("sportName", "Partida Casual");
-            startArcSport.setText((isCasual ? "⚡ " : "🏆 ") + sport);
+            startSport.setText((isCasual ? "⚡ " : "🏆 ") + sport);
             buildStartPlayers(teams, leftTeam, rightTeam,
                               server != null ? server.optString("name", "") : "");
             startOverlay.setVisibility(View.VISIBLE);
@@ -930,28 +808,22 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             serveOpen = pickOpen;
             lastPickOpen = pickOpen;
         }
-        // Barra do sacador no rodapé: só durante os 2 primeiros jogos.
-        // A pílula "Sacador" saiu (dono, 25/jul/2026): "não tem 1 linha para sacador — a
-        // bolinha ao lado do nome indica o sacador". Empilhada acima do Desfazer, ela
-        // subia por cima do 2º nome de cada dupla; e é redundante (o nome do sacador já
-        // vem com a bola). A troca continua pelo seletor, que abre sozinho na virada do
-        // 1º game. Espelha o RemoteView.swift do lado Apple.
-        serveBar.setVisibility(View.GONE);
         // Overlay do seletor (aberto por toque ou pela virada de fase).
         boolean showServe = serveOpen && canSetServer && !finished;
         if (showServe) {
-            serveArcPrompt.setText(servePhase == 1 ? "2º sacador" : "1º sacador");
+            servePrompt.setText(servePhase == 1 ? "2º sacador" : "1º sacador");
             boolean isCasualS = s.optBoolean("isCasual", false);
             String sportS = s.optString("sportName", "");
-            serveArcSport.setText((isCasualS ? "⚡ " : "🏆 ") + (sportS.isEmpty() ? "Partida" : sportS));
+            serveSport.setText((isCasualS ? "⚡ " : "🏆 ") + (sportS.isEmpty() ? "Partida" : sportS));
             renderServeOverlay();
         }
         serveOverlay.setVisibility(showServe ? View.VISIBLE : View.GONE);
+        scorePage.setVisibility(active && !finished && !tiePending && !showServe ? View.VISIBLE : View.GONE);
 
         // #2: Fim de jogo — cobre as metades e trava os toques +1.
         if (finished) {
             int winner = s.isNull("winner") ? 0 : s.optInt("winner", 0);
-            // Modalidade curva às 11h (igual às outras telas).
+            // Modalidade da partida encerrada.
             boolean isCasualW = s.optBoolean("isCasual", false);
             String sportW = s.optString("sportName", "");
             winnerSport.setText((isCasualW ? "⚡ " : "🏆 ") + (sportW.isEmpty() ? "Partida" : sportW));
@@ -1042,7 +914,6 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
                     mixedIcon.setAlpha(mixOn ? 1f : 0.38f);
                     aplicandoDoCelular = false;
                     pintarIniciar();
-                    if (mScale != 1f) scaleTree(reshuffleRow, mScale);
                 } else {
                     replayControls.setVisibility(View.GONE);
                     // Sem controles = à espera do celular (não é "travado").
@@ -1105,7 +976,6 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         startServerName = serverName == null ? "" : serverName;
         startCurTeam = 0; startCurIdx = -1;
         String selName = pendingPickName != null ? pendingPickName : startServerName;
-        float d = getResources().getDisplayMetrics().density;
         int[] order = { leftTeam, rightTeam };
         for (int team : order) {
             if (teams == null) continue;
@@ -1113,7 +983,6 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             if (t == null) continue;
             JSONArray pl = t.optJSONArray("players");
             if (pl == null) continue;
-            int cName = getColor(team == 1 ? R.color.team_blue : R.color.team_red);
             for (int i = 0; i < pl.length(); i++) {
                 final String n = pl.optString(i, "");
                 if (n.isEmpty()) continue;
@@ -1123,173 +992,66 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
                     startCurTeam = team; startCurIdx = i;   // slot que o Iniciar usa sem toque
                 }
 
-                LinearLayout row = new LinearLayout(this);
-                row.setOrientation(LinearLayout.HORIZONTAL);
-                row.setGravity(android.view.Gravity.CENTER);
-                row.setPadding((int)(6*d), (int)(3*d), (int)(6*d), (int)(3*d));
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                lp.topMargin = (int)(2*d);   // espaço menor entre nomes (ainda tappável)
-                row.setLayoutParams(lp);
-                // Box só no aceso, na COR DO TIME (dono, 30/jul/2026) — o laranja é a
-                // bola da modalidade, não a moldura. Fill transparente.
-                if (isSel) {
-                    android.graphics.drawable.GradientDrawable box = new android.graphics.drawable.GradientDrawable();
-                    box.setCornerRadius(8*d);
-                    box.setStroke(Math.max(1, (int)(1.5f*d)), cName);
-                    box.setColor(android.graphics.Color.TRANSPARENT);
-                    row.setBackground(box);
-                }
-
-                TextView dot = new TextView(this);
-                dot.setText("●");
-                dot.setTextColor(getColor(R.color.serve_ball));
-                dot.setTextSize(12);   // bola do saque maior
-                dot.setVisibility(isSel ? View.VISIBLE : View.INVISIBLE);
-                dot.setPadding(0, 0, (int)(5*d), 0);
-                row.addView(dot);
-
-                TextView tv = new TextView(this);
-                tv.setText(n);
-                tv.setTextColor(cName);
-                tv.setTextSize(19);   // menor pra não estourar a borda com os 4 nomes
-                tv.setMaxLines(1);
-                tv.setTypeface(null, isSel ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-                row.addView(tv);
-
-                row.setClickable(true);
-                row.setFocusable(true);
-                // Só ACENDE; o envio é no "Iniciar" (ver btnStart no onCreate).
+                TextView row = playerChoice(n, team, isSel);
                 row.setOnClickListener(v -> {
                     pendingPickName = n; pendingPickTeam = fteam; pendingPickIdx = fidx;
                     buildStartPlayers(startTeams, startLeftTeam, startRightTeam, startServerName);
                 });
                 startPlayers.addView(row);
-                if (mScale != 1f) scaleTree(row, mScale); // views dinâmicas nascem após o applyScale do onCreate
             }
         }
     }
 
-    // Linhas do seletor de sacador — MESMO visual dos nomes do Iniciar (nome grande
-    // na cor FORTE do time, box + bola no aceso). Aceso = pendingPick ou, na
-    // abertura, quem já ocupa o slot (servePickCurrent). Tocar SÓ acende; o
-    // Confirmar é que aplica. Nomes DISTRIBUÍDOS por espaçadores de peso igual.
     private void renderServeOverlay() {
         serveList.removeAllViews();
         if (serveEligible == null) return;
-        float d = getResources().getDisplayMetrics().density;
         String selected = pendingPickName != null ? pendingPickName : servePickCurrent;
-        int n = serveEligible.length();
-        for (int i = 0; i < n; i++) {
-            JSONObject o = serveEligible.optJSONObject(i);
-            if (o == null) continue;
-            final int team = o.optInt("team", 0);
-            final int idx = o.optInt("playerIdx", -1);
-            final String name = o.optString("name", "");
+        for (int i = 0; i < serveEligible.length(); i++) {
+            JSONObject entry = serveEligible.optJSONObject(i);
+            if (entry == null) continue;
+            int team = entry.optInt("team", 0);
+            int index = entry.optInt("playerIdx", -1);
+            String name = entry.optString("name", "");
             if (name.isEmpty()) continue;
-            boolean isSel = name.equals(selected) && !name.isEmpty();
-
-            // Espaçador de peso antes de cada nome → distribui pela altura.
-            View sp = new View(this);
-            sp.setLayoutParams(new LinearLayout.LayoutParams(1, 0, 1f));
-            serveList.addView(sp);
-
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(android.view.Gravity.CENTER);
-            row.setPadding((int)(6*d), (int)(3*d), (int)(6*d), (int)(3*d));
-            row.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            if (isSel) {
-                // Box na COR DO TIME (o laranja é a bola da modalidade, não a moldura).
-                android.graphics.drawable.GradientDrawable box = new android.graphics.drawable.GradientDrawable();
-                box.setCornerRadius(8*d);
-                box.setStroke(Math.max(1, (int)(1.5f*d)),
-                              getColor(team == 1 ? R.color.team_blue : R.color.team_red));
-                box.setColor(android.graphics.Color.TRANSPARENT);
-                row.setBackground(box);
-            }
-
-            TextView dot = new TextView(this);
-            dot.setText("●");
-            dot.setTextColor(getColor(R.color.serve_ball));
-            dot.setTextSize(12);
-            dot.setVisibility(isSel ? View.VISIBLE : View.INVISIBLE);
-            dot.setPadding(0, 0, (int)(5*d), 0);
-            row.addView(dot);
-
-            TextView tv = new TextView(this);
-            tv.setText(name);
-            tv.setTextColor(getColor(team == 1 ? R.color.team_blue : R.color.team_red));
-            tv.setTextSize(20);
-            tv.setMaxLines(1);
-            tv.setTypeface(null, isSel ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-            // ⛔ VIEW QUE NASCE EM RUNTIME NÃO É ALCANÇADA PELA REDE DO XML. Os 15
-            // `autoSizeTextType` do activity_main.xml não cobrem esta linha — e era ela,
-            // com nome longo e a fonte grande do sistema, que encostava na borda. Mesma
-            // régua das outras: teto em SP (cresce com a preferência do usuário), caixa
-            // limitada pelo quadrado inscrito no disco, e o texto encolhe até caber.
-            int folga = roundInsetPx();
-            int larguraSegura = getResources().getDisplayMetrics().widthPixels
-                                - 2 * folga - (int) (34 * d);  // 34dp = bola + paddings da linha
-            if (larguraSegura > 0) tv.setMaxWidth(larguraSegura);
-            tv.setAutoSizeTextTypeUniformWithConfiguration(11, 20, 1, TypedValue.COMPLEX_UNIT_SP);
-            row.addView(tv);
-
-            row.setClickable(true);
-            row.setFocusable(true);
+            TextView row = playerChoice(name, team, name.equals(selected));
             row.setOnClickListener(v -> {
-                pendingPickName = name; pendingPickTeam = team; pendingPickIdx = idx;
-                renderServeOverlay(); // re-acende no novo nome
+                pendingPickName = name; pendingPickTeam = team; pendingPickIdx = index;
+                renderServeOverlay();
             });
             serveList.addView(row);
-            if (mScale != 1f) scaleTree(row, mScale);
         }
-        // Espaçador final → fecha a distribuição (nomes espalhados por igual).
-        View spEnd = new View(this);
-        spEnd.setLayoutParams(new LinearLayout.LayoutParams(1, 0, 1f));
-        serveList.addView(spEnd);
-        encolherSeletorParaCaber();
     }
 
-    // ⛔ A ROLAGEM É A REDE, NÃO O PLANO. Com a fonte grande do sistema os 4 nomes de uma
-    // dupla passavam da altura do mostrador — no 384 sobrava um nome fora da tela, e quem
-    // não rolasse escolheria sem ver a lista inteira. Aqui, DEPOIS da medida real (o
-    // `post` roda com as alturas já calculadas, nunca com 0), se o conteúdo passou do
-    // visível o texto de TODAS as linhas encolhe na mesma proporção até caber — uniforme,
-    // porque nome menor que o vizinho pareceria menos importante. Se ainda assim não
-    // couber (fonte no talo + muitos nomes), o ScrollView garante que nada fique perdido.
-    private void encolherSeletorParaCaber() {
-        if (serveScroll == null || serveList == null) return;
-        serveList.post(() -> {
-            int visivel = serveScroll.getHeight() - serveList.getPaddingTop();
-            int conteudo = 0;
-            for (int i = 0; i < serveList.getChildCount(); i++) {
-                View c = serveList.getChildAt(i);
-                if (c instanceof LinearLayout) conteudo += c.getHeight();  // linhas; espaçadores não contam
-            }
-            if (visivel <= 0 || conteudo <= 0 || conteudo <= visivel) return;
-            float f = Math.max(0.55f, (float) visivel / conteudo);
-            for (int i = 0; i < serveList.getChildCount(); i++) {
-                View c = serveList.getChildAt(i);
-                if (!(c instanceof LinearLayout)) continue;
-                LinearLayout row = (LinearLayout) c;
-                row.setPadding(row.getPaddingLeft(), Math.round(row.getPaddingTop() * f),
-                               row.getPaddingRight(), Math.round(row.getPaddingBottom() * f));
-                for (int j = 0; j < row.getChildCount(); j++) {
-                    View ch = row.getChildAt(j);
-                    if (!(ch instanceof TextView)) continue;
-                    TextView t = (TextView) ch;
-                    if (t.getAutoSizeTextType() == TextView.AUTO_SIZE_TEXT_TYPE_UNIFORM) {
-                        int mn = Math.max(1, Math.round(t.getAutoSizeMinTextSize() * f));
-                        int mx = Math.max(mn + 1, Math.round(t.getAutoSizeMaxTextSize() * f));
-                        t.setAutoSizeTextTypeUniformWithConfiguration(mn, mx, 1, TypedValue.COMPLEX_UNIT_PX);
-                    } else {
-                        t.setTextSize(TypedValue.COMPLEX_UNIT_PX, t.getTextSize() * f);
-                    }
-                }
-            }
-        });
+    private CharSequence markedName(String name, boolean server) {
+        if (!server) return name;
+        SpannableString marked = new SpannableString("● " + name);
+        marked.setSpan(new ForegroundColorSpan(getColor(R.color.serve_ball)), 0, 1,
+                       android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return marked;
+    }
+
+    private TextView playerChoice(String name, int team, boolean selected) {
+        int color = getColor(team == 1 ? R.color.team_blue : R.color.team_red);
+        TextView choice = new TextView(this);
+        choice.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        choice.setGravity(Gravity.CENTER);
+        choice.setText(markedName(name, selected));
+        choice.setTextColor(color);
+        choice.setTextSize(17);
+        choice.setMinHeight(dp(48));
+        choice.setPadding(dp(4), dp(3), dp(4), dp(3));
+        choice.setFocusable(true);
+        choice.setSelected(selected);
+        if (selected) {
+            GradientDrawable border = new GradientDrawable();
+            border.setCornerRadius(dp(8));
+            border.setColor(Color.TRANSPARENT);
+            border.setStroke(dp(1.5f), color);
+            choice.setBackground(border);
+            choice.setTypeface(null, Typeface.BOLD);
+        }
+        return choice;
     }
 
     // Classificação final do Rei/Rainha: vitórias por PESSOA, invicto (3V) coroado.
@@ -1306,42 +1068,13 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             int wins = p.optInt("wins", 0);
             boolean king = wins == 3;
 
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            row.setBackgroundColor(getColor(king ? R.color.rr_row_bg : R.color.bg));
-            row.setPadding(pad + pad, pad, pad + pad, pad);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            lp.topMargin = pad / 2;
-            row.setLayoutParams(lp);
-
-            TextView medal = new TextView(this);
-            medal.setText(i < medals.length ? medals[i] : "•");
-            medal.setTextSize(12);
-            medal.setPadding(0, 0, pad, 0);
-            row.addView(medal);
-
-            TextView nm = new TextView(this);
-            nm.setText(name);
-            nm.setTextColor(getColor(king ? R.color.rr_amber_name : R.color.name_blue_dim));
-            nm.setTextSize(13);
-            nm.setTypeface(null, king ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-            nm.setMaxLines(1);
-            LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-            nm.setLayoutParams(nlp);
-            row.addView(nm);
-
-            TextView w = new TextView(this);
-            w.setText(wins + "V");
-            w.setTextColor(getColor(king ? R.color.rr_amber : R.color.meta_dim));
-            w.setTextSize(12);
-            w.setTypeface(null, android.graphics.Typeface.BOLD);
-            row.addView(w);
-
-            rrStandings.addView(row);
-            if (mScale != 1f) scaleTree(row, mScale);
+            TextView row = new TextView(this);
+            row.setText((i < medals.length ? medals[i] : "•") + " " + name + " · " + wins + "V");
+            row.setTextColor(getColor(king ? R.color.rr_amber_name : R.color.name_blue_dim));
+            row.setTextSize(15);
+            row.setGravity(Gravity.CENTER);
+            row.setPadding(pad, pad, pad, pad);
+            rrStandings.addView(row, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         }
     }
 
@@ -1362,23 +1095,12 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         return sb.toString();
     }
 
-    // Placar final por lado (esquerda–direita): sets em melhor-de-N, senão games.
-    private String scoreLine(int setsToWin, JSONArray sets, JSONArray games, int leftTeam, int rightTeam) {
-        if (setsToWin > 1 && sets != null) {
-            return "Sets " + sets.optInt(leftTeam - 1, 0) + "–" + sets.optInt(rightTeam - 1, 0);
-        }
-        int gl = games != null ? games.optInt(leftTeam - 1, 0) : 0;
-        int gr = games != null ? games.optInt(rightTeam - 1, 0) : 0;
-        return "Games " + gl + "–" + gr;
-    }
-
     private void applySide(boolean left, int team, JSONArray points, JSONArray games,
                            JSONObject teams, JSONObject server) {
         TextView point = left ? pointLeft : pointRight;
         TextView gm = left ? gamesLeft : gamesRight;
         LinearLayout half = left ? halfLeft : halfRight;
         TextView n1 = left ? nameL1 : nameR1, n2 = left ? nameL2 : nameR2;
-        TextView b1 = left ? ballL1 : ballR1, b2 = left ? ballL2 : ballR2;
 
         int cPoint = getColor(team == 1 ? R.color.team_blue : R.color.team_red);
         int cHalf = getColor(team == 1 ? R.color.half_blue : R.color.half_red);
@@ -1401,21 +1123,13 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
                 if (pl != null) { p0 = pl.optString(0, ""); p1 = pl.optString(1, ""); }
             }
         }
-        // Nome já vem CURTO do celular (primeiro nome; _watchShortNames) → 1 linha.
-        n1.setText(p0); n1.setTextColor(cName);
-        n2.setText(p1); n2.setTextColor(cNameDim);
-
-        // Bola GRANDE colada no nome do sacador (lado de fora). GONE quando não
-        // saca → o nome fica colado no centro; o sacador ganha a bola do lado de
-        // fora sem tirar o nome do lugar (gravity end/start ancora no centro).
-        b1.setVisibility(View.GONE);
-        b2.setVisibility(View.GONE);
-        if (server != null && server.optInt("team", 0) == team) {
-            String sn = server.optString("name", "");
-            if (!sn.isEmpty()) {
-                if (sn.equals(p0)) b1.setVisibility(View.VISIBLE);
-                else if (sn.equals(p1)) b2.setVisibility(View.VISIBLE);
-            }
-        }
+        String serverName = server != null && server.optInt("team", 0) == team
+                ? server.optString("name", "") : "";
+        n1.setText(markedName(p0, !p0.isEmpty() && p0.equals(serverName)));
+        n2.setText(markedName(p1, !p1.isEmpty() && p1.equals(serverName)));
+        n1.setTextColor(cName);
+        n2.setTextColor(cNameDim);
+        n1.setVisibility(p0.isEmpty() ? View.GONE : View.VISIBLE);
+        n2.setVisibility(p1.isEmpty() ? View.GONE : View.VISIBLE);
     }
 }

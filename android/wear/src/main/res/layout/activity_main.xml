@@ -1,1052 +1,243 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- _AUTOSIZE_WEAR_ -->
-<!--
-  ⛔ TEXTO NÃO PODE SER CORTADO PELA BORDA (Wear App Quality Guidelines · Font size).
-  O Google recusou a versão 109 com: "Your app must conform to the font size set by the
-  user in System Settings. If the user selects a larger font size, ensure that text and
-  controls are not cut off by screen edges."
-
-  ⚠️ AS MEDIDAS JÁ ESTAVAM EM `sp` — ou seja, o app JÁ obedecia à preferência do usuário.
-  O defeito era o outro lado da regra: obedecendo, o texto crescia e ESTOURAVA a caixa
-  numa tela redonda, onde a borda come os cantos. Os nomes tinham `maxLines=1` +
-  `ellipsize=end`, que é literalmente cortar.
-
-  ⭐ A correção é `autoSizeTextType="uniform"`: o tamanho escolhido pelo usuário vira o
-  TETO, e o texto encolhe até caber na caixa quando não couber. Continua obedecendo à
-  configuração (fonte maior = texto maior, até onde a tela permite) e para de cortar.
-  O piso (`autoSizeMinTextSize`) existe pra não virar um fio ilegível.
--->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<app.scoreplace.wear.WatchViewport
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/watch_viewport"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg">
-
-    <!-- Duas metades borda a borda: sacador (azul) à esquerda, recebedor (vermelho) à direita -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="horizontal">
-
-        <!-- Time 1 (azul) -->
-        <LinearLayout
-            android:id="@+id/half_left"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:background="@color/half_blue"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingTop="52dp"
-            android:paddingBottom="26dp"
-            android:paddingStart="10dp"
-            android:paddingEnd="4dp">
-
+    <ScrollView style="@style/WearPage" android:id="@+id/score_page" android:visibility="gone">
+        <LinearLayout style="@style/WearColumn">
             <TextView
-                android:id="@+id/point_left"
-                android:scaleY="1.10"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:gravity="center"
-                android:text="40"
-                android:textColor="@color/team_blue"
-                android:textSize="64sp"
-                android:textStyle="bold"
-                android:includeFontPadding="false"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="24sp"
-                    android:autoSizeStepGranularity="1sp" />
-
-            <!-- Nomes do time ESQUERDO: alinhados à DIREITA (colados no centro). A
-                 bola de saque (GRANDE) fica colada no lado de FORA do nome, só no
-                 sacador (GONE quando não saca → o nome não sai do centro). Nomes já
-                 vêm curtos (primeiro nome) → 1 linha. -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:id="@+id/name_row_l1"
-                android:gravity="end|center_vertical"
-                android:paddingEnd="7dp">
+                style="@style/WearCaption"
+                android:id="@+id/hr_pill"
+                android:visibility="gone"
+                android:layout_width="wrap_content" />
+            <LinearLayout style="@style/WearRow">
+                <TextView style="@style/WearScore" android:id="@+id/sets_arc_left" />
                 <TextView
-                    android:id="@+id/ball_l1"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="●"
-                    android:textColor="@color/serve_ball"
-                    android:textSize="15sp"
-                    android:includeFontPadding="false"
-                    android:layout_marginEnd="3dp"
-                    android:visibility="visible" />
-                <TextView
-                    android:id="@+id/name_l1"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:maxLines="1"
-                    android:ellipsize="end"
-                    android:gravity="end"
-                    android:text="Ana"
-                    android:textColor="@color/name_blue"
-                    android:textSize="16sp"
-                    android:includeFontPadding="false"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="8sp"
-                    android:autoSizeStepGranularity="1sp" />
+                    style="@style/WearCaption"
+                    android:text="SETS"
+                    android:layout_width="wrap_content" />
+                <TextView style="@style/WearScore" android:id="@+id/sets_arc_right" />
             </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:id="@+id/name_row_l2"
-                android:gravity="end|center_vertical"
-                android:paddingEnd="7dp"
-                android:layout_marginTop="1dp">
+            <LinearLayout style="@style/WearRow">
+                <TextView style="@style/WearScore" android:id="@+id/games_left" />
                 <TextView
-                    android:id="@+id/ball_l2"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="●"
-                    android:textColor="@color/serve_ball"
-                    android:textSize="15sp"
-                    android:includeFontPadding="false"
-                    android:layout_marginEnd="3dp"
-                    android:visibility="gone" />
-                <TextView
-                    android:id="@+id/name_l2"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:maxLines="1"
-                    android:ellipsize="end"
-                    android:gravity="end"
-                    android:text="Bruno"
-                    android:textColor="@color/name_blue_dim"
-                    android:textSize="16sp"
-                    android:includeFontPadding="false"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="8sp"
-                    android:autoSizeStepGranularity="1sp" />
+                    style="@style/WearCaption"
+                    android:id="@+id/games_label"
+                    android:text="GAMES"
+                    android:layout_width="wrap_content" />
+                <TextView style="@style/WearScore" android:id="@+id/games_right" />
             </LinearLayout>
-        </LinearLayout>
-
-        <!-- Time 2 (vermelho) -->
-        <LinearLayout
-            android:id="@+id/half_right"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:background="@color/half_red"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingTop="52dp"
-            android:paddingBottom="26dp"
-            android:paddingStart="4dp"
-            android:paddingEnd="10dp">
-
-            <TextView
-                android:id="@+id/point_right"
-                android:scaleY="1.10"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:gravity="center"
-                android:text="30"
-                android:textColor="@color/team_red"
-                android:textSize="64sp"
-                android:textStyle="bold"
-                android:includeFontPadding="false"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="24sp"
-                    android:autoSizeStepGranularity="1sp" />
-
-            <!-- Nomes do time DIREITO: alinhados à ESQUERDA (colados no centro). Bola
-                 GRANDE colada no lado de FORA (direita) do nome, só no sacador. -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:id="@+id/name_row_r1"
-                android:gravity="start|center_vertical"
-                android:paddingStart="7dp">
-                <TextView
-                    android:id="@+id/name_r1"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:maxLines="1"
-                    android:ellipsize="end"
-                    android:gravity="start"
-                    android:text="Carla"
-                    android:textColor="@color/name_red"
-                    android:textSize="16sp"
-                    android:includeFontPadding="false"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="8sp"
-                    android:autoSizeStepGranularity="1sp" />
-                <TextView
-                    android:id="@+id/ball_r1"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="●"
-                    android:textColor="@color/serve_ball"
-                    android:textSize="15sp"
-                    android:includeFontPadding="false"
-                    android:layout_marginStart="3dp"
-                    android:visibility="gone" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:id="@+id/name_row_r2"
-                android:gravity="start|center_vertical"
-                android:paddingStart="7dp"
-                android:layout_marginTop="1dp">
-                <TextView
-                    android:id="@+id/name_r2"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:maxLines="1"
-                    android:ellipsize="end"
-                    android:gravity="start"
-                    android:text="Diego"
-                    android:textColor="@color/name_red_dim"
-                    android:textSize="16sp"
-                    android:includeFontPadding="false"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="8sp"
-                    android:autoSizeStepGranularity="1sp" />
-                <TextView
-                    android:id="@+id/ball_r2"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="●"
-                    android:textColor="@color/serve_ball"
-                    android:textSize="15sp"
-                    android:includeFontPadding="false"
-                    android:layout_marginStart="3dp"
-                    android:visibility="gone" />
-            </LinearLayout>
-        </LinearLayout>
-    </LinearLayout>
-
-    <!-- Topo: Set, GAMES e placar de games 1 - 2 nas cores dos times -->
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|center_horizontal"
-        android:orientation="vertical"
-        android:gravity="center_horizontal"
-        android:layout_marginTop="26dp">
-
-        <!-- "Aguardando…" quando não há partida (só visível inativo). Sozinho não dizia
-             NADA: quem abria o relógio sem o app aberto no celular concluía que o relógio
-             "nunca conversou". O relógio é BURRO por design — a partida tem que estar
-             montada/rolando lá. Espelha o RemoteView.swift do lado Apple. -->
-        <TextView
-            android:id="@+id/set_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Aguardando…\nabra a partida no celular"
-            android:gravity="center_horizontal"
-            android:textColor="@color/meta"
-            android:textSize="10sp"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/games_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="GAMES"
-            android:textColor="@color/meta_dim"
-            android:textSize="8sp"
-            android:letterSpacing="0.15" />
-
-        <!-- Números dos games (os sets viraram texto CURVO na borda — ver sets_arc_*). -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="bottom">
-            <TextView
-                android:id="@+id/games_left"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="1"
-                android:textColor="@color/team_blue"
-                android:textSize="22sp"
-                android:textStyle="bold"
-                android:includeFontPadding="false" />
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="-"
-                android:textColor="@color/dash"
-                android:textSize="15sp"
-                android:layout_marginStart="6dp"
-                android:layout_marginEnd="6dp" />
-            <TextView
-                android:id="@+id/games_right"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="2"
-                android:textColor="@color/team_red"
-                android:textSize="22sp"
-                android:textStyle="bold"
-                android:includeFontPadding="false" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <!-- Palavra "SETS" curva na borda às 10h (branca), à esquerda dos números. -->
-    <androidx.wear.widget.CurvedTextView
-        android:id="@+id/sets_word_arc"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:text="SETS"
-        android:textColor="@color/meta_dim"
-        android:textSize="9sp"
-        android:letterSpacing="0.08"
-        android:visibility="gone" />
-
-    <!-- SETS na BORDA CURVA: "0" do time esquerdo às 11h (topo-esq) e do time
-         direito à 1h (topo-dir), colados na borda. Cada um numa cor de time (curvo
-         = 1 cor por view, então 2 views). Texto/cor/visibilidade em runtime. -->
-    <androidx.wear.widget.CurvedTextView
-        android:id="@+id/sets_arc_left"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:text="0"
-        android:textColor="@color/team_blue"
-        android:textSize="13sp"
-        android:textStyle="bold"
-        android:visibility="gone" />
-    <androidx.wear.widget.CurvedTextView
-        android:id="@+id/sets_arc_right"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:text="0"
-        android:textColor="@color/team_red"
-        android:textSize="13sp"
-        android:textStyle="bold"
-        android:visibility="gone" />
-
-    <!-- ♥ BPM em CÁPSULA no TOPO-CENTRO, pintada com a cor da FAIXA DE QUEIMA
-         (5 zonas, do azul ao vermelho) — mesmo desenho do Apple, onde a pílula
-         fica no meio da faixa do relógio. Era um texto CURVO às 2h; arco não
-         aceita moldura, então virou TextView. Os SETS foram agrupados à esquerda
-         (arcos 318°/334°) pra liberar o centro. Some sozinho sem leitura (sem
-         permissão de sensor / relógio sem sensor). -->
-    <TextView
-        android:id="@+id/hr_pill"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="9dp"
-        android:paddingStart="5dp"
-        android:paddingEnd="5dp"
-        android:paddingTop="0dp"
-        android:paddingBottom="1dp"
-        android:text="♥ --"
-        android:textColor="@color/hr_pink"
-        android:textSize="10sp"
-        android:textStyle="bold"
-        android:includeFontPadding="false"
-        android:visibility="gone" />
-
-    <!-- Rodapé: DESFAZER = barra inferior (mesmo formato/posição do Iniciar) —
-         topo reto, largura cheia, colada na base, cantos cortados pela curva. O
-         "Sacador" (só nos 2 primeiros jogos) é uma pílula logo ACIMA da barra. -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:orientation="vertical"
-        android:gravity="center_horizontal">
-
-        <!-- Barra do sacador — abre o seletor. Só visível nos 2 primeiros jogos
-             (duplas): canSetServer. -->
-        <LinearLayout
-            android:id="@+id/serve_bar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:background="@drawable/pill"
-            android:backgroundTint="@color/serve_bar_bg"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp"
-            android:layout_marginBottom="6dp"
-            android:visibility="gone">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="●"
-                android:textColor="@color/serve_ball"
-                android:textSize="9sp"
-                android:layout_marginEnd="4dp" />
-            <TextView
-                android:id="@+id/serve_bar_name"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Sacador"
-                android:textColor="@color/rr_amber_name"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:maxWidth="90dp"
-                android:maxLines="1"
-                android:ellipsize="end"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="8sp"
-                    android:autoSizeStepGranularity="1sp" />
-        </LinearLayout>
-
-        <!-- Barra Desfazer: cor sólida (topo reto), largura cheia. Mínima — o alvo
-             de toque é a largura inteira, então altura pequena segue funcional. -->
-        <LinearLayout
-            android:id="@+id/btn_undo"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:background="@color/btn_cancel_bg"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingTop="3dp"
-            android:paddingBottom="5dp">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="↺  Desfazer"
-                android:textColor="@color/undo_text"
-                android:textSize="12sp" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <!-- Fim de jogo: conteúdo em fluxo rolável. Com fonte ampliada, os nomes,
-         opções e botões precisam crescer sem se sobrepor ou sair do disco. -->
-    <FrameLayout
-        android:id="@+id/winner_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/winner_scrim"
-        android:clickable="true"
-        android:focusable="true"
-        android:visibility="gone">
-
-        <ScrollView
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:fillViewport="true"
-            android:scrollbars="none"
-            android:overScrollMode="never">
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_vertical"
-            android:paddingTop="28dp"
-            android:paddingBottom="28dp">
-
-            <TextView
-                android:id="@+id/winner_arc_sport"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="34dp"
-                android:layout_marginEnd="34dp"
-                android:gravity="center"
-                android:maxLines="2"
-                android:text="⚡ Beach Tennis"
-                android:textColor="@color/meta"
-                android:textSize="12sp" />
-
-            <!-- Resultado no fluxo: cresce com a fonte escolhida no sistema. -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:paddingTop="8dp"
-                android:paddingStart="18dp"
-                android:paddingEnd="18dp">
-
-                <!-- v1.8.83 (ordem do dono): o 🏆 SAIU. Comia ~22sp de altura num
-                     mostrador de centímetros e não dizia nada que o "Vencedor" logo
-                     abaixo já não diga. A altura foi pras três chaves (🎲👑⚥), que
-                     estavam pequenas demais pra acertar com o dedo. -->
-
-                <TextView
-                    android:id="@+id/winner_label"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Vencedor"
-                    android:textColor="@color/meta"
-                    android:textSize="10sp"
-                    android:letterSpacing="0.08"
-                    android:layout_marginTop="2dp" />
-
-                <TextView
-                    android:id="@+id/winner_names"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:text=""
-                    android:textColor="@color/team_blue"
-                    android:textSize="17sp"
-                    android:textStyle="bold"
-                    android:layout_marginTop="2dp" />
-
-                <!-- Placar em games: vencedor VERDE, perdedor VERMELHO (cor em runtime). -->
+            <LinearLayout style="@style/WearRow" android:baselineAligned="false" android:gravity="top">
                 <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_marginTop="4dp">
+                    style="@style/WearColumn"
+                    android:id="@+id/half_left"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:minHeight="48dp"
+                    android:focusable="true">
                     <TextView
-                        android:id="@+id/winner_score_l"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="6"
-                        android:textColor="@color/start_green"
-                        android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:includeFontPadding="false" />
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="–"
-                        android:textColor="@color/dash"
-                        android:textSize="13sp"
-                        android:layout_marginStart="5dp"
-                        android:layout_marginEnd="5dp" />
-                    <TextView
-                        android:id="@+id/winner_score_r"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="4"
-                        android:textColor="@color/team_red"
-                        android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:includeFontPadding="false" />
+                        style="@style/WearText"
+                        android:id="@+id/point_left"
+                        android:textSize="24sp"
+                        android:textStyle="bold" />
+                    <TextView style="@style/WearText" android:id="@+id/name_l1" android:textSize="14sp" />
+                    <TextView style="@style/WearText" android:id="@+id/name_l2" android:textSize="14sp" />
                 </LinearLayout>
-
-                <!-- Rei/Rainha (série de 3). -->
-                <TextView
-                    android:id="@+id/rr_series_label"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=""
-                    android:textColor="@color/meta_dim"
-                    android:textSize="11sp"
-                    android:layout_marginTop="6dp"
-                    android:visibility="gone" />
-                <TextView
-                    android:id="@+id/btn_rr_next"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:text="⚡ Jogo 2 de 3"
-                    android:textColor="@color/rr_amber_text"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:paddingTop="9dp"
-                    android:paddingBottom="9dp"
-                    android:layout_marginTop="6dp"
-                    android:background="@drawable/pill"
-                    android:backgroundTint="@color/rr_amber"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:visibility="gone" />
-                <TextView
-                    android:id="@+id/rr_final_title"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="👑 Rei/Rainha"
-                    android:textColor="@color/rr_amber"
-                    android:textSize="12sp"
-                    android:textStyle="bold"
-                    android:layout_marginTop="6dp"
-                    android:visibility="gone" />
                 <LinearLayout
-                    android:id="@+id/rr_standings"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:layout_marginTop="4dp"
-                    android:visibility="gone" />
-
-                <TextView
-                    android:id="@+id/winner_waiting"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Aguardando o celular…"
-                    android:textColor="@color/meta_dim"
-                    android:textSize="11sp"
-                    android:layout_marginTop="10dp"
-                    android:visibility="gone" />
+                    style="@style/WearColumn"
+                    android:id="@+id/half_right"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:minHeight="48dp"
+                    android:focusable="true">
+                    <TextView
+                        style="@style/WearText"
+                        android:id="@+id/point_right"
+                        android:textSize="24sp"
+                        android:textStyle="bold" />
+                    <TextView style="@style/WearText" android:id="@+id/name_r1" android:textSize="14sp" />
+                    <TextView style="@style/WearText" android:id="@+id/name_r2" android:textSize="14sp" />
+                </LinearLayout>
             </LinearLayout>
-
-            <!-- Base: toggle Re-sortear (compacto) + barra dividida. Só casual. -->
+            <TextView
+                style="@style/WearAction"
+                android:id="@+id/btn_undo"
+                android:text="↺ Desfazer"
+                android:backgroundTint="@color/undo_bg"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+    </ScrollView>
+    <ScrollView style="@style/WearPage" android:id="@+id/winner_overlay" android:visibility="gone">
+        <LinearLayout style="@style/WearColumn">
+            <TextView style="@style/WearCaption" android:id="@+id/winner_arc_sport" />
+            <TextView style="@style/WearCaption" android:id="@+id/winner_label" />
+            <TextView
+                style="@style/WearText"
+                android:id="@+id/winner_names"
+                android:textColor="@color/team_blue"
+                android:textSize="19sp"
+                android:textStyle="bold" />
+            <LinearLayout style="@style/WearRow">
+                <TextView style="@style/WearScore" android:id="@+id/winner_score_l" />
+                <TextView style="@style/WearCaption" android:text="–" android:layout_width="wrap_content" />
+                <TextView style="@style/WearScore" android:id="@+id/winner_score_r" />
+            </LinearLayout>
+            <TextView style="@style/WearText" android:id="@+id/rr_series_label" android:visibility="gone" />
+            <TextView
+                style="@style/WearAction"
+                android:id="@+id/btn_rr_next"
+                android:text="Próximo jogo"
+                android:backgroundTint="@color/rr_amber_dark"
+                android:textColor="#FFFFFF"
+                android:visibility="gone" />
+            <TextView
+                style="@style/WearText"
+                android:id="@+id/rr_final_title"
+                android:text="👑 Rei/Rainha"
+                android:visibility="gone" />
             <LinearLayout
+                style="@style/WearColumn"
+                android:id="@+id/rr_standings"
+                android:visibility="gone" />
+            <TextView
+                style="@style/WearCaption"
+                android:id="@+id/winner_waiting"
+                android:text="Aguardando o celular…"
+                android:visibility="gone" />
+            <LinearLayout
+                style="@style/WearColumn"
                 android:id="@+id/replay_controls"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:layout_marginStart="32dp"
-                android:layout_marginEnd="32dp"
-                android:layout_marginTop="8dp"
                 android:visibility="gone">
-
-                <!-- SÓ ENTRE PARTIDAS (tela Fechar/Iniciar): três opções, cada uma
-                     um SÍMBOLO com a sua chave — 🎲 re-sortear · 👑 Rei/Rainha ·
-                     ⚥ duplas mistas. Ordem do dono (15/ago): o texto
-                     "Re-sortear duplas" comia duas linhas num mostrador de
-                     centímetros; o símbolo diz o mesmo e as três cabem lado a
-                     lado. Espelha 1:1 o RemoteView.swift. -->
                 <LinearLayout
+                    style="@style/WearColumn"
                     android:id="@+id/reshuffle_row"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center_horizontal"
-                    android:orientation="horizontal"
-                    android:gravity="center"
-                    android:layout_marginBottom="8dp"
                     android:visibility="gone">
-
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:gravity="center"
-                        android:layout_marginEnd="10dp">
+                    <LinearLayout style="@style/WearRow">
                         <TextView
+                            style="@style/WearText"
                             android:id="@+id/reshuffle_label"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
                             android:text="🎲"
-                            android:textSize="30sp"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="14sp"
-                    android:autoSizeStepGranularity="1sp" />
+                            android:layout_width="wrap_content"
+                            android:textSize="18sp"
+                            android:importantForAccessibility="no" />
                         <Switch
                             android:id="@+id/reshuffle_switch"
                             android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:gravity="center"
-                        android:layout_marginEnd="10dp">
-                        <TextView
-                            android:id="@+id/rr_icon"
-                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:minWidth="48dp"
+                            android:minHeight="48dp"
+                            android:contentDescription="Sortear duplas" />
+                    </LinearLayout>
+                    <LinearLayout style="@style/WearRow">
+                        <TextView
+                            style="@style/WearText"
+                            android:id="@+id/rr_icon"
                             android:text="👑"
-                            android:textSize="30sp"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="14sp"
-                    android:autoSizeStepGranularity="1sp" />
+                            android:layout_width="wrap_content"
+                            android:textSize="18sp"
+                            android:importantForAccessibility="no" />
                         <Switch
                             android:id="@+id/rr_switch"
                             android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/mixed_col"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:gravity="center"
-                        android:visibility="gone">
-                        <TextView
-                            android:id="@+id/mixed_icon"
-                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:minWidth="48dp"
+                            android:minHeight="48dp"
+                            android:contentDescription="Rei ou Rainha" />
+                    </LinearLayout>
+                    <LinearLayout style="@style/WearRow" android:id="@+id/mixed_col">
+                        <TextView
+                            style="@style/WearText"
+                            android:id="@+id/mixed_icon"
                             android:text="⚥"
-                            android:textSize="30sp"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="14sp"
-                    android:autoSizeStepGranularity="1sp" />
+                            android:layout_width="wrap_content"
+                            android:textSize="18sp"
+                            android:importantForAccessibility="no" />
                         <Switch
                             android:id="@+id/mixed_switch"
                             android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" />
+                            android:layout_height="wrap_content"
+                            android:minWidth="48dp"
+                            android:minHeight="48dp"
+                            android:contentDescription="Duplas mistas" />
                     </LinearLayout>
                 </LinearLayout>
-
-                <!-- Ações empilhadas: cada rótulo tem largura inteira no relógio
-                     pequeno mesmo quando a fonte do sistema está ampliada. -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical">
-                    <TextView
-                        android:id="@+id/btn_replay_cancel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:text="Fechar"
-                        android:textColor="#FFFFFF"
-                        android:textSize="12sp"
-                        android:textStyle="bold"
-                        android:minHeight="48dp"
-                        android:autoSizeTextType="uniform"
-                        android:autoSizeMinTextSize="12sp"
-                        android:autoSizeStepGranularity="1sp"
-                        android:background="@color/win_red"
-                        android:clickable="true"
-                        android:focusable="true" />
-                    <Space
-                        android:layout_width="match_parent"
-                        android:layout_height="8dp" />
-                    <TextView
-                        android:id="@+id/btn_replay_confirm"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:text="Iniciar"
-                        android:textColor="@color/start_green_text"
-                        android:textSize="12sp"
-                        android:textStyle="bold"
-                        android:minHeight="48dp"
-                        android:autoSizeTextType="uniform"
-                        android:autoSizeMinTextSize="12sp"
-                        android:autoSizeStepGranularity="1sp"
-                        android:background="@color/start_green"
-                        android:clickable="true"
-                        android:focusable="true" />
-                </LinearLayout>
+                <TextView
+                    style="@style/WearAction"
+                    android:id="@+id/btn_replay_cancel"
+                    android:text="Fechar"
+                    android:backgroundTint="@color/win_red"
+                    android:textColor="#100606" />
+                <TextView
+                    style="@style/WearAction"
+                    android:id="@+id/btn_replay_confirm"
+                    android:text="Iniciar"
+                    android:backgroundTint="@color/start_green"
+                    android:textColor="@color/start_green_text" />
             </LinearLayout>
         </LinearLayout>
-        </ScrollView>
-    </FrameLayout>
-
-    <!-- Empate (5-5, 6-6, 7-7…) esperando decisão: cobre tudo e trava os +1 até
-         escolher prorrogar ou ativar o tie-break. Recorre a cada empate (motor
-         GSM = fonte única no JS). Espelha o overlay do celular e do watchOS. -->
-    <!-- Empate — 3 SETORES: Prorrogar = BARRA no topo (estoura as laterais, cortada
-         pela curva), ⚖️ + placar FLUTUAM no meio, Tie-break = BARRA na base. Sem
-         modalidade. -->
-    <LinearLayout
-        android:id="@+id/tie_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:background="@color/winner_scrim"
-        android:clickable="true"
-        android:focusable="true"
-        android:visibility="gone">
-
-        <!-- SETOR 1: Prorrogar (barra verde, topo reto, largura cheia). -->
-        <TextView
-            android:id="@+id/btn_tie_extend"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="Prorrogar"
-            android:textColor="@color/btn_extend_text"
-            android:textSize="17sp"
-            android:textStyle="bold"
-            android:paddingTop="9dp"
-            android:paddingBottom="9dp"
-            android:background="@color/btn_extend_bg"
-            android:clickable="true"
-            android:focusable="true" />
-
-        <!-- SETOR 2: ⚖️ + placar (cor dos times) flutuam no meio. -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="⚖️"
-                android:textSize="30sp"
-                android:includeFontPadding="false"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="14sp"
-                    android:autoSizeStepGranularity="1sp" />
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="1dp">
-                <TextView
-                    android:id="@+id/tie_score_l"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="5"
-                    android:textColor="@color/team_blue"
-                    android:textSize="36sp"
-                    android:textStyle="bold"
-                    android:includeFontPadding="false"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="14sp"
-                    android:autoSizeStepGranularity="1sp" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="–"
-                    android:textColor="@color/dash"
-                    android:textSize="22sp"
-                    android:layout_marginStart="6dp"
-                    android:layout_marginEnd="6dp" />
-                <TextView
-                    android:id="@+id/tie_score_r"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="5"
-                    android:textColor="@color/team_red"
-                    android:textSize="36sp"
-                    android:textStyle="bold"
-                    android:includeFontPadding="false"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="14sp"
-                    android:autoSizeStepGranularity="1sp" />
+    </ScrollView>
+    <ScrollView style="@style/WearPage" android:id="@+id/tie_overlay" android:visibility="gone">
+        <LinearLayout style="@style/WearColumn">
+            <TextView style="@style/WearCaption" android:text="Empate" />
+            <LinearLayout style="@style/WearRow">
+                <TextView style="@style/WearScore" android:id="@+id/tie_score_l" />
+                <TextView style="@style/WearCaption" android:text="–" android:layout_width="wrap_content" />
+                <TextView style="@style/WearScore" android:id="@+id/tie_score_r" />
             </LinearLayout>
+            <TextView
+                style="@style/WearAction"
+                android:id="@+id/btn_tie_extend"
+                android:text="Prorrogar"
+                android:backgroundTint="@color/btn_extend_bg"
+                android:textColor="@color/btn_extend_text" />
+            <TextView
+                style="@style/WearAction"
+                android:id="@+id/btn_tie_tiebreak"
+                android:text="Tie-break"
+                android:backgroundTint="@color/btn_tiebreak_bg"
+                android:textColor="#FFFFFF" />
         </LinearLayout>
-
-        <!-- SETOR 3: Tie-break (barra roxa, base, largura cheia). -->
-        <TextView
-            android:id="@+id/btn_tie_tiebreak"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="Tie-break"
-            android:textColor="#FFFFFF"
-            android:textSize="17sp"
-            android:textStyle="bold"
-            android:paddingTop="9dp"
-            android:paddingBottom="9dp"
-            android:background="@color/btn_tiebreak_bg"
-            android:clickable="true"
-            android:focusable="true" />
-    </LinearLayout>
-
-    <!-- Iniciar (montagem casual aberta no celular, nada ao vivo). ESPELHA a tela
-         Iniciar do Apple pelo modelo de 3 SETORES, centrada pela tela redonda:
-         SETOR 1 faixa da modalidade (ícone ⚡/🏆 + nome) colada no topo;
-         SETOR 2 central FLUTUANTE = "1º sacador" + os 4 nomes (toque = escolhe o
-         sacador inicial, aceso vira box laranja + bola, cor forte do time);
-         SETOR 3 botão-barra "Iniciar" colado na base — topo RETO, estoura a
-         largura → cantos inferiores cortados pela curva da tela. Dispara a MESMA
-         _casualStart() do celular. -->
-    <!-- ⚠️ PLACAR FECHADO NO CELULAR: sem isto o relógio ficava com o placar morto na
-         tela e "não fazia mais nada" (relato do dono). O celular manda active=false,
-         isFinished=false e canStart=false; nenhuma das outras telas casa com isso. -->
-    <FrameLayout
-        android:id="@+id/idle_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/winner_scrim"
-        android:clickable="true"
-        android:focusable="true"
-        android:visibility="gone">
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp">
+    </ScrollView>
+    <ScrollView style="@style/WearPage" android:id="@+id/idle_overlay" android:visibility="visible">
+        <LinearLayout style="@style/WearColumn">
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🎾"
-                android:textSize="30sp"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="14sp"
-                    android:autoSizeStepGranularity="1sp" />
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                style="@style/WearText"
                 android:text="Sem partida"
-                android:textColor="#FFFFFF"
-                android:textStyle="bold"
-                android:textSize="16sp"
-                android:layout_marginTop="6dp" />
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Abra o placar no celular"
-                android:textColor="#99FFFFFF"
-                android:gravity="center"
-                android:textSize="11sp"
-                android:layout_marginTop="2dp" />
+                android:textSize="19sp"
+                android:textStyle="bold" />
+            <TextView style="@style/WearCaption" android:text="Abra o placar no celular" />
         </LinearLayout>
-    </FrameLayout>
-
-    <FrameLayout
-        android:id="@+id/start_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/winner_scrim"
-        android:clickable="true"
-        android:focusable="true"
-        android:visibility="gone">
-
-        <!-- SETORES 2+3: central (nomes) FLUTUA no meio + botão-barra na base.
-             O cromo (modalidade / "1º sacador") vive no ARCO do topo (abaixo),
-             então o centro inteiro fica pros nomes. -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical">
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:paddingTop="20dp"
-                android:paddingStart="18dp"
-                android:paddingEnd="18dp">
-                <LinearLayout
-                    android:id="@+id/start_players"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:gravity="center_horizontal" />
-            </LinearLayout>
-
-            <!-- SETOR 3: botão-barra na base — cor sólida (topo reto), largura cheia
-                 (cantos inferiores cortados pela curva da tela). -->
+    </ScrollView>
+    <ScrollView style="@style/WearPage" android:id="@+id/start_overlay" android:visibility="gone">
+        <LinearLayout style="@style/WearColumn">
+            <TextView style="@style/WearCaption" android:id="@+id/start_arc_sport" />
+            <TextView style="@style/WearText" android:text="1º sacador" android:textStyle="bold" />
+            <LinearLayout style="@style/WearColumn" android:id="@+id/start_players" />
             <TextView
+                style="@style/WearAction"
                 android:id="@+id/btn_start"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center"
                 android:text="Iniciar"
-                android:textColor="@color/start_green_text"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:paddingTop="4dp"
-                android:paddingBottom="7dp"
-                android:background="@color/start_green"
-                android:clickable="true"
-                android:focusable="true" />
+                android:backgroundTint="@color/start_green"
+                android:textColor="@color/start_green_text" />
         </LinearLayout>
-
-        <!-- SETOR 1 (redondo): cromo CURVO seguindo o bezel do topo. Modalidade
-             (⚡/🏆 + nome) na metade ESQUERDA do arco, "1º sacador" na metade
-             DIREITA. Ângulo/âncora setados em Java (respeita o idioma do Wear;
-             o Apple usa faixa reta — cada aparelho tem seu design). -->
-        <androidx.wear.widget.CurvedTextView
-            android:id="@+id/start_arc_sport"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:text="⚡ Beach Tennis"
-            android:textColor="@color/meta"
-            android:textSize="12sp" />
-        <androidx.wear.widget.CurvedTextView
-            android:id="@+id/start_arc_prompt"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:text="1º sacador"
-            android:textColor="@color/name_blue"
-            android:textSize="12sp" />
-    </FrameLayout>
-
-    <!-- Seletor de sacador — MESMO modelo do Iniciar: prompt CURVO "2º sacador" no
-         12h, nomes grandes selecionáveis (box+bola, cor de time) DISTRIBUÍDOS no
-         centro, barra "Confirmar" na base. A lista vem PRONTA do celular
-         (serveEligible; fase 1 = só o time que não abriu). Preenchido em runtime. -->
-    <FrameLayout
-        android:id="@+id/serve_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/winner_scrim"
-        android:clickable="true"
-        android:focusable="true"
-        android:visibility="gone">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical">
-            <!-- Central: nomes distribuídos (runtime), com folga do topo pro prompt curvo.
-                 ⛔ ROLA. Com a fonte grande do sistema (font_scale 1.30) os 4 nomes NÃO cabem
-                 na altura do mostrador e o último ficava METADE ESCONDIDO atrás da barra
-                 "Confirmar" — que é o corte que o Google recusou. `fillViewport` mantém os
-                 espaçadores de peso funcionando quando SOBRA espaço, então em fonte normal a
-                 tela continua exatamente a mesma; quando FALTA, a lista rola (dedo e coroa). -->
-            <ScrollView
-                android:id="@+id/serve_scroll"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:fillViewport="true"
-                android:scrollbars="none"
-                android:clipToPadding="false">
-
-                <LinearLayout
-                    android:id="@+id/serve_list"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:paddingTop="34dp"
-                    android:paddingStart="16dp"
-                    android:paddingEnd="16dp" />
-            </ScrollView>
-
-            <!-- Confirmar: barra sólida na base (topo reto, largura cheia). -->
+    </ScrollView>
+    <ScrollView style="@style/WearPage" android:id="@+id/serve_overlay" android:visibility="gone">
+        <LinearLayout style="@style/WearColumn">
+            <TextView style="@style/WearCaption" android:id="@+id/serve_arc_sport" />
             <TextView
+                style="@style/WearText"
+                android:id="@+id/serve_arc_prompt"
+                android:text="1º sacador"
+                android:textStyle="bold" />
+            <LinearLayout style="@style/WearColumn" android:id="@+id/serve_list" />
+            <TextView
+                style="@style/WearAction"
                 android:id="@+id/btn_serve_confirm"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center"
                 android:text="Confirmar"
-                android:textColor="@color/start_green_text"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:paddingTop="4dp"
-                android:paddingBottom="7dp"
-                android:background="@color/start_green"
-                android:clickable="true"
-                android:focusable="true" />
+                android:backgroundTint="@color/start_green"
+                android:textColor="@color/start_green_text" />
         </LinearLayout>
-
-        <!-- ⚡/🏆 + modalidade curva às 11h (igual ao Iniciar). -->
-        <androidx.wear.widget.CurvedTextView
-            android:id="@+id/serve_arc_sport"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:text="⚡ Beach Tennis"
-            android:textColor="@color/meta"
-            android:textSize="12sp" />
-
-        <!-- Prompt curvo "2º sacador" no 12h (igual ao "1º sacador" do Iniciar). -->
-        <androidx.wear.widget.CurvedTextView
-            android:id="@+id/serve_arc_prompt"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:text="2º sacador"
-            android:textColor="@color/name_blue"
-            android:textStyle="bold"
-            android:textSize="13sp" />
-    </FrameLayout>
-
-</FrameLayout>
+    </ScrollView>
+</app.scoreplace.wear.WatchViewport>
