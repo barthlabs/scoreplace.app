@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "backendCommit": "a45d42b2d54a553f4eef309e31de7465225f0d5b",
+  "backendCommit": "356cc174446594269fefc16fe3c6b33c3f85366f",
   "scopeNote": "Três sliders por categoria e fase; modo comum ou individual; grupos e jogos exatos; séries apenas em quartetos 4x3, Super8 em duas quadras independentes; patrocinadores por quadra e preservação operacional.",
   "functions": [
     "createTournament",
