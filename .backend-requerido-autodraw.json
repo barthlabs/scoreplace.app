@@ -1,14 +1,11 @@
 {
   "schema": 1,
-  "backendCommit": "b159a697d5e5cbe2f5db805ae7d1e3cfd9e7bcb8",
-  "scopeNote": "Resumos atuais do painel, criação atômica de resumos e reconciliação; controle end-court validado com os mesmos sete fontes centrais.",
+  "backendCommit": "b3c4ec5f636f6772df5a4df21eb5013bbce30405",
+  "scopeNote": "Liberação dos jogos restantes por bloco; configuração, criação e upload de artes das telas No ar.",
   "functions": [
+    "endMatchOnCourt",
     "createTournament",
-    "tournamentSummary",
-    "tournamentSummaryMatch",
-    "tournamentSummaryParticipant",
-    "tournamentSummaryRegistration",
-    "tournamentSummaryLegacyGroup",
-    "endMatchOnCourt"
+    "updateTournamentConfiguration",
+    "uploadTournamentImage"
   ]
 }
