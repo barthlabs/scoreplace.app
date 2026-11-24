@@ -399,12 +399,14 @@ const { chromium } = require('@playwright/test');
       button.onclick = () => window._tvLiveToggle();
       document.body.appendChild(button);
     });
+    const livePopupPromise = page.waitForEvent('popup');
     await page.locator('#open-tv-test').click();
-    const liveFrame = page.locator('iframe[name="scoreplace-live-tv-tour_1790628592058_c342a1e8f5068424887f1702a1633a44"]');
-    await liveFrame.waitFor();
-    const popup = page.frame({ name:'scoreplace-live-tv-tour_1790628592058_c342a1e8f5068424887f1702a1633a44' });
-    assert.ok(popup, 'a TV ao vivo é montada no iframe que recebe a tela cheia');
+    const popup = await livePopupPromise;
     await popup.locator('#tv-root').waitFor();
+    assert.equal(await page.evaluate(() => document.fullscreenElement), null,
+      'a transmissão não coloca a janela de controle em tela cheia');
+    assert.equal(await page.evaluate(() => window._tvLiveWindow === null), false,
+      'o controle mantém referência à janela No ar independente');
     await popup.evaluate(() => {
       document.head.querySelector('style').textContent = '.tv-series-player-name{font-size:99px}';
       window.__tvStyleVersion = 'old-version';
@@ -414,58 +416,46 @@ const { chromium } = require('@playwright/test');
     assert.equal(await popup.evaluate(() => window.__tvStyleVersion),
       await page.evaluate(() => String(window.SCOREPLACE_VERSION || '')),
       'janela No Ar aberta recebe o CSS novo sem precisar ser fechada');
-    await page.waitForFunction(() => {
-      const iframe = document.querySelector('iframe[name="scoreplace-live-tv-tour_1790628592058_c342a1e8f5068424887f1702a1633a44"]');
-      return iframe && document.fullscreenElement === iframe;
-    });
     await popup.waitForFunction(() => {
       const titleElement = document.querySelector('.tv-header h1');
       const clockElement = document.querySelector('#tv-now');
-      if (document.querySelector('#tv-fullscreen-action') || !titleElement || !clockElement) return false;
+      if (!titleElement || !clockElement) return false;
       return titleElement.getBoundingClientRect().right <= clockElement.getBoundingClientRect().left;
     });
     const headerPositions = await popup.evaluate(() => {
       const bounds = selector => document.querySelector(selector).getBoundingClientRect();
       return { title:bounds('.tv-header h1'), action:document.querySelector('#tv-fullscreen-action'), clock:bounds('#tv-now') };
     });
-    assert.equal(headerPositions.action, null, 'o botão manual some quando a tela cheia automática já foi ativada');
     assert.ok(headerPositions.title.right <= headerPositions.clock.left,
-      'nome e relógio do cabeçalho não se sobrepõem na TV em tela cheia');
-    assert.equal(await page.evaluate(() => document.fullscreenElement?.getAttribute('title')),
-      'TV · TORNEIO REAL DA PRÉVIA', 'a abertura da TV solicita tela cheia dentro do gesto do organizador');
+      'nome e relógio do cabeçalho não se sobrepõem na janela da TV');
+    assert.equal(await popup.locator('#tv-exit-action').count(), 0, 'a apresentação não mostra Sair da TV');
+    const closeFirstPopup = popup.waitForEvent('close');
     await page.evaluate(() => window._tvLiveToggle());
-    await liveFrame.waitFor({ state:'detached' });
-    await page.waitForFunction(() => document.fullscreenElement === null);
+    await closeFirstPopup;
     await page.evaluate(() => {
       Object.defineProperty(window.screen, 'isExtended', { configurable:true, value:false });
       window.getScreenDetails = async () => ({ screens:[
         { label:'Principal', isPrimary:true, availLeft:0, availTop:0, availWidth:1400, availHeight:1000, width:1400, height:1000 },
         { label:'Projetor', isPrimary:false, availLeft:1400, availTop:0, availWidth:1280, availHeight:720, width:1280, height:720 }
       ] });
-      window.__tvFullscreenOptions = null;
-      HTMLIFrameElement.prototype.requestFullscreen = function (options) {
-        window.__tvFullscreenOptions = options || {};
-        return Promise.resolve();
-      };
     });
     await page.locator('#open-tv-test').click();
     await page.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
     assert.equal(await page.getByRole('button', { name:/Tela principal.*Principal/ }).count(), 1);
     assert.equal(await page.getByRole('button', { name:/Tela secundária.*Projetor/ }).count(), 1,
       'a lista da API prevalece mesmo quando isExtended informa falso');
+    const secondaryPopupPromise = page.waitForEvent('popup');
     await page.getByRole('button', { name:/Tela secundária.*Projetor/ }).click();
-    const secondFrame = page.locator('iframe[name="scoreplace-live-tv-tour_1790628592058_c342a1e8f5068424887f1702a1633a44"]');
-    await secondFrame.waitFor();
-    const secondPopup = page.frame({ name:'scoreplace-live-tv-tour_1790628592058_c342a1e8f5068424887f1702a1633a44' });
-    assert.ok(secondPopup, 'a seleção de monitor mantém a TV no iframe da operação');
+    const secondPopup = await secondaryPopupPromise;
     await secondPopup.waitForSelector('#tv-root');
-    assert.equal(await page.evaluate(() => window.__tvFullscreenOptions?.screen?.label), 'Projetor',
-      'a abertura no gesto de escolha solicita tela cheia no monitor selecionado');
+    assert.equal(await page.evaluate(() => document.fullscreenElement), null,
+      'abrir na tela secundária não desloca a tela de controle');
+    assert.match(await page.evaluate(() => window._tvLiveWindow ? 'active' : ''), /active/);
     assert.equal(await secondPopup.locator('#tv-exit-action').count(), 0,
       'a apresentação não mostra Sair da TV');
+    const closeSecondPopup = secondPopup.waitForEvent('close');
     await page.evaluate(() => window._tvLiveToggle());
-    await secondFrame.waitFor({ state:'detached' });
-    await page.evaluate(() => { HTMLIFrameElement.prototype.requestFullscreen = Element.prototype.requestFullscreen; });
+    await closeSecondPopup;
     await page.evaluate(() => { window.getScreenDetails = async () => ({ screens:[
       { label:'Principal', isPrimary:true, availLeft:0, availTop:0, availWidth:1400, availHeight:1000, width:1400, height:1000 }
     ] }); });
@@ -487,22 +477,19 @@ const { chromium } = require('@playwright/test');
         ? { matches:true, media:query, addListener(){}, removeListener(){}, addEventListener(){}, removeEventListener(){} }
         : actualMatchMedia(query);
     });
+    const standalonePopupPromise = page.waitForEvent('popup');
     await page.locator('#open-tv-test').click();
-    await page.waitForFunction(() => document.fullscreenElement?.tagName === 'IFRAME' &&
-      document.fullscreenElement.contentDocument?.querySelector('#tv-root'));
-    await page.waitForFunction(() => window._tvLiveWindow === document.querySelector('iframe[title^="TV · "]')?.contentWindow);
-    assert.equal(await page.locator('iframe[title^="TV · "]').count(), 1,
-      'app instalado abre a TV dentro da mesma janela já em tela cheia');
-    await page.waitForFunction(() => {
-      const action = document.querySelector('iframe[title^="TV · "]')?.contentDocument?.querySelector('#tv-fullscreen-action');
-      return !action || action.hidden;
-    });
-    assert.equal(await page.frameLocator('iframe[title^="TV · "]').locator('#tv-exit-action').count(), 0,
+    const standalonePopup = await standalonePopupPromise;
+    await standalonePopup.waitForSelector('#tv-root');
+    assert.equal(await page.locator('iframe[title^="TV · "]').count(), 0,
+      'mesmo no modo instalado a TV fica em outra janela, sem substituir o controle');
+    assert.equal(await standalonePopup.locator('#tv-exit-action').count(), 0,
       'a apresentação não mostra botão Sair da TV');
+    const closeStandalonePopup = standalonePopup.waitForEvent('close');
     await page.evaluate(() => window._tvLiveToggle());
-    await page.locator('iframe[title^="TV · "]').waitFor({ state:'detached' });
+    await closeStandalonePopup;
     assert.equal(await page.evaluate(() => document.fullscreenElement), null,
-      'desligar NO AR na operação fecha a TV e devolve o aplicativo');
+      'desligar NO AR fecha apenas a janela da TV');
     await page.evaluate(() => {
       window._editingTournament.id = 'tour_1793804848447_94bfe2282535789667cb35f1080024ee';
       window._editingTournament.name = 'Camis Day';

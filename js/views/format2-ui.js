@@ -1003,7 +1003,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         '<input id="f2-group-formation-value" type="number" min="2" max="128" value="' + currentFormation.value + '" aria-label="' + (currentFormation.mode === 'size' ? 'Pessoas por grupo' : 'Número de grupos') + '" onchange="window._f2GroupFormation(document.getElementById(\'f2-group-formation-mode\').value,this.value)" style="width:78px;text-align:center;padding:7px;border-radius:8px;border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,.2));background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);">' +
         '<span style="font-size:.78rem;color:var(--text-muted);">' + (currentFormation.mode === 'size' ? 'pessoas por grupo' : 'grupos; distribuição equilibrada') + '</span></div>' +
         (cfg.parceria === 'rotation_groups_8'
-          ? '<div style="font-size:.78rem;color:var(--text-muted);margin-top:7px;">O rodízio A–H exige exatamente 8 atletas por grupo. Com 32 inscritos na categoria, escolha 4 grupos ou 8 pessoas por grupo.</div>'
+          ? '<div style="font-size:.78rem;color:var(--text-muted);margin-top:7px;">A formação é geral: defina o tamanho dos grupos ou a quantidade de grupos; a distribuição fica equilibrada. O rodízio A–H exige que os grupos resultantes tenham exatamente 8 atletas.</div>'
           : ''));
 
     // (A FORMAÇÃO das duplas — participantes montam × organizador, + times sorteados vs
@@ -1025,7 +1025,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       } else {
         fBtns += _sec('Como serão formados os confrontos na classificatória',
           _pill(isSorteio, "window._f2TeamForm('sorteio')", 'Parceiros sorteados') +
-          _pill(pr === 'rotation_groups_8', "window._f2TeamForm('rotation_groups_8')", 'Grupos de 8 · rodízio') +
+          _pill(pr === 'rotation_groups_8', "window._f2TeamForm('rotation_groups_8')", 'Rodízio A–H') +
           (um ? _pill(pr === 'rei_rainha', "window._f2TeamForm('rei_rainha')", 'Rodada Rei/Rainha') : ''));
       }
       // v4.4.30: Sorteio + 1 grupo → toggle "Novo parceiro a cada rodada" (ON por padrão).
@@ -1120,7 +1120,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var rotationCount = Math.max(1, Math.min(7, parseInt(cfg.rodadas.n, 10) || 5));
       rInner = '<label style="display:block;font-size:.74rem;color:var(--text-muted);margin-bottom:6px;">Partidas por atleta em cada grupo</label>' +
         '<input type="number" min="1" max="7" value="' + rotationCount + '" onchange="window._f2RotationRounds(this.value)" style="width:82px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);">' +
-        '<div style="font-size:.72rem;color:var(--text-muted);margin-top:7px;line-height:1.45;">Cada grupo tem 8 atletas. O sorteio atribui A–H; cada rodada tem 2 jogos e cada atleta joga uma vez com parceiro diferente. Os grupos são separados por categoria.</div>';
+        '<div style="font-size:.72rem;color:var(--text-muted);margin-top:7px;line-height:1.45;">No rodízio A–H, cada grupo tem 8 atletas. O sorteio atribui as letras A–H; cada rodada tem 2 jogos e cada atleta joga uma vez com parceiro diferente. Os grupos são separados por categoria.</div>';
     } else if (rotativo) {
       // Rei/Rainha (ou sorteio a cada rodada): SEMPRE nº de rodadas + agendamento (rotativo por
       // rodada). "Todos contra todos" não se aplica — mas o Nº de rodadas FICA (pedido do dono).

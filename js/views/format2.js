@@ -908,11 +908,11 @@
     var resolved = resolveTurnos(cfg);
     var groupLabel = resolved.groups == null
       ? ('Grupos de ' + resolved.value + ' · definidos pelos inscritos')
-      : (cfg.parceria === 'rotation_groups_8' ? 'Grupos de 8' : (resolved.groups === 1 ? 'Pontos Corridos' : (resolved.groups + ' grupos')));
+      : (resolved.groups === 1 ? 'Pontos Corridos' : (resolved.groups + ' grupos'));
     parts.push(groupLabel);
     if (cfg.disputa === 'dupla') {
       if (cfg.parceria === 'super_eight') parts.push('Super 8 individual · todas as parcerias');
-      else if (cfg.parceria === 'rotation_groups_8') parts.push(cfg.rodadas.n + ' partidas por atleta · parceiros sem repetição');
+      else if (cfg.parceria === 'rotation_groups_8') parts.push('Rodízio A–H · ' + cfg.rodadas.n + ' partidas por atleta · parceiros sem repetição');
       else if (cfg.parceria === 'rei_rainha') parts.push('Rei/Rainha');
       else if (cfg.parceria === 'sorteio_rodada') parts.push('sorteio/rodada');
       else parts.push(cfg.formacaoDupla === 'manual' ? 'duplas montadas' : 'duplas sorteadas');

@@ -31,14 +31,18 @@ NODE
 diff="$(git diff --name-only "$base_commit" "$source_commit" -- functions-autodraw | LC_ALL=C sort)"
 expected="$(printf '%s\n' \
   functions-autodraw/court-capability-digest.js \
+  functions-autodraw/format-intent-validation-core.js \
   functions-autodraw/index.js \
   functions-autodraw/test-canonical-sandbox-emu.js \
   functions-autodraw/test-draw-checkpoint-emu.js \
+  functions-autodraw/test-super-eight.js \
   functions-autodraw/test-tournament-summary-reconcile.js \
   functions-autodraw/tournament-create.js \
   functions-autodraw/tournament-draw-checkpoint.js \
   functions-autodraw/tournament-summary-core.js \
   functions-autodraw/tournament-summary-reconcile.js \
+  functions-autodraw/vendor/format2.js \
+  functions-autodraw/vendor/phases-engine.js \
   functions-autodraw/vendor/tournaments-draw.js \
   functions-autodraw/vendor/tournaments-utils.js | LC_ALL=C sort)"
 [[ "$diff" == "$expected" ]] || {

@@ -6,16 +6,32 @@ const { chromium } = require('@playwright/test');
 (async () => {
   const browser = await chromium.launch();
   try {
-    const page = await browser.newPage();
+    const context = await browser.newContext();
+    // A popup runs in its own JS realm, so instrument requestFullscreen there too.
+    await context.addInitScript(() => {
+      Element.prototype.requestFullscreen = function (options) {
+        window._tvFullscreenRequests = (window._tvFullscreenRequests || []).concat([
+          { tag:this.tagName, screen:options && options.screen || null }
+        ]);
+        return Promise.resolve();
+      };
+    });
+    const page = await context.newPage();
     await page.goto('about:blank');
     await page.evaluate(() => {
       window.ScoreplaceMatchDay = { matchDay() {}, timestamp() {}, localDay() {}, eventZone() {} };
       window._currentBracketTournament = { id:'other-format', name:'Outro torneio' };
       window._collectAllMatches = () => [];
-      window._tvFullscreenRequests = [];
+      window.__openRequests = [];
+      const open = window.open.bind(window);
+      window.open = (url, name, features) => {
+        window.__openRequests.push({ url, name, features });
+        return open(url, name, features);
+      };
       Element.prototype.requestFullscreen = function (options) {
-        window._tvFullscreenRequests.push({ tag:this.tagName, name:this.name, screen:options && options.screen || null });
-        document.fullscreenElement = this;
+        window._tvFullscreenRequests = (window._tvFullscreenRequests || []).concat([
+          { tag:this.tagName, screen:options && options.screen || null }
+        ]);
         return Promise.resolve();
       };
       window.getScreenDetails = () => Promise.resolve({ screens:[
@@ -27,30 +43,51 @@ const { chromium } = require('@playwright/test');
     await page.evaluate(() => window._tvLiveToggle());
     await page.locator('[data-tv-monitor="1"]').waitFor();
     assert.match(await page.locator('#tv-monitor-picker').innerText(), /Tela principal[\s\S]*MacBook[\s\S]*Tela secundária[\s\S]*HDMI/);
+
+    const popupPromise = page.waitForEvent('popup');
     await page.locator('[data-tv-monitor="1"]').click();
-    const state = await page.evaluate(() => ({ requests:window._tvFullscreenRequests,
-      frame:document.querySelector('iframe[name^="scoreplace-live-tv-"]'), picker:!!document.getElementById('tv-monitor-picker') }));
+    const popup = await popupPromise;
+    await popup.locator('#tv-root').waitFor();
+    const state = await page.evaluate(() => ({
+      open:window.__openRequests.at(-1),
+      picker:!!document.getElementById('tv-monitor-picker'), fullscreen:!!document.fullscreenElement,
+      control:!!document.body
+    }));
     assert.equal(state.picker, false);
-    assert.ok(state.frame, 'a TV ocupa o detalhe existente, sem abrir uma segunda janela');
-    assert.equal(state.requests[0].tag, 'IFRAME');
-    assert.equal(state.requests[0].screen.label, 'HDMI',
-      'escolha da segunda tela pede fullscreen no monitor selecionado');
+    assert.equal(state.fullscreen, false, 'abrir a TV não põe a tela de controle em tela cheia');
+    assert.ok(state.control, 'a tela de controle continua aberta na janela original');
+    assert.match(state.open.features, /left=1440/);
+    assert.match(state.open.features, /width=1920/);
+    assert.match(state.open.features, /height=1080/);
+    const tvRequests = await popup.evaluate(() => window._tvFullscreenRequests || []);
+    assert.equal(tvRequests[0].screen.label, 'HDMI', 'a TV tenta fullscreen no monitor escolhido');
+    assert.equal(await popup.title(), 'TV · Outro torneio');
+    assert.equal(await popup.locator('#tv-root').count(), 1, 'a transmissão vive em uma janela independente');
+
+    const closePromise = popup.waitForEvent('close');
     await page.evaluate(() => window._tvLiveToggle());
+    await closePromise;
     await page.evaluate(() => {
       window.getScreenDetails = () => Promise.reject(new DOMException('Permissão negada', 'NotAllowedError'));
       window._tvLiveToggle();
     });
     await page.locator('[data-tv-monitor="manual"]').waitFor();
     assert.match(await page.locator('#tv-monitor-picker').innerText(), /permita gerenciar janelas/i);
+    const fallbackPromise = page.waitForEvent('popup');
     await page.locator('[data-tv-monitor="manual"]').click();
-    const fallback = await page.evaluate(() => ({ requests:window._tvFullscreenRequests,
-      frame:document.querySelector('iframe[name^="scoreplace-live-tv-"]'),
-      picker:!!document.getElementById('tv-monitor-picker') }));
+    const fallbackPopup = await fallbackPromise;
+    await fallbackPopup.locator('#tv-root').waitFor();
+    const fallback = await page.evaluate(() => ({
+      open:window.__openRequests.at(-1),
+      picker:!!document.getElementById('tv-monitor-picker'), fullscreen:!!document.fullscreenElement
+    }));
     assert.equal(fallback.picker, false);
-    assert.ok(fallback.frame, 'a opção manual também abre a TV no navegador atual');
-    assert.equal(fallback.requests.length, 2);
-    assert.equal(fallback.requests[1].screen, null,
-      'sem permissão de monitores, a TV pede fullscreen na tela atual');
-    console.log('✓ seletor No Ar abre fullscreen na tela escolhida ou na tela atual');
+    assert.equal(fallback.fullscreen, false, 'fallback também preserva o controle');
+    assert.match(fallback.open.features, /left=0/);
+    const fallbackRequests = await fallbackPopup.evaluate(() => window._tvFullscreenRequests || []);
+    assert.equal(fallbackRequests[0].screen, null, 'sem permissão, a TV tenta fullscreen na tela atual');
+    await page.evaluate(() => window._tvLiveToggle());
+    await fallbackPopup.waitForEvent('close');
+    console.log('✓ TV abre em janela independente, posicionada no monitor, sem deslocar o controle');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

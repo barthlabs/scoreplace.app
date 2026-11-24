@@ -5304,7 +5304,6 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
         return commitReply({ ok: true, changed: true, releasedAt: agoraIso, releasedMatchIds: series.map(item => String(item.id)),
           estimatedDurationMs: estimatedDurationMs || null });
       }
-      let nextInSeries = null;
       let completedSeries = null;
       if (m.isMonarch === true && !m.isTieBreak && Array.isArray(t.scheduleWindow?.days) &&
           t.scheduleWindow.days.length === 1 && m.monarchGroup != null && m.round != null && m.category) {
@@ -5316,49 +5315,25 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
           series.sort((a, b) => Number(a._gameNum || a.scheduledGameNumber || 0) -
             Number(b._gameNum || b.scheduledGameNumber || 0) ||
             Date.parse(a.scheduledAt || '') - Date.parse(b.scheduledAt || '') || String(a.id).localeCompare(String(b.id)));
-          const index = series.findIndex(item => String(item.id) === matchId);
-          if (index >= 0 && index < 2) {
-            if (!series.slice(0, index).every(item => _courtOccupancy.isFinished(item) || released[String(item.id)]))
-              throw new HttpsError('failed-precondition', 'Encerre os jogos anteriores deste grupo primeiro.');
-            const next = series[index + 1];
-            if (released[String(next.id)] || next.courtCalledAt || next.startedAt ||
-                _courtOccupancy.isFinished(next) || next.pendingResult || next.liveScored ||
-                (Array.isArray(next.sets) && next.sets.length) || Number(next.scoreP1) > 0 || Number(next.scoreP2) > 0)
-              throw new HttpsError('failed-precondition', 'O próximo jogo já foi iniciado ou alterado. Atualize a tela.');
-            const competing = all.find(item => item && String(item.id) !== matchId &&
-              String(item.id) !== String(next.id) && !released[String(item.id)] &&
-              String(item.court || '') === String(m.court) && _courtOccupancy.occupiesCourt(item));
-            if (competing) throw new HttpsError('failed-precondition', 'Outra partida ocupa esta quadra. Atualize a tela.');
-            nextInSeries = next;
-          }
-          if (index === 2) completedSeries = series;
+          const completeAfterRelease = series.every(item => String(item.id) === matchId ||
+            _courtOccupancy.isFinished(item) || released[String(item.id)]);
+          if (completeAfterRelease) completedSeries = series;
         }
       }
       const auditRef = ref.collection('courtReleases').doc();
       const nextReleased = { ...released, [matchId]: agoraIso };
-      const courtPatch = { revision: FieldValue.increment(1), released: nextReleased };
-      const before = nextInSeries || completedSeries ? _antesDoMotor(t) : null;
-      if (nextInSeries) {
-        nextInSeries.court = String(m.court);
-        nextInSeries.courtCalledAt = agoraIso;
-        nextInSeries.startedAt = agoraIso;
-        const timing = _matchTiming.config(t);
-        nextInSeries.courtClockBaseAt = new Date(Date.parse(agoraIso) -
-          (timing.call + timing.warmup) * 60000).toISOString();
-        delete nextInSeries.callCancelledAt;
-        courtPatch.postponed = (Array.isArray(state.postponed) ? state.postponed : []).map(String)
-          .filter(id => id !== String(nextInSeries.id));
-        courtPatch.postponedReady = (Array.isArray(state.postponedReady) ? state.postponedReady : []).map(String)
-          .filter(id => id !== String(nextInSeries.id));
-      }
+      const courtPatch = {
+        revision: FieldValue.increment(1), released: nextReleased,
+        postponed: (Array.isArray(state.postponed) ? state.postponed : []).map(String).filter(id => id !== matchId),
+        postponedReady: (Array.isArray(state.postponedReady) ? state.postponedReady : []).map(String).filter(id => id !== matchId)
+      };
+      const before = completedSeries ? _antesDoMotor(t) : null;
       const estimatedDurationMs = completedSeries
         ? _monarchCourtSeries.estimateLegacyDurations(t, completedSeries, agoraIso, _matchTiming) : null;
-      if (before && (nextInSeries || estimatedDurationMs)) _gravaTorneio(tx, ref, t, before, { agoraIso });
+      if (before && estimatedDurationMs) _gravaTorneio(tx, ref, t, before, { agoraIso });
       tx.set(stateRef, courtPatch, { merge: true });
-      tx.create(auditRef, { matchId, court: String(m.court), releasedAt: agoraIso, releasedBy: uid,
-        nextMatchId: nextInSeries ? String(nextInSeries.id) : null });
+      tx.create(auditRef, { matchId, court: String(m.court), releasedAt: agoraIso, releasedBy: uid });
       return commitReply({ ok: true, changed: true, releasedAt: agoraIso,
-        nextMatchId: nextInSeries ? String(nextInSeries.id) : null, seriesContinues: !!nextInSeries,
         estimatedDurationMs: estimatedDurationMs || null });
     }
     if (hasScore) {
@@ -7426,6 +7401,9 @@ exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) =
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização avança a fase.', { tId, uid });
+    const courtStateSnap = await tx.get(ref.collection('courtState').doc('main'));
+    const courtState = courtStateSnap.exists ? courtStateSnap.data() || {} : {};
+    const released = courtState.released && typeof courtState.released === 'object' ? courtState.released : {};
     const antes = _antesDoMotor(t);
     _hidrataGrupos(t, 'advanceTournamentPhase', tId);
     const phaseEngine = drawWindow && drawWindow._phasesEngine;
@@ -7509,7 +7487,7 @@ exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) =
         if (requestedTieAction.type === 'call' && !court) throw new HttpsError('failed-precondition', 'Escolha uma quadra antes da chamada.');
         if (court && ['call', 'restore'].includes(requestedTieAction.type)) {
           const regular = typeof drawWindow._collectAllMatches === 'function' ? drawWindow._collectAllMatches(t) : [];
-          const activeRegular = (regular || []).filter(m => m && _courtOccupancy.occupiesCourt(m));
+          const activeRegular = (regular || []).filter(m => m && !released[String(m.id)] && _courtOccupancy.occupiesCourt(m));
           const otherTieMatches = Object.values(t.phaseTieDecisions || {}).flatMap(book =>
             Object.values(book || {}).flatMap(d => d && d.matches || []))
             .filter(m => m && m.id !== target.id && m.courtCalledAt && !m.courtReleasedAt && !m.winnerKey);
@@ -8343,7 +8321,8 @@ exports.runEnrollmentSlotsDraw = onCall(async request => {
 });
 
 // ─── Encerramento manual: status, classificação e aviso server-side ─────────
-function _resolveFinalClassificationTie(t, action, nowIso) {
+function _resolveFinalClassificationTie(t, action, nowIso, releasedMatches) {
+  const released = releasedMatches && typeof releasedMatches === 'object' ? releasedMatches : {};
   const tieConfig = _phaseTieCore.canonicalTieFallbackView(t);
   const current = t.currentPhaseIndex || 0;
   const phase = Array.isArray(t.phases) && t.phases[current];
@@ -8475,7 +8454,7 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
     if (action.type === 'call' && !court) throw new HttpsError('failed-precondition', 'Escolha uma quadra antes da chamada.');
     if (['call', 'restore'].includes(action.type)) {
       const occupied = typeof drawWindow._collectAllMatches === 'function'
-        ? drawWindow._collectAllMatches(t).filter(item => item && _courtOccupancy.occupiesCourt(item)) : [];
+        ? drawWindow._collectAllMatches(t).filter(item => item && !released[String(item.id)] && _courtOccupancy.occupiesCourt(item)) : [];
       const otherExtras = Object.values(t.phaseTieDecisions || {}).flatMap(phaseBook =>
         Object.values(phaseBook || {}).flatMap(item => item && item.matches || []))
         .filter(item => item && item.id !== match.id && item.courtCalledAt && !item.courtReleasedAt && !item.winnerKey);
@@ -8534,7 +8513,9 @@ exports.finishTournament = onCall(async request => {
     const before = _antesDoMotor(t);
     if (t.rulesContractVersion >= 2) {
       _hidrataGrupos(t, 'finishTournament', tId);
-      const tieFlow = _resolveFinalClassificationTie(t, request.data && request.data.tieAction, nowIso);
+      const courtStateSnap = await tx.get(ref.collection('courtState').doc('main'));
+      const courtState = courtStateSnap.exists ? courtStateSnap.data() || {} : {};
+      const tieFlow = _resolveFinalClassificationTie(t, request.data && request.data.tieAction, nowIso, courtState.released);
       if (tieFlow.status !== 'ready') {
         const saved = tieFlow.changed ? _gravaTorneio(tx, ref, t, before, { agoraIso: nowIso }) : null;
         return { ok: false, reason: tieFlow.status === 'choice' ? 'tie-choice-required' :

@@ -6280,12 +6280,11 @@ window._endMatchOnCourt = function (tId, matchId, button, endWholeBlock) {
   var group = match && _bracketOperationsGroup(tournament, match, allMatches);
   var position = group && group.matches.findIndex(function (item) { return String(item.id) === String(matchId); });
   var blockMode = endWholeBlock === true;
-  var continues = !blockMode && position >= 0 && position < 2;
-  return _confirmCourtOperation(tId, matchId, 'release', blockMode ? 'Encerrar bloco' : continues ? 'Encerrar jogo' : 'Liberar quadra',
+  return _confirmCourtOperation(tId, matchId, 'release', blockMode ? 'Encerrar bloco' : position >= 0 ? 'Encerrar jogo' : 'Liberar quadra',
     blockMode
       ? 'Encerrar os três jogos deste grupo de uma vez? Todos ficarão disponíveis em Placares pendentes; nenhum placar será alterado.'
-      : continues
-      ? 'Encerrar este jogo sem placar? Ele vai para Placares pendentes e o próximo jogo continua na mesma quadra.'
+      : position >= 0
+      ? 'Encerrar este jogo sem placar? Ele ficará em Placares pendentes; os demais jogos permanecem em suas quadras.'
       : 'Liberar esta quadra sem placar? O jogo ficará em Placares pendentes.', function () {
   if (!window.ScoreplaceOperationRouter || typeof window.ScoreplaceOperationRouter.call !== 'function') return Promise.reject(new Error('Serviço indisponível.'));
   if (button) button.disabled = true;
@@ -6296,8 +6295,11 @@ window._endMatchOnCourt = function (tId, matchId, button, endWholeBlock) {
   }, null).then(function (res) {
     var data = res || {};
     if (!data.ok) throw new Error('Não foi possível liberar a quadra.');
-    if (typeof showNotification === 'function') showNotification(data.seriesContinues ? 'Próximo jogo em quadra' : 'Quadra liberada',
-      data.seriesContinues ? 'O placar deste jogo está em Placares pendentes. O próximo jogo continua na quadra.' : 'Jogo enviado para Placares pendentes.', 'success');
+    var releasedCount = Array.isArray(data.releasedMatchIds) ? data.releasedMatchIds.length : 0;
+    if (typeof showNotification === 'function') showNotification(blockMode ? 'Bloco encerrado' : 'Quadra liberada',
+      blockMode && releasedCount
+        ? releasedCount + ' jogos enviados para Placares pendentes.'
+        : 'Jogo enviado para Placares pendentes.', 'success');
     return data;
   }).catch(function (error) {
     if (typeof showNotification === 'function') showNotification('Quadra não liberada', error && error.message || 'Tente novamente.', 'error');

@@ -222,11 +222,11 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   const individualRelease = await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
     matchId:'block-b1-1', action:'release', monarchEndWholeBlock:false,
     operationId:'883780f4-d2d9-4c04-89a4-3e117fb44c39' } });
-  assert.equal(individualRelease.seriesContinues, true, 'encerramento individual continua a próxima partida');
+  assert.equal(individualRelease.seriesContinues, undefined, 'encerrar um jogo não inicia automaticamente o próximo');
   const individualState = courtStates.get('tournaments/tour_test/courtState/main');
   assert.ok(individualState.released['block-b1-1'], 'o jogo encerrado vai imediatamente para Placares pendentes');
   assert.equal(individualState.released['block-b1-2'], undefined, 'a preferência legada não libera o bloco junto');
-  assert.equal(tournament.matches.find(match => match.id === 'block-b1-2').court, 'Quadra 7',
+  assert.equal(tournament.matches.find(match => match.id === 'block-b1-2').court, 'Quadra 8',
     'o jogo seguinte permanece em quadra após o encerramento individual');
   const blockRelease = await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
     matchId:'block-1', action:'release', monarchEndWholeBlock:true,
@@ -458,24 +458,24 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   const firstEnded = await endOnCourt({ auth:{ uid:'owner' }, data:{
     tournamentId:'tour_test', sandbox:false, matchId:'series-1', operationId:'a7090ce4-e8e4-4db3-a058-4cf36407c643'
   } });
-  assert.equal(firstEnded.nextMatchId, 'series-2', 'encerrar jogo 1 chama automaticamente jogo 2');
-  assert.equal(tournament.matches[1].court, 'Quadra 1');
-  assert.equal(tournament.matches[1].startedAt, nowIso, 'jogo 2 começa no encerramento');
-  assert.equal(context._matchTiming.phaseAt(Date.parse(tournament.matches[1].courtClockBaseAt),
-    context._matchTiming.config(tournament), Date.parse(nowIso)).phase, 'game',
-    'relógio do jogo 2 entra diretamente no tempo de jogo, sem repetir aquecimento');
+  assert.equal(firstEnded.nextMatchId, undefined, 'encerrar jogo 1 não chama automaticamente jogo 2');
+  assert.equal(tournament.matches[1].courtCalledAt, undefined, 'jogo 2 aguarda chamada explícita');
   assert.ok(courtStates.get(statePath).released['series-1'], 'placar do jogo 1 continua pendente');
   nowIso = '2026-10-20T18:10:00.000Z';
+  await callable(request('tour_test', 'series-2', 'Quadra 1', true));
+  assert.equal(tournament.matches[1].courtCalledAt, nowIso, 'jogo 2 só começa após a chamada do controlador');
   const secondEnded = await endOnCourt({ auth:{ uid:'owner' }, data:{
     tournamentId:'tour_test', sandbox:false, matchId:'series-2', operationId:'b8090ce4-e8e4-4db3-a058-4cf36407c643'
   } });
-  assert.equal(secondEnded.nextMatchId, 'series-3', 'encerrar jogo 2 chama automaticamente jogo 3');
-  assert.equal(tournament.matches[2].startedAt, nowIso, 'relógio do jogo 3 inicia independente');
+  assert.equal(secondEnded.nextMatchId, undefined, 'encerrar jogo 2 não chama automaticamente jogo 3');
+  assert.equal(tournament.matches[2].courtCalledAt, undefined, 'jogo 3 aguarda chamada explícita');
   nowIso = '2026-10-20T18:20:00.000Z';
+  await callable(request('tour_test', 'series-3', 'Quadra 1', true));
+  assert.equal(tournament.matches[2].courtCalledAt, nowIso, 'jogo 3 só começa após a chamada do controlador');
   const thirdEnded = await endOnCourt({ auth:{ uid:'owner' }, data:{
     tournamentId:'tour_test', sandbox:false, matchId:'series-3', operationId:'c9090ce4-e8e4-4db3-a058-4cf36407c643'
   } });
-  assert.equal(thirdEnded.seriesContinues, false, 'só o terceiro encerramento libera a quadra');
+  assert.equal(thirdEnded.seriesContinues, undefined, 'encerrar o terceiro jogo também não dispara chamadas automáticas');
   assert.equal(thirdEnded.estimatedDurationMs, 500000,
     'série chamada antes da correção reparte o tempo efetivo total entre três jogos');
   assert.deepEqual(tournament.matches.map(game => game.estimatedDurationMs), [500000, 500000, 500000]);

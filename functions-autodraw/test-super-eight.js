@@ -29,7 +29,8 @@ assert.equal(rotationCompiled.phases[0].classification.rotationRounds, 5);
 draw._window.ScoreplaceSuperEight = require('./vendor/super-eight-core.js');
 const rotationPool = Array.from({ length: 16 }, (_, i) => ({ uid: 'r' + i, displayName: 'Rotação ' + i }));
 const rotationGroups = draw._window._phasesEngine.genGroupsFromPool(rotationPool, {
-  gruposCount: 1, classification: { partnerRotation: 'unique_8', rotationRounds: 5 }
+  gruposCount: 1, groupFormation: { mode: 'count', value: 2 },
+  classification: { partnerRotation: 'unique_8', rotationRounds: 5 }
 }, 'rotation-test');
 assert.equal(rotationGroups.groups.length, 2, '16 atletas geram dois grupos de oito');
 assert.equal(rotationGroups.matches.length, 20, 'cinco rodadas geram dez jogos por grupo');
@@ -49,9 +50,22 @@ rotationGroups.groups.forEach(group => {
   });
   assert.deepEqual(Array.from(appearances.values()), Array(8).fill(5));
 });
+const fourRotationGroups = draw._window._phasesEngine.genGroupsFromPool(
+  Array.from({ length: 32 }, (_, i) => ({ uid: 'g' + i, displayName: 'Grupo ' + i })), {
+    gruposCount: 1, groupFormation: { mode: 'count', value: 4 },
+    classification: { partnerRotation: 'unique_8', rotationRounds: 5 }
+  }, 'rotation-four-groups');
+assert.deepEqual(fourRotationGroups.groups.map(group => group.players.length), [8, 8, 8, 8],
+  'organizador pode escolher quatro grupos para 32 atletas mantendo o rodízio A–H');
 assert.throws(() => draw._window._phasesEngine.genGroupsFromPool(rotationPool.slice(0, 10), {
-  gruposCount: 1, classification: { partnerRotation: 'unique_8', rotationRounds: 5 }
-}, 'rotation-invalid'), /grupos completos de oito/);
+  gruposCount: 1, groupFormation: { mode: 'count', value: 2 },
+  classification: { partnerRotation: 'unique_8', rotationRounds: 5 }
+}, 'rotation-invalid'), /oito atletas/);
+assert.throws(() => draw._window._phasesEngine.genGroupsFromPool(rotationPool, {
+  gruposCount: 1, groupFormation: { mode: 'count', value: 4 },
+  classification: { partnerRotation: 'unique_8', rotationRounds: 5 }
+}, 'rotation-invalid-size'), /exatamente oito atletas/,
+'formação genérica permite quatro grupos, mas o algoritmo A–H exige oito atletas em cada grupo');
 console.log('✓ rodízio configurável: 16 atletas separados por categoria em dois grupos, cinco partidas e letras A–H');
 cfg.superEightDrawMode = 'single';
 const single = format.compileToPhases(cfg, { sport: 'beach_tennis' });

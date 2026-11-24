@@ -600,7 +600,13 @@ const fakePopup = { name:'scoreplace-live-tv-neon-test', closed: false, navigato
 } } }, document: {
   open() {}, write(html) { popupHtml = html; }, close() {},
   visibilityState: 'visible', fullscreenElement:null,
-  documentElement: { requestFullscreen() { fullscreenRequests++; fakePopup.document.fullscreenElement = this; fullscreenHandlers.fullscreenchange.forEach(fn => fn()); return Promise.resolve(); } },
+  documentElement: { requestFullscreen() {
+    fullscreenRequests++;
+    if (fullscreenRequests === 1) return Promise.reject(new Error('fullscreen requires a user gesture'));
+    fakePopup.document.fullscreenElement = this;
+    fullscreenHandlers.fullscreenchange.forEach(fn => fn());
+    return Promise.resolve();
+  } },
   addEventListener: onFullscreen,
   getElementById: id => id === 'tv-root' ? tvRoot : id === 'tv-fullscreen-action' ? fullscreenButton : { addEventListener() {} },
   querySelector: () => null,
@@ -622,8 +628,9 @@ window.FirestoreDB = { db: { collection() { return { doc() { return { collection
 window._tvLiveToggle();
 assert.match(tvRoot.innerHTML, /<h1>NEON NIGHTMARE<\/h1><button id="tv-fullscreen-action"[^>]*>⛶ Tela cheia<\/button><time id="tv-now">/,
   'ação de tela cheia fica entre o título e o relógio');
+assert.equal(fullscreenRequests, 1, 'a abertura tenta tela cheia automaticamente na janela da TV');
 fullscreenHandlers.click[0]({ target:{ closest: () => fullscreenButton } });
-assert.equal(fullscreenRequests, 1, 'o clique solicita tela cheia na própria janela');
+assert.equal(fullscreenRequests, 2, 'o botão de fallback solicita tela cheia na janela da TV');
 assert.equal(fullscreenButton.hidden, true, 'o botão some depois que a TV ocupa a tela');
 fakePopup.document.fullscreenElement = null;
 fullscreenHandlers.fullscreenchange.forEach(fn => fn());
