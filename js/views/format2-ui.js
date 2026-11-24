@@ -1135,8 +1135,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       error = plan.error;
       matches = plan.matches;
       var actual = sizes.length ? sizes : [size];
-      name = !rule.allowRepeatPartners && actual.every(n=>n===4) && rule.rounds===3 ? 'Rei/Rainha da Praia' :
-        !rule.allowRepeatPartners && actual.every(n=>n===8) && rule.rounds<=7 ? 'Super 8' : 'Rodízio';
+      name = !rule.allowRepeatPartners && actual.every(n=>n===4) && rule.rounds===3 ? 'Rei e Rainha' :
+        !rule.allowRepeatPartners && actual.every(n=>n===8) && rule.rounds<=7 ? 'Super Oito ativado' : 'Fase de grupos';
     } else {
       var schedule = {gamesPerUnit:rule.rounds,allowRepeat:rule.allowRepeatPartners,mode:'free'};
       var plan = window.FORMAT2.groupPlanForCategory({groupFormation:formation,classificationSchedule:schedule},rule.category,units,false);
@@ -1144,7 +1144,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (!error && !people && form.mode==='size' && !rule.allowRepeatPartners && rule.rounds>=formation.value)
         error = 'O número de jogos excede os adversários disponíveis no grupo.';
       matches = plan.matches;
-      name = sport === 'team' ? 'Duplas representantes dos times' : unit === 2 ? 'Duplas fixas' : 'Simples';
+      name = 'Fase de grupos';
     }
     var preview = error || (name+' · '+(people ? count+(count===1?' grupo':' grupos')+' · '+sizeText+' pessoas por grupo · '+matches+' jogos'
       : 'A divisão final depende do elenco da categoria')+' · '+rule.rounds+' jogos por jogador');
