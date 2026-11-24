@@ -1,1 +1,3 @@
-In King/Queen groups, arrows cycle through the quartet’s three games and standings. One-day tournaments show game times without repeating the date. This release also includes set-by-set scores, court call controls, phase-specific on-air screens, and updated Apple Watch integration.
+On the tournament screen, you can see all categories together or tap a category to view its bracket. The tabs stay in view as you scroll.
+
+On the court control screen, the timer buttons change color to show when players have been called, are warming up, are playing or are running late. Organizers can also free up the court for the next match and enter the previous score later.

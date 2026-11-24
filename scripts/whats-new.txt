@@ -1,1 +1,3 @@
-Na operação Rei/Rainha, as setas percorrem os três jogos do quarteto e sua classificação. Torneios de um dia mostram apenas o horário dos jogos. Esta versão também inclui placares por set, chamadas para quadra, telas no ar por fase e integração atualizada com o Apple Watch.
+Na ficha do torneio, a aba Geral reúne todas as categorias. Toque em uma categoria para ver sua chave. As abas ficam à vista enquanto você rola a tela.
+
+Na operação de quadra, a cor dos botões do relógio indica chamada, aquecimento, jogo ou atraso. A organização também pode liberar a quadra para o próximo jogo e preencher o placar anterior depois.
