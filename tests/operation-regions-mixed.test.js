@@ -147,7 +147,7 @@ for (const version of ['v2', 'v3']) {
     const courtSources = sourceDescriptor('functions-autodraw', recordedCourtCommit, true);
     const courtFresh = original.filter(row => [`sp-op-court-${version}`, `sp-op-control-${version}`].includes(row.name))
       .every(row => row.commit === recordedCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedCourtCommit, courtSources));
-    const recordedEndCourtCommit = 'b7b63e146ba02997837d4e2ef04a1b12d5280ef9';
+    const recordedEndCourtCommit = 'b159a697d5e5cbe2f5db805ae7d1e3cfd9e7bcb8';
     const endCourtSources = sourceDescriptor('functions-autodraw', recordedEndCourtCommit, true);
     const endCourtFresh = original.filter(row => row.name === `sp-op-end-court-${version}`)
       .every(row => row.commit === recordedEndCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedEndCourtCommit, endCourtSources));

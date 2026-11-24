@@ -23,7 +23,7 @@ function validateRows(rows, version, options) {
   // Mudanças em outros arquivos de functions-autodraw (por exemplo, um vendor usado
   // no sorteio) não alteram a imagem desses dois serviços na malha regional.
   const courtControlRefreshCommit = '36a6b3ddae6427ee884ddbf9b7468986913872d3';
-  const endCourtRefreshCommit = 'b7b63e146ba02997837d4e2ef04a1b12d5280ef9';
+  const endCourtRefreshCommit = 'b159a697d5e5cbe2f5db805ae7d1e3cfd9e7bcb8';
   const regions = version === 'v2'
     ? ['us-east1', 'us-east4', 'us-south1']
     : ['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1'];
