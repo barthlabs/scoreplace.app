@@ -5,7 +5,7 @@
 - A grade pode ser gerada a partir do formato configurado, sem exigir Rei/Rainha ou eliminatória. Oito pessoas mantêm duas partidas independentes por rodada; somente quartetos de três jogos constituem a série Rei/Rainha. O resumo usa o motor real para contagem e duração.
 - Antes do sorteio, o organizador pode nomear e distribuir os grupos por entrada e quadras. O mapa é validado e aplicado aos jogos reais, com nomes consistentes na operação, TV e súmulas. B1/C1/C2 podem usar seis quadras na primeira entrada e B2/C3/C4 as mesmas quadras na seguinte.
 - Seletor único para games disputados no total ou games ganhos para vencer o set. Quantidade, sets e políticas de desempate são conservados; sete games totais permanecem disponíveis para qualquer torneio.
-- Corrigida a leitura das vagas deslocadas para os controles por categoria no salvamento. Campos inválidos seguem recusados. A atualização do formulário preserva os campos externos mesmo quando a remoção do campo focado dispara outro evento.
+- Corrigida a leitura das vagas deslocadas para os controles por categoria no salvamento. Campos inválidos seguem recusados. A atualização do formulário preserva os campos externos mesmo quando a remoção do campo focado dispara outro evento. O painel de distribuição conserva a grade e sua rolagem sob zoom.
 
 ## 2.7.58 — 24/nov/2026 (configuração por categoria e patrocinadores)
 
