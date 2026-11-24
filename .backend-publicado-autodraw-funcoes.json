@@ -164,8 +164,8 @@
       "mode": "only"
     },
     "endMatchOnCourt": {
-      "backendCommit": "b3c4ec5f636f6772df5a4df21eb5013bbce30405",
-      "deployedAt": "2026-11-24T14:37:39.060Z",
+      "backendCommit": "99654f3267a65bd331c9e3584064187fa64f3183",
+      "deployedAt": "2026-11-24T18:25:54.849Z",
       "result": "success",
       "mode": "only"
     },
