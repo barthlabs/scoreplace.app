@@ -95,7 +95,7 @@ ok(restauraComVazio.length >= 10,
 //    Pegar a PRIMEIRA declaração do arquivo acusa #logo-preview (que declara display:flex mas
 //    ninguém toca) e esconde o alvo real. Vale a declaração mais próxima ANTES do toggle.
 function idDaVariavel(nome, pos) {
-  const decl = new RegExp('\\b' + nome + '\\s*=\\s*document\\.getElementById\\(\\s*[\'"]([^\'"]+)[\'"]', 'g');
+  const decl = new RegExp('\\b' + nome + '\\s*=\\s*(?:document\\.getElementById|read)\\(\\s*[\'"]([^\'"]+)[\'"]', 'g');
   let achado = null, m;
   while ((m = decl.exec(SRC)) !== null) {
     if (m.index > pos) break;
@@ -103,6 +103,9 @@ function idDaVariavel(nome, pos) {
   }
   return achado;
 }
+const categoryPreviewStart = SRC.indexOf('window._updateCategoryPreview =');
+ok(idDaVariavel('preview', SRC.indexOf('preview.style.display', categoryPreviewStart)) === 'category-preview',
+   'o leitor escopado resolve o preview da categoria, sem confundir com o preview do logo');
 // 3) e do id pro atributo style que o template declara
 function styleDoTemplate(id) {
   const m = SRC.match(new RegExp('<[a-z]+[^>]*\\bid="' + id.replace(/[-]/g, '\\-') + '"[^>]*>'));
