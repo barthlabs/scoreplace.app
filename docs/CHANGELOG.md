@@ -1,10 +1,9 @@
-## 2.7.58 — 24/nov/2026 (patrocinadores e configuração por categoria)
+## 2.7.58 — 24/nov/2026 (configuração por categoria e patrocinadores)
 
-- Antes do sorteio, desligar a eliminatória direta ativa a classificatória e revela seus controles. Grupos e Rainha da Praia têm escolhas independentes. Cada categoria pode definir quantidade ou capacidade dos grupos e jogos por atleta ou dupla, com prévia e suporte a um único grupo. As escolhas usam botões e toggles. A quantidade de jogos aceita repetições quando habilitadas, sem ser reduzida silenciosamente; sete partidas por atleta no rodízio de oito geram 14 jogos e 14 geram 28. O modo de teste mantém a configuração escolhida.
-- O salvamento aceita o espelho de formação dos grupos enviado pelo formulário e reconfirma sua coerência no servidor; após o sorteio, um espelho idêntico é uma operação sem escrita, e uma mudança de estrutura continua bloqueada.
-- As artes de patrocinadores podem ocupar a tela No ar inteira ou alternar entre as quadras, uma por vez, com duração e sequência configuráveis. O placar continua atualizando sob a arte; a janela, o monitor e a tela cheia são preservados.
-- No rodízio, cada categoria pode definir suas partidas por atleta e seu destino: classificação direta ou eliminatória. A organização pode configurar cinco partidas e final entre os grupos para as categorias femininas e sete partidas com classificação direta para as masculinas, usando os mesmos controles em qualquer torneio.
-- Os jogos independentes do rodízio mantêm chamadas, encerramentos e placares próprios. A série de três jogos Rei/Rainha preserva seu comando de bloco.
+- Cada categoria de cada classificatória tem três sliders junto à capacidade: grupos, pessoas por grupo e jogos por jogador. O modo comum aplica a mesma regra por número de grupos ou por pessoas por grupo; a personalização conserva regras próprias. A escolha do modo é persistida.
+- O rodízio permite configurar a repetição de parceiros. Quatro pessoas com três jogos sem repetição formam a série Rei/Rainha; oito pessoas com sete jogos têm 14 partidas, duas por rodada em quadras independentes. Outras combinações viáveis usam as quantidades exatas, sem reduzir jogos silenciosamente nem fabricar bloco por coincidência de três partidas na mesma rodada.
+- Simples, duplas fixas e times mantêm suas unidades competitivas. Fases classificatórias sucessivas têm configuração independente, e a eliminatória pode ser desativada antes do sorteio. Criação, edição, espelhos e modelos usam a configuração validada no servidor.
+- Patrocinadores podem alternar em tela inteira ou no espaço de uma quadra por vez, com duração e sequência configuráveis em qualquer torneio. A atualização dos placares conserva janela e tela cheia.
 
 ## 2.7.57 — 24/nov/2026 (escolha de jogos, quadra e ordem da programação)
 

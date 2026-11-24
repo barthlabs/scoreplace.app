@@ -4959,7 +4959,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
           throw _drawFail('failed-precondition', 'Esta eliminatória depende da definição das duplas classificadas.', { tId, matchId });
         }
         if (m.isMonarch === true && !m.isTieBreak && Array.isArray(t.scheduleWindow?.days) &&
-            t.scheduleWindow.days.length === 1 && m.monarchGroup != null && m.round != null && m.category) {
+            t.scheduleWindow.days.length === 1 && m.monarchGroup != null && m.round != null && (m.category || m.rotationSeries)) {
           const series = all.filter(item => item && item.isMonarch === true && !item.isTieBreak &&
             String(item.category || '') === String(m.category) &&
             Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
@@ -5186,7 +5186,7 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
     const all = drawWindow._collectAllMatches(t);
     if (!m || !Array.isArray(all)) throw new HttpsError('failed-precondition', 'Jogo não encontrado na chave completa.');
     const legacyModeEnabled = state.monarchEndWholeBlock === true;
-    const groupRecords = m.isMonarch === true && !m.isTieBreak && m.monarchGroup != null && m.round != null && m.category
+    const groupRecords = m.isMonarch === true && !m.isTieBreak && m.monarchGroup != null && m.round != null && (m.category || m.rotationSeries)
       ? all.filter(item => item && item.isMonarch === true && !item.isTieBreak &&
         String(item.category || '') === String(m.category) && Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
         String(item.round) === String(m.round) && String(item.monarchGroup) === String(m.monarchGroup))
@@ -5235,7 +5235,7 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
       if (seriesRevision !== request.data.expectedRevision) throw new HttpsError('failed-precondition', 'A configuração desta série mudou; atualize a tela.');
       const validMonarchIds = new Set();
       const grouped = new Map();
-      all.filter(item => item && item.isMonarch === true && !item.isTieBreak && item.monarchGroup != null && item.round != null && item.category)
+      all.filter(item => item && item.isMonarch === true && !item.isTieBreak && item.monarchGroup != null && item.round != null && (item.category || item.rotationSeries))
         .forEach(item => {
           const key = [String(item.category), Number(item.phaseIndex || 0), String(item.round), String(item.monarchGroup)].join('|');
           if (!grouped.has(key)) grouped.set(key, new Set());
@@ -5305,7 +5305,7 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
         throw new HttpsError('failed-precondition', 'O jogo precisa estar em quadra e sem resultado.');
       let completedSeries = null;
       if (m.isMonarch === true && !m.isTieBreak && Array.isArray(t.scheduleWindow?.days) &&
-          t.scheduleWindow.days.length === 1 && m.monarchGroup != null && m.round != null && m.category) {
+          t.scheduleWindow.days.length === 1 && m.monarchGroup != null && m.round != null && (m.category || m.rotationSeries)) {
         const series = all.filter(item => item && item.isMonarch === true && !item.isTieBreak &&
           String(item.category || '') === String(m.category) &&
           Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
@@ -6661,6 +6661,8 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const fmt2Present = Object.prototype.hasOwnProperty.call(patch, 'fmt2');
     const requestedTeamSize = Object.prototype.hasOwnProperty.call(patch, 'teamSize') ? patch.teamSize : t.teamSize;
     const rotationRules = (t.fmt2 && t.fmt2.rotationCategoryRules) || (patch.fmt2 && patch.fmt2.rotationCategoryRules);
+    const secondRules = t.fmt2?.eliminatoria?.formationCategoryRules || patch.fmt2?.eliminatoria?.formationCategoryRules ||
+      patch.phases?.[1]?.classification?.rotationCategoryRules;
     const groupRules = t.fmt2?.groupCategoryRules?.length || patch.fmt2?.groupCategoryRules?.length;
     const repeatPolicy = [t.fmt2, patch.fmt2].some(cfg => cfg &&
       (typeof cfg.rotationAllowRepeatPartners === 'boolean' || typeof cfg.classificationSchedule?.allowRepeat === 'boolean'));
@@ -6670,6 +6672,10 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     if (hasDraw && patch.phases && (repeatPolicy || phaseHasRepeatPolicy) &&
         !_configAtiva.igual(t.phases?.[0]?.classification, requestedClassification)) {
       throw new HttpsError('failed-precondition', 'A política de repetição está fixada pelo sorteio.');
+    }
+    if (hasDraw && fmt2Present && (t.fmt2?.classificationSliderMode !== patch.fmt2?.classificationSliderMode ||
+        t.fmt2?.eliminatoria?.formationSliderMode !== patch.fmt2?.eliminatoria?.formationSliderMode)) {
+      throw new HttpsError('failed-precondition','A configuração comum ou por categoria está fixada pelo sorteio.');
     }
     const nextCategories = patch.combinedCategories || t.combinedCategories || [];
     if (hasDraw && groupRules && ((fmt2Present && !_configAtiva.igual(t.fmt2?.groupCategoryRules || [], patch.fmt2?.groupCategoryRules || [])) ||
@@ -6681,8 +6687,14 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         !_configAtiva.igual(t.combinedCategories, nextCategories))) {
       throw new HttpsError('failed-precondition', 'As regras por categoria estão fixadas pelo sorteio.');
     }
-    if ((rotationRules || groupRules) && !hasDraw && patch.combinedCategories) {
-      require('./format-intent-validation-core').validateNewFormatIntent(patch.fmt2 || t.fmt2, HttpsError, t, requestedTeamSize, nextCategories);
+    if (hasDraw && secondRules && ((fmt2Present && !_configAtiva.igual(t.fmt2?.eliminatoria?.formationCategoryRules || [],
+        patch.fmt2?.eliminatoria?.formationCategoryRules || [])) || (patch.phases && !_configAtiva.igual(t.phases?.[1]?.classification,
+        patch.phases?.[1]?.classification)) || !_configAtiva.igual(t.combinedCategories, nextCategories))) {
+      throw new HttpsError('failed-precondition', 'A formação dos classificados está fixada pelo sorteio.');
+    }
+    const population = cat => drawWindow.ScoreplaceSuperEight.categoryPopulation(Object.assign({}, t, patch), cat);
+    if ((rotationRules || groupRules || secondRules) && !hasDraw && patch.combinedCategories) {
+      require('./format-intent-validation-core').validateNewFormatIntent(patch.fmt2 || t.fmt2, HttpsError, t, requestedTeamSize, nextCategories, population);
     }
     if (!hasDraw) {
       const formatGate = require('./format-intent-validation-core');
@@ -6692,7 +6704,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           formatGate.validateCompletedMixedIdentity(t, requestedTeamSize, HttpsError);
           delete patch.fmt2;
         } else {
-          formatGate.validateNewFormatIntent(patch.fmt2, HttpsError, t, requestedTeamSize, nextCategories);
+          formatGate.validateNewFormatIntent(patch.fmt2, HttpsError, t, requestedTeamSize, nextCategories, population);
         }
       } else {
         formatGate.validateHistoricalSinglesIdentity(t, requestedTeamSize, HttpsError);
@@ -6722,12 +6734,16 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     // Uma ficha antiga pode reenviar phases sem a extensão. O intent fresco
     // define a geometria; pontuação e datas continuam com a configuração da fase.
     const phaseRules = patch.phases?.[0]?.classification?.rotationCategoryRules;
-    if (!hasDraw && (groupFormationMirror || rotationRules || phaseRules || groupRules || repeatPolicy || phaseHasRepeatPolicy || patch.phases?.[0]?.classification?.groupCategoryRules) && (groupFormationMirror || fmt2Present || patch.phases || patch.combinedCategories)) {
+    if (!hasDraw && (groupFormationMirror || rotationRules || phaseRules || secondRules || groupRules || repeatPolicy || phaseHasRepeatPolicy || patch.phases?.[0]?.classification?.groupCategoryRules) && (groupFormationMirror || fmt2Present || patch.phases || patch.combinedCategories)) {
       const intent = patch.fmt2 || t.fmt2;
       if (!intent) throw new HttpsError('invalid-argument', 'As regras de rodízio exigem a configuração de formato.');
       const projected = drawWindow.FORMAT2.compileToPhases(intent, { sport:patch.sport || t.sport,
         categories:nextCategories, resultEntry:patch.resultEntry || t.resultEntry,
         lateEnrollment:patch.lateEnrollment || t.lateEnrollment, newMatchups:patch.newMatchups ?? t.newMatchups });
+      if (secondRules && patch.phases && !_configAtiva.igual(projected.phases[1]?.classification?.rotationCategoryRules || [],
+          patch.phases[1]?.classification?.rotationCategoryRules || [])) {
+        throw new HttpsError('invalid-argument','As regras da formação dos classificados divergem da configuração da fase.');
+      }
       const supplied = patch.phases || t.phases || [];
       patch.phases = projected.phases.map((phase, i) => {
         const copy = Object.assign({}, phase);
@@ -7420,13 +7436,15 @@ function _materializeInterleavedReadyCategories(t, tId, nowIso) {
       continue;
     }
     const pools = tieRuntime.pools.filter(pool => categoryOf(pool.group) === category);
-    const rotation = currentCfg.classification && currentCfg.classification.partnerRotation === 'unique_8' &&
+    const rotation = currentCfg.classification && ['groups','unique_8'].includes(currentCfg.classification.partnerRotation) &&
       currentCfg.classification.rotationCategoryRules;
     const rule = rotation && drawWindow.FORMAT2.rotationRuleForCategory(currentCfg.classification, category);
     if (!pools.length || (!rotation && (!expectedGroups[category] || pools.length !== expectedGroups[category]))) continue;
     const done = pools.every(pool => {
       const matches = (pool.group && pool.group.matches) || [];
-      const expected = rotation ? 2 * (rule ? rule.rounds : currentCfg.classification.rotationRounds) : 3;
+      const expected = currentCfg.classification?.partnerRotation === 'groups' && rule
+        ? (pool.group?.players || []).length * rule.rounds / 4
+        : rotation ? 2 * (rule ? rule.rounds : currentCfg.classification.rotationRounds) : 3;
       return matches.length === expected && matches.every(m => m && (m.winner || m.isBye));
     });
     if (!done) continue;

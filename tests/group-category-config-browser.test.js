@@ -25,42 +25,37 @@ const { chromium } = require('@playwright/test');
     let cfg = await page.evaluate(() => window._f2GetConfig());
     assert.equal(cfg.classifAtiva, true); assert.equal(cfg.eliminatoria.ativa, false);
     await page.evaluate(() => {window._f2Disputa('individual');window._f2ClassificationStructure('groups');});
-    await page.locator('#f2-group-formation-mode [data-value="count"]').click();
-    await page.locator('#f2-group-formation-value').fill('1');
-    await page.locator('#f2-group-formation-value').press('Tab');
-    assert.deepEqual(await page.evaluate(() => window._f2GetConfig().groupFormation), {mode:'count',value:1});
-    await page.locator('#f2-group-category-enabled').check();
+    async function adjust(kind,index,value) {
+      await page.locator('#f2-rotation-'+kind+'-'+index).evaluate((input,n)=>{
+        input.value=n; input.dispatchEvent(new Event('input')); input.dispatchEvent(new Event('change'));
+      },value);
+    }
     for (const [i,count,games] of [[0,2,3],[1,1,5]]) {
-      await page.locator('#f2-group-mode-'+i+' [data-value="count"]').click();
-      await page.locator('#f2-group-value-'+i).fill(String(count));
-      await page.locator('#f2-group-value-'+i).press('Tab');
-      await page.locator('#f2-group-games-'+i).fill(String(games));
-      await page.locator('#f2-group-games-'+i).press('Tab');
+      await adjust('groups',i,count); await adjust('games',i,games);
     }
     cfg = await page.evaluate(() => window._f2GetConfig());
     assert.deepEqual(cfg.groupCategoryRules,[
-      {category:'Alpha',groupFormation:{mode:'count',value:2},gamesPerUnit:3},
-      {category:'Beta',groupFormation:{mode:'count',value:1},gamesPerUnit:5}
+      {category:'Alpha',groupFormation:{mode:'count',value:2},gamesPerUnit:3,allowRepeat:false},
+      {category:'Beta',groupFormation:{mode:'count',value:1},gamesPerUnit:5,allowRepeat:false}
     ]);
-    assert.match(await page.locator('#f2-group-preview-0').innerText(), /18/);
-    assert.match(await page.locator('#f2-group-preview-1').innerText(), /20/);
+    assert.match(await page.locator('#f2-rotation-preview-0').innerText(), /18/);
+    assert.match(await page.locator('#f2-rotation-preview-1').innerText(), /20/);
     await page.evaluate(saved => {
       window.fixture.fmt2=saved;
       window._f2MountInForm(document.querySelector('main'),fixture.sport,saved,fixture);
     },cfg);
-    assert.equal(await page.locator('#f2-group-value-1').inputValue(),'1');
-    assert.equal(await page.locator('#f2-group-games-1').inputValue(),'5');
+    assert.equal(await page.locator('#f2-rotation-groups-1').inputValue(),'1');
+    assert.equal(await page.locator('#f2-rotation-games-1').inputValue(),'5');
     assert.equal(await page.evaluate(() => window.fixture.testModeEnabled),true);
     const phases=await page.evaluate(() => window.FORMAT2.compileToPhases(window._f2GetConfig(),
       {sport:fixture.sport,categories:fixture.combinedCategories}).phases);
     assert.equal(phases.length,1); assert.equal(phases[0].kind,'classification');
     assert.deepEqual(phases[0].classification.groupCategoryRules,cfg.groupCategoryRules);
     assert.equal(await page.locator('main select').count(),0,'classificatória usa botões e toggles');
-    await page.locator('#f2-group-repeat-0').check();
-    await page.locator('#f2-group-games-0').fill('14');
-    await page.locator('#f2-group-games-0').press('Tab');
-    assert.equal(await page.locator('#f2-group-games-0').inputValue(),'14');
-    assert.match(await page.locator('#f2-group-preview-0').innerText(),/84 jogos/);
+    await page.locator('#f2-rotation-partners-0').check();
+    await adjust('games',0,14);
+    assert.equal(await page.locator('#f2-rotation-games-0').inputValue(),'14');
+    assert.match(await page.locator('#f2-rotation-preview-0').innerText(),/84 jogos/);
     assert.equal(await page.evaluate(()=>window._f2GetConfig().groupCategoryRules[0].allowRepeat),true);
 
     await page.evaluate(() => {
@@ -73,13 +68,9 @@ const { chromium } = require('@playwright/test');
     assert.deepEqual(cfg.groupCategoryRules,[]); assert.equal(cfg.groupFormation,undefined);
     assert.equal(cfg.eliminatoria.ativa,false);
     await page.evaluate(() => window._f2ClassificationStructure('groups'));
-    await page.locator('#f2-group-category-enabled').check();
-    await page.locator('#f2-group-mode-0 [data-value="people"]').click();
-    await page.locator('#f2-group-value-0').fill('8');
-    await page.locator('#f2-group-value-0').press('Tab');
+    await adjust('size',0,8);
     assert.deepEqual(await page.evaluate(()=>window._f2GetConfig().groupCategoryRules[0].groupFormation),{mode:'size',value:4});
-    await page.locator('#f2-group-value-0').fill('7');
-    await page.locator('#f2-group-value-0').press('Tab');
+    await page.evaluate(()=>window._f2RotationSlider(0,0,'size',7));
     assert.deepEqual(await page.evaluate(()=>window._f2GetConfig().groupCategoryRules[0].groupFormation),{mode:'size',value:4},
       'capacidade ímpar em pessoas não é arredondada para duplas silenciosamente');
     await page.evaluate(()=>{
@@ -93,13 +84,11 @@ const { chromium } = require('@playwright/test');
         phase.category='Solo';return window._phasesEngine.genGroupsFromPool(fixture.participants,phase,'browser-fixture').matches.length;
       };
     });
-    await page.locator('#f2-rotation-rounds').fill('7');await page.locator('#f2-rotation-rounds').press('Tab');
-    assert.equal(await page.evaluate(()=>window.countMatches()),14);
-    await page.locator('#f2-rotation-repeat').check();
-    await page.locator('#f2-rotation-rounds').fill('14');await page.locator('#f2-rotation-rounds').press('Tab');
-    assert.equal(await page.locator('#f2-rotation-rounds').inputValue(),'14');
+    await adjust('games',0,7); assert.equal(await page.evaluate(()=>window.countMatches()),14);
+    await page.locator('#f2-rotation-partners-0').check(); await adjust('games',0,14);
+    assert.equal(await page.locator('#f2-rotation-games-0').inputValue(),'14');
     assert.equal(await page.evaluate(()=>window.countMatches()),28);
-    assert.equal(await page.evaluate(()=>window._f2GetConfig().rotationAllowRepeatPartners),true);
+    assert.equal(await page.evaluate(()=>window._f2GetConfig().rotationCategoryRules[0].allowRepeatPartners),true);
     console.log('✓ Chromium: 7/14 partidas por atleta geram 14/28 jogos, sem menus suspensos');
     console.log('✓ Chromium: eliminatória desativada, grupos 2/1, jogos 3/5, reabertura, Rainha independente e pessoas/duplas');
   } finally {await browser.close();}

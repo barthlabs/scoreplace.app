@@ -79,6 +79,7 @@ window._computeMonarchStandings = function(group, t, category) {
   function _monUid(name, uid) { return uid || _matchN2u[name] || _n2uMon[name] || null; }
   function _monKey(name, uid, slotId) {
     if (_isGhostMon(name, slotId)) return 'ghost:' + slotId;
+    if (!uid && String(slotId || '').startsWith('manual:')) return slotId;
     var u = _monUid(name, uid);
     return u ? ('uid:' + u) : ('name:' + name);
   }
@@ -98,8 +99,9 @@ window._computeMonarchStandings = function(group, t, category) {
       };
       return null;   // null preservado: quem chama pra CREDITAR jogo continua pulando
     }
-    var k = _monKey(name, uid);
-    var _u = _monUid(name, uid);
+    var k = _monKey(name, uid, slotId);
+    var manualId = !uid && String(slotId || '').startsWith('manual:') ? slotId.slice(7) : null;
+    var _u = manualId ? null : _monUid(name, uid);
     // O NOME DA LINHA SAI DO PERFIL, o rótulo é só reserva. O seed do elenco já fazia isso
     // (via _nomeVivoMon), mas quem entra por AQUI — uid conhecido só pelos jogos, ou seja
     // grupo sem `playersUids` — ficava com o rótulo GRAVADO no dia do sorteio. Medido no
@@ -109,7 +111,7 @@ window._computeMonarchStandings = function(group, t, category) {
     var _nm = (_u && typeof window !== 'undefined' && typeof window._displayNameForUid === 'function')
       ? (window._displayNameForUid(_u, name) || name) : name;
     if (!stats[k]) stats[k] = {
-      key: k, uid: _u, name: _nm,
+      key: k, uid: _u, name: _nm, ...(manualId ? {manualParticipantId:manualId} : {}),
       wins: 0, losses: 0, played: 0, pointsFor: 0, pointsAgainst: 0,
       setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, tiebreaksLost: 0
     };

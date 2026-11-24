@@ -5,7 +5,7 @@
 function advance(tournament, completed, matches, nowIso, occupancy, timing, released) {
   if (!completed || completed.isMonarch !== true || completed.isTieBreak ||
       !Array.isArray(tournament?.scheduleWindow?.days) || tournament.scheduleWindow.days.length !== 1 ||
-      completed.monarchGroup == null || completed.round == null || !completed.category ||
+      completed.monarchGroup == null || completed.round == null || (!completed.category && !completed.rotationSeries) ||
       !completed.court || !completed.courtCalledAt || !occupancy.isFinished(completed) ||
       released && released[String(completed.id)]) return null;
   const unique = new Map();

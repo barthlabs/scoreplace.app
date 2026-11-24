@@ -172,7 +172,7 @@ async function formRoundTrip(t) {
   try {
     const page = await browser.newPage();
     await page.setContent('<main id="f2-config-mount"></main>');
-    for (const file of ['sport-rules', 'standings-core', 'format2', 'tournaments-categories',
+    for (const file of ['sport-rules', 'standings-core', 'super-eight-core', 'format2', 'tournaments-categories',
       'bracket-model', 'chaves', 'chaves-adapter', 'phases-engine', 'tournaments-utils', 'format2-ui']) {
       await page.addScriptTag({path:require.resolve('../js/views/' + file + '.js')});
     }
@@ -181,23 +181,24 @@ async function formRoundTrip(t) {
       delete window.fixture.fmt2.rotationCategoryRules;
       window._f2MountInForm(document.querySelector('main'), t.sport, window.fixture.fmt2, window.fixture);
     }, t);
-    await page.getByLabel('Personalizar partidas e classificação por categoria').check();
-    const fields = page.locator('#f2-rotation-categories fieldset');
-    await fields.nth(0).getByRole('spinbutton').fill('5');
-    await fields.nth(0).getByRole('spinbutton').press('Tab');
-    await fields.nth(1).getByRole('spinbutton').fill('7');
-    await fields.nth(1).getByRole('spinbutton').press('Tab');
+    async function degree(index,value) {
+      await page.locator('#f2-rotation-games-'+index).evaluate((el,n)=>{
+        el.value=n;el.dispatchEvent(new Event('input'));el.dispatchEvent(new Event('change'));
+      },value);
+    }
+    await degree(0,5); await degree(1,7);
+    const fields=page.locator('#f2-rotation-destinations fieldset');
     await fields.nth(1).locator('[data-value="ranking"]').click();
-    const saved = await page.evaluate(() => window._f2GetConfig());
-    assert.deepEqual(saved.rotationCategoryRules, t.fmt2.rotationCategoryRules);
+    const saved=await page.evaluate(()=>window._f2GetConfig());
+    assert.deepEqual(saved.rotationCategoryRules.map(({category,rounds,destination})=>({category,rounds,destination})),t.fmt2.rotationCategoryRules);
     assert.match(await page.locator('main').innerText(), /35 jogos/);
     await page.evaluate(saved => {
       window._f2MountInForm(document.querySelector('main'), window.fixture.sport, saved,
         {...window.fixture, matches:[{phaseIndex:0}], fmt2:saved});
     }, saved);
-    assert.equal(await fields.nth(1).getByRole('spinbutton').inputValue(), '7');
+    assert.equal(await page.locator('#f2-rotation-games-1').inputValue(), '7');
     assert.equal(await fields.nth(1).locator('[data-value="ranking"]').getAttribute('aria-pressed'), 'true');
-    assert(await fields.nth(1).getByRole('spinbutton').isDisabled());
+    assert(await page.locator('#f2-rotation-games-1').isDisabled());
     assert(await fields.nth(0).locator('[data-value="elimination"]').isDisabled());
     console.log('✓ Chromium: personalizar categorias, estimar 35 jogos, salvar, reabrir e congelar');
   } finally { await browser.close(); }

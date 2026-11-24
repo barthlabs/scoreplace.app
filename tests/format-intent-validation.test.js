@@ -206,19 +206,11 @@ assert.match(uiBox.innerHTML, /Número de grupos[\s\S]*?Pessoas por grupo/,
 const rotationCfg = uiHarness.window.FORMAT2.defaultConfig('Beach Tennis');
 rotationCfg.parceria = 'rotation_groups_8';
 uiHarness.window._f2MountInForm(uiBox, 'Beach Tennis', rotationCfg, { id: 'rotation-groups-test' });
-assert.match(uiBox.innerHTML, /id="f2-group-formation-mode"[\s\S]*?aria-pressed="true" data-value="size"/,
-  'rodízio A–H mantém a escolha genérica de formação visível, com oito pessoas por grupo como padrão');
-assert.match(uiBox.innerHTML, /O rodízio A–H exige que os grupos resultantes tenham exatamente 8 atletas/,
-  'a restrição de oito atletas pertence ao rodízio A–H, não à formação geral dos grupos');
-assert.match(uiBox.innerHTML, /window\._f2TeamForm\('rotation_groups_8'\)[^>]*>Sortear parceiro a cada rodada/,
-  'a opção de duplas descreve o algoritmo de rodízio sem chamar a formação geral de grupos de oito');
-assert.match(uiBox.innerHTML, /Partidas por atleta em cada grupo[\s\S]*?value="5"/,
-  'a formação de grupos continua separada do número configurável de partidas por atleta');
-uiHarness.window._f2GroupFormation('count', '4');
-assert.equal(uiHarness.window._f2GetConfig().groupFormation.mode, 'count',
-  'rodízio A–H permite escolher a quantidade de grupos');
-assert.equal(uiHarness.window._f2GetConfig().groupFormation.value, 4,
-  'a escolha de formação persiste na configuração do rodízio');
+assert.match(uiBox.innerHTML, /id="f2-rotation-size-0"[^>]*value="8"/);
+assert.match(uiBox.innerHTML, /id="f2-rotation-games-0"[^>]*value="5"/);
+uiHarness.window._f2RotationSlider(0,0,'groups',4);
+assert.equal(uiHarness.window._f2GetConfig().rotationCategoryRules[0].groupFormation.mode,'count');
+assert.equal(uiHarness.window._f2GetConfig().rotationCategoryRules[0].groupFormation.value,4);
 uiHarness.window._f2MountInForm(uiBox, 'Beach Tennis', uiCfg, { id: 'future-test' });
 assert.equal((uiBox.innerHTML.match(/onchange="window\._f2TeamCompetition\(this\.checked\)"/g) || []).length, 1,
   'a decisão de ter times aparece uma vez dentro da classificatória');

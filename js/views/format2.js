@@ -574,7 +574,10 @@
       if (typeof first.classification?.rotationAllowRepeatPartners === 'boolean') cfg.rotationAllowRepeatPartners = first.classification.rotationAllowRepeatPartners;
       cfg.rodadas.n = parseInt(first.rotationRounds || tournament.rotationRounds || 5, 10) || 5;
     }
-    if (cfg.parceria === 'super_eight') cfg.superEightDrawMode = first.superEightDrawMode || tournament.superEightDrawMode || 'rounds';
+    if (classif.partnerRotation === 'groups') {
+      cfg.parceria = 'rotation_groups';
+      cfg.rotationCategoryRules = classif.rotationCategoryRules;
+    } else if (cfg.parceria === 'super_eight') cfg.superEightDrawMode = first.superEightDrawMode || tournament.superEightDrawMode || 'rounds';
     else if (pairing.strategy === 'monarch_groups') cfg.parceria = 'rei_rainha';
     else if (cfg.disputa === 'dupla') cfg.parceria = pairing.entryMode === 'fixed' ? 'fixa' : 'sorteio_rodada';
     if (cfg.grupos === 1 && classif.structure !== 'groups') {
@@ -709,18 +712,18 @@
     if (!isDupla) {
       out.parceria = null;
     } else {
-      if (['fixa', 'rei_rainha', 'sorteio_rodada', 'super_eight', 'rotation_groups_8'].indexOf(out.parceria) === -1) out.parceria = 'fixa';
+      if (['fixa', 'rei_rainha', 'sorteio_rodada', 'super_eight', 'rotation_groups_8', 'rotation_groups'].indexOf(out.parceria) === -1) out.parceria = 'fixa';
       // Rei/Rainha (grupos de 4 rotativos) só faz sentido com 1 grupo. 2+ grupos ⇒ dupla fixa
       // (montadas ou sorteadas). Pedido do dono: "rei/rainha só aparece se for 1 grupo".
-      if (!umGrupo && out.parceria !== 'fixa' && out.parceria !== 'rotation_groups_8') out.parceria = 'fixa';
+      if (!umGrupo && out.parceria !== 'fixa' && !isGroupRotation(out.parceria)) out.parceria = 'fixa';
     }
     if (out.groupCategoryRules && !Array.isArray(out.groupCategoryRules)) delete out.groupCategoryRules;
     if (out.groupCategoryRules && out.groupCategoryRules.length && (out.classifAtiva === false ||
         out.teamCompetition.enabled || (isDupla && !['fixa', 'rotation_groups_8'].includes(out.parceria)))) {
       out.groupCategoryRules = [];
     }
-    if (out.parceria !== 'rotation_groups_8' || out.teamCompetition.enabled || out.classifAtiva === false || !Array.isArray(out.rotationCategoryRules) || !out.rotationCategoryRules.length)
-      delete out.rotationCategoryRules;
+    if (!isGroupRotation(out.parceria) || out.teamCompetition.enabled || out.classifAtiva === false || !Array.isArray(out.rotationCategoryRules) || !out.rotationCategoryRules.length)
+      if (cfg.rotationCategoryRules === null) out.rotationCategoryRules = null; else delete out.rotationCategoryRules;
     if (out.formacaoDupla !== 'manual' && out.formacaoDupla !== 'sorteio') out.formacaoDupla = 'sorteio';
     out.manualPairingOpen = !!out.manualPairingOpen;
     if (['organizer_only', 'athletes_only', 'open'].indexOf(out.manualPairingPolicy) < 0) {
@@ -729,7 +732,7 @@
     out.manualPairingOpen = out.manualPairingPolicy !== 'organizer_only';
 
     // Pontuação individual quando singles OU parceria rotativa.
-    out._scoreBy = (!isDupla || out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada' || out.parceria === 'super_eight' || out.parceria === 'rotation_groups_8')
+    out._scoreBy = (!isDupla || out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada' || out.parceria === 'super_eight' || isGroupRotation(out.parceria))
       ? 'individual' : 'dupla';
     if ((out._scoreBy !== 'individual' && !(out.eliminatoria && out.eliminatoria.openReiRainha)) ||
         (out.classifAtiva !== false && out.teamCompetition && out.teamCompetition.enabled)) {
@@ -768,7 +771,7 @@
     // explícita do organizador (true/false) sempre vence. Só decide quando ninguém decidiu.
     if (out.rodadas.allowSelfDeactivation == null) out.rodadas.allowSelfDeactivation = (out.rodadas.n !== 1);
     else out.rodadas.allowSelfDeactivation = (out.rodadas.allowSelfDeactivation !== false);
-    if (out.parceria === 'super_eight' || out.parceria === 'rotation_groups_8') out.rodadas.allowSelfDeactivation = false;
+    if (out.parceria === 'super_eight' || isGroupRotation(out.parceria)) out.rodadas.allowSelfDeactivation = false;
     out.superEightDrawMode = out.superEightDrawMode === 'single' ? 'single' : 'rounds';
     out.rodadas._intervalAuto = (out.rodadas._intervalAuto !== false); // sugere intervalo até o user editar
 
@@ -778,7 +781,7 @@
     out.tieSinglesMargin = Number(out.tieSinglesMargin) === 2 ? 2 : 1;
     // Escopo da classificação: por grupo × geral. Com 1 grupo é sempre geral (não há grupos).
     if (out.classifScope !== 'overall' && out.classifScope !== 'per_group') out.classifScope = 'per_group';
-    if (umGrupo && out.parceria !== 'rotation_groups_8' && !(out.groupCategoryRules && out.groupCategoryRules.length)) out.classifScope = 'overall';
+    if (umGrupo && !isGroupRotation(out.parceria) && !(out.groupCategoryRules && out.groupCategoryRules.length)) out.classifScope = 'overall';
 
     var e = out.eliminatoria || {};
     e.ativa = !!e.ativa; // v4.4.32: pode desligar SEMPRE (grupos ou pontos corridos); default = defaultConfig
@@ -929,7 +932,7 @@
     if (cfg.disputa === 'dupla') {
       if (cfg.parceria === 'super_eight') parts.push('Super 8 individual · todas as parcerias');
       else if (cfg.rotationCategoryRules) {
-        parts.push('Rodízio A–H · ' + cfg.rotationCategoryRules.map(function (rule) {
+        parts.push((cfg.parceria === 'rotation_groups' ? 'Rodízio · ' : 'Rodízio A–H · ') + cfg.rotationCategoryRules.map(function (rule) {
           return rule.category + ' (' + rule.rounds + ' partidas por atleta, ' +
             (rule.destination === 'ranking' ? 'ranking individual' : 'eliminatória') + ')';
         }).join(' · '));
@@ -938,7 +941,7 @@
       else if (cfg.parceria === 'sorteio_rodada') parts.push('sorteio/rodada');
       else parts.push(cfg.formacaoDupla === 'manual' ? 'duplas montadas' : 'duplas sorteadas');
     }
-    if (resolved.groups === 1 && cfg.parceria !== 'rotation_groups_8' && !(cfg.groupCategoryRules && cfg.groupCategoryRules.length)) {
+    if (resolved.groups === 1 && !isGroupRotation(cfg.parceria) && !(cfg.groupCategoryRules && cfg.groupCategoryRules.length)) {
       parts.push(cfg.rodadas.modo === 'fixo' ? (cfg.rodadas.n + ' rodadas') : ('todos ' + (resolved.turnos === 'ida_volta' ? 'ida/volta' : 'ida')));
     }
     if (cfg.eliminatoria.ativa) parts.push('elim ' + cfg.eliminatoria.linhas + (cfg.eliminatoria.linhas > 1 ? ' linhas' : ' linha') + ' · top ' + cfg.classificados);
@@ -1067,8 +1070,22 @@
   }
 
   // A prévia e o sorteio recebem a mesma população de unidades de jogo da categoria.
+  function isGroupRotation(partnership) {
+    return partnership === 'rotation_groups' || partnership === 'rotation_groups_8';
+  }
   function groupPlanForCategory(config, category, units, equalOnly) {
     var structure = config.classification || config;
+    if (config.parceria === 'rotation_groups' || structure.partnerRotation === 'groups') {
+      var rotationRule = (structure.rotationCategoryRules || []).find(function (r) { return r.category === (category || ''); });
+      var formation = rotationRule && rotationRule.groupFormation;
+      var layout = resolveGroupFormation(formation, units, 1);
+      var assessment = assessGroupSchedule(units, layout.groups, null, false, false);
+      var error = !rotationRule ? 'A categoria precisa de uma regra de rodízio.'
+        : !window.ScoreplaceSuperEight ? 'Aguardando as regras de rodízio.'
+        : window.ScoreplaceSuperEight.formationError(rotationRule, units);
+      return { formation:formation, assessment:assessment, schedule:null, sizes:layout.sizes,
+        matches:error || !units ? 0 : units * rotationRule.rounds / 4, error:error };
+    }
     var rules = structure.groupCategoryRules || [];
     var rule = rules.find(function (entry) { return entry.category === category; });
     var formation = rule ? rule.groupFormation : config.groupFormation;
@@ -1105,6 +1122,7 @@
     var isDupla = cfg.disputa === 'dupla';
     var teamSize = teamSizeFor(cfg.disputa);
     var rotationCategories = Array.isArray(opts.categories) ? opts.categories : [];
+    if (cfg.parceria === 'rotation_groups' && !rotationCategories.length) rotationCategories = [''];
     var hasElimination = cfg.eliminatoria.ativa && !(cfg.rotationCategoryRules && rotationCategories.length &&
       rotationCategories.every(function (category) {
         var rule = rotationRuleForCategory(cfg, category);
@@ -1189,7 +1207,7 @@
     // "Nº de rodadas" (modo 'fixo') = Liga rodada-a-rodada com agendamento — vale p/ singles E
     // dupla fixa (pontos corridos com nº determinado de rodadas). Todos-contra-todos = grupos.
     var useLiga = isDupla
-      ? (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada' || cfg.parceria === 'super_eight' || cfg.parceria !== 'rotation_groups_8' && cfg.rodadas.modo === 'fixo')
+      ? (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada' || cfg.parceria === 'super_eight' || !isGroupRotation(cfg.parceria) && cfg.rodadas.modo === 'fixo')
       : (cfg.rodadas.modo === 'fixo');
 
     if (useLiga) {
@@ -1265,8 +1283,8 @@
       top.gruposCount = _teamGroupCount;
       if (cfg.groupFormation) top.groupFormation = cfg.groupFormation;
       top.gruposClassified = cfg.classificados;
-      if (cfg.parceria === 'rotation_groups_8') {
-        top.partnerRotation = 'unique_8';
+      if (isGroupRotation(cfg.parceria)) {
+        top.partnerRotation = cfg.parceria === 'rotation_groups' ? 'groups' : 'unique_8';
         top.rotationRounds = cfg.rodadas.n;
       }
       if (cfg.teamCompetition && cfg.teamCompetition.enabled) top.teamCompetition = cfg.teamCompetition;
@@ -1275,8 +1293,8 @@
       top.turnos = _turns.turnos;   // _buildPhase0Cfg propaga p/ genGroupsFromPool
       if (idaVolta) top.ligaTurnos = 2;
       var _classification = { structure: 'groups' };
-      if (cfg.parceria === 'rotation_groups_8') {
-        _classification.partnerRotation = 'unique_8';
+      if (isGroupRotation(cfg.parceria)) {
+        _classification.partnerRotation = top.partnerRotation;
         if (typeof cfg.rotationAllowRepeatPartners === 'boolean') _classification.rotationAllowRepeatPartners = cfg.rotationAllowRepeatPartners;
         _classification.rotationRounds = cfg.rodadas.n;
         if (cfg.rotationCategoryRules) _classification.rotationCategoryRules = cfg.rotationCategoryRules;
@@ -1284,7 +1302,7 @@
       if (cfg.groupCategoryRules && cfg.groupCategoryRules.length) _classification.groupCategoryRules = cfg.groupCategoryRules;
       if (cfg.classificationSchedule) _classification.schedule = cfg.classificationSchedule;
       p0 = Object.assign(_phaseBase(re), {
-        kind: 'classification', classification: _classification, name: cfg.parceria === 'rotation_groups_8' ? 'Fase de Grupos' : (_teamGroupCount === 1 ? 'Pontos Corridos' : 'Fase de Grupos'),
+        kind: 'classification', classification: _classification, name: isGroupRotation(cfg.parceria) ? 'Fase de Grupos' : (_teamGroupCount === 1 ? 'Pontos Corridos' : 'Fase de Grupos'),
         formatCode: 'classification_groups',
         drawMode: 'sorteio', reiRainha: false,
         gruposCount: _teamGroupCount, gruposClassified: cfg.classificados,
@@ -1294,7 +1312,7 @@
         turnos: _turns.turnos,
         _doubleRR: _turns.turnos === 'ida_volta',
         source: { type: 'enrollment' },
-        fixedPairs: isDupla && cfg.parceria !== 'rotation_groups_8', // rodízio pontua atletas individualmente
+        fixedPairs: isDupla && !isGroupRotation(cfg.parceria), // rodízio pontua atletas individualmente
         teamCompetition: (cfg.teamCompetition && cfg.teamCompetition.enabled) ? cfg.teamCompetition : null,
         pairingStrategy: 'top', grandFinal: true
       });
@@ -1328,7 +1346,7 @@
     // MÉRITO (é isso que dá as cabeças de chave).
     if (hasElimination && cfg.eliminatoria.openReiRainha && isDupla) {
       var eRR = cfg.eliminatoria;
-      var perGroupRR = (cfg.parceria === 'rotation_groups_8' || cfg.grupos > 1 || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) && cfg.classifScope === 'per_group';
+      var perGroupRR = (isGroupRotation(cfg.parceria) || cfg.grupos > 1 || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) && cfg.classifScope === 'per_group';
       var destsRR = _lineDests(eRR.linhas);
       var mapClassif = !!eRR.qualifyAll
         ? destsRR.map(function (dst, di) { return { dest: dst, rankFrom: 1, rankTo: 999, label: (eRR.nomes && eRR.nomes[di]) || '' }; })
@@ -1343,6 +1361,10 @@
         // Rei/Rainha em escopo geral = ranking plano (mesma razão do ramo comum abaixo)
         flatOverall: (cfg.parceria === 'rei_rainha' && !perGroupRR)
       }, opts);
+      if (eRR.formationCategoryRules) Object.assign(parEmpilhado[0], {
+        name:'Formação dos classificados', classification:{structure:'groups',partnerRotation:'groups',rotationCategoryRules:eRR.formationCategoryRules},
+        formatCode:'classification_groups', drawMode:'sorteio',reiRainha:false,fixedPairs:false
+      });
       phases.push(parEmpilhado[0]);   // formação
       phases.push(parEmpilhado[1]);   // eliminatória (lê a formação, fromPhaseOffset 1)
       if (opts.lateEnrollment) phases[0].lateEnrollment = opts.lateEnrollment;
@@ -1370,7 +1392,7 @@
       // grupo" não significa nada — aí continua valendo o ranking geral plano.
       // [[project_formato_da_partida_por_fase]] · [[feedback_behavior_is_pure_function_of_config]]
       var _rrRodadaUnica = (cfg.parceria === 'rei_rainha') && (((cfg.rodadas || {}).n || 1) === 1);
-      var perGroup = _rrRodadaUnica || ((cfg.parceria === 'rotation_groups_8' || cfg.grupos > 1 || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) && cfg.classifScope === 'per_group');
+      var perGroup = _rrRodadaUnica || ((isGroupRotation(cfg.parceria) || cfg.grupos > 1 || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) && cfg.classifScope === 'per_group');
       var nLines = e.linhas;
       var dests = _lineDests(nLines);
       var topN = cfg.classificados;            // quantos classificam = valor do SLIDER
@@ -1586,6 +1608,7 @@
     assessGroupSchedule: assessGroupSchedule,
     resolveTurnos: resolveTurnos,
     resolveGroupFormation: resolveGroupFormation,
+    isGroupRotation:isGroupRotation,
     rotationRuleForCategory: rotationRuleForCategory,
     groupPlanForCategory: groupPlanForCategory,
     superEightVariant: superEightVariant

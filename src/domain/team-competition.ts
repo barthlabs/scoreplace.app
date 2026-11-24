@@ -34,6 +34,7 @@ namespace ScoreplaceTeamCompetition {
     schedule: {
       enabled: boolean;
       teamsPerGroup: number;
+      groupFormationByCategory?: Record<string, {mode:'count'|'size'; value:number}>;
       gamesPerPair: number;
       /** @deprecated Migração semântica para gamesPerPair. */
       gamesPerTeam: number;
@@ -174,12 +175,18 @@ namespace ScoreplaceTeamCompetition {
       if (!key || Object.prototype.hasOwnProperty.call(pairsPerTeamByCategory, key)) return;
       pairsPerTeamByCategory[key] = Math.max(1, Math.min(64, Math.floor(number(rawPairsByCategory[category], 1))));
     });
+    const formations: NonNullable<Config['schedule']['groupFormationByCategory']> = Object.create(null);
+    Object.entries(record(schedule.groupFormationByCategory)).forEach(([category, entry]) => {
+      const form = record(entry), value = Number(form.value);
+      if ((form.mode === 'count' || form.mode === 'size') && Number.isInteger(value) &&
+          value >= (form.mode === 'count' ? 1 : 2) && value <= 128) formations[category] = {mode:form.mode,value};
+    });
     const rawGamesByCategory = record(schedule.gamesPerPairByCategory);
     const gamesPerPairByCategory: Record<string, number> = {};
     Object.keys(rawGamesByCategory).slice(0, 128).forEach((category) => {
       const key = text(category).slice(0, 160);
-      if (!key || Object.prototype.hasOwnProperty.call(gamesPerPairByCategory, key)) return;
-      gamesPerPairByCategory[key] = Math.min(teamsPerGroup - 1, Math.max(1,
+      if ((!key && !formations[key]) || Object.prototype.hasOwnProperty.call(gamesPerPairByCategory, key)) return;
+      gamesPerPairByCategory[key] = Math.min(formations[key] ? 128 : teamsPerGroup - 1, Math.max(1,
         Math.floor(number(rawGamesByCategory[category], gamesPerPair))));
     });
     // Com duas ou mais duplas do mesmo time na mesma categoria, um confronto
@@ -209,6 +216,7 @@ namespace ScoreplaceTeamCompetition {
       schedule: {
         enabled: Object.keys(schedule).length > 0 && schedule.enabled !== false,
         teamsPerGroup,
+        ...(Object.keys(formations).length ? {groupFormationByCategory:formations} : {}),
         gamesPerPair,
         // Espelho transitório: os leitores antigos continuam recebendo o mesmo
         // número durante a migração, mas nenhum código novo decide por ele.

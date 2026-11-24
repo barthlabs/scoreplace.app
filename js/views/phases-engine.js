@@ -1244,7 +1244,9 @@
   // inclusive quando a última fase do torneio pertence às outras categorias.
   function rotationRankingPools(t) {
     var groups = prevPhaseGroups(t);
-    return (t.combinedCategories || []).flatMap(function (category, index) {
+    var categories = t.combinedCategories || [];
+    if (!categories.length && t.phases?.[0]?.classification?.partnerRotation === 'groups') categories = [''];
+    return categories.flatMap(function (category, index) {
       if (!categoryEndsInRanking(t, category)) return [];
       var matches = groups.filter(function (g) { return _groupCategory(g) === category; })
         .flatMap(function (g) { return g.matches || []; });
@@ -1554,18 +1556,20 @@
     pool = pool || [];
     if (!pool.length) return { matches: [], groups: [] };
 
-    var rotationCfg = phaseCfg && phaseCfg.classification && phaseCfg.classification.partnerRotation === 'unique_8'
+    var rotationCfg = phaseCfg && phaseCfg.classification && ['unique_8','groups'].includes(phaseCfg.classification.partnerRotation)
       ? phaseCfg.classification : null;
+    var flexible = rotationCfg && rotationCfg.partnerRotation === 'groups';
     var nGroups = rotationCfg ? Math.ceil(pool.length / 8) : (parseInt(phaseCfg && phaseCfg.gruposCount, 10) || 4);
     var classification = phaseCfg && phaseCfg.classification;
     var localPlan = classification && (classification.groupCategoryRules || typeof classification.schedule?.allowRepeat === 'boolean' ||
-      classification.rotationAllowRepeatPartners === true) &&
+      classification.rotationAllowRepeatPartners === true || flexible) &&
       window.FORMAT2.groupPlanForCategory(phaseCfg, phaseCfg.category, pool.length, phaseCfg.gruposEqualOnly);
     if (localPlan && localPlan.error) throw new Error((phaseCfg.category ? phaseCfg.category + ': ' : '') + localPlan.error);
     if (localPlan && phaseCfg.maxDrawOperations && localPlan.matches > phaseCfg.maxDrawOperations) {
       throw new Error('A grade exige ' + localPlan.matches + ' partidas e excede a capacidade de publicação de um sorteio.');
     }
-    var formation = localPlan ? localPlan.formation : phaseCfg && phaseCfg.groupFormation;
+    var teamForm = phaseCfg?.teamCompetition?.schedule?.groupFormationByCategory?.[phaseCfg.category || ''];
+    var formation = teamForm || (localPlan ? localPlan.formation : phaseCfg && phaseCfg.groupFormation);
     var explicitFormation = !!(formation && (formation.mode === 'count' || formation.mode === 'size'));
     if (explicitFormation) {
       var requested = Number(formation.value);
@@ -1577,11 +1581,11 @@
       }
       var baseSize = Math.floor(pool.length / nGroups), extraSize = pool.length % nGroups;
       if (baseSize < 2) throw new Error('Cada grupo precisa ter pelo menos duas unidades.');
-      if (rotationCfg && (pool.length % 8 !== 0 || nGroups !== pool.length / 8 || baseSize !== 8 || extraSize !== 0)) {
+      if (rotationCfg && !flexible && (pool.length % 8 !== 0 || nGroups !== pool.length / 8 || baseSize !== 8 || extraSize !== 0)) {
         throw new Error('O rodízio A–H exige grupos completos com exatamente oito atletas.');
       }
     }
-    if (rotationCfg && pool.length % 8 !== 0) throw new Error('O rodízio de parceiros exige grupos completos de oito atletas em cada categoria.');
+    if (rotationCfg && !flexible && pool.length % 8 !== 0) throw new Error('O rodízio de parceiros exige grupos completos de oito atletas em cada categoria.');
     if (nGroups < 1) nGroups = 1;
     // v1.3.88: NUNCA mais grupos que floor(N/2) — senão sobra grupo de 1 time (0 jogos → storePhase
     // 'no-entrants' → "diz que sorteou mas não mostra chave"). O bug apareceu no sweep com o default
@@ -1636,8 +1640,9 @@
     // Serpentina: ida 0..n-1, volta n-1..0 — cabeças (pool já ordenado por força) caem
     // em grupos distintos e o equilíbrio fica melhor que blocos contíguos.
     if (rotationCfg) {
+      var random = phaseCfg._rotationRandom || Math.random;
       for (var ri = _placePool.length - 1; ri > 0; ri--) {
-        var rj = Math.floor(Math.random() * (ri + 1));
+        var rj = Math.floor(random() * (ri + 1));
         var rs = _placePool[ri]; _placePool[ri] = _placePool[rj]; _placePool[rj] = rs;
       }
     }
@@ -1676,10 +1681,11 @@
       var entryName = function (entry) { return typeof entry === 'string' ? entry : (entry.displayName || entry.name || ''); };
       var entryUid = function (entry) { return entry && typeof entry === 'object' ? (entry.uid || null) : null; };
       groups.forEach(function (g) {
-        if (g.players.length !== 8) throw new Error('Cada grupo de rodízio precisa ter exatamente oito atletas.');
-        var plan = rotationCfg.rotationAllowRepeatPartners === true
+        if (!flexible && g.players.length !== 8) throw new Error('Cada grupo de rodízio precisa ter exatamente oito atletas.');
+        var plan = flexible ? rotationCore.buildGroups(g.players, rule.rounds, rule.allowRepeatPartners, phaseCfg._rotationRandom)
+          : rotationCfg.rotationAllowRepeatPartners === true
           ? rotationCore.buildWithRepeats(g.players, rotationRounds) : rotationCore.build(g.players, rotationRounds);
-        g.superEightLetters = g.players.map(function (entry, index) {
+        if (g.players.length === 8) g.superEightLetters = g.players.map(function (entry, index) {
           return { letter: String.fromCharCode(65 + index), name: entryName(entry), uid: entryUid(entry) };
         });
         plan.rounds.forEach(function (round, roundIndex) {
@@ -1694,10 +1700,15 @@
               team1: leftNames, team2: rightNames,
               team1Uids: left.map(entryUid), team2Uids: right.map(entryUid),
               winner: null, scoreP1: null, scoreP2: null, isMonarch: true,
-              monarchGroup: g.groupIdx,
-              groupLetterAssignments: g.superEightLetters,
+              monarchGroup: flexible && !plan.series ? counter : g.groupIdx,
               label: g.name + ' • Rodada ' + (roundIndex + 1) + ' • Jogo ' + (gameIndex + 1)
             };
+            if (flexible && left.concat(right).some(player=>player.manualParticipantId)) {
+              var slotId=player=>player.manualParticipantId ? 'manual:'+player.manualParticipantId : null;
+              match.team1SlotIds=left.map(slotId);match.team2SlotIds=right.map(slotId);
+            }
+            if (g.superEightLetters) match.groupLetterAssignments = g.superEightLetters;
+            if (plan.series) { match.rotationSeries = true; match.category = phaseCfg.category || ''; }
             if (phaseCfg.category) match.category = phaseCfg.category;
             g.matches.push(match); allMatches.push(match);
           });
@@ -1855,6 +1866,15 @@
           });
         });
       }
+      if (teamForm) {
+        var games = _teamCompetitionCore.gamesPerPairForCategory(_teamCompetition,phaseCfg.category);
+        var counts = new Map(g.players.map(entry=>[entry,0]));
+        g.matches.forEach(function (match) {
+          counts.set(match.team1Obj,counts.get(match.team1Obj)+1); counts.set(match.team2Obj,counts.get(match.team2Obj)+1);
+        });
+        if (Array.from(counts.values()).some(n=>n!==games))
+          throw new Error('A grade da categoria não comporta a quantidade de jogos por dupla com esses grupos e times.');
+      }
     });
     var _ret = { matches: allMatches, groups: groups };
     if (_waitlist.length) _ret.waitlist = _waitlist;  // suplentes (grupos de mesmo tamanho) → storePhase → standbyParticipants
@@ -1864,6 +1884,26 @@
   function buildPhaseGroupStage(prevGroups, phaseCfg, computeStandings, idPrefix, det) {
     det = det || {};
     idPrefix = idPrefix || 'phg';
+    if (phaseCfg.classification?.partnerRotation === 'groups') {
+      var result = { matches:[], groups:[] };
+      phaseCfg.classification.rotationCategoryRules.forEach(function (rule, ci) {
+        var source = prevGroups.filter(function (group) { return _groupCategory(group) === rule.category; });
+        if (!source.length) return;
+        var entrants = _poolFromPrev(source, phaseCfg, computeStandings).map(function (entry) {
+          var members = entry.participants || [];
+          return members.length === 1 ? Object.assign({}, entry, members[0]) : entry;
+        });
+        if (!entrants.length) return;
+        var built = genGroupsFromPool(entrants, Object.assign({},phaseCfg,{category:rule.category,_rotationRandom:det.rnd}), idPrefix+'-c'+ci);
+        built.groups.forEach(function (group) {
+          group.category=rule.category;
+          if (rule.category) group.name=rule.category+' · '+group.name;
+          group.matches.forEach(function (match) { match.groupName=group.name; });
+        });
+        result.matches.push.apply(result.matches,built.matches); result.groups.push.apply(result.groups,built.groups);
+      });
+      return result;
+    }
     var pool = _poolFromPrev(prevGroups, phaseCfg, computeStandings);
     if (!pool.length) return { matches: [], groups: [] };
     return genGroupsFromPool(pool, phaseCfg, idPrefix);
@@ -2394,7 +2434,10 @@
         built = { matches: allGroupMatches, groups: allGroups };
         if (groupWaitlist.length) built.waitlist = groupWaitlist;
       } else {
-        built = genGroupsFromPool(pool, cfg, idPrefix);
+        var singleCfg = cfg.classification?.partnerRotation === 'groups' || cfg.teamCompetition?.schedule?.groupFormationByCategory
+          ? Object.assign({}, cfg, { category:cfg.categories?.[0] || '' }) : cfg;
+        built = genGroupsFromPool(pool, singleCfg, idPrefix);
+        if (singleCfg !== cfg) built.groups.forEach(function (group) { group.category = singleCfg.category; });
       }
     } else {
       // Eliminatória: split por CATEGORIA só quando há 2+ categorias REAIS (cada uma =
@@ -2739,11 +2782,24 @@
       var k = category + '\u0000' + groupIdx;
       if (!byG[k]) { byG[k] = { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + (parseInt(groupIdx, 10) || 0))), groupIdx: parseInt(groupIdx, 10) || 0, category: category, players: [], _seen: {}, matches: [] }; order.push(k); }
       byG[k].matches.push(m);
+      if (t.phases?.[phaseIdx]?.classification?.partnerRotation==='groups') {
+        var group=byG[k];
+        if (!group.playersSlotIds) {group.playersSlotIds=[];group.playersUids=[];}
+        [1,2].forEach(function (side) {
+          (m['team'+side] || []).forEach(function (name,i) {
+            var uid=m['team'+side+'Uids']?.[i] || null, slotId=m['team'+side+'SlotIds']?.[i] || null;
+            var ident=uid ? 'uid:'+uid : slotId || 'name:'+name;
+            if (group._seen[ident]) return;
+            group._seen[ident]=true;group.players.push(name);group.playersUids.push(uid);group.playersSlotIds.push(slotId);
+          });
+        });
+        return;
+      }
       var ps = (m.isMonarch || m.bracket === 'monarch') ? (m.team1 || []).concat(m.team2 || []) : [m.p1, m.p2];
       ps.forEach(function (n) { if (n && n !== 'BYE' && n !== 'TBD' && n !== 'BYE (Avança Direto)' && !byG[k]._seen[n]) { byG[k]._seen[n] = 1; byG[k].players.push(n); } });
     });
     return order.sort(function (a, b) { return byG[a].groupIdx - byG[b].groupIdx; }).map(function (k) {
-      var g = byG[k]; return { name: g.name, groupIdx: g.groupIdx, category: g.category, players: g.players, matches: g.matches };
+      var g = byG[k]; delete g._seen; return g;
     });
   }
 
@@ -2793,7 +2849,7 @@
     var capturedPhase = phaseIdx != null ? phaseIdx : (t.currentPhaseIndex || 0);
     var byName = Object.create(null);
     if (!groups.length) throw new Error('[classificação] nenhum grupo para consolidar');
-    var fields = ['name', 'uid', 'p1Uid', 'p2Uid', 'p3Uid', 'p4Uid', 'points', 'basicPoints',
+    var fields = ['name', 'uid', 'manualParticipantId', 'p1Uid', 'p2Uid', 'p3Uid', 'p4Uid', 'points', 'basicPoints',
       'advancedPoints', 'wins', 'losses', 'draws', 'played', 'pointsDiff', 'setsWon',
       'setsLost', 'gamesWon', 'gamesLost', 'tiebreaksWon', 'tbPointsWon', 'tbPointsLost',
       'buchholz', 'sonnebornBerger'];
@@ -3168,6 +3224,12 @@
       _slot.rounds.forEach(function (r) { if (r && Array.isArray(r.matches)) pm = pm.concat(r.matches); });
     }
     if (!pm.length) return [];
+    if (t.phases?.[phaseIdx]?.classification?.partnerRotation === 'groups') {
+      return _groupsFromTaggedMatches(t, phaseIdx).map(function (group) {
+        group.standings = standingsDaFaseAnterior(group, t, {tiebreakers:t.tiebreakers}, true, phaseIdx);
+        return group;
+      });
+    }
     var nameTeam = _nameToTeamMap(pm);
     function entry(nm) { return nameTeam[nm] || { name: nm, displayName: nm }; }
     var gf = pm.filter(function (m) { return m.bracket === 'grandfinal'; })[0];

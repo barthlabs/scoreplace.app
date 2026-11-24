@@ -27,7 +27,9 @@ function checkNested(value, fail, path) {
     // O caminho não contém valor do formulário; ele identifica apenas o nome estrutural
     // que a fronteira recusou. Sem isso, "Estado de execução" repetia a mesma mensagem
     // para causas diferentes e tornava impossível corrigir a origem verificavelmente.
-    if ((INTERNAL.has(key) && !DECLARATIVE_RESERVED_PATHS.has(at)) || (key.startsWith('_') && !['_intervalAuto', '_scoreBy'].includes(key))) fail('invalid-argument', 'Estado de execução não pertence à configuração: ' + at + '.');
+    const roundsRule = /^fmt2[.](rotationCategoryRules|eliminatoria[.]formationCategoryRules)[.]\d+[.]rounds$/.test(at) &&
+      Number.isInteger(value[key]) && value[key] >= 1 && value[key] <= 128;
+    if ((INTERNAL.has(key) && !DECLARATIVE_RESERVED_PATHS.has(at) && !roundsRule) || (key.startsWith('_') && !['_intervalAuto', '_scoreBy'].includes(key))) fail('invalid-argument', 'Estado de execução não pertence à configuração: ' + at + '.');
     checkNested(value[key], fail, at);
   });
 }
@@ -94,7 +96,8 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       try { config.registrationSettings = require('./registration-settings-core').validate(config.registrationSettings, config.combinedCategories); }
       catch (error) { fail('invalid-argument', error.message); }
     }
-    if (config.fmt2 && validateIntent) validateIntent(config.fmt2, HttpsError, undefined, undefined, config.combinedCategories);
+    if (config.fmt2 && validateIntent) validateIntent(config.fmt2, HttpsError, undefined, undefined, config.combinedCategories,
+      category => require('./vendor/super-eight-core').categoryPopulation(config, category));
     if (Object.hasOwn(config, 'groupFormation')) {
       validateIntent({groupFormation:config.groupFormation}, HttpsError);
       if (!config.fmt2) fail('invalid-argument', 'A formação dos grupos exige a configuração de formato.');

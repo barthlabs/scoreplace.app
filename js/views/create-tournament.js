@@ -4233,6 +4233,7 @@ function setupCreateTournamentModal() {
 
   window._syncCategoryCapacity = function(options) {
     options = options || {};
+    if (typeof window._f2RestoreSliderCapacities==='function') window._f2RestoreSliderCapacities();
     var section = document.getElementById('category-capacity-section');
     var perCategory = document.getElementById('tourn-max-per-category');
     var custom = document.getElementById('tourn-custom-category-capacity');
@@ -5042,7 +5043,8 @@ function setupCreateTournamentModal() {
       categories.forEach(function (category) {
         var pairs = Math.max(1, Math.floor(Number(pairsByCategory[category]) || 1));
         var games = Math.max(1, Math.floor(Number(gamesByCategory[category]) || teamSchedule.gamesPerPair || teamSchedule.gamesPerTeam || 1));
-        byCategory[category] = scheduledTeamMatches(teamCount * pairs, games) || 0;
+        var formation=teamSchedule.groupFormationByCategory?.[category];
+        byCategory[category] = formation ? teamCount*pairs*games/2 : scheduledTeamMatches(teamCount * pairs, games) || 0;
       });
       return byCategory;
     }
@@ -5159,6 +5161,7 @@ function setupCreateTournamentModal() {
     var teamSchedule = f2cfg && f2cfg.classifAtiva && tc && tc.enabled && tc.schedule ? {
       enabled: true,
       teamsPerGroup: tc.schedule.teamsPerGroup,
+      groupFormationByCategory:tc.schedule.groupFormationByCategory,
       gamesPerPair: tc.schedule.gamesPerPair || tc.schedule.gamesPerTeam,
       gamesPerTeam: tc.schedule.gamesPerPair || tc.schedule.gamesPerTeam,
       pairsPerTeamByCategory: tc.schedule.pairsPerTeamByCategory || {},
@@ -7518,6 +7521,8 @@ window._saveTournamentClickHandler = async function() {
           if (window._warn) window._warn('[save] format2 indisponível (_f2GetConfig/FORMAT2 nulo) — save ABORTADO (sem fallback)');
           return;
         }
+        var rotationError = window._f2RotationConfigError && window._f2RotationConfigError();
+        if (rotationError) { showAlertDialog('Confira os grupos', window._safeHtml(rotationError), null, {type:'warning'}); return; }
         if (_f2cfg.parceria === 'super_eight' && !_f2cfg.rodadas.drawManual && !_f2cfg.rodadas.drawFirstDate) {
           showAlertDialog('Agenda do Super 8',
             'Informe a data do primeiro sorteio ou ative “Sortear manualmente”.',
@@ -9134,7 +9139,7 @@ window._f2TemplateCopy = function(fmt2Bruto) {
   var out = pick(raw, ['disputa', 'grupos', 'parceria', 'superEightDrawMode', 'superEightRounds', 'formacaoDupla', 'manualPairingOpen', 'manualPairingPolicy',
     'classifAtiva', 'classificados', 'classifScope', '_scoreBy', 'historicalSinglesOverride',
     'rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution', 'tieSinglesPoints', 'tieSinglesMargin',
-    'groupFormation', 'groupCategoryRules', 'rotationCategoryRules', 'rotationAllowRepeatPartners']);
+    'groupFormation', 'groupCategoryRules', 'rotationCategoryRules', 'rotationAllowRepeatPartners', 'classificationSliderMode']);
   if (raw.groupFormation) out.groupFormation = pick(raw.groupFormation, ['mode', 'value']);
   if (Array.isArray(raw.groupCategoryRules)) out.groupCategoryRules = raw.groupCategoryRules.map(function (rule) {
     var copied = pick(rule, ['category', 'gamesPerUnit', 'allowRepeat']);
@@ -9142,7 +9147,9 @@ window._f2TemplateCopy = function(fmt2Bruto) {
     return copied;
   });
   if (Array.isArray(raw.rotationCategoryRules)) out.rotationCategoryRules = raw.rotationCategoryRules.map(function (rule) {
-    return pick(rule, ['category', 'rounds', 'destination']);
+    var row = pick(rule, ['category', 'rounds', 'destination', 'allowRepeatPartners']);
+    if (rule && rule.groupFormation) row.groupFormation = pick(rule.groupFormation, ['mode','value']);
+    return row;
   });
   if (raw.rodadas) {
     out.rodadas = pick(raw.rodadas, ['modo', 'turnos', 'n', 'drawFirstTime', 'drawIntervalDays',
@@ -9158,7 +9165,11 @@ window._f2TemplateCopy = function(fmt2Bruto) {
       'formacao', 'qualifyAll', 'terceiro', 'grandFinal', 'lateEnrollment', 'newMatchups',
       'scoring', 'roundBoundsEditorEnabled', 'politicaDaChave', 'openReiRainha', 'reiRainhaCut',
       'lineAssignment', 'lineRankRanges', 'bestNextByGroup', 'semeadura',
-      'finalSeriesBestOf', 'grandFinalReset']);
+      'finalSeriesBestOf', 'grandFinalReset', 'formationSliderMode']);
+    if (Array.isArray(raw.eliminatoria.formationCategoryRules)) out.eliminatoria.formationCategoryRules = raw.eliminatoria.formationCategoryRules.map(function (rule) {
+      var row = pick(rule, ['category','rounds','destination','allowRepeatPartners']);
+      row.groupFormation = pick(rule.groupFormation,['mode','value']); return row;
+    });
     out.eliminatoria.endDate = '';
     out.eliminatoria.endTime = '';
     out.eliminatoria.roundBounds = [];
@@ -9169,7 +9180,7 @@ window._f2TemplateCopy = function(fmt2Bruto) {
     if (raw.teamCompetition.schedule) {
       out.teamCompetition.schedule = pick(raw.teamCompetition.schedule,
         ['enabled', 'teamsPerGroup', 'gamesPerPair', 'gamesPerTeam', 'pairsPerTeamByCategory',
-          'gamesPerPairByCategory', 'mode', 'modeConfirmed', 'modeChosen', 'originDayPolicy']);
+          'gamesPerPairByCategory', 'groupFormationByCategory', 'mode', 'modeConfirmed', 'modeChosen', 'originDayPolicy']);
     }
   }
   return out;

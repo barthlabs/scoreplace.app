@@ -110,7 +110,7 @@
           return { ok:false, reason:'tie-pending', titles:[] };
         var chosen = titleRowAfterTie(pool.rows, pool.id, phaseTies);
         if (!chosen.row) return { ok:false, reason:chosen.error || 'standings-unavailable', titles:[] };
-        titles.push(awardFromRow(chosen.row, 'category', pool.group.category));
+        titles.push(awardFromRow(chosen.row, pool.group.category ? 'category' : 'overall', pool.group.category));
       }
       if (phase.kind === 'classification' && rankings.length) return { ok:true, titles:titles };
     }

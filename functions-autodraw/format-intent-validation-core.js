@@ -4,8 +4,10 @@
 // de torneios históricos continua aceitando seus dialetos antigos; não validar
 // documentos já salvos durante leitura, sorteio ou lançamento de resultado.
 const ENUMS = [
+  ['classificationSliderMode',['common','category']],
+  ['eliminatoria.formationSliderMode',['common','category']],
   ['disputa', ['individual', 'dupla']],
-  ['parceria', ['fixa', 'rei_rainha', 'sorteio_rodada', 'super_eight', 'rotation_groups_8']],
+  ['parceria', ['fixa', 'rei_rainha', 'sorteio_rodada', 'super_eight', 'rotation_groups_8', 'rotation_groups']],
   ['superEightDrawMode', ['single', 'rounds']],
   ['formacaoDupla', ['manual', 'sorteio']],
   ['manualPairingPolicy', ['organizer_only', 'athletes_only', 'open']],
@@ -84,12 +86,17 @@ function validateCompletedMixedIdentity(stored, requestedTeamSize, HttpsError) {
   }
 }
 
-function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, categories) {
+function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, categories, population) {
   if (!fmt2 || typeof fmt2 !== 'object' || Array.isArray(fmt2)) {
     throw new HttpsError('invalid-argument', 'Configuração de formato inválida.');
   }
   const prev = stored?.fmt2;
+  population = population || (category => stored ? require('./vendor/super-eight-core').categoryPopulation(stored, category) : 0);
   const storedRules = prev?.groupCategoryRules;
+  if (prev?.classificationSliderMode && fmt2.parceria===prev.parceria && !Object.hasOwn(fmt2,'classificationSliderMode'))
+    fmt2.classificationSliderMode=prev.classificationSliderMode;
+  if (prev?.eliminatoria?.formationSliderMode && fmt2.eliminatoria?.formationCategoryRules && !Object.hasOwn(fmt2.eliminatoria,'formationSliderMode'))
+    fmt2.eliminatoria.formationSliderMode=prev.eliminatoria.formationSliderMode;
   if (typeof prev?.rotationAllowRepeatPartners === 'boolean' && !Object.hasOwn(fmt2, 'rotationAllowRepeatPartners') &&
       fmt2.parceria === 'rotation_groups_8') fmt2.rotationAllowRepeatPartners = prev.rotationAllowRepeatPartners;
   if (Object.hasOwn(fmt2, 'rotationAllowRepeatPartners') &&
@@ -141,22 +148,62 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, ca
       }
     }
   }
-  if (Object.prototype.hasOwnProperty.call(fmt2, 'rotationCategoryRules')) {
-    const rules = fmt2.rotationCategoryRules;
-    const available = new Set(categories || (stored && stored.combinedCategories) || []);
-    const seen = new Set();
-    if (fmt2.parceria !== 'rotation_groups_8' || fmt2.disputa !== 'dupla' || fmt2.classifAtiva === false ||
-        (fmt2.teamCompetition && fmt2.teamCompetition.enabled) || !Array.isArray(rules) || !rules.length || available.size < 2) {
-      throw new HttpsError('invalid-argument', 'As regras por categoria exigem rodízio A–H com várias categorias.');
+  const teamFormation = fmt2.teamCompetition?.schedule?.groupFormationByCategory;
+  if (teamFormation != null) {
+    const available = categories || stored?.combinedCategories || [];
+    const names = available.length ? available : [''];
+    if (!fmt2.teamCompetition.enabled || !teamFormation || typeof teamFormation!=='object' || Array.isArray(teamFormation) ||
+        Object.keys(teamFormation).length!==names.length || Object.keys(teamFormation).some(cat=>!names.includes(cat)))
+      throw new HttpsError('invalid-argument','Confira a formação dos grupos nas categorias dos times.');
+    for (const cat of names) {
+      const f=teamFormation[cat], g=fmt2.teamCompetition.schedule.gamesPerPairByCategory?.[cat];
+      if (!f || Object.keys(f).some(k=>!['mode','value'].includes(k)) || !['count','size'].includes(f.mode) ||
+          !Number.isInteger(f.value) || f.value<(f.mode==='count'?1:2) || f.value>128 || !Number.isInteger(g) || g<1 || g>128)
+        throw new HttpsError('invalid-argument','Formação ou quantidade de jogos por dupla inválida.');
+      const n=population(cat) || 2*Number(fmt2.teamCompetition.teamCount || 0)*(fmt2.teamCompetition.schedule.pairsPerTeamByCategory?.[cat] || 1);
+      const groups=f.mode==='count'?f.value:Math.ceil(n/(2*f.value));
+      if ((n && (n%2 || Math.floor(n/(2*groups))<=g || (n/2)%groups && g%2 || Math.floor(n/(2*groups))*g%2)) ||
+          (!n && f.mode==='size' && f.value<=g)) throw new HttpsError('invalid-argument','A formação escolhida não permite essa quantidade de jogos por dupla.');
     }
+  }
+  const genericRotation = fmt2.parceria === 'rotation_groups';
+  if (prev?.parceria === 'rotation_groups' && !Object.hasOwn(fmt2, 'rotationCategoryRules')) {
+    throw new HttpsError('failed-precondition','Atualize a ficha para editar as regras de rodízio por categoria.');
+  }
+  const formationRules = fmt2.eliminatoria?.formationCategoryRules;
+  if (prev?.eliminatoria?.formationCategoryRules && !Object.hasOwn(fmt2.eliminatoria || {}, 'formationCategoryRules'))
+    throw new HttpsError('failed-precondition','A configuração da segunda classificatória deve ser preservada.');
+  if (genericRotation || fmt2.rotationCategoryRules != null) validateRotation(fmt2.rotationCategoryRules, genericRotation, false);
+  if (formationRules != null) validateRotation(formationRules, true, true);
+  function validateRotation(rules, generic, second) {
+    const available = new Set(categories || stored?.combinedCategories || []);
+    if (generic && !available.size) available.add('');
+    if ((!generic && fmt2.parceria !== 'rotation_groups_8') || fmt2.disputa !== 'dupla' || fmt2.classifAtiva === false ||
+        fmt2.teamCompetition?.enabled || !Array.isArray(rules) || !rules.length ||
+        (generic ? rules.length !== available.size : available.size < 2) ||
+        (second && (!fmt2.eliminatoria?.ativa || !fmt2.eliminatoria?.openReiRainha))) {
+      throw new HttpsError('invalid-argument','Confira as categorias e as fases do rodízio.');
+    }
+    const seen = new Set();
     for (const rule of rules) {
-      if (!rule || Object.keys(rule).some(key => !['category','rounds','destination'].includes(key)) || typeof rule.category !== 'string' || !available.has(rule.category) || seen.has(rule.category) ||
-          !Number.isInteger(rule.rounds) || rule.rounds < 1 || rule.rounds > maxRotation ||
-          !['ranking', 'elimination'].includes(rule.destination) ||
+      const keys = generic ? ['category','groupFormation','rounds','destination','allowRepeatPartners'] : ['category','rounds','destination'];
+      const formation = rule?.groupFormation;
+      if (generic && (!formation || Object.keys(formation).some(k => !['mode','value'].includes(k)) ||
+          !['count','size'].includes(formation.mode) || !Number.isInteger(formation.value) ||
+          formation.value < (formation.mode === 'count' ? 1 : 4) || formation.value > 128 || typeof rule.allowRepeatPartners !== 'boolean')) {
+        throw new HttpsError('invalid-argument', 'Quantidade de grupos, pessoas por grupo ou política de parceiros inválida.');
+      }
+      if (!rule || Object.keys(rule).some(key => !keys.includes(key)) || typeof rule.category !== 'string' || !available.has(rule.category) || seen.has(rule.category) ||
+          !Number.isInteger(rule.rounds) || rule.rounds < 1 || rule.rounds > (generic ? 128 : maxRotation) ||
+          !['ranking', 'elimination'].includes(rule.destination) || second && rule.destination !== 'elimination' ||
           (rule.destination === 'elimination' && !(fmt2.eliminatoria && fmt2.eliminatoria.ativa === true))) {
         throw new HttpsError('invalid-argument', 'Categoria, número de partidas ou destino do rodízio inválido.');
       }
       seen.add(rule.category);
+      if (generic) {
+        const error = require('./vendor/super-eight-core').formationError(rule, second ? 0 : population?.(rule.category) || 0);
+        if (error) throw new HttpsError('invalid-argument', (rule.category ? rule.category + ' · ' : '') + error);
+      }
     }
   }
   const historicalField = explicitValue(fmt2, 'historicalSinglesOverride');
