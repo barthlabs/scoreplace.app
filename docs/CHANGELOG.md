@@ -1,3 +1,10 @@
+## 2.7.60 — 24/nov/2026 (preservação e escopo das vagas no editor)
+
+- Corrigida a troca do configurador já montado: os campos de capacidade, pontuação e agenda são retirados antes da substituição do mount e recolocados depois. O teste de criação previamente montada → edição reproduziu a perda dos campos antes do ajuste.
+- A página reutiliza o painel existente na mesma rota e preserva o rascunho. Trocar de torneio hidrata o destino, sem outra instância concorrente do formulário.
+- Estimativa, população dos grupos e validação do salvamento usam as capacidades do editor ativo. Uma cópia oculta não entra na contagem nem encobre um campo ativo inválido. Permanecem as guardas de inteiros, categorias excluídas, coerência do mapa e soma das vagas.
+- Teste Chromium completo de Personalizado → sete games totais → clique Salvar: uma gravação em memória com vagas 16/32, inclusive após remontagens. A sequência limpa já funcionava; os defeitos de ciclo de montagem e cópias ocultas foram reproduzidos isoladamente. Não foi inspecionada a sessão do proprietário nem alterado um torneio real para testar.
+
 ## 2.7.59 — 24/nov/2026 (grupos, classificados e distribuição de quadras)
 
 - Quatro sliders em duas linhas por classificatória: grupos/pessoas e jogos/classificados por grupo. O modo comum mostra um único conjunto por padrão; a personalização mantém conjuntos e cortes por categoria. O toggle Não repetir parceiro fica ligado por padrão; simples e duplas fixas mantêm a opção correspondente de adversários.

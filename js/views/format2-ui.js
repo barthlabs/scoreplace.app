@@ -127,6 +127,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     });
   }
   window._f2RefreshScoring=function(){if(S) _rerender();};
+  window._f2StashExtSections = _stashExt;
   window._f2PlaceExtSections = _placeExt; // pra chamar de fora após o mount
 
   function _rerender() {
@@ -988,9 +989,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     Object.keys((tc && tc.schedule && tc.schedule.gamesPerPairByCategory) || {}).forEach(add);
     return categories;
   }
+  function _capacityRoot() {
+    return typeof window._createTournamentEditorRoot === 'function' ? window._createTournamentEditorRoot() : document;
+  }
+  function _capacityField(id) {
+    var root=_capacityRoot();
+    return root!==document && typeof root.querySelector==='function' ? root.querySelector('#'+id) : document.getElementById(id);
+  }
   function _rotationCategories() {
-    if (S && S.mode === 'form' && document.getElementById('tourn-gender-categories') && typeof window._getCreateFormCategoryData === 'function') {
-      var data = window._getCreateFormCategoryData();
+    if (S && S.mode === 'form' && _capacityField('tourn-gender-categories') && typeof window._getCreateFormCategoryData === 'function') {
+      var data = window._getCreateFormCategoryData(_capacityRoot());
       if (data && Array.isArray(data.combinedCategories)) return data.combinedCategories;
     }
     return _teamCompetitionCategories();
@@ -1044,12 +1052,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     var actual = _categoryPeople(category);
     if (actual) return actual;
-    var custom = document.getElementById('tourn-custom-category-capacity');
+    var custom = _capacityField('tourn-custom-category-capacity');
     if (custom && custom.checked) {
-      var field = document.getElementById('tourn-max-by-category');
+      var field = _capacityField('tourn-max-by-category');
       try { var limits = JSON.parse(field && field.value || '{}'); if (Number(limits[category]) > 0) return Number(limits[category]); } catch (_) {}
     }
-    var limit = document.getElementById('tourn-max-per-category');
+    var limit = _capacityField('tourn-max-per-category');
     var capacity=Number(limit && limit.value || S.t?.maxParticipantsByCategory?.[category] || S.t?.maxParticipantsPerCategory || 0);
     var tc=S.cfg.teamCompetition;
     return capacity || (tc.enabled ? 2*tc.teamCount*(tc.schedule.pairsPerTeamByCategory[category] || 1) : 0);
@@ -1079,13 +1087,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return 'rotation';
   }
   function _restoreSliderCapacities() {
-    var grid=document.getElementById('category-capacity-grid');
+    var grid=_capacityField('category-capacity-grid');
     if (!grid || !S?.mountEl?.querySelectorAll) return;
     S.mountEl.querySelectorAll('[data-slider-capacity] > label').forEach(label=>grid.appendChild(label));
   }
   window._f2RestoreSliderCapacities=_restoreSliderCapacities;
   function _placeSliderCapacities() {
-    var grid=document.getElementById('category-capacity-grid');
+    var grid=_capacityField('category-capacity-grid');
     if (!grid || !grid.querySelectorAll || !S?.mountEl?.querySelector) return;
     var names=_sliderCategories();
     grid.querySelectorAll('input[data-category]').forEach(function (input) {

@@ -338,7 +338,29 @@ window._renderPhaseCallOrder = function () {
 };
 window._readPhaseCallOrder = function () { return null; };
 
+// Resolve a instância ativa; cópias ocultas não participam da leitura da ficha.
+window._createTournamentEditorRoot = function (source) {
+  var node = source && (source.currentTarget || source.target || source);
+  var panel = node && typeof node.closest === 'function' && node.closest('.modal');
+  if (panel && panel.querySelector('#form-create-tournament')) return panel;
+  if (typeof document.querySelector === 'function') {
+    var route = document.querySelector('#view-container #form-create-tournament');
+    if (route) return route.closest('.modal') || route;
+    var modal = document.querySelector('#modal-create-tournament.active #form-create-tournament') ||
+      document.querySelector('#modal-create-tournament #form-create-tournament');
+    if (modal) return modal.closest('.modal') || modal;
+  }
+  return document;
+};
+window._createTournamentEditorField = function (root, id) {
+  return root && root !== document && typeof root.querySelector === 'function'
+    ? root.querySelector('#' + id) : document.getElementById(id);
+};
+
 function setupCreateTournamentModal() {
+  // A rota move o painel para fora do wrapper modal. Isso não cria outro editor.
+  var existingForm = document.getElementById('form-create-tournament');
+  if (existingForm && existingForm.dataset?.editorReady === 'true') return;
   window._categoryCapacityLoadGuard = null;
   window._estimatedGameHoursState = null;
   window._phaseCallOrderState = null;
@@ -2324,6 +2346,8 @@ function setupCreateTournamentModal() {
         if (typeof window._f2PlaceExtSections === 'function') { try { window._f2PlaceExtSections(); } catch (e) {} }
         return;
       }
+      // Capacidade, pontuação e agenda pertencem à ficha; sobrevivem à troca do configurador.
+      if (typeof window._f2StashExtSections === 'function') window._f2StashExtSections();
       try { _existing.remove(); } catch (e) {}
     }
     var mount = document.createElement('div');
@@ -4033,6 +4057,8 @@ function setupCreateTournamentModal() {
   };
 
   window._updateCategoryPreview = function(options) {
+    var editorRoot = typeof window._createTournamentEditorRoot==='function' ? window._createTournamentEditorRoot() : document;
+    var read = function(id) { return typeof window._createTournamentEditorField==='function' ? window._createTournamentEditorField(editorRoot,id) : document.getElementById(id); };
     options = options || {};
     if (typeof window._f2RefreshRotationCategories === 'function') window._f2RefreshRotationCategories();
     // ⭐ 2.1: a seção de proporção depende das categorias de gênero — ligar "Fem" faz o sorteio
@@ -4044,26 +4070,26 @@ function setupCreateTournamentModal() {
     if (typeof window._renderCustomCatChips === 'function') window._renderCustomCatChips();
     // Categorias dividem o campo em sub-chaves → atualiza a estimativa de tempo da fase.
     if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
-    var genderVals = ((document.getElementById('tourn-gender-categories') || {}).value || '').split(',').filter(Boolean);
-    var skillText = ((document.getElementById('tourn-skill-categories') || {}).value || '').trim();
+    var genderVals = ((read('tourn-gender-categories') || {}).value || '').split(',').filter(Boolean);
+    var skillText = ((read('tourn-skill-categories') || {}).value || '').trim();
     var skillCats = skillText ? skillText.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
     // v2.1.80: categorias personalizadas — entram como "skill-like" (cruzam com gênero igual à habilidade).
-    var customCats = ((document.getElementById('tourn-custom-categories') || {}).value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    var customCats = ((read('tourn-custom-categories') || {}).value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
     var skillLike = skillCats.concat(customCats);
 
     // v1.2.0-beta: ler ageCategories
-    var ageText = (document.getElementById('tourn-age-categories') || {}).value || '';
+    var ageText = (read('tourn-age-categories') || {}).value || '';
     var ageCats = ageText ? ageText.split(',').filter(Boolean) : [];
 
     // Game type dimension
-    var gameTypesVal = (document.getElementById('tourn-game-types') || {}).value || '';
+    var gameTypesVal = (read('tourn-game-types') || {}).value || '';
     var gameTypes = [];
     if (gameTypesVal === 'simples,duplas') { gameTypes = ['Simples', 'Duplas']; }
     else if (gameTypesVal === 'simples') { gameTypes = ['Simples']; }
     else if (gameTypesVal === 'duplas') { gameTypes = ['Duplas']; }
 
-    var preview = document.getElementById('category-preview');
-    var list = document.getElementById('category-preview-list');
+    var preview = read('category-preview');
+    var list = read('category-preview-list');
     if (!preview || !list) return;
 
     var genderLabels = { fem: 'Fem', masc: 'Masc', misto_aleatorio: 'Misto Aleat.', misto_obrigatorio: 'Misto Obrig.' };
@@ -4114,7 +4140,7 @@ function setupCreateTournamentModal() {
       ageCombined = ageBaseCats;
     }
 
-    var excludedInput = document.getElementById('tourn-excluded-categories');
+    var excludedInput = read('tourn-excluded-categories');
     var excluded = [];
     try { excluded = JSON.parse((excludedInput || {}).value || '[]') || []; } catch (e) {}
     var normalizeCategory = function(label) { return String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR'); };
@@ -4185,17 +4211,18 @@ function setupCreateTournamentModal() {
     if (typeof window._renderEstimatedGameHours === 'function') window._renderEstimatedGameHours();
   };
 
-  window._getCreateFormCategoryData = function() {
-    var genderVals = (document.getElementById('tourn-gender-categories').value || '').split(',').filter(Boolean);
-    var skillText = (document.getElementById('tourn-skill-categories').value || '').trim();
+  window._getCreateFormCategoryData = function(root) {
+    var read = function(id) { return window._createTournamentEditorField(root, id); };
+    var genderVals = (read('tourn-gender-categories').value || '').split(',').filter(Boolean);
+    var skillText = (read('tourn-skill-categories').value || '').trim();
     var skillCats = skillText ? skillText.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
     // v2.1.80: categorias personalizadas — "skill-like" (cruzam com gênero igual à habilidade).
-    var customCats = (document.getElementById('tourn-custom-categories').value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    var customCats = (read('tourn-custom-categories').value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
     var skillLike = skillCats.concat(customCats);
     var genderLabels = { fem: 'Fem', masc: 'Masc', misto_aleatorio: 'Misto Aleat.', misto_obrigatorio: 'Misto Obrig.' };
 
     // Game type dimension
-    var gameTypesVal = (document.getElementById('tourn-game-types') || {}).value || '';
+    var gameTypesVal = (read('tourn-game-types') || {}).value || '';
     var gameTypes = [];
     if (gameTypesVal === 'simples,duplas') { gameTypes = ['Simples', 'Duplas']; }
 
@@ -4221,7 +4248,7 @@ function setupCreateTournamentModal() {
     }
 
     // v1.2.0-beta: ler ageCategories também
-    var ageCats = (document.getElementById('tourn-age-categories') || {}).value || '';
+    var ageCats = (read('tourn-age-categories') || {}).value || '';
     ageCats = ageCats ? ageCats.split(',').filter(Boolean) : [];
     ageCats.forEach(function (age) {
       var ageBase = genderVals.length ? genderVals.map(function (g) { return (genderLabels[g] || g) + ' ' + age; }) : [age];
@@ -4231,7 +4258,7 @@ function setupCreateTournamentModal() {
       });
     });
     combined = combined.filter(function (name, index) { return combined.indexOf(name) === index; });
-    var excludedInput = document.getElementById('tourn-excluded-categories');
+    var excludedInput = read('tourn-excluded-categories');
     var excluded = [];
     try { excluded = JSON.parse((excludedInput || {}).value || '[]') || []; } catch (e) {}
     var normalizeCategory = function(label) { return String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR'); };
@@ -4242,20 +4269,22 @@ function setupCreateTournamentModal() {
   };
 
   window._syncCategoryCapacity = function(options) {
+    var editorRoot = typeof window._createTournamentEditorRoot==='function' ? window._createTournamentEditorRoot() : document;
+    var read = function(id) { return typeof window._createTournamentEditorField==='function' ? window._createTournamentEditorField(editorRoot,id) : document.getElementById(id); };
     options = options || {};
     if (typeof window._f2RestoreSliderCapacities==='function') window._f2RestoreSliderCapacities();
-    var section = document.getElementById('category-capacity-section');
-    var perCategory = document.getElementById('tourn-max-per-category');
-    var custom = document.getElementById('tourn-custom-category-capacity');
-    var mapInput = document.getElementById('tourn-max-by-category');
-    var grid = document.getElementById('category-capacity-grid');
-    var total = document.getElementById('tourn-max-participants');
-    var legacyContainer = document.getElementById('cap-max-container');
-    var summary = document.getElementById('category-capacity-summary');
-    var generalControl = document.getElementById('category-capacity-general');
+    var section = read('category-capacity-section');
+    var perCategory = read('tourn-max-per-category');
+    var custom = read('tourn-custom-category-capacity');
+    var mapInput = read('tourn-max-by-category');
+    var grid = read('category-capacity-grid');
+    var total = read('tourn-max-participants');
+    var legacyContainer = read('cap-max-container');
+    var summary = read('category-capacity-summary');
+    var generalControl = read('category-capacity-general');
     if (!section || !perCategory || !total || !custom || !mapInput || !grid) return;
 
-    var catData = window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {};
+    var catData = window._getCreateFormCategoryData ? window._getCreateFormCategoryData(editorRoot) : {};
     var categories = Array.isArray(catData.combinedCategories) ? catData.combinedCategories : [];
     var allCategories = Array.isArray(catData.allCombinedCategories) ? catData.allCombinedCategories : categories;
     var excludedSet = new Set((catData.excludedCategories || []).map(function(label) { return String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR'); }));
@@ -4327,28 +4356,32 @@ function setupCreateTournamentModal() {
     window._syncCategoryCapacity({userChanged:true});
   };
   window._categoryPreviewCapacity = function(category) {
-    var custom = document.getElementById('tourn-custom-category-capacity');
+    var editorRoot = typeof window._createTournamentEditorRoot==='function' ? window._createTournamentEditorRoot() : document;
+    var read = function(id) { return typeof window._createTournamentEditorField==='function' ? window._createTournamentEditorField(editorRoot,id) : document.getElementById(id); };
+    var custom = read('tourn-custom-category-capacity');
     if (custom && custom.checked) {
-      var map = {}; try { map = JSON.parse((document.getElementById('tourn-max-by-category') || {}).value || '{}') || {}; } catch (e) {}
+      var map = {}; try { map = JSON.parse((read('tourn-max-by-category') || {}).value || '{}') || {}; } catch (e) {}
       if (Number(map[category]) > 0) return Number(map[category]);
-      var data = (window._getCreateFormCategoryData && window._getCreateFormCategoryData()) || {};
+      var data = (window._getCreateFormCategoryData && window._getCreateFormCategoryData(editorRoot)) || {};
       var display = (typeof window._displayCategoryName === 'function') ? window._displayCategoryName : function(name) { return name; };
       var matches = (data.combinedCategories || []).filter(function(name) { return display(name) === category && Number(map[name]) > 0; });
       var values = Array.from(new Set(matches.map(function(name) { return Number(map[name]); })));
       return values.length ? values.join('/') : '';
     }
-    var general = Number((document.getElementById('tourn-max-per-category') || {}).value);
+    var general = Number((read('tourn-max-per-category') || {}).value);
     return Number.isSafeInteger(general) && general > 0 ? general : '';
   };
   window._setCategoryCapacityValue = function(input) {
-    var hidden = document.getElementById('tourn-max-by-category');
+    var editorRoot = typeof window._createTournamentEditorRoot==='function' ? window._createTournamentEditorRoot(input) : document;
+    var read = function(id) { return typeof window._createTournamentEditorField==='function' ? window._createTournamentEditorField(editorRoot,id) : document.getElementById(id); };
+    var hidden = read('tourn-max-by-category');
     if (!hidden || !input) return;
     var map = {};
     try { map = JSON.parse(hidden.value || '{}') || {}; } catch (e) {}
     var category = decodeURIComponent(input.getAttribute('data-category') || '');
     if (input.value === '') return;
     var value = Number(input.value);
-    var excludedInput = document.getElementById('tourn-excluded-categories');
+    var excludedInput = read('tourn-excluded-categories');
     var excluded = [];
     try { excluded = JSON.parse((excludedInput || {}).value || '[]') || []; } catch (e) {}
     var normalizeCategory = function(label) { return String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR'); };
@@ -4362,9 +4395,9 @@ function setupCreateTournamentModal() {
     hidden.value = JSON.stringify(map);
     if (excludedInput) excludedInput.value = JSON.stringify(excluded);
     // Não recriar o campo durante a digitação; o cursor permanece na mesma posição.
-    var total = document.getElementById('tourn-max-participants');
-    var summary = document.getElementById('category-capacity-summary');
-    var categories = (window._getCreateFormCategoryData() || {}).combinedCategories || [];
+    var total = read('tourn-max-participants');
+    var summary = read('category-capacity-summary');
+    var categories = (window._getCreateFormCategoryData(editorRoot) || {}).combinedCategories || [];
     var calculated = categories.reduce(function(sum, name) { return sum + (Number(map[name]) || 0); }, 0);
     if (total) total.value = String(calculated);
     if (summary) summary.textContent = categories.map(function(name) { return name + ': ' + (map[name] || '—'); }).join(' · ') + ' = ' + calculated + ' vagas no total.';
@@ -5100,13 +5133,15 @@ function setupCreateTournamentModal() {
 
   // Fase 1: colhe os inputs (torneio + Fase 1) e injeta no #phase-estimate-ladder.
   window._renderPhaseEstimate = function () {
-    var ladder = document.getElementById('phase-estimate-ladder');
+    var editorRoot = typeof window._createTournamentEditorRoot === 'function' ? window._createTournamentEditorRoot() : document;
+    var read = function(id) { return typeof window._createTournamentEditorField === 'function' ? window._createTournamentEditorField(editorRoot,id) : document.getElementById(id); };
+    var ladder = read('phase-estimate-ladder');
     if (!ladder) return;
-    var gv = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
+    var gv = function (id) { var e = read(id); return e ? e.value : ''; };
     var iv = function (id, d) { var v = parseInt(gv(id), 10); return isNaN(v) ? d : v; };
     var K = 1;
     try {
-      var catData = (window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {}) || {};
+      var catData = (window._getCreateFormCategoryData ? window._getCreateFormCategoryData(editorRoot) : {}) || {};
       if (catData.combinedCategories && catData.combinedCategories.length) K = catData.combinedCategories.length;
     } catch (e) { K = 1; }
     // A estimativa usa UNIDADE COMPETITIVA — em duplas, EQUIPES, nunca pessoas soltas.
@@ -5146,7 +5181,7 @@ function setupCreateTournamentModal() {
     if (setupScopeWrap) setupScopeWrap.style.display = 'block';
     if(f2cfg && typeof window._f2ProjectCurrentPhases==='function' && window.ScoreplacePhaseGridPlan) {
       var capacities;
-      var custom=document.getElementById('tourn-custom-category-capacity');
+      var custom=read('tourn-custom-category-capacity');
       var names=catData?.combinedCategories?.length?catData.combinedCategories:[''];
       if(configuredMax>0) {
         var overrides={};
@@ -5154,7 +5189,7 @@ function setupCreateTournamentModal() {
         capacities=Object.fromEntries(names.map(category=>[category,Object.hasOwn(overrides,category)?Number(overrides[category]):
           names.length===1?configuredMax:iv('tourn-max-per-category',0)]));
         // The visible capacity controls are authoritative during editing.
-        document.querySelectorAll('#category-capacity-grid input[data-category], [data-slider-capacity] input[data-category]').forEach(function(input){
+        editorRoot.querySelectorAll('#category-capacity-grid input[data-category], [data-slider-capacity] input[data-category]').forEach(function(input){
           if(custom?.checked) capacities[decodeURIComponent(input.dataset.category)]=Number(input.value);
         });
       }
@@ -5213,7 +5248,7 @@ function setupCreateTournamentModal() {
       gamesPerTeam: tc.schedule.gamesPerPair || tc.schedule.gamesPerTeam,
       pairsPerTeamByCategory: tc.schedule.pairsPerTeamByCategory || {},
       gamesPerPairByCategory: tc.schedule.gamesPerPairByCategory || {},
-      categories: (window._getCreateFormCategoryData ? ((window._getCreateFormCategoryData() || {}).combinedCategories || []) : []),
+      categories: (window._getCreateFormCategoryData ? ((window._getCreateFormCategoryData(editorRoot) || {}).combinedCategories || []) : []),
       teamCount: tc.teamCount,
       turns: effectiveTurnos && effectiveTurnos.ligaTurnos === 2 ? 2 : 1,
       unitLabel: teamSize >= 2 ? 'dupla' : 'time'
@@ -5961,7 +5996,7 @@ function setupCreateTournamentModal() {
 
     // v1.6.2-beta: defensive reinit — modal may not exist if setupCreateTournamentModal
     // was skipped at boot (script load race on iOS). Sentry #7475975789 (count=2).
-    if (!document.getElementById('modal-create-tournament') && typeof setupCreateTournamentModal === 'function') {
+    if (!document.getElementById('form-create-tournament') && typeof setupCreateTournamentModal === 'function') {
       setupCreateTournamentModal();
     }
     var _titleEl = document.getElementById('create-modal-title');
@@ -6991,8 +7026,11 @@ window._readTournamentBrandingPatch = function(editId) {
   }
   return patch;
 };
-window._saveTournamentClickHandler = async function() {
-      var saveButton = document.getElementById('btn-save-tournament');
+window._saveTournamentClickHandler = async function(event) {
+      var capacityRoot = window._createTournamentEditorRoot(event);
+      var capacityField = function(id) { return window._createTournamentEditorField(capacityRoot,id); };
+      var saveButton = event && event.currentTarget && event.currentTarget.id === 'btn-save-tournament'
+        ? event.currentTarget : capacityField('btn-save-tournament');
       if (saveButton && saveButton.disabled) return;
       // Salvar pode incluir upload de imagem e a confirmação do servidor. O botão precisa
       // dizer que recebeu o comando durante toda a operação, não apenas ficar desabilitado.
@@ -7148,21 +7186,21 @@ window._saveTournamentClickHandler = async function() {
         const regDateVal = regTimeRaw ? regDateRaw + 'T' + regTimeRaw : regDateRaw;
         const enrollmentVal = document.getElementById('select-inscricao').value || 'individual';
         const teamSizeVal = parseInt(document.getElementById('tourn-team-size').value) || 1;
-        let maxPartsVal = parseInt(document.getElementById('tourn-max-participants').value) || null;
-        const maxPerCategoryVal = parseInt((document.getElementById('tourn-max-per-category') || {}).value, 10) || null;
-        const customCategoryCapacity = !!((document.getElementById('tourn-custom-category-capacity') || {}).checked);
-        const categoryDataForCapacity = ((window._getCreateFormCategoryData && window._getCreateFormCategoryData()) || {});
+        let maxPartsVal = parseInt(capacityField('tourn-max-participants').value) || null;
+        const maxPerCategoryVal = parseInt((capacityField('tourn-max-per-category') || {}).value, 10) || null;
+        const customCategoryCapacity = !!((capacityField('tourn-custom-category-capacity') || {}).checked);
+        const categoryDataForCapacity = ((window._getCreateFormCategoryData && window._getCreateFormCategoryData(capacityRoot)) || {});
         const capacityCategories = categoryDataForCapacity.combinedCategories || [];
         const allCapacityCategories = categoryDataForCapacity.allCombinedCategories || capacityCategories;
         let maxByCategoryVal = {};
         if (customCategoryCapacity) {
-          try { maxByCategoryVal = JSON.parse((document.getElementById('tourn-max-by-category') || {}).value || '{}'); } catch (e) { maxByCategoryVal = {}; }
+          try { maxByCategoryVal = JSON.parse((capacityField('tourn-max-by-category') || {}).value || '{}'); } catch (e) { maxByCategoryVal = {}; }
         }
         const normalizedExcluded = new Set((categoryDataForCapacity.excludedCategories || []).map(function(label) {
           return String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
         }));
         const categoryCapacityInputs = customCategoryCapacity
-          ? Array.from(document.querySelectorAll('#category-capacity-grid input[data-category], [data-slider-capacity] input[data-category]')) : [];
+          ? Array.from(capacityRoot.querySelectorAll('#category-capacity-grid input[data-category], [data-slider-capacity] input[data-category]')) : [];
         const validCategoryInputs = !customCategoryCapacity || (categoryCapacityInputs.length === allCapacityCategories.length &&
           categoryCapacityInputs.every(function(input) {
             const category = decodeURIComponent(input.getAttribute('data-category') || '');
@@ -7925,6 +7963,8 @@ window._saveTournamentClickHandler = async function() {
   window._renderEstimatedGameHours();
   window._syncCoverAngle(135);
   window._syncCoverBalance(50);
+  var readyForm = document.getElementById('form-create-tournament');
+  if (readyForm) readyForm.dataset.editorReady = 'true';
 }
 
 // ─── v2.1.33: datas/horários NUNCA são sugeridos — ficam em branco por padrão.
@@ -9599,18 +9639,18 @@ window.renderCreateTournamentPage = function (container, editId) {
     }, true);
     return;
   }
-  // Garantir que setupCreateTournamentModal já criou a estrutura DOM
-  if (!document.getElementById('modal-create-tournament') && typeof window.setupCreateTournamentModal === 'function') {
-    window.setupCreateTournamentModal();
+  var currentForm = document.getElementById('form-create-tournament');
+  var currentId = currentForm && currentForm.querySelector('#edit-tournament-id');
+  if (currentForm && String(currentId && currentId.value || '') !== String(editId || '')) {
+    var oldPanel = currentForm.closest('.modal');
+    var oldWrapper = currentForm.closest('#modal-create-tournament');
+    (oldWrapper || oldPanel || currentForm).remove();
+    currentForm = null;
   }
-  var modalEl = document.getElementById('modal-create-tournament');
-  var modalInner = modalEl ? modalEl.querySelector('.modal') : null;
-  if (!modalInner) {
-    if (modalEl) modalEl.remove();
-    if (typeof window.setupCreateTournamentModal === 'function') window.setupCreateTournamentModal();
-    modalEl = document.getElementById('modal-create-tournament');
-    modalInner = modalEl ? modalEl.querySelector('.modal') : null;
-  }
+  if (!currentForm && typeof window.setupCreateTournamentModal === 'function') window.setupCreateTournamentModal();
+  currentForm = document.getElementById('form-create-tournament');
+  var modalInner = currentForm && currentForm.closest('.modal');
+  var modalEl = currentForm && currentForm.closest('#modal-create-tournament');
   if (!modalInner) return;
   if (!editId) {
     var newTestRow = document.getElementById('tourn-test-mode-row');
@@ -9679,8 +9719,11 @@ window.renderCreateTournamentPage = function (container, editId) {
     }
   }
 
-  container.innerHTML = '';
-  container.appendChild(modalInner);
+  if (modalInner.parentNode !== container) {
+    modalInner.remove();
+    container.innerHTML = '';
+    container.appendChild(modalInner);
+  }
   if (modalEl && modalEl.parentNode === document.body) modalEl.remove();
 
   // Re-render header on every navigation so button labels/padding reflect actual

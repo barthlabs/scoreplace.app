@@ -145,6 +145,7 @@ const SUITES = [
   'tests/category-rotation-sliders.test.js',
   'tests/game-mode-selectors-browser.test.js',
   'tests/category-qualification-browser.test.js',
+  'tests/editor-capacity-save-browser.test.js',
   'tests/category-rotation-sliders-browser.test.js',
   'tests/universal-phase-grid-emulator.test.js',
   'tests/category-rotation-sliders-emulator.test.js',

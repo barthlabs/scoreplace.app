@@ -37,7 +37,7 @@ const {chromium}=require(root+'/node_modules/@playwright/test');
   const saveBlock=source.slice(saveStart,source.indexOf('        const autoCloseVal =',saveStart));
   await page.evaluate(code=>{
    window.checkActualSaveCapacity=new Function('categoryDataForCapacity','maxByCategoryVal','maxPartsVal',
-    'const customCategoryCapacity=true;const capacityCategories=categoryDataForCapacity.combinedCategories;'+
+    'const capacityRoot=document;const customCategoryCapacity=true;const capacityCategories=categoryDataForCapacity.combinedCategories;'+
     'const allCapacityCategories=capacityCategories;const maxPerCategoryVal=16;'+
     'let alert=null;const showAlertDialog=(title,message)=>{alert={title,message};};'+
     code+';return {maxPartsVal,maxByCategoryVal,alert};');
