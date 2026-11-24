@@ -41,8 +41,12 @@ for (const file of ['js/store.js', 'js/views/participants.js']) {
 }
 const bracket = fs.readFileSync(path.join(__dirname, '../js/views/bracket.js'), 'utf8');
 assert(bracket.includes(".collection('courtState').doc('main').onSnapshot"));
-assert.equal((bracket.match(/operationId: _courtOperationId\(\)/g) || []).length, 3,
-  'liberar, restaurar, cancelar chamada e adiar usam o recibo');
+const courtPayloads = Array.from(bracket.matchAll(/_callCF\('endMatchOnCourt', \{([^}]+)\}/g), match => match[1]);
+assert.equal(courtPayloads.length, 2, 'a chave envia liberação e reversão de quadra');
+assert(courtPayloads.some(payload => payload.includes("action: 'release'")));
+assert(courtPayloads.some(payload => payload.includes('action: action')));
+assert(courtPayloads.every(payload => payload.includes('operationId: _courtOperationId()')),
+  'liberar, restaurar e cancelar chamada continuam usando recibos');
 const autodrawConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '../functions-autodraw/firebase.json'), 'utf8'));
 assert(!autodrawConfig.functions.ignore.some(pattern => pattern.includes('operation-receipt-core')),
   'o contrato de recibo precisa acompanhar o deploy do autodraw');

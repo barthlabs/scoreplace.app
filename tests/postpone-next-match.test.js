@@ -85,7 +85,7 @@ const fullCourts = context.window._bracketOperationsSelect({ id:'tour_full_court
   matches:[...activeDiamond, firstGold] });
 assert.equal(fullCourts.active.length, 8);
 assert.equal(fullCourts.next.id, 'gold-1', 'mostra o primeiro Ouro mesmo com todas as quadras ocupadas');
-assert.equal(fullCourts.nextCallable, true, 'jogo definido de outra etapa admite chamada ou adiamento manual');
+assert.equal(fullCourts.nextCallable, true, 'jogo definido de outra etapa permanece candidato a chamada');
 const scheduledPlan = { id:'tour_interleaved_order', courtCount:8,
   scheduleWindow:{ interleavedPlan:{ schema:1, editorVersion:2, blocks:[] } }, matches:[firstGold] };
 assert.equal(context.window._bracketOperationsSelect(scheduledPlan).next.id, firstGold.id,
@@ -139,7 +139,7 @@ const laterDiamond = { id:'diamond-later', category:'Fem Diamante', p1:'Outra A'
   phaseIndex:0, scheduledAt:'2026-11-13T13:00:00.000Z' };
 withTie.matches.push(laterDiamond);
 assert.equal(context.window._bracketOperationsSelect(withTie).tieCanPostpone, true,
-  'com outro jogo da fase, o desempate oferece Pular jogo');
+  'o estado do desempate reconhece outro jogo elegível na mesma fase');
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].postponedAt = '2026-11-13T12:02:00Z';
 assert.equal(context.window._bracketOperationsSelect(withTie).next.id, laterDiamond.id,
   'pular a simples deixa o próximo jogo classificatório ser chamado');
@@ -148,13 +148,13 @@ firstGold.courtCalledAt = '2026-11-13T13:00:00Z';
 assert.equal(context.window._bracketOperationsSelect(withTie).next.id, 'tie-a',
   'sem outro jogo chamável, a simples volta antes da fase seguinte');
 assert.equal(context.window._bracketOperationsSelect(withTie).tieCanPostpone, false,
-  'na volta final não existe mais Pular jogo');
+  'na volta final o desempate é o único elegível');
 const dependent = { id:'diamond-final', category:'Fem Diamante', phaseIndex:1,
   p1:'Classificado A1', p2:'Classificado A2', scheduledAt:'2026-11-13T14:00:00.000Z' };
 withTie.matches.push(dependent);
 context.window.ScoreplaceNextMatch.knownSide = side => !String(side).startsWith('Classificado');
 assert.equal(context.window._bracketOperationsSelect(withTie).tieCanPostpone, false,
-  'eliminatória com classificação indefinida não habilita Pular jogo');
+  'eliminatória indefinida não conta como alternativa ao desempate');
 withTie.matches.pop();
 delete firstGold.courtCalledAt;
 delete withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].postponedAt;
@@ -181,9 +181,8 @@ vm.runInNewContext(source.slice(concentratedStart, concentratedEnd), context);
 const futureSchedule = { days:[{ day:'2026-11-13', startTime:'08:00', endTime:'19:30' }] };
 assert.equal(context.window._isConcentratedTournament({ id:'sb_future_event', scheduleWindow:futureSchedule }), true);
 assert.equal(context.window._isConcentratedTournament({ id:'tour_future_event', scheduleWindow:futureSchedule }), true);
-assert(source.includes("_callCF('endMatchOnCourt', {") && source.includes("action: 'postpone'") &&
-  source.includes("sandbox: String(t.id).startsWith('sb_')"),
-  'sandbox e torneio real devem chamar a mesma ação com o mesmo payload');
+assert.doesNotMatch(source, /data-postpone-next|data-tie-action="postpone"|action:\s*['"]postpone['"]/,
+  'a faixa permite selecionar outro confronto sem botão nem envio de adiamento');
 const reloadStart = source.indexOf('window._bracketReloadCourtState = function', start);
 const reloadEnd = source.indexOf('window._bracketEnsureCourtReleaseListener = function', reloadStart);
 assert(reloadStart > start && reloadEnd === end);
@@ -195,7 +194,7 @@ context.window.FirestoreDB = { db: { collection: () => ({ doc: () => ({ collecti
 context.Promise = Promise;
 const entry = { ready: true, revision: 7, postponed: ['j1'] };
 const pending = context.window._bracketReloadCourtState('tour_test', entry);
-assert.equal(entry.ready, false, 'segundo clique fica bloqueado até ler a revisão nova');
+assert.equal(entry.ready, false, 'o cache aguarda a revisão nova do servidor');
 assert.equal(sourceOption.source, 'server');
 resolveRead({ exists: true, data: () => ({ revision: 8, postponed: ['j2'], postponedReady: ['j1'] }) });
 pending.then(() => {
@@ -203,5 +202,5 @@ pending.then(() => {
   assert.equal(entry.revision, 8);
   assert.deepEqual(Array.from(entry.postponed), ['j2']);
   assert.deepEqual(Array.from(entry.postponedReady), ['j1']);
-  console.log('✓ pular jogo repetidamente usa a revisão confirmada do servidor');
+  console.log('✓ a fila respeita os adiamentos persistidos e a revisão confirmada pelo servidor');
 }).catch(error => { console.error(error); process.exitCode = 1; });
