@@ -17,6 +17,7 @@ Plataforma web de gestao de torneios esportivos e board games. App SPA (Single P
   valida que todos os alvos da mesma loja usam a mesma versão X.Y.Z, sem comparar com a web. O
   `CURRENT_PROJECT_VERSION` (build) segue independente e sempre incrementando — ele é da
   Apple, não do produto.
+- **Google Play (ordem do dono, 24/nov/2026).** Enviar novos candidatos diretamente à Produção na distribuição de cada plataforma (telefone ou Wear OS). Os APKs locais servem para diagnóstico.
 - **Convenção de versão (a partir de 30 Abr 2026):** `MAJOR.MINOR.PATCH-channel` no padrão semver. Em fase **beta**, incremento PATCH a cada deploy (`1.0.0-beta` → `1.0.1-beta` → `1.0.2-beta` → ...). MINOR sobe quando há feature significativa nova; MAJOR reservado pra v2.0 (mudanças incompatíveis). Estável: dropar o `-beta` (`1.0.0`).
 - **URL principal:** https://scoreplace.app
 - **GitHub repo:** `barthlabs/scoreplace.app` — ⚠️ **NÃO é `rstbarth/scoreplace.app`**, que este arquivo afirmou até 10/ago/2026. Os dois existem: `rstbarth/` é um espelho **ABANDONADO** (último push 20/mai/2026, `main` em `0ce285bb`) e `barthlabs/` é o `origin` de verdade. Isso importa porque o GitHub é **o backup** contra a corrupção do `.git` pelo Drive ([[project_git_repo_lives_in_google_drive]]): empurrar backup pro espelho morto — ou LER dele achando que é atual — é falha silenciosa. Conferir sempre com `git remote -v`.

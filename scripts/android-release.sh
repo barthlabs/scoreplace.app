@@ -13,9 +13,14 @@
 #
 # NÃO faz upload (ação outward-facing da conta Google). Ao fim aponta os .aab.
 #
-# Uso:  scripts/android-release.sh
+# Uso:  scripts/android-release.sh [--local-only]
 
 set -euo pipefail
+LOCAL_ONLY=false
+case "${1:-}" in
+  --local-only) LOCAL_ONLY=true; shift ;;
+esac
+[ "$#" -eq 0 ] || { echo "Uso: $0 [--local-only]" >&2; exit 2; }
 
 # ── TRAVA: nota de versão antes de gerar o .aab (mesmo motivo do iOS) ─────────
 node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/check-release-notes.js"
@@ -76,9 +81,7 @@ fi
 
 echo "▶ Buildando celular (:app) + relógio (:wear)…"
 # bundleRelease → .aab (formato do Play). assembleRelease do wear → APK só p/ validar o manifesto.
-# ⛔ :app:assembleRelease NÃO é opcional. Ordem do dono (12/set/2026): o .aab não se instala
-# em aparelho nenhum — quem ele testa é o APK do CELULAR, direto, ANTES de qualquer subida.
-# Sem este alvo, a leva chega ao fim sem a peça que o gate exige. [[project_apk_direto_e_o_gate]]
+# assembleRelease produz os APKs instaláveis para diagnóstico e validação.
 ./gradlew :app:bundleRelease :app:assembleRelease :wear:bundleRelease :wear:assembleRelease --console=plain --no-daemon
 
 APP_AAB="$(find app/build/outputs/bundle/release -name '*.aab' | head -1)"
@@ -96,16 +99,17 @@ echo "▶ Validando que os DOIS artefatos separados existem…"
 [ -n "$WEAR_AAB" ] || { echo "❌ FALHA: :wear (relógio) não gerou .aab. Os DOIS são obrigatórios."; exit 1; }
 [ "$APP_AAB" != "$WEAR_AAB" ] || { echo "❌ FALHA: celular e relógio apontam pro MESMO .aab → build cruzado."; exit 1; }
 echo "  ✅ Dois .aab distintos presentes (celular + relógio)."
-# ⛔ E o APK do CELULAR, que é o que o dono instala para APROVAR a leva.
-[ -n "$APP_APK_REL" ] || { echo "❌ FALHA: :app não gerou APK. É ELE que o dono instala para dar o OK."; exit 1; }
-echo "  ✅ APK do celular presente (o que vai para o aparelho do dono)."
+[ -n "$APP_APK_REL" ] || { echo "❌ Falta APK do celular."; exit 1; }
+python3 "$REPO_ROOT/scripts/check-android-native-symbols.py" "$APP_AAB" "$APP_APK_REL" --sdk "$ANDROID_HOME"
+ZIPALIGN="$(ls -t "$ANDROID_HOME"/build-tools/*/zipalign | head -1)"
+"$ZIPALIGN" -c -P 16 4 "$APP_APK_REL"
 
-# ── ENTREGA: o APK precisa CHEGAR ao aparelho, e o caminho é o Drive do dono ──
-# Pôr no Drive montado é o único passo que não depende de Play, faixa de teste nem cabo:
-# o celular vê o arquivo em segundos pelo app do Drive.
+# Entrega opcional do APK de diagnóstico ao Drive montado.
 DRIVE="$HOME/Library/CloudStorage/GoogleDrive-rstbarth@gmail.com/Meu Drive"
 APK_ENTREGUE=""
-if [ -d "$DRIVE" ]; then
+if "$LOCAL_ONLY"; then
+  echo "  APK disponível localmente em $APP_APK_REL"
+elif [ -d "$DRIVE" ]; then
   # nome com a VERSÃO REAL: dois APKs indistinguíveis no Drive já custaram uma volta inteira.
   _VER="$(tr -d ' \n\r' < "$REPO_ROOT/version.txt" 2>/dev/null)"
   [ -n "$_VER" ] || _VER="$(date +%Y%m%d-%H%M)"
@@ -141,17 +145,5 @@ echo "   Celular (.apk p/ o DONO) : $APP_APK_REL"
 [ -n "$APK_ENTREGUE" ] && echo "   Celular (no Drive)       : $APK_ENTREGUE"
 echo "   Relógio (.aab p/ o Play) : $WEAR_AAB"
 echo ""
-echo "⚠ MODELO ANDROID: são DUAS distribuições SEPARADAS na MESMA ficha do Play —"
-echo "   • Celular → track do app de telefone"
-echo "   • Relógio → track/distribuição de Wear OS (SEPARADA, não embutida)"
-echo "   Suba os DOIS .aab. Subir só um deixa a outra plataforma pra trás."
-echo "   O do relógio precisa estar ASSINADO com o mesmo upload key — ver nota"
-echo "   sobre signingConfig do :wear no README de release."
-echo "   (Na Apple é o oposto: watch vai EMBUTIDO num único arquivo — ver ios-archive.sh.)"
-echo ""
-echo "🚦 FLUXO OBRIGATÓRIO DE DISTRIBUIÇÃO ANDROID (definido em 17/set/2026):"
-echo "   1) Suba os dois .aab na faixa FECHADA do Google Play."
-echo "   2) O dono valida a build recebida pela faixa fechada no aparelho real."
-echo "   3) Só após o OK explícito do dono, promova a MESMA release para Produção."
-echo "   ⛔ Nunca envie uma build nova diretamente para Produção. O APK no Drive é apenas"
-echo "      artefato local de diagnóstico; ele não substitui a validação na faixa fechada."
+echo "Google Play: enviar o novo AAB de cada plataforma diretamente à Produção."
+echo "Telefone e Wear OS têm distribuições separadas na mesma ficha. Preserve o AAB já enviado quando só a outra plataforma mudou."

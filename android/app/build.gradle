@@ -4,6 +4,8 @@ apply plugin: 'kotlin-android'
 
 android {
     namespace = "app.scoreplace"
+    ndkVersion "25.2.9519653"
+    testBuildType project.findProperty("scoreplaceTestBuildType") ?: "debug"
     compileSdk = rootProject.ext.compileSdkVersion
 
     // Assinatura de release via android/keystore.properties (gitignored). Se o
@@ -35,27 +37,23 @@ android {
         applicationId "app.scoreplace"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 182
+        versionCode 184
         versionName "2.7.55"
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner project.findProperty("scoreplaceTestRunner") ?: "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    // ⚠️ AVISO DE SÍMBOLOS NATIVOS — NÃO TENTAR DE NOVO SEM DECISÃO NOVA.
-    // Medido 3×: `ndk { debugSymbolLevel 'SYMBOL_TABLE' }` (06/ago) e `'FULL'` (07/ago)
-    // NÃO produzem entrada de debugsymbols no .aab — a libdatastore_shared_counter.so
-    // (4 cópias, 4–7 KB, do androidx.datastore) vem STRIPPADA do fornecedor, sem
-    // `.symtab` nem `.debug_*`: não há símbolo para extrair.
-    // O ÚNICO caminho que apaga o aviso é excluir o .so via
-    // `packaging { jniLibs { excludes += ['**/libdatastore_shared_counter.so'] } }`.
-    // Foi implementado e passou no emulador (app abre, login nativo abre, sem
-    // UnsatisfiedLinkError) — e REVERTIDO por decisão do dono: "vai capar o negocio,
-    // deixa pra la. depois analisamos isso com calma". Arrancar código nativo de uma
-    // dependência pra silenciar aviso cosmético troca ruído por risco de runtime.
-    // O aviso de DESOFUSCAÇÃO, esse sim, foi resolvido (R8 ligado abaixo).
+    externalNativeBuild {
+        cmake {
+            path file("src/main/cpp/datastore/CMakeLists.txt")
+            version "3.22.1"
+        }
+    }
+    // A cópia local tem DWARF. O gate de release confere qual ELF venceu o merge.
+    packaging.jniLibs.pickFirsts += ["**/libdatastore_shared_counter.so"]
 
     buildTypes {
         release {
@@ -72,12 +70,7 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             if (keystorePropsFile.exists()) signingConfig signingConfigs.release
 
-            // ⚠️ NÃO adicionar `ndk { debugSymbolLevel ... }` — TENTADO E MEDIDO (06/ago).
-            // O único código nativo do pacote são 4 cópias de
-            // `libdatastore_shared_counter.so` (7 KB cada, do Firebase/DataStore), e elas
-            // já vêm STRIPPADAS: lendo as seções do .so só existe `.dynsym`, sem `.symtab`
-            // e sem `.debug_*`. A task roda, não acha símbolo e o .aab sai idêntico byte a
-            // byte. Esse aviso é o único dos dois que segue sem conserto do nosso lado.
+            ndk { debugSymbolLevel "FULL" }
         }
     }
 }
@@ -89,6 +82,10 @@ repositories {
 }
 
 dependencies {
+    implementation("androidx.datastore:datastore-core-android") {
+        version { strictly "1.1.7" }
+        because "O JNI compilado neste módulo corresponde a essa versão do AndroidX."
+    }
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"

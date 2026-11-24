@@ -55,3 +55,9 @@
 -dontwarn com.facebook.**
 -dontwarn com.twitter.**
 -dontwarn com.google.android.gms.games.**
+
+# O JNI resolve a classe e os quatro métodos pelo nome exportado no ELF.
+-keep class androidx.datastore.core.NativeSharedCounter {
+    public <init>();
+    native <methods>;
+}
