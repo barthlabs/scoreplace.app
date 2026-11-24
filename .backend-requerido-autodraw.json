@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "356cc174446594269fefc16fe3c6b33c3f85366f",
-  "scopeNote": "Três sliders por categoria e fase; modo comum ou individual; grupos e jogos exatos; séries apenas em quartetos 4x3, Super8 em duas quadras independentes; patrocinadores por quadra e preservação operacional.",
+  "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
+  "scopeNote": "Quatro sliders por categoria e fase, classificados por grupo transmitidos à próxima fase, grade universal e mapa pré-sorteio de grupos por entrada e quadras, com preservação operacional e séries restritas a quartetos Rei/Rainha.",
   "functions": [
     "createTournament",
     "updateTournamentConfiguration",

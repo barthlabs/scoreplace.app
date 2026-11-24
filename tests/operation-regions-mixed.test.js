@@ -146,12 +146,12 @@ for (const version of ['v2', 'v3']) {
     // nos manifestos operacionais; o backend central em us-central1 tem recibo
     // separado e mais recente. Usar HEAD aqui atestaria uma implantação
     // regional que ainda não ocorreu.
-    const recordedScoreCommit = '356cc174446594269fefc16fe3c6b33c3f85366f';
+    const recordedScoreCommit = 'a389c8807a6bf861beab4e4b1b14262767f667ae';
     const recordedScoreDigest = sourceDigest('applyMatchResult', recordedScoreCommit,
       sourceDescriptor('functions-autodraw', recordedScoreCommit, true));
     const scoreFresh = original.filter(row => row.name === `sp-op-score-${version}`)
       .every(row => row.commit === recordedScoreCommit && row.sourceDigest === recordedScoreDigest);
-    const recordedCourtCommit = '356cc174446594269fefc16fe3c6b33c3f85366f';
+    const recordedCourtCommit = 'a389c8807a6bf861beab4e4b1b14262767f667ae';
     const courtSources = sourceDescriptor('functions-autodraw', recordedCourtCommit, true);
     const courtFresh = original.filter(row => [`sp-op-court-${version}`, `sp-op-control-${version}`].includes(row.name))
       .every(row => row.commit === recordedCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedCourtCommit, courtSources));
