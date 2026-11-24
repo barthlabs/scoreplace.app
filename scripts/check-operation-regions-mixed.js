@@ -5,7 +5,16 @@ const fs = require('node:fs');
 const { execFileSync, spawnSync } = require('node:child_process');
 const path = require('node:path');
 const { sourceDescriptor, sourceDigest } = require('./operation-source-digest');
+const { validateFunctionSet } = require('./end-court-readiness-core');
 const root = path.join(__dirname, '..');
+
+function endCourtCommitFromManifest(manifest) {
+  validateFunctionSet(manifest);
+  if (manifest.schema !== 1 || typeof manifest.backendCommit !== 'string' || !/^[a-f0-9]{40}$/.test(manifest.backendCommit)) {
+    throw new Error('schema ou backendCommit inválido no manifesto de endMatchOnCourt');
+  }
+  return manifest.backendCommit;
+}
 
 function validateRows(rows, version, options) {
   options = options || {};
@@ -23,7 +32,6 @@ function validateRows(rows, version, options) {
   // Mudanças em outros arquivos de functions-autodraw (por exemplo, um vendor usado
   // no sorteio) não alteram a imagem desses dois serviços na malha regional.
   const courtControlRefreshCommit = '36a6b3ddae6427ee884ddbf9b7468986913872d3';
-  const endCourtRefreshCommit = 'b159a697d5e5cbe2f5db805ae7d1e3cfd9e7bcb8';
   const regions = version === 'v2'
     ? ['us-east1', 'us-east4', 'us-south1']
     : ['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1'];
@@ -71,11 +79,19 @@ function validateRows(rows, version, options) {
       (row.name === `sp-op-score-${version}` ? scoreRefreshCommit : releaseCommit))) {
     throw new Error('malha regional diverge do corte dirigido de placar');
   }
-  if (requireCourtControlRefresh && rows.some(row => row.commit !==
-      (row.name === `sp-op-score-${version}` ? scoreRefreshCommit :
-        row.name === `sp-op-end-court-${version}` ? endCourtRefreshCommit :
+  if (requireCourtControlRefresh) {
+    // Apenas o encerramento acompanha o corte declarado no manifesto de backend.
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, '.backend-requerido-autodraw.json'), 'utf8'));
+    const endCourtCommit = endCourtCommitFromManifest(manifest);
+    const endCourtName = `sp-op-end-court-${version}`;
+    if (rows.some(row => row.name === endCourtName && row.commit !== endCourtCommit)) {
+      throw new Error(`endMatchOnCourt exigido pelo manifesto não está na malha regional no commit ${endCourtCommit}`);
+    }
+    if (rows.some(row => row.name !== endCourtName && row.commit !==
+        (row.name === `sp-op-score-${version}` ? scoreRefreshCommit :
           [`sp-op-court-${version}`, `sp-op-control-${version}`].includes(row.name) ? courtControlRefreshCommit : releaseCommit))) {
-    throw new Error('malha regional diverge do corte dirigido de chamada e controle');
+      throw new Error('malha regional diverge do corte dirigido de chamada e controle');
+    }
   }
   if (!allowLegacyCourt && !requireCurrent && !uniformCurrent && !directed) {
     throw new Error('nenhuma porta direcionada usa o código atual');
@@ -96,4 +112,4 @@ if (require.main === module) {
   process.stdout.write(JSON.stringify(validateRows(JSON.parse(fs.readFileSync(file, 'utf8')), version, options)) + '\n');
 }
 
-module.exports = { validateRows };
+module.exports = { validateRows, endCourtCommitFromManifest };

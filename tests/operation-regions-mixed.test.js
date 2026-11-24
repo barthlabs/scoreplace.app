@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const { sourceDescriptor, sourceDigest } = require('../scripts/operation-source-digest');
-const { validateRows } = require('../scripts/check-operation-regions-mixed');
+const { validateRows, endCourtCommitFromManifest } = require('../scripts/check-operation-regions-mixed');
 const { legacyFixtureAvailability, legacyFixtureRows } = require('./operation-regions-legacy-fixture');
 const root = path.join(__dirname, '..');
 const script = path.join(root, 'scripts/check-operation-regions-mixed.js');
@@ -40,6 +40,14 @@ const digest = skipReason ? '' : execFileSync('node',
 const scoreDigest = skipReason ? '' : execFileSync('node',
   ['scripts/operation-source-digest.js', 'functions-autodraw', 'applyMatchResult', current, '--from-git'],
   { cwd: root }).toString().trim();
+
+test('manifesto de encerramento exige o SHA integral e a função no corte', () => {
+  const manifest = { schema:1, backendCommit:'a'.repeat(40), functions:['endMatchOnCourt'] };
+  assert.equal(endCourtCommitFromManifest(manifest), manifest.backendCommit);
+  assert.throws(() => endCourtCommitFromManifest({ ...manifest, backendCommit:'abc' }), /backendCommit/);
+  assert.throws(() => endCourtCommitFromManifest({ ...manifest, schema:2 }), /schema/);
+  assert.throws(() => endCourtCommitFromManifest({ ...manifest, functions:['applyMatchResult'] }), /deve incluir endMatchOnCourt/);
+});
 
 for (const version of ['v2', 'v3']) {
   const run = (rows, allowLegacyCourt = false, extraEnv = {}, requireCurrent = false, requireScoreRefresh = false, requireCourtControlRefresh = false) => {
@@ -147,12 +155,21 @@ for (const version of ['v2', 'v3']) {
     const courtSources = sourceDescriptor('functions-autodraw', recordedCourtCommit, true);
     const courtFresh = original.filter(row => [`sp-op-court-${version}`, `sp-op-control-${version}`].includes(row.name))
       .every(row => row.commit === recordedCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedCourtCommit, courtSources));
-    const recordedEndCourtCommit = 'b159a697d5e5cbe2f5db805ae7d1e3cfd9e7bcb8';
+    const recordedEndCourtCommit = JSON.parse(fs.readFileSync(path.join(root, '.backend-requerido-autodraw.json'), 'utf8')).backendCommit;
     const endCourtSources = sourceDescriptor('functions-autodraw', recordedEndCourtCommit, true);
     const endCourtFresh = original.filter(row => row.name === `sp-op-end-court-${version}`)
       .every(row => row.commit === recordedEndCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedEndCourtCommit, endCourtSources));
     assert.equal(run(original, false, {}, false, false, true).status === 0, scoreFresh && courtFresh && endCourtFresh,
       'corte dirigido só aceita as revisões de placar, chamada, encerramento e controle efetivamente publicadas');
+    const staleEndCourt = 'b159a697d5e5cbe2f5db805ae7d1e3cfd9e7bcb8';
+    const staleDigest = sourceDigest('endMatchOnCourt', staleEndCourt,
+      sourceDescriptor('functions-autodraw', staleEndCourt, true));
+    const previous = original.map(row => row.name === `sp-op-end-court-${version}`
+      ? { ...row, commit:staleEndCourt, sourceDigest:staleDigest } : row);
+    assert.equal(run(previous).status, 0, 'o corte anterior ainda passa as verificações de integridade');
+    const stale = run(previous, false, {}, false, false, true);
+    assert.equal(stale.status, 1);
+    assert.match(stale.stderr, new RegExp('endMatchOnCourt.*' + recordedEndCourtCommit));
     assert.notEqual(run(original, true, {}, false, true).status, 0, 'flags incompatíveis são recusadas');
     assert.notEqual(run(original, false, {}, true, true).status, 0, 'dois modos obrigatórios são recusados');
     const wrongOther = structuredClone(original);
