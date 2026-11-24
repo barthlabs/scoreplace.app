@@ -958,7 +958,7 @@ window._bracketFocusOperationsStrip = function(tId, behavior) {
  * ([[feedback_instrumentacao_nao_pode_cobrar_pedagio]]). */
 function _medirLarguraUtilDaChave() {
   try {
-    var alvo = document.querySelector('[data-hscroll]:not(.sp-operations-track)')
+    var alvo = document.querySelector('[data-hscroll]:not(.sp-operations-court-track)')
             || document.getElementById('inline-bracket-container')
             || document.getElementById('view-container');
     var w = (alvo && alvo.clientWidth) || 0;
@@ -2801,10 +2801,12 @@ window._bracketOperationsRefresh = function (t, root) {
     });
   }
   root._bracketOperationsDrafts = root._bracketOperationsDrafts || {};
-  var previousTrack = existing.querySelector('.sp-operations-track');
+  var previousTrack = existing.querySelector('.sp-operations-court-track');
   var scrollMemory = window._spOperationsScrollByTournament || (window._spOperationsScrollByTournament = {});
   var trackScroll = previousTrack ? previousTrack.scrollLeft : Number(scrollMemory[String(t.id)] || 0);
-  var previousNextScroll = previousTrack && previousTrack.querySelector('.sp-operations-next-scroll');
+  var previousNextScroll = existing.querySelector('.sp-operations-next-scroll');
+  var previousPendingScroll = existing.querySelector('.sp-operations-pending-track');
+  var pendingScrollTop = previousPendingScroll ? previousPendingScroll.scrollTop : 0;
   var nextScrollMemory = window._spOperationsNextScrollByTournament || (window._spOperationsNextScrollByTournament = {});
   var nextScrollTop = previousNextScroll && previousNextScroll.clientHeight ? previousNextScroll.scrollTop :
     Number(nextScrollMemory[String(t.id)] || 0);
@@ -2889,7 +2891,7 @@ window._bracketOperationsRefresh = function (t, root) {
   }).join('');
   if (existing._spNextScrollRestoreObserver) { existing._spNextScrollRestoreObserver.disconnect(); existing._spNextScrollRestoreObserver = null; }
   if (existing._spSeriesLabelObserver) { existing._spSeriesLabelObserver.disconnect(); existing._spSeriesLabelObserver = null; }
-  existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll" aria-label="Próximos jogos">' +
+  existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next"><div class="sp-operations-next-scroll" aria-label="Próximos jogos">' +
     advancePhaseHtml +
     (nextCardsHtml || '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (categoryFilter ? 'Nenhum próximo jogo nesta categoria.' : state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
@@ -2899,7 +2901,7 @@ window._bracketOperationsRefresh = function (t, root) {
     (typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user) ?
       '<button type="button" class="sp-operations-simulate" data-operations-simulate="1" title="Registra placares simulados apenas nos jogos que estão em quadra agora"' +
       (state.active.some(function (m) { return m && categoryMatches(m) && !m.isTieBreak && !m.winner && !m.pendingResult; }) ? '' : ' disabled') + '>Simular</button>' : '') +
-    '</div><div class="sp-operations-court-track">' +
+    '</div><div class="sp-operations-court-track" data-hscroll="ops:track">' +
     state.courts.map(function (court) {
       var allCourtGames = state.active.filter(function (m) { return String(m.court) === court; });
       var games = allCourtGames.filter(categoryMatches);
@@ -2955,10 +2957,11 @@ window._bracketOperationsRefresh = function (t, root) {
     if (cardHeights.length) root._bracketOperationsGameHeight = Math.max.apply(null, [210].concat(cardHeights));
     operationsTrack.style.setProperty('--sp-operations-card-height',
       (root._bracketOperationsGameHeight || 120) + 'px');
-    operationsTrack.scrollLeft = trackScroll;
-    scrollMemory[String(t.id)] = operationsTrack.scrollLeft;
-    operationsTrack.addEventListener('scroll', function () {
-      scrollMemory[String(t.id)] = operationsTrack.scrollLeft;
+    var courtTrack = operationsTrack.querySelector('.sp-operations-court-track');
+    courtTrack.scrollLeft = trackScroll;
+    scrollMemory[String(t.id)] = courtTrack.scrollLeft;
+    courtTrack.addEventListener('scroll', function () {
+      scrollMemory[String(t.id)] = courtTrack.scrollLeft;
     }, { passive:true });
     var nextScroll = operationsTrack.querySelector('.sp-operations-next-scroll');
     if (nextScroll) {
@@ -2980,7 +2983,9 @@ window._bracketOperationsRefresh = function (t, root) {
         existing._spNextScrollRestoreObserver.observe(nextScroll);
       }
     }
-    _bracketOperationsBindScrollbar(operationsTrack, existing.querySelector('.sp-operations-scrollbar'));
+    var pendingScroll = existing.querySelector('.sp-operations-pending-track');
+    if (pendingScroll) pendingScroll.scrollTop = pendingScrollTop;
+    _bracketOperationsBindScrollbar(courtTrack, existing.querySelector('.sp-operations-scrollbar'));
     if (window.scrollY !== pageY || window.scrollX !== pageX) window.scrollTo(pageX, pageY);
   }
   Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
@@ -5522,8 +5527,6 @@ function renderBracket(container, tournamentId, isInline) {
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._tvMode('${_tIdSafe}')">📺 Modo TV</button>` : '<span></span>'}
       ${hasContent && isOrg && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._downloadTournamentSumula('${_tIdSafe}', 'both')">📋 Súmulas</button>` : ''}
       ${isOrg && !isTournamentFinished && !hasContent ? `<button class="btn btn-primary btn-sm hover-lift" style="grid-column:span 2;" onclick="if(window._handleSortearClick)window._handleSortearClick('${_tIdSafe}',false);else window.generateDrawFunction('${_tIdSafe}')">🎲 Realizar Sorteio</button>` : ''}
-      ${(hasContent && isOrg && t.testModeEnabled === true && typeof window._isDeveloperIdentity === 'function' && window._isDeveloperIdentity()) ? `<button class="btn btn-warning btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="${t.isSandbox === true ? 'window._resetTournamentToEnrollment' : 'window._restoreTournamentPrePublication'}('${_tIdSafe}')">🔄 Resetar sorteio</button>` : ''}
-      ${(hasContent && isOrg && !isTournamentFinished && t.testModeEnabled === true && typeof window._isDeveloperIdentity === 'function' && window._isDeveloperIdentity()) ? `<button class="btn btn-purple btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._devSimulateCurrentPhase('${_tIdSafe}')">🎲 Simular resultados</button>` : ''}
     </div>
     <style>
       @media (min-width: 768px) {
@@ -6286,14 +6289,14 @@ window._endMatchOnCourt = function (tId, matchId, button, endWholeBlock) {
       : position >= 0
       ? 'Encerrar este jogo sem placar? Ele ficará em Placares pendentes; os demais jogos permanecem em suas quadras.'
       : 'Liberar esta quadra sem placar? O jogo ficará em Placares pendentes.', function () {
-  if (!window.ScoreplaceOperationRouter || typeof window.ScoreplaceOperationRouter.call !== 'function') return Promise.reject(new Error('Serviço indisponível.'));
+  if (typeof window._callCF !== 'function') return Promise.reject(new Error('Serviço indisponível.'));
   if (button) button.disabled = true;
   if (button) button.setAttribute('aria-busy', 'true');
-  return window.ScoreplaceOperationRouter.call('endMatchOnCourt', {
+  return window._callCF('endMatchOnCourt', {
     tournamentId: String(tId), matchId: String(matchId), sandbox: String(tId).startsWith('sb_'),
     action: 'release', monarchEndWholeBlock:blockMode, operationId: _courtOperationId()
-  }, null).then(function (res) {
-    var data = res || {};
+  }, 'Entre na sua conta para encerrar o jogo.').then(function (res) {
+    var data = (res && res.data) || res || {};
     if (!data.ok) throw new Error('Não foi possível liberar a quadra.');
     var releasedCount = Array.isArray(data.releasedMatchIds) ? data.releasedMatchIds.length : 0;
     if (typeof showNotification === 'function') showNotification(blockMode ? 'Bloco encerrado' : 'Quadra liberada',

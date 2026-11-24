@@ -1,3 +1,7 @@
+## 2.7.52 — 24/nov/2026 (operação, teste e transmissão)
+
+- Encerrar bloco envia os três jogos para Placares pendentes e libera a quadra. Encerrar jogo envia só a partida escolhida. Na operação, só as quadras rolam para os lados e o relógio cabe no card. A tela No ar abre em uma janela independente e a escolha do monitor ativa a tela cheia. Nas ferramentas, Editar vem primeiro e o modo de teste mantém sua configuração ao salvar outros campos.
+
 ## 2.7.48 — 23/nov/2026 (trava de publicação regional)
 
 - A verificação de publicação reconhece o commit efetivamente implantado nas funções regionais de encerramento por quadra.

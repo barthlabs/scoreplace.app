@@ -139,6 +139,27 @@ ok('  → e o cálculo vive FORA do ramo isLigaAutoDraw (vale pros três ramos)'
   src.indexOf('var _phaseCanAdvance') < src.indexOf('if (isLigaAutoDraw) {'),
   'o _advBtn voltou pra dentro do ramo — as outras formas ficam sem botão');
 
+const dev = { uid:'B17n7JCXYOfqahlcLZ0fKxGGyUu1', email:'org@x.com' };
+W._isDeveloperIdentity = () => W.AppStore.currentUser.uid === dev.uid;
+function tools(overrides, user = dev) {
+  const tournament = Object.assign(torneio(), { creatorUid:dev.uid, adminUids:[dev.uid], isPublic:false,
+    organizerOnly:true, testModeEnabled:true }, overrides);
+  const detail = renderDetalhe(tournament, user);
+  const start = detail.lastIndexOf('class="org-tools-label"');
+  return start < 0 ? '' : detail.slice(start).split('</div>\n            </div>')[0];
+}
+const currentTools = tools({});
+const buttons = currentTools.match(/<button[^>]*>/g) || [];
+ok('Editar é a primeira ferramenta', buttons.length > 0 && buttons[0].includes('_navigateToCreateTournament'));
+ok('uma ação de reset e nenhuma simulação, presença ou encerramento duplicado',
+  (currentTools.match(/_restoreTournamentPrePublication/g) || []).length === 1 &&
+  !/Simular resultados|Encerrar ensaio|📋 Presença|_realTournamentRehearsalAction/.test(currentTools));
+ok('sem sorteio não oferece reset', !tools({ rounds:[], matches:[], groups:[] }).includes('_restoreTournamentPrePublication'));
+ok('sem teste não oferece reset', !tools({ testModeEnabled:false }).includes('_restoreTournamentPrePublication'));
+const resuming = tools({ rehearsal:{ state:'resetting' } });
+ok('recuperação exclusiva do reset interrompido', resuming.includes('_realTournamentRehearsalAction') && !resuming.includes('_restoreTournamentPrePublication'));
+ok('reset antigo ausente no ensaio ativo', !tools({ rehearsal:{ state:'active' } }).includes('_realTournamentRehearsalAction'));
+ok('participante não recebe ferramentas', !tools({}, { uid:'visitor', email:'visitor@example.test' }).includes('_navigateToCreateTournament'));
 console.log(falhas === 0
   ? '\n✅ avancar-de-fase-e-um-botao-so: OK'
   : '\n❌ avancar-de-fase-e-um-botao-so: ' + falhas + ' falha(s)');

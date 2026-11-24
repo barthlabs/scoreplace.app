@@ -4702,14 +4702,25 @@ function renderTournaments(container, tournamentId = null) {
               </div>
             </div>`;
               }
+              var testResetButton = '';
+              var developer = isOrg && typeof window._isDeveloperIdentity === 'function' && window._isDeveloperIdentity();
+              if (developer && t.rehearsal && t.rehearsal.state === 'resetting') {
+                if (t.isSandbox !== true && !isFinished && t.isPublic === false && t.organizerOnly === true &&
+                    window.AppStore.currentUser && t.creatorUid === window.AppStore.currentUser.uid) {
+                  testResetButton = `<button class="btn btn-danger hover-lift" onclick="event.stopPropagation();window._realTournamentRehearsalAction('${_escAttr(t.id)}','reset')">🔄 ${_t('org.resumeTestReset')}</button>`;
+                }
+              } else if (developer && hasDraw && t.testModeEnabled === true && (t.isSandbox !== true || !isFinished)) {
+                var resetHandler = t.isSandbox === true ? '_resetTournamentToEnrollment' : '_restoreTournamentPrePublication';
+                testResetButton = `<button class="btn btn-warning hover-lift" onclick="event.stopPropagation();window.${resetHandler}('${_escAttr(t.id)}')">🔄 ${_t('org.resetTest')}</button>`;
+              }
               return `
             <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid ${_toolsBorder};">
               <div class="org-tools-label" style="${_TOOLS_LABEL_CSS} ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
-                ${hasDraw && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button><button class="btn btn-outline hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
-                ${isOrg && Array.isArray(t.matches) && t.matches.some(m => m && (m.isMonarch === true || m.monarchGroup != null)) ? `<button class="btn btn-outline hover-lift" onclick="event.stopPropagation(); window._openPublishedInitialDrawResult('${_escAttr(t.id)}')">🖼️ Resultado do sorteio</button>` : ''}
                 ${/* create-tournament.js is deferred after this view; the hash fallback is intentional so a direct detail render never loses Editar during that load window. */ !isFinished ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); if (typeof window._navigateToCreateTournament === 'function') { window._navigateToCreateTournament('${_escAttr(t.id)}'); } else { window.location.hash = '#novo-torneio/${_escAttr(t.id)}'; }">✏️ ${_t('btn.edit')}</button>` : ''}
+                ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
+                ${hasDraw && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button>` : ''}
+                ${isOrg && Array.isArray(t.matches) && t.matches.some(m => m && (m.isMonarch === true || m.monarchGroup != null)) ? `<button class="btn btn-outline hover-lift" onclick="event.stopPropagation(); window._openPublishedInitialDrawResult('${_escAttr(t.id)}')">🖼️ Resultado do sorteio</button>` : ''}
                 <button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.location.hash='#comunicados/${t.id}'">📢 Comunicados</button>
                 ${addParticipantBtns}
                 ${isOrg && !hasDraw && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._openTournamentClaimLink('${_escAttr(t.id)}', ${window._isSandboxTournament && window._isSandboxTournament(t) ? 'true' : 'false'})">🔗 Vincular contas às vagas</button>` : ''}
@@ -4740,10 +4751,7 @@ function renderTournaments(container, tournamentId = null) {
                       _setPhaseLateEnrollment DELETADAS (v1.3.66). Pedido do dono. */ ''}
                 ${sortearBtn}
                 ${sortearAberto}
-                ${(window.AppStore.currentUser && window.AppStore.currentUser.uid === 'B17n7JCXYOfqahlcLZ0fKxGGyUu1' && t.creatorUid === window.AppStore.currentUser.uid && t.isSandbox !== true && !isFinished && t.isPublic === false && t.organizerOnly === true && t.rehearsal && (t.rehearsal.state === 'active' || t.rehearsal.state === 'resetting' || t.rehearsal.step === 'verification-failed')) ? `<button class="btn btn-danger hover-lift" onclick="event.stopPropagation();window._realTournamentRehearsalAction('${_escAttr(t.id)}','reset')">${t.rehearsal.state === 'resetting' ? '🔄 Retomar reset' : '🔄 Resetar teste'}</button>` : ''}
-                ${(window.AppStore.currentUser && window.AppStore.currentUser.uid === 'B17n7JCXYOfqahlcLZ0fKxGGyUu1' && t.creatorUid === window.AppStore.currentUser.uid && t.isSandbox !== true && !isFinished && t.isPublic === false && t.organizerOnly === true && t.rehearsal && t.rehearsal.state === 'active' && t.rehearsal.mode === 'preDraw') ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation();window._realTournamentRehearsalAction('${_escAttr(t.id)}','finish')">Encerrar ensaio</button>` : ''}
-                ${isOrg && hasDraw && t.testModeEnabled === true && t.isSandbox !== true && typeof window._isDeveloperIdentity === 'function' && window._isDeveloperIdentity() ? `<button class="btn btn-warning hover-lift" onclick="event.stopPropagation(); window._restoreTournamentPrePublication('${t.id}')" title="Apaga jogos e placares do teste, preservando inscritos e configuração">🔄 Resetar sorteio</button>` : ''}
-                ${isOrg && hasDraw && !isFinished && t.testModeEnabled === true && t.isSandbox !== true && typeof window._isDeveloperIdentity === 'function' && window._isDeveloperIdentity() ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window._devSimulateCurrentPhase('${t.id}')">🎲 Simular resultados</button>` : ''}
+                ${testResetButton}
                 ${/* ⛔ REMOVIDO: a segunda renderização de "Avançar de fase" (bloco v4.4.50).
                       Ela criava "🏆 Avançar de fase" sob a MESMA condição do "⏭️ Avançar de
                       Fase" que já vem em `sortearBtn` logo acima — os dois apareciam LADO A
@@ -4760,9 +4768,6 @@ function renderTournaments(container, tournamentId = null) {
                       _renderPlayoffSection) deletado de vez — confirmado que nenhum
                       torneio no banco usava. A fase final da Liga agora é uma fase do
                       construtor de fases (t.phases[]), adicionada em sequência à Liga. */ ''}
-                ${/* Reset + Simular fase: SÓ no SB e só pro dev (some dos torneios normais). */ ''}
-                ${(!isFinished && t.testModeEnabled === true && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isDeveloperIdentity === 'function' && window._isDeveloperIdentity() && hasDraw) ? `<button class="btn btn-tool-amber hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window._resetTournamentToEnrollment('${t.id}')">🔄 Resetar sorteio</button>` : ''}
-                ${(!isFinished && t.testModeEnabled === true && window._isSandboxTournament && window._isSandboxTournament(t) && hasDraw && typeof window._isDeveloperIdentity === 'function' && window._isDeveloperIdentity()) ? `<button class="btn btn-purple hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window._devSimulateCurrentPhase('${t.id}')">🎲 Simular resultados</button>` : ''}
                 ${window.AppStore.isCreator(t) ? `<button class="btn btn-danger hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window.deleteTournamentFunction('${t.id}')">🗑️ ${_t('enroll.deleteTournament') || 'Apagar Torneio'}</button>` : ''}
               </div>
             </div>`;

@@ -1,3 +1,4 @@
+// 2.7.52 — Encerrar bloco envia os três jogos para Placares pendentes e libera a quadra. Encerrar jogo envia só a partida escolhida. Na operação, só as quadras rolam para os lados e o relógio cabe no card. A tela No ar abre em uma janela independente e a escolha do monitor ativa a tela cheia. Nas ferramentas, Editar vem primeiro e o modo de teste mantém sua configuração ao salvar outros campos.
 // 2.7.51 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.50 — Na classificação final da Confra, as eliminatórias Ouro e Prata permanecem separadas e identificadas após o encerramento; a convergência só acontece quando a final conjunta termina. Na configuração de torneios, o organizador pode formar grupos informando quantos grupos quer ou quantas pessoas cabem em cada grupo; a distribuição fica equilibrada e o rodízio A–H só se aplica a grupos de oito.
 // 2.7.49 — Atualização consolidada de produção com as correções validadas desde a última publicação.
@@ -1929,9 +1930,11 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800;color:var(--sp-c-a7f3d0,#a7f3d0);font-size:1rem;margin-bottom:8px;">🎾 v2.7 — Torneios sem interrupção <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(Novembro, 2026)</span></div>' +
       '<ul style="margin:0;padding-left:1.1rem;font-size:0.86rem;line-height:1.5;color:var(--text-main);">' +
-        '<li>Na operação, os próximos jogos aparecem em cards roláveis, com a fase de cada partida. Jogos prontos de outra fase continuam disponíveis para chamada.</li>' +
+        '<li>Na operação, Próximo jogo e Placares pendentes têm rolagem vertical independente. Deslize para os lados em Em quadra para ver outras quadras. Jogos prontos de outra fase continuam disponíveis para chamada.</li>' +
+        '<li>Encerrar bloco libera a quadra e envia os três jogos para Placares pendentes. Encerrar jogo envia apenas a partida escolhida.</li>' +
+        '<li>Editar aparece primeiro nas ferramentas disponíveis. Salvar outros campos mantém a configuração de teste e, após o sorteio, Resetar teste volta ao ponto configurado.</li>' +
         '<li>A lista de quadras livres considera os jogos realmente em andamento. O placar registrado continua válido mesmo quando uma estimativa de horário da agenda é ultrapassada.</li>' +
-        '<li>Na tela No Ar, é possível escolher o monitor de apresentação quando o navegador permite identificar as telas conectadas.</li>' +
+        '<li>No ar abre uma janela de apresentação independente. Nela, selecione o monitor para entrar em tela cheia.</li>' +
         '<li>No relógio Wear, a tela de resultado acompanha a fonte escolhida no sistema e permite rolar até as ações sem cortar nomes ou botões.</li>' +
       '</ul>' +
     '</div>' +

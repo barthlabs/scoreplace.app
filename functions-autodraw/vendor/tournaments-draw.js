@@ -287,7 +287,7 @@ window._realTournamentRehearsalAction = function (tId, action) {
   var postDrawReset = isReset && t.rehearsal && t.rehearsal.mode === 'postDraw';
   if (isReset ? !(t.rehearsal && (t.rehearsal.state === 'active' || t.rehearsal.state === 'resetting' || t.rehearsal.step === 'verification-failed'))
               : !!(t.rehearsal && t.rehearsal.state && t.rehearsal.state !== 'capturing')) return;
-  showAlertDialog(isFinish ? 'Encerrar ensaio e restaurar o pré-sorteio?' :
+  showAlertDialog(isReset && t.rehearsal.state === 'resetting' ? window._t('org.resumeTestResetConfirm') : isFinish ? 'Encerrar ensaio e restaurar o pré-sorteio?' :
     (isReset ? (postDrawReset ? '🔄 Resetar teste para os grupos sorteados?' : '🔄 Restaurar estado anterior ao teste?') : '🧪 Iniciar teste com restauração?'),
     isFinish
       ? 'O servidor vai apagar o sorteio, jogos e resultados do teste, conferir a fotografia pré-sorteio e então liberar as inscrições e notificações. O botão de reset deixará de aparecer.'
@@ -334,7 +334,7 @@ window._restoreTournamentPrePublication = function (tId) {
   if (!t || !testMode || typeof showAlertDialog !== 'function') return;
   var preserveDraw = t.preserveDrawOnTestReset === true;
   var n = (typeof window._countCompetitors === 'function') ? window._countCompetitors(t).people : (t.participants || []).length;
-  showAlertDialog('🔄 Resetar sorteio?',
+  showAlertDialog('🔄 ' + window._t('org.resetTestConfirm'),
     preserveDraw
       ? 'Apaga os dados do teste e restaura exatamente o torneio como estava no momento do sorteio preservado. Inscrições, duplas e configurações alteradas depois desse momento também serão revertidas. O teste recomeça depois do sorteio.'
       : 'Apaga todos os jogos, placares e resultados do teste. Mantém os <strong>' + n +

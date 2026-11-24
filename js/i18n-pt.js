@@ -271,6 +271,10 @@ window._translations['pt'] = {
   'enroll.suspended': 'Inscrições suspensas durante a enquete.',
 
   // Organizer tools
+  'org.resetTest': 'Resetar teste',
+  'org.resetTestConfirm': 'Resetar teste?',
+  'org.resumeTestReset': 'Retomar reset',
+  'org.resumeTestResetConfirm': 'Retomar o reset interrompido?',
   'org.tools': 'Ferramentas do Organizador',
   'org.closeRegistration': 'Encerrar Inscrições',
   'org.reopenRegistration': 'Reabrir Inscrições',

@@ -112,7 +112,7 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
   var resetStart = server.indexOf('exports.resetTournamentToEnrollment = onCall');
   var resetEnd = server.indexOf('// ─── Rodada extra manual', resetStart);
   var resetServer = server.slice(resetStart, resetEnd);
-  ok(/t\.testModeEnabled === true/.test(tournaments) && /_isDeveloperIdentity/.test(tournaments) && /Resetar sorteio/.test(tournaments) && /_restoreTournamentPrePublication/.test(tournaments),
+  ok(/t\.testModeEnabled === true/.test(tournaments) && /_isDeveloperIdentity/.test(tournaments) && /org\.resetTest/.test(tournaments) && /_restoreTournamentPrePublication/.test(tournaments),
     'as Ferramentas oferecem reset somente no modo de teste do desenvolvedor');
   ok(/var preserveDraw = t\.preserveDrawOnTestReset === true/.test(draw) &&
     /var restoreMode = preserveDraw \? 'testModePostDraw' : 'testModePreDraw'/.test(draw) &&

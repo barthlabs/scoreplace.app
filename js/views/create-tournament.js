@@ -5848,6 +5848,18 @@ function setupCreateTournamentModal() {
     }
   };
 
+  function editedTestSettings(editId) {
+    var patch = {};
+    if (!editId || !window._isDeveloperIdentity || !window._isDeveloperIdentity()) return patch;
+    var test = document.getElementById('tourn-test-mode');
+    if (!test || test.dataset.tournamentId !== String(editId)) return patch;
+    if (test.dataset.initialChecked !== String(test.checked)) patch.testModeEnabled = test.checked;
+    var preserve = document.getElementById('tourn-preserve-draw');
+    if (test.checked && preserve && preserve.dataset.tournamentId === String(editId) &&
+        preserve.dataset.initialChecked !== String(preserve.checked)) patch.preserveDrawOnTestReset = preserve.checked;
+    return patch;
+  }
+
   window._syncTournamentTestMode = function () {
     var input = document.getElementById('tourn-test-mode');
     var state = document.getElementById('tourn-test-mode-state');
@@ -5901,8 +5913,16 @@ function setupCreateTournamentModal() {
     var isDeveloper = window._isDeveloperIdentity && window._isDeveloperIdentity();
     if (testModeRow) testModeRow.style.display = isDeveloper ? 'flex' : 'none';
     if (preserveDrawRow) preserveDrawRow.style.display = isDeveloper ? 'flex' : 'none';
-    if (testModeInput) testModeInput.checked = t.testModeEnabled === true;
-    if (preserveDrawInput) preserveDrawInput.checked = t.preserveDrawOnTestReset === true;
+    if (testModeInput) {
+      testModeInput.checked = t.testModeEnabled === true;
+      testModeInput.dataset.initialChecked = String(testModeInput.checked);
+      testModeInput.dataset.tournamentId = String(tId);
+    }
+    if (preserveDrawInput) {
+      preserveDrawInput.checked = t.preserveDrawOnTestReset === true;
+      preserveDrawInput.dataset.initialChecked = String(preserveDrawInput.checked);
+      preserveDrawInput.dataset.tournamentId = String(tId);
+    }
     window._syncTournamentTestMode();
     // Match sport option even if stored value lacks emoji prefix (legacy data)
     const sportSelect = document.getElementById('select-sport');
@@ -7209,12 +7229,7 @@ window._saveTournamentClickHandler = async function() {
           // `t.matches` taggeado; doc sem a marca é legado e não muda de lugar.
           storageCanonico: true,
           name,
-          ...(editId && window._isDeveloperIdentity && window._isDeveloperIdentity()
-            ? {
-              testModeEnabled: !!((document.getElementById('tourn-test-mode') || {}).checked),
-              preserveDrawOnTestReset: !!((document.getElementById('tourn-test-mode') || {}).checked &&
-                (document.getElementById('tourn-preserve-draw') || {}).checked)
-            } : {}),
+          ...editedTestSettings(editId),
           isPublic: isPublicVal,
           membersOnly: visibilityVal === 'members',
           organizerOnly: visibilityVal === 'organizers',

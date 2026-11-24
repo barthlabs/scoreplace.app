@@ -4,6 +4,23 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 const form = fs.readFileSync('js/views/create-tournament.js', 'utf8');
+const readPatch = new Function('window', 'document', form.slice(form.indexOf('  function editedTestSettings('),
+  form.indexOf('  window._syncTournamentTestMode =')) + 'return editedTestSettings;');
+const toggle = (initial, checked) => ({ checked, dataset:{ initialChecked:String(initial), tournamentId:'tour1' } });
+function patch(test, preserve, dev = true, id = 'tour1') {
+  return readPatch({ _isDeveloperIdentity:() => dev }, {
+    getElementById:key => key === 'tourn-test-mode' ? test : preserve
+  })(id);
+}
+assert.deepEqual(patch(null, null), {});
+assert.deepEqual(patch(toggle(true, true), toggle(true, true)), {});
+assert.deepEqual(patch(toggle(false, true), toggle(false, true)), { testModeEnabled:true, preserveDrawOnTestReset:true });
+assert.deepEqual(patch(toggle(true, false), toggle(true, true)), { testModeEnabled:false });
+assert.deepEqual(patch(toggle(true, true), toggle(true, false)), { preserveDrawOnTestReset:false });
+assert.deepEqual(patch(toggle(false, true), toggle(false, true), false), {});
+assert.deepEqual(patch(toggle(false, true), toggle(false, true), true, ''), {});
+assert.deepEqual(patch(toggle(false, true), toggle(false, true), true, 'other'), {});
+assert(form.includes('...editedTestSettings(editId),'));
 const ranking = form.indexOf('id="ranking-primary-choice"');
 const scores = form.indexOf('id="result-entry-section"');
 const tie = form.indexOf('id="tie-resolution-section"');
@@ -50,6 +67,13 @@ assert(fs.readFileSync('functions-autodraw/tournament-create.js', 'utf8')
   .includes("key === 'testModeEnabled'"), 'criação não aceita ativação forjada do modo de teste');
 
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
+const flagRules = source.slice(source.indexOf("  if ('testModeEnabled' in patch"), source.indexOf("  if ('dateCardColors' in patch"));
+assert(flagRules.includes("'preserveDrawOnTestReset' in patch"));
+const validateFlags = new Function('patch','uid','TEST_DEVELOPER_UID','HttpsError', flagRules);
+for (const key of ['testModeEnabled','preserveDrawOnTestReset']) {
+  assert.throws(() => validateFlags({ [key]:true }, 'org','dev', Error), /permission-denied/);
+  assert.doesNotThrow(() => validateFlags({ [key]:true }, 'dev','dev', Error));
+}
 const syncStart = source.indexOf("if (Object.prototype.hasOwnProperty.call(patch, 'resultEntry') && Array.isArray(t.phases)");
 const syncEnd = source.indexOf('if (camisNameRebase)', syncStart);
 assert(syncStart >= 0 && syncEnd > syncStart);

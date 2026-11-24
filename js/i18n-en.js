@@ -271,6 +271,10 @@ window._translations['en'] = {
   'enroll.suspended': 'Enrollment suspended during poll.',
 
   // Organizer tools
+  'org.resetTest': 'Reset test',
+  'org.resetTestConfirm': 'Reset the test?',
+  'org.resumeTestReset': 'Resume reset',
+  'org.resumeTestResetConfirm': 'Resume the interrupted reset?',
   'org.tools': 'Organizer Tools',
   'org.closeRegistration': 'Close Registration',
   'org.reopenRegistration': 'Reopen Registration',

@@ -316,7 +316,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketCourtReleaseCache = { sb_test: { released: {} } };
       window._bracketOperationsRefresh(t, root);
       const strip = root._bracketOperationsStrip;
-      const track = strip.querySelector('.sp-operations-track');
+      const track = strip.querySelector('.sp-operations-court-track');
       const next = strip.querySelector('.sp-operations-next');
       const noPending = !strip.querySelector('.sp-operations-pending');
       const freeCount = strip.querySelector('.sp-operations-availability > span').textContent;
@@ -329,11 +329,12 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const keyboardEnd = track.scrollLeft > 0;
       scrollbar.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
       const keyboardHome = track.scrollLeft === 0;
+      const pinnedLeft = next.getBoundingClientRect().left;
       track.scrollLeft = 240;
-      const sticky = getComputedStyle(next).position === 'sticky' && next.getBoundingClientRect().left <= track.getBoundingClientRect().left + 9;
+      const sticky = Math.abs(next.getBoundingClientRect().left - pinnedLeft) < 1;
       const noVerticalClip = track.scrollHeight <= track.clientHeight;
       window._bracketOperationsRefresh(t, root);
-      const scrollPreserved = root._bracketOperationsStrip.querySelector('.sp-operations-track').scrollLeft === 240;
+      const scrollPreserved = root._bracketOperationsStrip.querySelector('.sp-operations-court-track').scrollLeft === 240;
       window._bracketCourtReleaseCache = { sb_test: { released: { m1: '2026-10-22T18:05:00Z' } } };
       window._bracketOperationsRefresh(t, root);
       const withPending = !!strip.querySelector('.sp-operations-pending [data-operations-match="m1"]');
@@ -341,7 +342,11 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const card = strip.querySelector('.sp-operations-next .sp-match-card');
       const aligned = Math.abs(courtSlot.getBoundingClientRect().top - card.getBoundingClientRect().top) <= 3 &&
         Math.abs(courtSlot.getBoundingClientRect().bottom - card.getBoundingClientRect().bottom) <= 3;
-      const liveTrack = strip.querySelector('.sp-operations-track');
+      const liveTrack = strip.querySelector('.sp-operations-court-track');
+      const pinned = [...strip.querySelectorAll('.sp-operations-next,.sp-operations-pending')];
+      const left = pinned.map(panel => panel.getBoundingClientRect().left);
+      liveTrack.scrollLeft = liveTrack.scrollWidth;
+      const fixed = liveTrack.scrollLeft > 0 && pinned.every((panel, i) => Math.abs(panel.getBoundingClientRect().left - left[i]) <= 1);
       const width = liveTrack.scrollWidth, viewport = liveTrack.clientWidth;
       window._bracketCourtReleaseCache = { sb_test: { released: {} } };
       t.courtNames = ['Quadra 5'];
@@ -350,7 +355,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       t.courtNames = ['Quadra 4', 'Quadra 5'];
       window._bracketOperationsRefresh(t, root);
       const one = strip.querySelector('.sp-operations-availability > span').textContent;
-      return { noPending, freeCount, courtNames, sticky, noVerticalClip, scrollPreserved, withPending, aligned,
+      return { noPending, freeCount, courtNames, sticky:sticky && fixed, noVerticalClip, scrollPreserved, withPending, aligned,
         width, viewport, zero, one, scrollbarSize, keyboardEnd, keyboardHome };
     });
     assert(scrollLayout.noPending && scrollLayout.withPending, 'o painel azul só aparece com placar pendente');
@@ -359,7 +364,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(scrollLayout.one, '1 QUADRA LIVRE');
     assert.deepEqual(scrollLayout.courtNames, ['Quadra 4', 'Quadra 6', 'Quadra 7', 'Quadra 8']);
     assert(scrollLayout.width > scrollLayout.viewport && scrollLayout.sticky && scrollLayout.scrollPreserved,
-      'a faixa inteira deve rolar e manter o próximo jogo fixo: ' + JSON.stringify(scrollLayout));
+      'só as quadras rolam horizontalmente e a posição sobrevive à atualização: ' + JSON.stringify(scrollLayout));
     assert(scrollLayout.scrollbarSize.visible && scrollLayout.scrollbarSize.height >= 22 &&
       scrollLayout.scrollbarSize.thumbHeight >= 16 && scrollLayout.scrollbarSize.thumbWidth >= 72 &&
       scrollLayout.keyboardEnd && scrollLayout.keyboardHome,
@@ -392,6 +397,12 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
           labels: [label.top, availability.top], clipped: strip.querySelector('.sp-operations-track').scrollHeight > strip.querySelector('.sp-operations-track').clientHeight };
       });
       const aligned = (a, b) => Math.abs(a[0] - b[0]) <= 3 && Math.abs(a[1] - b[1]) <= 3;
+      if (width <= 690) {
+        assert(geometry.panels[1][0] >= geometry.panels[0][1] && geometry.panels[2][0] >= geometry.panels[1][1]);
+        assert(Math.abs((geometry.next[1]-geometry.next[0])-(geometry.pending[1]-geometry.pending[0])) <= 3);
+        assert(!geometry.clipped);
+        continue;
+      }
       assert(aligned(geometry.next, geometry.pending) && aligned(geometry.next, geometry.free),
         'cards e slot livre devem ocupar a mesma região em ' + width + 'px: ' + JSON.stringify(geometry));
       assert(geometry.panels.every(panel => aligned(panel, geometry.panels[0])) &&
@@ -426,10 +437,10 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window.scrollTo(0, 350);
       const before = window.scrollY;
       const root = document.querySelector('[data-bracket-tabs-root]');
-      root._bracketOperationsStrip.querySelector('.sp-operations-track').scrollLeft = 180;
-      const leftBefore = root._bracketOperationsStrip.querySelector('.sp-operations-track').scrollLeft;
+      root._bracketOperationsStrip.querySelector('.sp-operations-court-track').scrollLeft = 180;
+      const leftBefore = root._bracketOperationsStrip.querySelector('.sp-operations-court-track').scrollLeft;
       window._bracketOperationsRefresh(window._findTournamentById(), root);
-      return { before, after: window.scrollY, leftBefore, left: root._bracketOperationsStrip.querySelector('.sp-operations-track').scrollLeft };
+      return { before, after: window.scrollY, leftBefore, left: root._bracketOperationsStrip.querySelector('.sp-operations-court-track').scrollLeft };
     });
     assert.equal(scrollAfterRefresh.after, scrollAfterRefresh.before, 'atualização da faixa preserva a posição vertical');
     assert.equal(scrollAfterRefresh.left, scrollAfterRefresh.leftBefore, 'atualização da faixa preserva a posição horizontal');
@@ -493,21 +504,73 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       return op.querySelector('button').style.display !== 'none';
     });
     assert.equal(nextSetButton, true, 'a réplica oferece Confirmar se um set seguinte foi preenchido');
+    const narrow = await browser.newPage();
+    await narrow.addStyleTag({ path:'css/bracket.css' });
+    await narrow.addScriptTag({ path:'js/domain/match-timing.js' });
+    await narrow.addScriptTag({ content:source.slice(source.indexOf('window._spCourtClockHtml ='), source.indexOf('window._spRefreshCourtClocks = function')) });
+    for (const width of [320, 360]) {
+      await narrow.setViewportSize({ width, height:900 });
+      for (const zoom of [1, 1.25]) {
+        for (const theme of ['light','dark']) {
+          const result = await narrow.evaluate(({ zoom, theme }) => {
+            window._safeHtml = String;
+            document.documentElement.style.zoom = String(zoom);
+            document.documentElement.dataset.theme = theme;
+            const clock = window._spCourtClockHtml(1000, {}, 2000, 'tour1', 'm1', true);
+            const card = '<article class="sp-match-card" style="padding:8px;box-sizing:border-box"><div style="display:flex;flex-wrap:wrap">' + clock + '</div></article>';
+            document.body.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next"></div><div class="sp-operations-pending"></div><div class="sp-operations-courts"><div>Em quadra</div><div class="sp-operations-court-track">' +
+              [1,2,3].map(() => '<div class="sp-operations-court-slot"><span>Quadra</span><div class="sp-operations-replica">' + card + '</div></div>').join('') + '</div></div></div>' + card;
+            const track = document.querySelector('.sp-operations-court-track');
+            track.scrollLeft = track.scrollWidth;
+            const cards = [track.lastElementChild.querySelector('article'), document.body.lastElementChild];
+            return cards.every(card => {
+              const timer = card.querySelector('.sp-match-call-timer');
+              timer.textContent = '04:47:51';
+              const bounds = card.getBoundingClientRect();
+              const parts = [...card.querySelectorAll('.sp-match-clock-action, .sp-match-clock-label, .sp-match-call-timer')];
+              return track.scrollLeft > 0 && document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1 &&
+                parts.every(el => {
+                  const rect = el.getBoundingClientRect();
+                  return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1 &&
+                    (!el.matches('button') || (rect.width >= 44 && rect.height >= 44));
+                }) && timer.scrollWidth <= timer.clientWidth + 1;
+            });
+          }, { zoom, theme });
+          assert(result, 'relógio e controles dentro dos cards de chave e quadra em ' + width + 'px zoom ' + zoom + ' tema ' + theme);
+        }
+      }
+    }
+    await narrow.close();
     const endStart = source.indexOf('function _courtOperationId()');
     const endStop = source.indexOf('function _syncMatchCourtCopies(', endStart);
     assert(endStart > 0 && endStop > endStart);
     await page.addScriptTag({ content: source.slice(endStart, endStop) });
+    await page.addScriptTag({ path:'js/firebase-db.js' });
+    const draw = fs.readFileSync('js/views/tournaments-draw.js', 'utf8');
+    await page.addScriptTag({ content:draw.slice(draw.indexOf('window._callCF = function'), draw.indexOf('// v1.7: lançamento de placar')) });
     const endFeedback = await page.evaluate(async () => {
       const calls = [], notices = [], confirmations = [];
       window.showConfirmDialog = (title, message, onConfirm) => { confirmations.push([title, message]); onConfirm(); };
       window.showNotification = (...args) => notices.push(args);
-      window.ScoreplaceOperationRouter = { call: (name, payload) => { calls.push([name, payload]); return Promise.resolve({ ok:true, seriesContinues:!payload.monarchEndWholeBlock }); } };
+      window.firebase = {
+        app:() => ({ options:{ projectId:'scoreplace-app' } }),
+        auth:() => ({ currentUser:{ getIdToken:async () => 'test-id' } }),
+        appCheck:() => ({ getToken:async () => ({ token:'test-app-check' }) })
+      };
+      window.ScoreplaceOperationRouter = { names:['endMatchOnCourt'], call:(name, payload, headers) => {
+        calls.push([name, payload, headers]);
+        return Promise.resolve({ ok:true, releasedMatchIds:payload.monarchEndWholeBlock ? ['m2','m3','m4'] : ['m1'] });
+      } };
       await window._endMatchOnCourt('tour_test', 'm1', null, false);
       await window._endMatchOnCourt('sb_test', 'm2', null, true);
       window.ScoreplaceOperationRouter.call = () => Promise.reject(new Error('falha de rede'));
       try { await window._endMatchOnCourt('tour_test', 'm3'); } catch (_) {}
       return { calls, notices, confirmations };
     });
+    for (const [, , headers] of endFeedback.calls) {
+      assert.deepEqual(headers, { 'Content-Type':'application/json', Authorization:'Bearer test-id', 'X-Firebase-AppCheck':'test-app-check' });
+    }
+    assert(endFeedback.notices.some(args => args[0] === 'Bloco encerrado' && args[1] === '3 jogos enviados para Placares pendentes.' && args[2] === 'success'));
     assert.equal(endFeedback.calls[0][1].sandbox, false);
     assert.equal(endFeedback.calls[1][1].sandbox, true);
     assert.equal(endFeedback.calls[0][1].monarchEndWholeBlock, false, 'Encerra envia intenção individual mesmo com preferência antiga');
@@ -518,7 +581,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert(endFeedback.notices.some(args => args[0] === 'Quadra não liberada' && args[2] === 'error'));
     const courtDialog = await page.evaluate(async () => {
       let opens = 0, writes = 0, callbacks;
-      window.ScoreplaceOperationRouter = { call: () => { writes++; return Promise.resolve({ ok:true }); } };
+      window.ScoreplaceOperationRouter = { names:['endMatchOnCourt'], call: () => { writes++; return Promise.resolve({ ok:true }); } };
       window.showConfirmDialog = (_title, _message, ok, cancel) => {
         const old = document.getElementById('custom-confirm-dialog');
         if (old) old.remove();
