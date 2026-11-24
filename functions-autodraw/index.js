@@ -6073,7 +6073,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'ligaInactivity','ligaInactivityX','allowSelfDeactivation','ligaOpenEnrollment',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy','rankingSitOutScoring',
   'ligaSeasonMonths','elimRankingType','gruposCount','gruposClassified','gruposEqualOnly','turnos',
-  'teamCompetition','categorySchedule','scheduleWindow',
+  'teamCompetition','categorySchedule','scheduleWindow','groupFormation',
   'gruposSeedVip','gruposSeedCategory','drawMode','reiRainhaGroupsBy','monarchAdvanceToElim',
   /* ⛔ COMO A CHAVE RESOLVE O RESTO (repescagem · folga · sobra única). É configuração declarativa
    * e escolha do organizador, então pertence a esta lista — sem ela, criar ou editar um torneio
@@ -6098,7 +6098,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
 const _CONFIG_ESTRUTURAL = new Set([
   'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds','superEight','superEightDrawMode','superEightRounds','partnerRotation','rotationRounds','registrationSettings','genderRatioDisabled',
   'gruposCount','gruposClassified','gruposEqualOnly','gruposSeedVip','gruposSeedCategory',
-  'teamCompetition','categorySchedule','turnos','categoryDefinitions',
+  'teamCompetition','categorySchedule','turnos','categoryDefinitions','groupFormation',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy','rankingSitOutScoring','monarchAdvanceToElim',
   /* ⛔⛔⛔ COMO A CHAVE RESOLVE O RESTO É ESTRUTURAL: ela decide quem espera a estreia, quem volta
    * depois de perder e onde cai a folga. Trocá-la com a chave já sorteada redesenha confrontos que as
@@ -6287,6 +6287,10 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       patch[key] = raw[key].map(label => label.trim());
     } else patch[key] = _clonaConfigDeclarativa(raw[key], 0, [key]);
   });
+  const groupFormationMirror = Object.hasOwn(patch, 'groupFormation');
+  if (groupFormationMirror) {
+    require('./format-intent-validation-core').validateNewFormatIntent({groupFormation:patch.groupFormation}, HttpsError);
+  }
   if ('titleColor' in patch && (typeof patch.titleColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(patch.titleColor))) {
     throw new HttpsError('invalid-argument', 'Cor do título inválida.');
   }
@@ -6657,12 +6661,27 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const fmt2Present = Object.prototype.hasOwnProperty.call(patch, 'fmt2');
     const requestedTeamSize = Object.prototype.hasOwnProperty.call(patch, 'teamSize') ? patch.teamSize : t.teamSize;
     const rotationRules = (t.fmt2 && t.fmt2.rotationCategoryRules) || (patch.fmt2 && patch.fmt2.rotationCategoryRules);
+    const groupRules = t.fmt2?.groupCategoryRules?.length || patch.fmt2?.groupCategoryRules?.length;
+    const repeatPolicy = [t.fmt2, patch.fmt2].some(cfg => cfg &&
+      (typeof cfg.rotationAllowRepeatPartners === 'boolean' || typeof cfg.classificationSchedule?.allowRepeat === 'boolean'));
+    const requestedClassification = patch.phases?.[0]?.classification;
+    const phaseHasRepeatPolicy = typeof requestedClassification?.rotationAllowRepeatPartners === 'boolean' ||
+      typeof requestedClassification?.schedule?.allowRepeat === 'boolean';
+    if (hasDraw && patch.phases && (repeatPolicy || phaseHasRepeatPolicy) &&
+        !_configAtiva.igual(t.phases?.[0]?.classification, requestedClassification)) {
+      throw new HttpsError('failed-precondition', 'A política de repetição está fixada pelo sorteio.');
+    }
     const nextCategories = patch.combinedCategories || t.combinedCategories || [];
+    if (hasDraw && groupRules && ((fmt2Present && !_configAtiva.igual(t.fmt2?.groupCategoryRules || [], patch.fmt2?.groupCategoryRules || [])) ||
+        (patch.phases && !_configAtiva.igual(t.phases?.[0]?.classification?.groupCategoryRules || [],
+          patch.phases[0]?.classification?.groupCategoryRules || [])) || !_configAtiva.igual(t.combinedCategories, nextCategories))) {
+      throw new HttpsError('failed-precondition', 'Os grupos por categoria estão fixados pelo sorteio.');
+    }
     if (rotationRules && hasDraw && ((fmt2Present && !_configAtiva.igual(t.fmt2 && t.fmt2.rotationCategoryRules || [], patch.fmt2 && patch.fmt2.rotationCategoryRules || [])) ||
         !_configAtiva.igual(t.combinedCategories, nextCategories))) {
       throw new HttpsError('failed-precondition', 'As regras por categoria estão fixadas pelo sorteio.');
     }
-    if (rotationRules && !hasDraw && patch.combinedCategories) {
+    if ((rotationRules || groupRules) && !hasDraw && patch.combinedCategories) {
       require('./format-intent-validation-core').validateNewFormatIntent(patch.fmt2 || t.fmt2, HttpsError, t, requestedTeamSize, nextCategories);
     }
     if (!hasDraw) {
@@ -6680,11 +6699,31 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         formatGate.validateCompletedMixedIdentity(t, requestedTeamSize, HttpsError);
       }
     }
+    // O formulário envia também o espelho produzido pelo compilador. Ele nunca
+    // pode contradizer o intent fresco nem autorizar alteração depois do sorteio.
+    if (groupFormationMirror) {
+      const intent = patch.fmt2 || t.fmt2;
+      if (!intent) throw new HttpsError('invalid-argument', 'A formação dos grupos exige a configuração de formato.');
+      const format = drawWindow.FORMAT2;
+      const sport = patch.sport || t.sport;
+      const mirror = format.normalize({groupFormation:patch.groupFormation}, sport).groupFormation;
+      const effective = format.normalize(intent, sport).groupFormation;
+      if (!_configAtiva.igual(mirror, effective)) {
+        throw new HttpsError('invalid-argument', 'Formação dos grupos divergente entre formato e torneio.');
+      }
+      if (hasDraw) {
+        const existing = t.fmt2 && format.normalize(t.fmt2, t.sport).groupFormation;
+        if (!_configAtiva.igual(mirror, existing)) {
+          throw new HttpsError('failed-precondition', 'A formação dos grupos está fixada pelo sorteio.');
+        }
+        delete patch.groupFormation;
+      } else patch.groupFormation = mirror;
+    }
     // Uma ficha antiga pode reenviar phases sem a extensão. O intent fresco
     // define a geometria; pontuação e datas continuam com a configuração da fase.
     const phaseRules = patch.phases?.[0]?.classification?.rotationCategoryRules;
-    if (!hasDraw && (rotationRules || phaseRules) && (fmt2Present || patch.phases || patch.combinedCategories)) {
-      const intent = fmt2Present ? patch.fmt2 : t.fmt2;
+    if (!hasDraw && (groupFormationMirror || rotationRules || phaseRules || groupRules || repeatPolicy || phaseHasRepeatPolicy || patch.phases?.[0]?.classification?.groupCategoryRules) && (groupFormationMirror || fmt2Present || patch.phases || patch.combinedCategories)) {
+      const intent = patch.fmt2 || t.fmt2;
       if (!intent) throw new HttpsError('invalid-argument', 'As regras de rodízio exigem a configuração de formato.');
       const projected = drawWindow.FORMAT2.compileToPhases(intent, { sport:patch.sport || t.sport,
         categories:nextCategories, resultEntry:patch.resultEntry || t.resultEntry,

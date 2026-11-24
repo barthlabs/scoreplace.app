@@ -13,7 +13,7 @@ headless.load('../domain/match-day.js');
 headless.load('../tv-layout-core.js');
 headless.load('tv-live.js');
 
-function scenario(sizes, reverse) {
+function scenario(sizes, reverse, localFormation) {
   const categories = sizes.map((_, index) => 'Chave ' + (index + 1));
   const cfg = format.defaultConfig('beach_tennis');
   cfg.parceria = 'rotation_groups_8';
@@ -25,6 +25,10 @@ function scenario(sizes, reverse) {
     category, rounds:sizes[i] === 8 ? 7 : 5,
     destination:sizes[i] === 8 ? 'ranking' : 'elimination'
   }));
+  if (localFormation) cfg.groupCategoryRules = categories.map((category, i) => ({
+    category, groupFormation:{mode:'count', value:sizes[i] / 8}
+  }));
+  const rotationRulesBefore = structuredClone(cfg.rotationCategoryRules);
   validate(cfg, Error, undefined, 2, categories);
   const entries = categories.flatMap((category, i) => Array.from({length:sizes[i]}, (_, j) => ({
     displayName:category + ' Atleta ' + (j + 1), uid:'u-' + i + '-' + j, category, categories:[category], ligaActive:true
@@ -38,6 +42,7 @@ function scenario(sizes, reverse) {
   assert.equal(t.phases.length, finalsExpected ? 2 : 1);
   assert.equal(draw.drawInitial(t, {idStamp:123}).ok, true);
   assert.equal(draw.drawInitial(t, {idStamp:123}).reason, 'already-drawn');
+  assert.deepEqual(t.phases[0].classification.rotationCategoryRules, rotationRulesBefore);
   const plannedGames = sizes.reduce((sum,n) => sum + n / 8 * (n === 8 ? 14 : 10), finalsExpected);
   assert.equal(W._tournamentGamesPlan(t).totalPlanned, plannedGames);
   const preview = W._sumulaUpcomingBracket(t, 1);
@@ -136,6 +141,8 @@ const mixed = scenario([16, 8], false);
 const cfg = mixed.fmt2;
 const rankingsOnly = scenario([8, 8], false);
 scenario([16, 16, 16, 8, 8, 8, 8], true);
+scenario([16, 8], false, true);
+scenario([16, 16, 16, 8, 8, 8, 8], true, true);
 const categories = cfg.rotationCategoryRules.map(r => r.category);
 for (const bad of [
   [{category:'desconhecida', rounds:5, destination:'ranking'}],
@@ -180,7 +187,7 @@ async function formRoundTrip(t) {
     await fields.nth(0).getByRole('spinbutton').press('Tab');
     await fields.nth(1).getByRole('spinbutton').fill('7');
     await fields.nth(1).getByRole('spinbutton').press('Tab');
-    await fields.nth(1).getByRole('combobox').selectOption('ranking');
+    await fields.nth(1).locator('[data-value="ranking"]').click();
     const saved = await page.evaluate(() => window._f2GetConfig());
     assert.deepEqual(saved.rotationCategoryRules, t.fmt2.rotationCategoryRules);
     assert.match(await page.locator('main').innerText(), /35 jogos/);
@@ -189,9 +196,9 @@ async function formRoundTrip(t) {
         {...window.fixture, matches:[{phaseIndex:0}], fmt2:saved});
     }, saved);
     assert.equal(await fields.nth(1).getByRole('spinbutton').inputValue(), '7');
-    assert.equal(await fields.nth(1).getByRole('combobox').inputValue(), 'ranking');
+    assert.equal(await fields.nth(1).locator('[data-value="ranking"]').getAttribute('aria-pressed'), 'true');
     assert(await fields.nth(1).getByRole('spinbutton').isDisabled());
-    assert(await fields.nth(0).getByRole('combobox').isDisabled());
+    assert(await fields.nth(0).locator('[data-value="elimination"]').isDisabled());
     console.log('✓ Chromium: personalizar categorias, estimar 35 jogos, salvar, reabrir e congelar');
   } finally { await browser.close(); }
 }

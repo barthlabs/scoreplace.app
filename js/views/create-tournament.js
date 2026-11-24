@@ -5132,7 +5132,7 @@ function setupCreateTournamentModal() {
     try { f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) {}
     var setupScopeWrap = document.getElementById('setup-scope-wrap');
     if (setupScopeWrap) setupScopeWrap.style.display = 'block';
-    if (f2cfg && f2cfg.rotationCategoryRules && typeof window._f2ProjectedRotation === 'function') {
+    if (f2cfg && (f2cfg.rotationCategoryRules || (f2cfg.groupCategoryRules && f2cfg.groupCategoryRules.length)) && typeof window._f2ProjectedRotation === 'function') {
       var capacities = null;
       if (configuredMax > 0) {
         var custom = document.getElementById('tourn-custom-category-capacity');
@@ -5144,7 +5144,7 @@ function setupCreateTournamentModal() {
       var plan = window._f2ProjectedRotation(capacities);
       ladder.textContent = plan ? (plan.groupGames + plan.elimGames) + ' jogos · ' +
         plan.groupGames + ' na classificatória · ' + plan.elimGames + ' na eliminatória' :
-        'A estimativa depende de grupos completos de oito por categoria e da chave projetada.';
+        'A estimativa depende da formação dos grupos por categoria e da chave projetada.';
       return;
     }
     var tc = f2cfg && f2cfg.teamCompetition;
@@ -9133,7 +9133,17 @@ window._f2TemplateCopy = function(fmt2Bruto) {
   };
   var out = pick(raw, ['disputa', 'grupos', 'parceria', 'superEightDrawMode', 'superEightRounds', 'formacaoDupla', 'manualPairingOpen', 'manualPairingPolicy',
     'classifAtiva', 'classificados', 'classifScope', '_scoreBy', 'historicalSinglesOverride',
-    'rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution', 'tieSinglesPoints', 'tieSinglesMargin']);
+    'rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution', 'tieSinglesPoints', 'tieSinglesMargin',
+    'groupFormation', 'groupCategoryRules', 'rotationCategoryRules', 'rotationAllowRepeatPartners']);
+  if (raw.groupFormation) out.groupFormation = pick(raw.groupFormation, ['mode', 'value']);
+  if (Array.isArray(raw.groupCategoryRules)) out.groupCategoryRules = raw.groupCategoryRules.map(function (rule) {
+    var copied = pick(rule, ['category', 'gamesPerUnit', 'allowRepeat']);
+    if (rule && rule.groupFormation) copied.groupFormation = pick(rule.groupFormation, ['mode', 'value']);
+    return copied;
+  });
+  if (Array.isArray(raw.rotationCategoryRules)) out.rotationCategoryRules = raw.rotationCategoryRules.map(function (rule) {
+    return pick(rule, ['category', 'rounds', 'destination']);
+  });
   if (raw.rodadas) {
     out.rodadas = pick(raw.rodadas, ['modo', 'turnos', 'n', 'drawFirstTime', 'drawIntervalDays',
       'drawManual', 'allowSelfDeactivation', '_intervalAuto']);
@@ -9142,7 +9152,7 @@ window._f2TemplateCopy = function(fmt2Bruto) {
   if (raw.classificationPairing) out.classificationPairing = pick(raw.classificationPairing,
     ['strategy', 'clusterSize', 'rematchPolicy']);
   if (raw.classificationSchedule) out.classificationSchedule = pick(raw.classificationSchedule,
-    ['gamesPerUnit', 'mode']);
+    ['gamesPerUnit', 'mode', 'allowRepeat']);
   if (raw.eliminatoria) {
     out.eliminatoria = pick(raw.eliminatoria, ['ativa', 'nome', 'dupla', 'linhas', 'nomes', 'origem',
       'formacao', 'qualifyAll', 'terceiro', 'grandFinal', 'lateEnrollment', 'newMatchups',

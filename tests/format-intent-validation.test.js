@@ -206,11 +206,11 @@ assert.match(uiBox.innerHTML, /Número de grupos[\s\S]*?Pessoas por grupo/,
 const rotationCfg = uiHarness.window.FORMAT2.defaultConfig('Beach Tennis');
 rotationCfg.parceria = 'rotation_groups_8';
 uiHarness.window._f2MountInForm(uiBox, 'Beach Tennis', rotationCfg, { id: 'rotation-groups-test' });
-assert.match(uiBox.innerHTML, /id="f2-group-formation-mode"[\s\S]*?value="size" selected/,
+assert.match(uiBox.innerHTML, /id="f2-group-formation-mode"[\s\S]*?aria-pressed="true" data-value="size"/,
   'rodízio A–H mantém a escolha genérica de formação visível, com oito pessoas por grupo como padrão');
 assert.match(uiBox.innerHTML, /O rodízio A–H exige que os grupos resultantes tenham exatamente 8 atletas/,
   'a restrição de oito atletas pertence ao rodízio A–H, não à formação geral dos grupos');
-assert.match(uiBox.innerHTML, /window\._f2TeamForm\('rotation_groups_8'\)[^>]*>Rodízio A–H/,
+assert.match(uiBox.innerHTML, /window\._f2TeamForm\('rotation_groups_8'\)[^>]*>Sortear parceiro a cada rodada/,
   'a opção de duplas descreve o algoritmo de rodízio sem chamar a formação geral de grupos de oito');
 assert.match(uiBox.innerHTML, /Partidas por atleta em cada grupo[\s\S]*?value="5"/,
   'a formação de grupos continua separada do número configurável de partidas por atleta');

@@ -51,10 +51,9 @@
     if (!value || typeof value !== 'object') return null;
     var games = parseInt(value.gamesPerUnit, 10);
     if (!(games >= 1)) return null;
-    return {
-      gamesPerUnit: games,
-      mode: value.mode === 'structured' ? 'structured' : 'free'
-    };
+    var schedule = { gamesPerUnit: games, mode: value.mode === 'structured' ? 'structured' : 'free' };
+    if (typeof value.allowRepeat === 'boolean') schedule.allowRepeat = value.allowRepeat;
+    return schedule;
   }
 
   // Prévia da agenda técnica; não altera confrontos nem resultados. Espelha os
@@ -69,14 +68,14 @@
     var total = 0, min = Infinity, max = 0, unequal = 0, limited = 0;
     for (var i = 0; i < groups; i++) {
       var size = base + (i < remainder ? 1 : 0);
-      var per = wanted >= 1 ? Math.min(wanted, Math.max(0, size - 1)) : Math.max(0, size - 1);
+      var per = wanted >= 1 ? (schedule.allowRepeat === true && size > 1 ? wanted : Math.min(wanted, Math.max(0, size - 1))) : Math.max(0, size - 1);
       var matches = Math.floor(size * per / 2);
       // Um grupo ímpar com grau ímpar exige uma folga: um integrante joga menos.
       var lower = per - (size * per % 2);
       total += matches;
       if (size > 0) { min = Math.min(min, lower); max = Math.max(max, per); }
       if (size * per % 2) unequal++;
-      if (wanted >= 1 && wanted > size - 1) limited++;
+      if (wanted >= 1 && wanted > size - 1 && schedule.allowRepeat !== true) limited++;
     }
     var legs = returnLeg && requested === 1 ? 2 : 1;
     return { known: units > 0, units: units, placed: placed, waitlist: units - placed,
@@ -94,7 +93,7 @@
       return { declared: false, groups: Math.max(1, parseInt(legacyGroups, 10) || 1), sizes: null };
     }
     var value = Math.floor(Number(formation.value));
-    if (!Number.isSafeInteger(value) || value < 2) return { declared: true, groups: null, sizes: null, invalid: true };
+    if (!Number.isSafeInteger(value) || value < (formation.mode === 'count' ? 1 : 2) || value > 128) return { declared: true, groups: null, sizes: null, invalid: true };
     if (units == null) return { declared: true, mode: formation.mode, value: value,
       groups: formation.mode === 'count' ? value : null, sizes: null };
     if (units === 0) return { declared: true, mode: formation.mode, value: value,
@@ -521,6 +520,7 @@
     var first = projected[0] || {};
     var elimination = projected.filter(function (phase) { return phase && phase.kind === 'elimination'; })[0] || null;
     var cfg = defaultConfig(sport || tournament.sport);
+    if (first.classification && first.classification.groupCategoryRules) cfg.groupCategoryRules = first.classification.groupCategoryRules;
     if (tournament.fmt2 && tournament.fmt2.groupFormation && typeof tournament.fmt2.groupFormation === 'object') {
       cfg.groupFormation = JSON.parse(JSON.stringify(tournament.fmt2.groupFormation));
     }
@@ -571,6 +571,7 @@
     if (first.superEight === true || tournament.superEight === true) cfg.parceria = 'super_eight';
     if (first.partnerRotation === 'unique_8' || tournament.partnerRotation === 'unique_8') {
       cfg.parceria = 'rotation_groups_8';
+      if (typeof first.classification?.rotationAllowRepeatPartners === 'boolean') cfg.rotationAllowRepeatPartners = first.classification.rotationAllowRepeatPartners;
       cfg.rodadas.n = parseInt(first.rotationRounds || tournament.rotationRounds || 5, 10) || 5;
     }
     if (cfg.parceria === 'super_eight') cfg.superEightDrawMode = first.superEightDrawMode || tournament.superEightDrawMode || 'rounds';
@@ -653,7 +654,7 @@
     if (out.groupFormation != null) {
       var gf = out.groupFormation;
       if (!gf || typeof gf !== 'object' || Array.isArray(gf) ||
-          (gf.mode !== 'count' && gf.mode !== 'size') || !Number.isSafeInteger(Number(gf.value)) || Number(gf.value) < 2) {
+          (gf.mode !== 'count' && gf.mode !== 'size') || !Number.isSafeInteger(Number(gf.value)) || Number(gf.value) < (gf.mode === 'count' ? 1 : 2) || Number(gf.value) > 128) {
         delete out.groupFormation;
       } else {
         out.groupFormation = { mode: gf.mode, value: Number(gf.value) };
@@ -679,7 +680,7 @@
     // precisa preservar primeiro a grade existente e só então oferecer conversão
     // auditável pelo organizador.
     out.classificationSchedule = normalizeClassificationSchedule(out.classificationSchedule);
-    if (!out.classificationSchedule) delete out.classificationSchedule;
+    if (!out.classificationSchedule && cfg.classificationSchedule !== null) delete out.classificationSchedule;
 
     // Uma classificatória com várias rodadas não é um formato "Suíço" separado.
     // É pareamento por ranking dentro da própria fase. A política de repetição é
@@ -713,6 +714,11 @@
       // (montadas ou sorteadas). Pedido do dono: "rei/rainha só aparece se for 1 grupo".
       if (!umGrupo && out.parceria !== 'fixa' && out.parceria !== 'rotation_groups_8') out.parceria = 'fixa';
     }
+    if (out.groupCategoryRules && !Array.isArray(out.groupCategoryRules)) delete out.groupCategoryRules;
+    if (out.groupCategoryRules && out.groupCategoryRules.length && (out.classifAtiva === false ||
+        out.teamCompetition.enabled || (isDupla && !['fixa', 'rotation_groups_8'].includes(out.parceria)))) {
+      out.groupCategoryRules = [];
+    }
     if (out.parceria !== 'rotation_groups_8' || out.teamCompetition.enabled || out.classifAtiva === false || !Array.isArray(out.rotationCategoryRules) || !out.rotationCategoryRules.length)
       delete out.rotationCategoryRules;
     if (out.formacaoDupla !== 'manual' && out.formacaoDupla !== 'sorteio') out.formacaoDupla = 'sorteio';
@@ -742,7 +748,7 @@
       if (out.rodadas.modo !== 'todos' && out.rodadas.modo !== 'fixo') out.rodadas.modo = 'todos';
       // "Nº de rodadas" (fixo, com agendamento) só faz sentido em PONTOS CORRIDOS (1 grupo).
       // Em fase de grupos (2+), sempre round-robin dentro do grupo.
-      if (!umGrupo) out.rodadas.modo = 'todos';
+      if (!umGrupo || (out.groupCategoryRules && out.groupCategoryRules.length)) out.rodadas.modo = 'todos';
       // ida-e-volta vale em qualquer round-robin (o motor dobra o RR — grupos ou tabela única).
       out.rodadas.turnos = (out.rodadas.modo === 'todos' && out.rodadas.turnos === 'ida_volta') ? 'ida_volta' : 'ida';
     }
@@ -750,7 +756,7 @@
     // Super 8 descreve o elenco e a rotação de parceiros; a organização escolhe
     // quantas rodadas cada atleta joga (1–7). Sete continua sendo o padrão.
     if (out.parceria === 'super_eight') out.rodadas.n = Math.max(1, Math.min(7, out.rodadas.n));
-    if (out.parceria === 'rotation_groups_8') out.rodadas.n = Math.max(1, Math.min(7, out.rodadas.n));
+    if (out.parceria === 'rotation_groups_8') out.rodadas.n = Math.max(1, Math.min(out.rotationAllowRepeatPartners === true ? 128 : 7, out.rodadas.n));
     // Agendamento dos sorteios (só relevante no modo "nº de rodadas").
     out.rodadas.drawFirstDate = out.rodadas.drawFirstDate || '';
     out.rodadas.drawFirstTime = out.rodadas.drawFirstTime || '19:00';
@@ -772,7 +778,7 @@
     out.tieSinglesMargin = Number(out.tieSinglesMargin) === 2 ? 2 : 1;
     // Escopo da classificação: por grupo × geral. Com 1 grupo é sempre geral (não há grupos).
     if (out.classifScope !== 'overall' && out.classifScope !== 'per_group') out.classifScope = 'per_group';
-    if (umGrupo && out.parceria !== 'rotation_groups_8') out.classifScope = 'overall';
+    if (umGrupo && out.parceria !== 'rotation_groups_8' && !(out.groupCategoryRules && out.groupCategoryRules.length)) out.classifScope = 'overall';
 
     var e = out.eliminatoria || {};
     e.ativa = !!e.ativa; // v4.4.32: pode desligar SEMPRE (grupos ou pontos corridos); default = defaultConfig
@@ -911,6 +917,14 @@
     var groupLabel = resolved.groups == null
       ? ('Grupos de ' + resolved.value + ' · definidos pelos inscritos')
       : (resolved.groups === 1 ? 'Pontos Corridos' : (resolved.groups + ' grupos'));
+    if (cfg.groupCategoryRules && cfg.groupCategoryRules.length) {
+      groupLabel = cfg.groupCategoryRules.map(function (rule) {
+        var formation = rule.groupFormation;
+        return rule.category + ' · ' + formation.value + (formation.mode === 'count' ? ' grupo(s)' :
+          cfg.disputa === 'dupla' && cfg.parceria === 'fixa' ? ' duplas por grupo' : ' atletas por grupo') +
+          (rule.gamesPerUnit ? ' · ' + rule.gamesPerUnit + ' jogos por unidade' : '');
+      }).join(' / ');
+    }
     parts.push(groupLabel);
     if (cfg.disputa === 'dupla') {
       if (cfg.parceria === 'super_eight') parts.push('Super 8 individual · todas as parcerias');
@@ -919,12 +933,12 @@
           return rule.category + ' (' + rule.rounds + ' partidas por atleta, ' +
             (rule.destination === 'ranking' ? 'ranking individual' : 'eliminatória') + ')';
         }).join(' · '));
-      } else if (cfg.parceria === 'rotation_groups_8') parts.push('Rodízio A–H · ' + cfg.rodadas.n + ' partidas por atleta · parceiros sem repetição');
+      } else if (cfg.parceria === 'rotation_groups_8') parts.push('Rodízio A–H · ' + cfg.rodadas.n + ' partidas por atleta · ' + (cfg.rotationAllowRepeatPartners ? 'parceiros podem repetir' : 'parceiros sem repetição'));
       else if (cfg.parceria === 'rei_rainha') parts.push('Rei/Rainha');
       else if (cfg.parceria === 'sorteio_rodada') parts.push('sorteio/rodada');
       else parts.push(cfg.formacaoDupla === 'manual' ? 'duplas montadas' : 'duplas sorteadas');
     }
-    if (resolved.groups === 1 && cfg.parceria !== 'rotation_groups_8') {
+    if (resolved.groups === 1 && cfg.parceria !== 'rotation_groups_8' && !(cfg.groupCategoryRules && cfg.groupCategoryRules.length)) {
       parts.push(cfg.rodadas.modo === 'fixo' ? (cfg.rodadas.n + ' rodadas') : ('todos ' + (resolved.turnos === 'ida_volta' ? 'ida/volta' : 'ida')));
     }
     if (cfg.eliminatoria.ativa) parts.push('elim ' + cfg.eliminatoria.linhas + (cfg.eliminatoria.linhas > 1 ? ' linhas' : ' linha') + ' · top ' + cfg.classificados);
@@ -1050,6 +1064,29 @@
       roundBounds: Array.isArray(e0.roundBounds) ? e0.roundBounds.slice() : []
     });
     return [pRR, pElimRR];
+  }
+
+  // A prévia e o sorteio recebem a mesma população de unidades de jogo da categoria.
+  function groupPlanForCategory(config, category, units, equalOnly) {
+    var structure = config.classification || config;
+    var rules = structure.groupCategoryRules || [];
+    var rule = rules.find(function (entry) { return entry.category === category; });
+    var formation = rule ? rule.groupFormation : config.groupFormation;
+    var rotation = config.parceria === 'rotation_groups_8' || structure.partnerRotation === 'unique_8';
+    var baseSchedule = structure.schedule || config.classificationSchedule || null;
+    var schedule = rule && rule.gamesPerUnit != null
+      ? Object.assign({}, baseSchedule, { gamesPerUnit:rule.gamesPerUnit, mode:baseSchedule && baseSchedule.mode || 'free' }) : baseSchedule;
+    if (rule && schedule && typeof rule.allowRepeat === 'boolean') schedule = Object.assign({}, schedule, {allowRepeat:rule.allowRepeat});
+    var groups = resolveGroupFormation(formation, units, rotation ? Math.max(1, Math.ceil(units / 8)) : config.gruposCount || config.grupos);
+    var assessment = assessGroupSchedule(units, groups.groups, schedule, equalOnly, false);
+    var error = '';
+    if (units === 1 || groups.invalid) error = 'A formação escolhida deixaria um grupo com menos de duas unidades.';
+    else if (units && rotation && (units % 8 || groups.groups !== units / 8)) error = 'O rodízio A–H exige grupos completos com exatamente oito atletas.';
+    else if (units && !rotation && schedule && (rule || typeof schedule.allowRepeat === 'boolean') && (assessment.unequalGroups || assessment.limitedGroups))
+      error = 'O número de jogos por unidade é incompatível com o tamanho de pelo menos um grupo.';
+    var rotationRule = rotation && rotationRuleForCategory(structure, category);
+    var matches = rotation ? assessment.groups * 2 * (rotationRule ? rotationRule.rounds : structure.rotationRounds || (config.rodadas && config.rodadas.n) || 5) : assessment.matches;
+    return { formation:formation, schedule:schedule, assessment:assessment, matches:matches, error:error };
   }
 
   // Ausência de regra específica conserva integralmente o formato global.
@@ -1240,9 +1277,11 @@
       var _classification = { structure: 'groups' };
       if (cfg.parceria === 'rotation_groups_8') {
         _classification.partnerRotation = 'unique_8';
+        if (typeof cfg.rotationAllowRepeatPartners === 'boolean') _classification.rotationAllowRepeatPartners = cfg.rotationAllowRepeatPartners;
         _classification.rotationRounds = cfg.rodadas.n;
         if (cfg.rotationCategoryRules) _classification.rotationCategoryRules = cfg.rotationCategoryRules;
       }
+      if (cfg.groupCategoryRules && cfg.groupCategoryRules.length) _classification.groupCategoryRules = cfg.groupCategoryRules;
       if (cfg.classificationSchedule) _classification.schedule = cfg.classificationSchedule;
       p0 = Object.assign(_phaseBase(re), {
         kind: 'classification', classification: _classification, name: cfg.parceria === 'rotation_groups_8' ? 'Fase de Grupos' : (_teamGroupCount === 1 ? 'Pontos Corridos' : 'Fase de Grupos'),
@@ -1289,7 +1328,7 @@
     // MÉRITO (é isso que dá as cabeças de chave).
     if (hasElimination && cfg.eliminatoria.openReiRainha && isDupla) {
       var eRR = cfg.eliminatoria;
-      var perGroupRR = (cfg.parceria === 'rotation_groups_8' || cfg.grupos > 1) && cfg.classifScope === 'per_group';
+      var perGroupRR = (cfg.parceria === 'rotation_groups_8' || cfg.grupos > 1 || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) && cfg.classifScope === 'per_group';
       var destsRR = _lineDests(eRR.linhas);
       var mapClassif = !!eRR.qualifyAll
         ? destsRR.map(function (dst, di) { return { dest: dst, rankFrom: 1, rankTo: 999, label: (eRR.nomes && eRR.nomes[di]) || '' }; })
@@ -1331,7 +1370,7 @@
       // grupo" não significa nada — aí continua valendo o ranking geral plano.
       // [[project_formato_da_partida_por_fase]] · [[feedback_behavior_is_pure_function_of_config]]
       var _rrRodadaUnica = (cfg.parceria === 'rei_rainha') && (((cfg.rodadas || {}).n || 1) === 1);
-      var perGroup = _rrRodadaUnica || ((cfg.parceria === 'rotation_groups_8' || cfg.grupos > 1) && cfg.classifScope === 'per_group');
+      var perGroup = _rrRodadaUnica || ((cfg.parceria === 'rotation_groups_8' || cfg.grupos > 1 || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) && cfg.classifScope === 'per_group');
       var nLines = e.linhas;
       var dests = _lineDests(nLines);
       var topN = cfg.classificados;            // quantos classificam = valor do SLIDER
@@ -1548,6 +1587,7 @@
     resolveTurnos: resolveTurnos,
     resolveGroupFormation: resolveGroupFormation,
     rotationRuleForCategory: rotationRuleForCategory,
+    groupPlanForCategory: groupPlanForCategory,
     superEightVariant: superEightVariant
   };
 })();

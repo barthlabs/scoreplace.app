@@ -145,9 +145,10 @@ test.describe('Camada 2 — Criar Torneio: formação dos confrontos', () => {
   test('as opções de parceiros atualizam a configuração da classificatória', async ({ page }) => {
     await openCreateModal(page);
     await page.evaluate(() => window._f2MountInEditForm());
-    await page.getByRole('button', { name: 'Rodada Rei/Rainha' }).click();
+    await page.getByRole('button', { name: 'Rainha da Praia' }).click();
     await expect.poll(() => page.evaluate(() => window._f2GetConfig().parceria)).toBe('rei_rainha');
-    await page.getByRole('button', { name: 'Parceiros sorteados' }).click();
-    await expect.poll(() => page.evaluate(() => window._f2GetConfig().parceria)).toBe('sorteio_rodada');
+    await page.getByRole('button', { name: 'Grupos', exact: true }).click();
+    await page.getByRole('button', { name: 'Sortear parceiro a cada rodada', exact: false }).click();
+    await expect.poll(() => page.evaluate(() => window._f2GetConfig().parceria)).toBe('rotation_groups_8');
   });
 });

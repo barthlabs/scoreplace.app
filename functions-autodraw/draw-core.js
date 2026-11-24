@@ -885,6 +885,7 @@ function drawInitial(t, opts) {
 
   const _E0 = win._phasesEngine;
   const _cfg0 = win._buildPhase0Cfg(t);
+  _cfg0.maxDrawOperations = require('./write-plan').TETO_OPERACOES;
 
   // Rei/Rainha é MODO INDIVIDUAL (parceiros rotativos) — nunca duplas fixas. Sem esta
   // trava, uma fase Rei/Rainha num torneio de dupla juntava 2 duplas num "time de 4"
@@ -895,7 +896,7 @@ function drawInitial(t, opts) {
   // motor de Liga. Pré-formar duplas aqui escondia o atleta ímpar do gerador:
   // cinco inscritos viravam duas duplas + um avulso sem folga registrada.
   const _rotatingEntries0 = !!(t.rulesContractVersion >= 2 && _cfg0 && _cfg0.kind === 'classification' &&
-    _cfg0.classification && ((_cfg0.classification.partnerRotation === 'unique_8' && _cfg0.classification.rotationCategoryRules) ||
+    _cfg0.classification && ((_cfg0.classification.partnerRotation === 'unique_8' && (_cfg0.classification.rotationCategoryRules || _cfg0.classification.groupCategoryRules || _cfg0.classification.rotationAllowRepeatPartners != null)) ||
     (_cfg0.classification.pairing && _cfg0.classification.pairing.entryMode === 'rotate')));
 
   let _ts0 = (_isMon0 || _rotatingEntries0) ? 1 : (parseInt(t.teamSize, 10) || 1);

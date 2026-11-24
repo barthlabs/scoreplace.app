@@ -95,6 +95,17 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       catch (error) { fail('invalid-argument', error.message); }
     }
     if (config.fmt2 && validateIntent) validateIntent(config.fmt2, HttpsError, undefined, undefined, config.combinedCategories);
+    if (Object.hasOwn(config, 'groupFormation')) {
+      validateIntent({groupFormation:config.groupFormation}, HttpsError);
+      if (!config.fmt2) fail('invalid-argument', 'A formação dos grupos exige a configuração de formato.');
+      const context = {sport:config.sport, categories:config.combinedCategories || []};
+      const mirror = compile({groupFormation:config.groupFormation}, context).cfg.groupFormation;
+      const effective = compile(config.fmt2, context).cfg.groupFormation;
+      if (JSON.stringify(canonical(mirror)) !== JSON.stringify(canonical(effective))) {
+        fail('invalid-argument', 'Formação dos grupos divergente entre formato e torneio.');
+      }
+      config.groupFormation = mirror;
+    }
     if (config.lateEnrollment === 'closed' && config.newMatchups === true) {
       fail('invalid-argument', 'Novos confrontos exigem inscrições abertas.');
     }

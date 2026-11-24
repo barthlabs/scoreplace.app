@@ -39,7 +39,7 @@ const INTEGERS = [
   ['rodadas.n', 1],
   ['classificationPairing.clusterSize', 2],
   ['classificationSchedule.gamesPerUnit', 1],
-  ['groupFormation.value', 2]
+  ['groupFormation.value', 1]
 ];
 
 function explicitValue(object, path) {
@@ -88,6 +88,59 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, ca
   if (!fmt2 || typeof fmt2 !== 'object' || Array.isArray(fmt2)) {
     throw new HttpsError('invalid-argument', 'Configuração de formato inválida.');
   }
+  const prev = stored?.fmt2;
+  const storedRules = prev?.groupCategoryRules;
+  if (typeof prev?.rotationAllowRepeatPartners === 'boolean' && !Object.hasOwn(fmt2, 'rotationAllowRepeatPartners') &&
+      fmt2.parceria === 'rotation_groups_8') fmt2.rotationAllowRepeatPartners = prev.rotationAllowRepeatPartners;
+  if (Object.hasOwn(fmt2, 'rotationAllowRepeatPartners') &&
+      (typeof fmt2.rotationAllowRepeatPartners !== 'boolean' || fmt2.rotationAllowRepeatPartners && fmt2.parceria !== 'rotation_groups_8')) {
+    throw new HttpsError('invalid-argument', 'Permitir repetir parceiros exige uma escolha válida no rodízio de oito.');
+  }
+  const maxRotation = fmt2.rotationAllowRepeatPartners === true ? 128 : 7;
+  if (fmt2.parceria === 'rotation_groups_8' && Number(fmt2.rodadas?.n) > maxRotation) {
+    throw new HttpsError('invalid-argument', 'O número de jogos por atleta excede a política de repetição escolhida.');
+  }
+  if (typeof prev?.classificationSchedule?.allowRepeat === 'boolean' &&
+      fmt2.classifAtiva !== false && (fmt2.disputa === 'individual' || fmt2.parceria === 'fixa')) {
+    if (!Object.hasOwn(fmt2, 'classificationSchedule')) fmt2.classificationSchedule = prev.classificationSchedule;
+    else if (fmt2.classificationSchedule && typeof fmt2.classificationSchedule === 'object' && !Object.hasOwn(fmt2.classificationSchedule, 'allowRepeat'))
+      fmt2.classificationSchedule.allowRepeat = prev.classificationSchedule.allowRepeat;
+  }
+  if (fmt2.classificationSchedule && Object.hasOwn(fmt2.classificationSchedule, 'allowRepeat') &&
+      (typeof fmt2.classificationSchedule.allowRepeat !== 'boolean' || fmt2.classificationSchedule.gamesPerUnit > 128 ||
+        fmt2.rodadas?.turnos === 'ida_volta' || fmt2.parceria === 'rotation_groups_8')) {
+    throw new HttpsError('invalid-argument', 'A agenda por quantidade de jogos exige de 1 a 128 jogos, turno único e uma política de repetição válida.');
+  }
+  // Edições de clientes anteriores podem reenviar o envelope completo sem a extensão.
+  // Uma lista vazia explícita é a intenção de remover a personalização.
+  if (storedRules && storedRules.length && !Object.hasOwn(fmt2, 'groupCategoryRules')) {
+    fmt2.groupCategoryRules = storedRules;
+  }
+  if (Object.hasOwn(fmt2, 'groupCategoryRules')) {
+    const rules = fmt2.groupCategoryRules;
+    const available = new Set(categories || (stored && stored.combinedCategories) || []);
+    if (!Array.isArray(rules) || (rules.length && (rules.length !== available.size || available.size < 2 ||
+        fmt2.classifAtiva === false || fmt2.teamCompetition?.enabled ||
+        (fmt2.disputa !== 'individual' && !['fixa', 'rotation_groups_8'].includes(fmt2.parceria)) ||
+        fmt2.rodadas?.modo === 'fixo' && fmt2.parceria !== 'rotation_groups_8' || fmt2.rodadas?.turnos === 'ida_volta'))) {
+      throw new HttpsError('invalid-argument', 'As regras de grupos por categoria exigem uma classificatória em grupos de ida e as categorias atuais.');
+    }
+    for (const rule of rules) {
+      const formation = rule && rule.groupFormation;
+      const previousRule = Array.isArray(storedRules) && rule && storedRules.find(entry => entry.category === rule.category);
+      if (rule && fmt2.parceria !== 'rotation_groups_8' && typeof previousRule?.allowRepeat === 'boolean' && !Object.hasOwn(rule, 'allowRepeat')) rule.allowRepeat = previousRule.allowRepeat;
+      if (!rule || !available.delete(rule.category) ||
+          Object.keys(rule).some(key => !['category','groupFormation','gamesPerUnit','allowRepeat'].includes(key)) ||
+          !formation || Object.keys(formation).some(key => !['mode','value'].includes(key)) ||
+          !['size','count'].includes(formation.mode) || !Number.isSafeInteger(formation.value) ||
+          formation.value < (formation.mode === 'count' ? 1 : 2) || formation.value > 128 ||
+          ('allowRepeat' in rule && (typeof rule.allowRepeat !== 'boolean' || fmt2.parceria === 'rotation_groups_8')) ||
+          ('gamesPerUnit' in rule && (fmt2.parceria === 'rotation_groups_8' ||
+            !Number.isSafeInteger(rule.gamesPerUnit) || rule.gamesPerUnit < 1 || rule.gamesPerUnit > 128))) {
+        throw new HttpsError('invalid-argument', 'Categoria, formação ou quantidade de jogos por unidade inválida.');
+      }
+    }
+  }
   if (Object.prototype.hasOwnProperty.call(fmt2, 'rotationCategoryRules')) {
     const rules = fmt2.rotationCategoryRules;
     const available = new Set(categories || (stored && stored.combinedCategories) || []);
@@ -98,7 +151,7 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, ca
     }
     for (const rule of rules) {
       if (!rule || Object.keys(rule).some(key => !['category','rounds','destination'].includes(key)) || typeof rule.category !== 'string' || !available.has(rule.category) || seen.has(rule.category) ||
-          !Number.isInteger(rule.rounds) || rule.rounds < 1 || rule.rounds > 7 ||
+          !Number.isInteger(rule.rounds) || rule.rounds < 1 || rule.rounds > maxRotation ||
           !['ranking', 'elimination'].includes(rule.destination) ||
           (rule.destination === 'elimination' && !(fmt2.eliminatoria && fmt2.eliminatoria.ativa === true))) {
         throw new HttpsError('invalid-argument', 'Categoria, número de partidas ou destino do rodízio inválido.');
@@ -151,11 +204,12 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, ca
   }
   const storedGroupFormation = explicitValue(stored && stored.fmt2, 'groupFormation');
   const requestedGroupFormation = explicitValue(fmt2, 'groupFormation');
-  if (storedGroupFormation.present && !requestedGroupFormation.present) {
+  if (storedGroupFormation.present && !requestedGroupFormation.present && !(fmt2.parceria === 'rei_rainha' && fmt2.grupos === 1)) {
     throw new HttpsError('failed-precondition', 'Atualize o app para editar a formação dos grupos deste torneio.');
   }
   if (requestedGroupFormation.present &&
-      (!explicitValue(fmt2, 'groupFormation.mode').present ||
+      (Object.keys(requestedGroupFormation.value).some(key => !['mode','value'].includes(key)) ||
+       !explicitValue(fmt2, 'groupFormation.mode').present ||
        !explicitValue(fmt2, 'groupFormation.value').present)) {
     throw new HttpsError('invalid-argument', 'A formação dos grupos exige escolher o critério e o número.');
   }
@@ -211,8 +265,8 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, ca
     if (path === 'tieSinglesPoints' && parsed > 99) {
       throw new HttpsError('invalid-argument', 'O desempate de simples aceita de 1 a 99 pontos.');
     }
-    if (path === 'groupFormation.value' && parsed > 128) {
-      throw new HttpsError('invalid-argument', 'A formação aceita de 2 a 128 grupos ou unidades por grupo.');
+    if (path === 'groupFormation.value' && (parsed > 128 || (fmt2.groupFormation.mode === 'size' && parsed < 2))) {
+      throw new HttpsError('invalid-argument', 'Escolha de 1 a 128 grupos ou de 2 a 128 unidades por grupo.');
     }
     if (path === 'eliminatoria.finalSeriesBestOf' && (parsed > 99 || parsed % 2 !== 1)) {
       throw new HttpsError('invalid-argument', 'A série final exige de 1 a 99 partidas, em número ímpar.');

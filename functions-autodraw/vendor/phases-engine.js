@@ -1557,11 +1557,19 @@
     var rotationCfg = phaseCfg && phaseCfg.classification && phaseCfg.classification.partnerRotation === 'unique_8'
       ? phaseCfg.classification : null;
     var nGroups = rotationCfg ? Math.ceil(pool.length / 8) : (parseInt(phaseCfg && phaseCfg.gruposCount, 10) || 4);
-    var formation = phaseCfg && phaseCfg.groupFormation;
+    var classification = phaseCfg && phaseCfg.classification;
+    var localPlan = classification && (classification.groupCategoryRules || typeof classification.schedule?.allowRepeat === 'boolean' ||
+      classification.rotationAllowRepeatPartners === true) &&
+      window.FORMAT2.groupPlanForCategory(phaseCfg, phaseCfg.category, pool.length, phaseCfg.gruposEqualOnly);
+    if (localPlan && localPlan.error) throw new Error((phaseCfg.category ? phaseCfg.category + ': ' : '') + localPlan.error);
+    if (localPlan && phaseCfg.maxDrawOperations && localPlan.matches > phaseCfg.maxDrawOperations) {
+      throw new Error('A grade exige ' + localPlan.matches + ' partidas e excede a capacidade de publicação de um sorteio.');
+    }
+    var formation = localPlan ? localPlan.formation : phaseCfg && phaseCfg.groupFormation;
     var explicitFormation = !!(formation && (formation.mode === 'count' || formation.mode === 'size'));
     if (explicitFormation) {
       var requested = Number(formation.value);
-      if (!Number.isSafeInteger(requested) || requested < 2) throw new Error('A formação dos grupos precisa ser um número inteiro maior ou igual a dois.');
+      if (!Number.isSafeInteger(requested) || requested < (formation.mode === 'count' ? 1 : 2) || requested > 128) throw new Error('Quantidade ou tamanho dos grupos inválido.');
       if (pool.length < 2) throw new Error('São necessários pelo menos dois participantes para formar grupos.');
       nGroups = formation.mode === 'count' ? requested : Math.ceil(pool.length / requested);
       if (nGroups < 1 || nGroups > Math.floor(pool.length / 2)) {
@@ -1664,12 +1672,13 @@
       if (!rotationCore || typeof rotationCore.build !== 'function') throw new Error('Motor de rodízio para grupos de oito indisponível.');
       var rule = Array.isArray(rotationCfg.rotationCategoryRules)
         ? window.FORMAT2.rotationRuleForCategory(rotationCfg, phaseCfg.category) : null;
-      var rotationRounds = rule ? rule.rounds : Math.max(1, Math.min(7, parseInt(rotationCfg.rotationRounds, 10) || 5));
+      var rotationRounds = rule ? rule.rounds : Math.max(1, Math.min(rotationCfg.rotationAllowRepeatPartners ? 128 : 7, parseInt(rotationCfg.rotationRounds, 10) || 5));
       var entryName = function (entry) { return typeof entry === 'string' ? entry : (entry.displayName || entry.name || ''); };
       var entryUid = function (entry) { return entry && typeof entry === 'object' ? (entry.uid || null) : null; };
       groups.forEach(function (g) {
         if (g.players.length !== 8) throw new Error('Cada grupo de rodízio precisa ter exatamente oito atletas.');
-        var plan = rotationCore.build(g.players, rotationRounds);
+        var plan = rotationCfg.rotationAllowRepeatPartners === true
+          ? rotationCore.buildWithRepeats(g.players, rotationRounds) : rotationCore.build(g.players, rotationRounds);
         g.superEightLetters = g.players.map(function (entry, index) {
           return { letter: String.fromCharCode(65 + index), name: entryName(entry), uid: entryUid(entry) };
         });
@@ -1776,6 +1785,22 @@
         return pairs.length ? { round: round.round, pairs: pairs } : null;
       }).filter(Boolean);
     }
+    function groupSchedule(players, schedule) {
+      var degree = players.length - 1, wanted = schedule.gamesPerUnit;
+      if (degree < 1 && schedule.allowRepeat === true) throw new Error('São necessárias duas unidades para montar confrontos.');
+      if (schedule.allowRepeat !== true || wanted <= degree) return _partialGroupSchedule(players, wanted, schedule.mode);
+      var total = [], offset = 0;
+      var full = roundRobinSchedule(players);
+      var cycles = Math.floor(wanted / degree);
+      for (var cycle = 0; cycle < cycles; cycle++) {
+        full.forEach(function (r) { total.push({round:offset + r.round, pairs:r.pairs}); });
+        offset += full.length;
+      }
+      if (wanted % degree) _partialGroupSchedule(players, wanted % degree, schedule.mode).forEach(function (r) {
+        total.push({round:offset + r.round, pairs:r.pairs});
+      });
+      return total;
+    }
     // v4.4.x: ida-e-volta (turnos=2) — repete a grade com mando invertido.
     // O turno explícito da fase vence o sinal legado _doubleRR.
     var _turnos = (phaseCfg && phaseCfg.turnos === 'ida_volta') ? 2
@@ -1790,13 +1815,13 @@
       var normalizedCompetition = _teamCompetitionCore && typeof _teamCompetitionCore.normalize === 'function'
         ? _teamCompetitionCore.normalize(_teamCompetition) : null;
       var teamSchedule = normalizedCompetition && normalizedCompetition.enabled && normalizedCompetition.schedule && normalizedCompetition.schedule.enabled ? normalizedCompetition.schedule : null;
-      var classificationSchedule = phaseCfg && phaseCfg.classification && phaseCfg.classification.schedule;
+      var classificationSchedule = localPlan ? localPlan.schedule : phaseCfg && phaseCfg.classification && phaseCfg.classification.schedule;
       var genericSchedule = classificationSchedule && parseInt(classificationSchedule.gamesPerUnit, 10) >= 1
         ? classificationSchedule : null;
       // Campo novo vence; campo de times permanece só como leitor de documentos
       // anteriores à separação entre agenda e classificação agregada.
       var sched = genericSchedule
-        ? _partialGroupSchedule(g.players, genericSchedule.gamesPerUnit, genericSchedule.mode)
+        ? groupSchedule(g.players, genericSchedule)
         : (teamSchedule
           ? _partialGroupSchedule(g.players, _teamCompetitionCore && _teamCompetitionCore.gamesPerPairForCategory
               ? _teamCompetitionCore.gamesPerPairForCategory(_teamCompetition, phaseCfg && phaseCfg.category)
@@ -2357,7 +2382,7 @@
           (one.groups || []).forEach(function (group) {
             group.category = cat;
             group.name = String(cat) + (stratum.day ? ' · ' + stratum.day : '') + ' · ' + String(group.name || 'Grupo');
-            if (groupCfg.classification && groupCfg.classification.rotationCategoryRules) {
+            if (groupCfg.classification && (groupCfg.classification.rotationCategoryRules || groupCfg.classification.groupCategoryRules)) {
               (group.matches || []).forEach(function (match) { match.groupName = group.name; });
             }
           });

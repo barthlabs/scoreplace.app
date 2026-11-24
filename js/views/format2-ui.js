@@ -47,9 +47,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var available = Object.keys(labels).filter(function (key) {
       return list.indexOf(key) < 0 && (key !== 'sorteio' || tc.classificationUnit !== 'pair');
     });
-    if (available.length) out += '<label style="display:block;margin-top:8px;font-size:.72rem;color:var(--text-muted);">Adicionar critério ' +
-      '<select aria-label="Adicionar critério de desempate por time" onchange="window._f2TeamTiebreakAdd(this.value)" style="margin-left:5px;background:var(--bg-secondary,#20242b);color:var(--text-main);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:5px;">' +
-      '<option value="">Selecione</option>' + available.map(function (key) { return '<option value="' + key + '">' + labels[key] + '</option>'; }).join('') + '</select></label>';
+    if (available.length) out += _sec('Adicionar critério de desempate por time', available.map(function (key) {
+      return _pill(false, "window._f2TeamTiebreakAdd('" + key + "')", labels[key]);
+    }).join(''));
     if (list.indexOf('sorteio') >= 0) out += '<div style="font-size:.72rem;color:var(--text-muted);margin-top:8px;">O sorteio só desempata quando a organização registra a ordem dos times. Sem ordem registrada, a posição continua empatada pelos critérios esportivos.</div>';
     return out + '</div>';
   }
@@ -164,10 +164,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
 
-  function _pill(active, onclick, label) {
+  function _pill(active, onclick, label, value, disabled) {
     var on = 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:var(--sp-c-c7d2fe,#c7d2fe);';
     var off = 'border:2px solid var(--sp-b-255-255-255-016,rgba(255,255,255,0.16));background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:var(--text-main);';
-    return '<button type="button" onclick="' + onclick + '" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap;margin:0 4px 4px 0;' + (active ? on : off) + '">' + label + '</button>';
+    return '<button type="button" aria-pressed="' + !!active + '"' + (value ? ' data-value="' + value + '"' : '') +
+      (disabled ? ' disabled' : '') + ' onclick="' + onclick + '" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap;margin:0 4px 4px 0;' + (active ? on : off) + '">' + label + '</button>';
   }
   function _binaryChoice(left, right, rightActive, onchange, ariaLabel) {
     return '<label class="sp-binary-choice">' +
@@ -726,7 +727,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var t = S && S.t;
     var people = _peopleCount(t);
     var isDupla = cfg.disputa === 'dupla';
-    var units = isDupla ? Math.floor(people / 2) : people;
+    var units = isDupla && cfg.parceria !== 'rotation_groups_8' ? Math.floor(people / 2) : people;
     if (cfg.teamCompetition && cfg.teamCompetition.enabled && t && typeof window._diagnoseAll === 'function') {
       var diagnosis = window._diagnoseAll(t);
       if (diagnosis && Number.isFinite(Number(diagnosis.effectiveTeams))) units = Math.max(0, Number(diagnosis.effectiveTeams));
@@ -749,27 +750,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ? Math.ceil(Math.max(0, Number(gi && gi.units) || 0) / 8)
       : Math.max(1, Number(cfg && cfg.grupos) || 1);
   }
-  function _rotationEstimate(cfg, gi, capacities) {
-    var categories = _rotationCategories();
-    var groups = [], groupGames = 0, incomplete = false;
-    var players = gi.t && gi.t.participants || [];
-    categories.forEach(function (category, ci) {
-      var roster = players.filter(function (p) {
-        return (window._getParticipantCategories(p) || [])[0] === category && p.ligaActive !== false;
-      });
-      if (capacities) {
-        var capacity = Number(capacities[category]);
-        if (!Number.isSafeInteger(capacity) || capacity < 1 || capacity > 4096) { incomplete = true; return; }
-        roster = Array.from({length:capacity}, function (_, i) { return 'Vaga ' + ci + '-' + i; });
+  function _categoryProjection(cfg, capacities) {
+    var categories = _rotationCategories(), groupGames = 0, groups = [];
+    for (var ci = 0; ci < categories.length; ci++) {
+      var category = categories[ci];
+      var people = capacities ? Number(capacities[category]) : _categoryPeople(category);
+      if (!Number.isSafeInteger(people) || people < 1 || people > 4096) return null;
+      var row = _groupPreview(cfg, category, people);
+      if (row.plan.error) return null;
+      groupGames += row.plan.matches;
+      var a = row.plan.assessment;
+      for (var i = 0; i < a.groups; i++) {
+        var size = a.base + (i < a.remainder ? 1 : 0);
+        groups.push({ category:category, name:category + ' · ' + (i + 1),
+          players:Array.from({length:size}, function (_, j) { return 'Vaga ' + ci + '-' + i + '-' + j; }) });
       }
-      var rule = window.FORMAT2.rotationRuleForCategory(cfg, category);
-      if (roster.length % 8) incomplete = true;
-      for (var i = 0; i + 8 <= roster.length; i += 8) {
-        groups.push({ category:category, name:category + ' · ' + (i / 8 + 1), players:roster.slice(i, i + 8) });
-        groupGames += 2 * (rule ? rule.rounds : cfg.rodadas.n);
-      }
-    });
-    if (incomplete || !groups.length) return null;
+    }
+    if (!groups.length) return null;
     var phases = window.FORMAT2.compileToPhases(cfg, { sport:S.sport, categories:categories }).phases;
     var projection = { combinedCategories:categories, groups:groups, phases:phases };
     var next = phases[1] && window._sumulaUpcomingBracket(projection, 1);
@@ -777,8 +774,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return { groupGames:groupGames, elimGames:next ? next.categories.reduce(function (total,c) { return total + c.matches.length; }, 0) : 0 };
   }
   window._f2ProjectedRotation = function (capacities) {
-    if (!S || !S.cfg.rotationCategoryRules) return null;
-    return _rotationEstimate(S.cfg, _groupInfo(S.cfg), capacities);
+    if (!S || !(S.cfg.rotationCategoryRules || (S.cfg.groupCategoryRules && S.cfg.groupCategoryRules.length))) return null;
+    return _categoryProjection(S.cfg, capacities);
   };
   // Linha de estimativa (inscritos + tempo de jogos).
   function _estimateLine(cfg) {
@@ -793,9 +790,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       q = Math.min(q, gi.units);
       if (q >= 2) elimGames = (q - 1) + (q >= 4 ? 1 : 0);   // 3º lugar sempre (≥4 tem 2 semis)
     }
-    if (cfg.rotationCategoryRules) {
-      var projection = _rotationEstimate(cfg, gi);
-      if (!projection) return '<div role="status">A estimativa depende de grupos completos de oito por categoria e da chave projetada.</div>';
+    if (cfg.rotationCategoryRules || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) {
+      var projection = _categoryProjection(cfg);
+      if (!projection) return '<div role="status">A estimativa depende da formação dos grupos por categoria e da chave projetada.</div>';
       groupGames = projection.groupGames;
       elimGames = projection.elimGames;
     }
@@ -810,7 +807,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var timeStr = hh > 0 ? (hh + 'h' + (mm ? ' ' + mm + 'min' : '')) : (mm + 'min');
     var gdTxt = (gdG === gdE) ? (gdG + 'min') : (gdG + '/' + gdE + 'min');
     return '<div style="margin-top:8px;font-size:0.78rem;color:var(--sp-c-a5b4fc,#a5b4fc);background:rgba(99,102,241,0.08);border-radius:8px;padding:9px 11px;line-height:1.5;">' +
-      '👥 <b>' + gi.people + '</b> inscritos' + (gi.isDupla && !cfg.rotationCategoryRules ? (' → <b>' + gi.units + '</b> duplas') : '') +
+      '👥 <b>' + gi.people + '</b> inscritos' + (gi.isDupla && cfg.parceria !== 'rotation_groups_8' ? (' → <b>' + gi.units + '</b> duplas') : '') +
       ' · ⏱️ ~<b>' + timeStr + '</b> de jogos <span style="opacity:0.8;">(' + totalGames + ' jogos · ' + gdTxt + ' · ' + cc + ' quadra' + (cc > 1 ? 's' : '') + ')</span></div>';
   }
   // Resumo da eliminatória (abaixo do slider de classificados): pessoas/equipes, jogos, tempo.
@@ -818,12 +815,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!cfg.eliminatoria || !cfg.eliminatoria.ativa) return '';
     var gi = _groupInfo(cfg);
     var isDupla = cfg.disputa === 'dupla';
-    if (cfg.rotationCategoryRules) {
-      var projection = _rotationEstimate(cfg, gi);
+    if (cfg.rotationCategoryRules || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) {
+      var projection = _categoryProjection(cfg);
       return projection ? '<div>' + projection.elimGames + (projection.elimGames === 1 ? ' jogo' : ' jogos') + ' na eliminatória</div>' : '';
     }
     var effectiveGroups = _effectiveGroupCount(cfg, gi);
-    var perGroupScope = (effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8') && cfg.classifScope !== 'overall';
+    var perGroupScope = (effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8' || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) && cfg.classifScope !== 'overall';
     // v4.4.40: "Todos" → o total é o nº REAL de inscritos (não o classificados). Sem inscritos,
     // não dá pra saber quantos "todos" são → mensagem em vez de número fixo.
     if (cfg.eliminatoria.qualifyAll) {
@@ -856,7 +853,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // Apresentação abaixo do slider: rótulo (1 grupo) OU números grandes (N grupos).
   function _estruturaBlock(cfg) {
     var gi = _groupInfo(cfg);
-    if (cfg.rotationCategoryRules) return _estimateLine(cfg);
+    if (cfg.rotationCategoryRules || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) return _estimateLine(cfg);
     var superEight = window.FORMAT2.superEightVariant(cfg,
       cfg.parceria === 'super_eight' ? gi.people : gi.units);
     // Categorias distintas geram grades separadas; oito duplas no total não
@@ -890,6 +887,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _groupScheduleWarning(cfg) {
     var gi = _groupInfo(cfg), a = gi.assessment;
     if (!a.known || !cfg.classificationSchedule || (!a.unequalGroups && !a.limitedGroups)) return '';
+    if (typeof cfg.classificationSchedule.allowRepeat === 'boolean') return '<div role="status">O número de jogos escolhido é incompatível com o tamanho ou a paridade dos grupos.</div>';
     var unit = window._t(gi.isDupla ? 'format2.scheduleUnitPair' : 'format2.scheduleUnitPerson');
     var message = a.minGames === a.maxGames
       ? window._t('format2.scheduleLimited', { games: a.maxGames, unit: unit })
@@ -901,18 +899,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var sched = cfg.classificationSchedule;
     var isShort = !!sched;
     var current = isShort ? Math.max(1, parseInt(sched.gamesPerUnit, 10) || 1) : 1;
-    var inferredMax = Math.max(1, (gi.big || 2) - 1);
-    var max = Math.max(inferredMax, current);
-    var unit = gi.isDupla ? 'dupla' : 'jogador';
-    var text = !gi.units
-      ? 'Quando houver inscritos, o sistema limita automaticamente o valor ao tamanho de cada grupo.'
-      : ('Em um grupo com N ' + (gi.isDupla ? 'duplas' : 'jogadores') + ', todos contra todos são N−1 jogos por ' + unit + '.');
-    var html = _pill(!isShort, 'window._f2GroupSchedule(null)', '🔄 Todos contra todos') +
-      _pill(isShort, 'window._f2GroupSchedule(\'short\')', '🔢 Agenda curta') +
-      '<div style="font-size:.72rem;color:var(--text-muted);margin-top:7px;line-height:1.45;">' + text + '</div>';
+    var unit = gi.isDupla ? 'dupla' : 'atleta';
+    var locked = _hasDrawnGames();
+    var html = _pill(!isShort, 'window._f2GroupSchedule(null)', '🔄 Todos contra todos', null, locked) +
+      _pill(isShort, "window._f2GroupSchedule('short')", 'Definir jogos por ' + unit, null, locked);
     if (!isShort) return html;
-    html += '<div style="margin-top:12px;font-size:.72rem;color:var(--text-muted);">Jogos por ' + unit + ' no grupo <b id="f2-group-schedule-games-value" style="color:var(--text-main);">' + current + '</b></div>' +
-      '<input id="f2-group-schedule-games" type="range" min="1" max="' + max + '" value="' + current + '" oninput="window._f2GroupSchedule(this.value,this)" style="width:100%;">' +
+    html += '<div><label>Jogos por ' + unit + ' no grupo <input id="f2-group-schedule-games" type="number" min="1" max="128" value="' +
+      current + '"' + (locked ? ' disabled' : '') + ' onchange="window._f2GroupSchedule(this.value,this)"></label></div>' +
+      '<label><input type="checkbox" id="f2-group-repeat"' + (sched.allowRepeat ? ' checked' : '') + (locked ? ' disabled' : '') +
+        ' onchange="window._f2GroupRepeat(this.checked)"> Permitir repetir adversários</label>' +
       '<div id="f2-group-schedule-warning" aria-live="polite">' + _groupScheduleWarning(cfg) + '</div>' +
       '<div style="margin-top:10px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Montagem dos confrontos</div>' +
       _pill(sched.mode !== 'structured', 'window._f2GroupScheduleMode(\'free\')', '🎲 Sorteio livre') +
@@ -984,6 +979,149 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     return _teamCompetitionCategories();
   }
+  function _usesFixedPairs(cfg) {
+    return cfg.disputa === 'dupla' && cfg.parceria === 'fixa';
+  }
+  function _defaultGroupFormation(cfg) {
+    return cfg.groupFormation || (cfg.parceria === 'rotation_groups_8'
+      ? { mode:'size', value:8 } : { mode:'count', value:cfg.grupos });
+  }
+  function _categoryPeople(category) {
+    var participants = ((S.t && S.t.participants) || []).filter(function (entry) {
+      return entry && entry.ligaActive !== false && (window._getParticipantCategories(entry) || [])[0] === category;
+    });
+    return _peopleCount({ participants:participants });
+  }
+  function _groupPreview(cfg, category, people) {
+    var pairs = _usesFixedPairs(cfg);
+    var units = pairs ? Math.floor(people / 2) : people;
+    var plan = window.FORMAT2.groupPlanForCategory(cfg, category, units, cfg.gruposEqualOnly || S.t && S.t.gruposEqualOnly);
+    var a = plan.assessment;
+    var sizes = Array.from({length:a.groups}, function (_, i) { return a.base + (i < a.remainder ? 1 : 0); });
+    var details = !people ? 'Aguardando inscrições' : people + ' pessoas · ' + (pairs ? units + ' duplas · ' : '') +
+      (plan.error || (a.groups + (a.groups === 1 ? ' grupo' : ' grupos') + ' (' + sizes.join(' + ') + ') · ' + plan.matches + ' jogos' +
+        (a.waitlist ? ' · ' + a.waitlist + ' em espera' : '')));
+    return { plan:plan, details:details, people:people };
+  }
+  function _groupCategoryControls(cfg) {
+    var categories = _rotationCategories();
+    var rules = cfg.groupCategoryRules || [];
+    if ((categories.length < 2 && !rules.length) || cfg.teamCompetition.enabled ||
+        (cfg.disputa === 'dupla' && !['fixa', 'rotation_groups_8'].includes(cfg.parceria))) return '';
+    var locked = _hasDrawnGames() ? ' disabled' : '';
+    var html = '<label><input type="checkbox" id="f2-group-category-enabled"' + locked + (rules.length ? ' checked' : '') +
+      ' onchange="window._f2GroupByCategory(this.checked)"> Configurar grupos por categoria</label>';
+    if (!rules.length) return html;
+    if (rules.length !== categories.length || rules.some(function (rule) { return !categories.includes(rule.category); })) {
+      html += '<div role="status">A lista de categorias mudou. <button type="button"' + locked +
+        ' onclick="window._f2GroupByCategory(true)">Aplicar às categorias atuais</button></div>';
+    }
+    var pairs = _usesFixedPairs(cfg);
+    categories.forEach(function (category, index) {
+      var rule = rules.find(function (r) { return r.category === category; });
+      if (!rule) return;
+      var formation = rule.groupFormation;
+      var mode = formation.mode === 'size' && pairs && S.groupPeople && S.groupPeople[category] ? 'people' : formation.mode;
+      var value = formation.value * (mode === 'people' ? 2 : 1);
+      var change = ' onchange="window._f2GroupRule(' + index + ',this)"';
+      var changeMode = function (key, label) {
+        return _pill(mode === key, "window._f2GroupRule(" + index + ",null,'" + key + "')", label, key, !!locked);
+      };
+      html += '<fieldset><legend>' + _safe(category) + '</legend><div id="f2-group-mode-' + index + '" role="group" aria-label="Definir grupos por">' +
+        changeMode('count','Número de grupos') + changeMode('size',pairs ? 'Duplas por grupo' : 'Pessoas por grupo') +
+        (pairs ? changeMode('people','Pessoas por grupo') : '') + '</div><label>Quantidade <input type="number" id="f2-group-value-' +
+        index + '" min="' + (mode === 'count' ? 1 : mode === 'people' ? 4 : 2) + '" max="' + (mode === 'people' ? 256 : 128) +
+        '" step="' + (mode === 'people' ? 2 : 1) + '" value="' + value + '"' + change + locked + '></label>';
+      if (cfg.parceria !== 'rotation_groups_8') html += ' <label>Jogos por ' + (pairs ? 'dupla' : 'atleta') +
+        ' <input type="number" min="1" max="128" id="f2-group-games-' + index + '" placeholder="Herdar" value="' +
+        (rule.gamesPerUnit || '') + '"' + change + locked + '></label>';
+      if (cfg.parceria !== 'rotation_groups_8') {
+        var repeats = typeof rule.allowRepeat === 'boolean' ? rule.allowRepeat : !!cfg.classificationSchedule?.allowRepeat;
+        html += '<label><input id="f2-group-repeat-' + index + '" type="checkbox"' + (repeats ? ' checked' : '') +
+          locked + ' onchange="window._f2GroupRepeat(this.checked,' + index + ')"> Permitir repetir adversários</label>';
+      }
+      html += '<div id="f2-group-preview-' + index + '" role="status">' +
+        _safe(_groupPreview(cfg, category, _categoryPeople(category)).details) + '</div></fieldset>';
+    });
+    return html;
+  }
+  window._f2GroupByCategory = function (enabled) {
+    if (!S || _hasDrawnGames()) return;
+    var previous = S.cfg.groupCategoryRules || [];
+    var categories = _rotationCategories();
+    S.cfg.groupCategoryRules = enabled && categories.length > 1 ? categories.map(function (category) {
+      return previous.find(function (r) { return r.category === category; }) ||
+        { category:category, groupFormation:Object.assign({}, _defaultGroupFormation(S.cfg)) };
+    }) : [];
+    if (enabled) { S.cfg.rodadas.modo = 'todos'; S.cfg.rodadas.turnos = 'ida'; }
+    _norm(); _rerender();
+  };
+  window._f2GroupRule = function (index, input, selectedMode) {
+    if (!S || _hasDrawnGames() || !S.cfg.groupCategoryRules) return;
+    var category = _rotationCategories()[index];
+    var rule = S.cfg.groupCategoryRules.find(function (r) { return r.category === category; });
+    if (!rule) return;
+    var selector = document.querySelector('#f2-group-mode-' + index + ' [aria-pressed="true"]');
+    var number = document.getElementById('f2-group-value-' + index);
+    var games = document.getElementById('f2-group-games-' + index);
+    var mode = selectedMode || selector.dataset.value, value = number.valueAsNumber;
+    S.groupPeople = S.groupPeople || Object.create(null);
+    if (selectedMode) {
+      value = rule.groupFormation.value;
+      if (mode !== 'count') value = Math.max(2, value);
+    } else if (mode === 'people') value /= 2;
+    if (!Number.isSafeInteger(value) || value < (mode === 'count' ? 1 : 2) || value > 128) {
+      number.setCustomValidity(mode === 'people' ? 'Informe um número par de pessoas entre 4 e 256.' : 'Confira a quantidade.');
+      number.reportValidity(); return;
+    }
+    number.setCustomValidity('');
+    if (games && games.value && (!Number.isSafeInteger(games.valueAsNumber) || games.valueAsNumber < 1 || games.valueAsNumber > 128)) {
+      games.reportValidity(); return;
+    }
+    S.groupPeople[category] = mode === 'people';
+    rule.groupFormation = { mode:mode === 'people' ? 'size' : mode, value:value };
+    if (games && games.value) rule.gamesPerUnit = games.valueAsNumber;
+    else delete rule.gamesPerUnit;
+    _norm(); _rerender();
+  };
+  function _switchGroupUnits(toIndividuals) {
+    var cfg = S.cfg;
+    var formations = [cfg.groupFormation].concat((cfg.groupCategoryRules || []).map(function (r) { return r.groupFormation; }));
+    for (var i = 0; i < formations.length; i++) {
+      var formation = formations[i];
+      if (formation && formation.mode === 'size') {
+        var value = toIndividuals ? formation.value * 2 : formation.value / 2;
+        if (!Number.isInteger(value) || value < 2 || value > 128) {
+          S.groupNotice = 'Ajuste o tamanho dos grupos para que a formação possa ser convertida entre pessoas e duplas.';
+          _rerender(); return false;
+        }
+      }
+    }
+    formations.forEach(function (formation) {
+      if (formation && formation.mode === 'size') formation.value *= toIndividuals ? 2 : 0.5;
+    });
+    S.groupNotice = '';
+    return true;
+  }
+  window._f2ClassificationStructure = function (value) {
+    if (!S || _hasDrawnGames()) return;
+    if (value === 'rei_rainha') {
+      delete S.cfg.rotationAllowRepeatPartners;
+      S.cfg.grupos = 1;
+      delete S.cfg.groupFormation;
+      delete S.cfg.classificationSchedule;
+      if (S.cfg.groupCategoryRules) S.cfg.groupCategoryRules = [];
+      S.cfg.parceria = 'rei_rainha'; S.cfg.formacaoDupla = 'sorteio';
+    } else if (value === 'groups' || value === 'fixed') {
+      if (S.cfg.parceria === 'rotation_groups_8' && value === 'groups') return;
+      if (S.cfg.parceria === 'rotation_groups_8' && !_switchGroupUnits(false)) return;
+      if (S.cfg.disputa === 'dupla') S.cfg.parceria = 'fixa';
+      delete S.cfg.rotationAllowRepeatPartners;
+      S.cfg.rodadas.modo = 'todos';
+    } else return;
+    _norm(); _rerender();
+  };
+
   function _rotationCategoryControls(cfg) {
     var categories = _rotationCategories();
     var rules = cfg.rotationCategoryRules || [];
@@ -1001,12 +1139,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var rule = window.FORMAT2.rotationRuleForCategory(cfg, category);
       var rounds = rule ? rule.rounds : cfg.rodadas.n;
       var ranking = rule ? rule.destination === 'ranking' : !cfg.eliminatoria.ativa;
-      html += '<fieldset><legend>' + _safe(category) + '</legend><label>Partidas por atleta <input type="number" min="1" max="7" value="' +
-        rounds + '"' + locked + ' onchange="window._f2RotationRule(' + index + ',this.value,null)"></label> ' +
-        '<label>Classificação <select' + locked + ' onchange="window._f2RotationRule(' + index + ',null,this.value)">' +
-        '<option value="ranking"' + (ranking ? ' selected' : '') + '>Encerrar no ranking individual</option>' +
-        (cfg.eliminatoria.ativa ? '<option value="elimination"' + (!ranking ? ' selected' : '') +
-          '>Avançar à eliminatória configurada</option>' : '') + '</select></label></fieldset>';
+      html += '<fieldset><legend>' + _safe(category) + '</legend><label>Partidas por atleta <input type="number" min="1" max="' +
+        (cfg.rotationAllowRepeatPartners ? 128 : 7) + '" value="' + rounds + '"' + locked + ' onchange="window._f2RotationRule(' + index +
+        ',this.value,null)"></label><div role="group" aria-label="Classificação">' +
+        _pill(ranking, "window._f2RotationRule(" + index + ",null,'ranking')", 'Encerrar no ranking individual', 'ranking', !!locked) +
+        (cfg.eliminatoria.ativa ? _pill(!ranking, "window._f2RotationRule(" + index + ",null,'elimination')", 'Avançar à eliminatória', 'elimination', !!locked) : '') +
+        '</div></fieldset>';
     });
     return html;
   }
@@ -1068,22 +1206,33 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     entryControls += _binaryChoice('Simples', 'Duplas', isDupla,
       "window._f2Disputa(this.checked?'dupla':'individual')", 'Disputa em simples ou duplas');
 
-    var currentFormation = cfg.groupFormation || (cfg.parceria === 'rotation_groups_8'
-      ? { mode: 'size', value: 8 }
-      : { mode: 'count', value: cfg.grupos });
-    structureControls += _sec('Formação dos grupos',
-      '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:9px;">' +
-        '<label for="f2-group-formation-mode" style="font-size:.84rem;">Definir por</label>' +
-        '<select id="f2-group-formation-mode" onchange="window._f2GroupFormation(this.value,document.getElementById(\'f2-group-formation-value\').value)" style="padding:7px 9px;border-radius:8px;border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,.2));background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);"><option value="count"' + (currentFormation.mode === 'count' ? ' selected' : '') + '>Número de grupos</option><option value="size"' + (currentFormation.mode === 'size' ? ' selected' : '') + '>Pessoas por grupo</option></select>' +
-        '<input id="f2-group-formation-value" type="number" min="2" max="128" value="' + currentFormation.value + '" aria-label="' + (currentFormation.mode === 'size' ? 'Pessoas por grupo' : 'Número de grupos') + '" onchange="window._f2GroupFormation(document.getElementById(\'f2-group-formation-mode\').value,this.value)" style="width:78px;text-align:center;padding:7px;border-radius:8px;border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,.2));background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);">' +
-        '<span style="font-size:.78rem;color:var(--text-muted);">' + (currentFormation.mode === 'size' ? 'pessoas por grupo' : 'grupos; distribuição equilibrada') + '</span></div>' +
-        (cfg.parceria === 'rotation_groups_8'
-          ? '<div style="font-size:.78rem;color:var(--text-muted);margin-top:7px;">A formação é geral: defina o tamanho dos grupos ou a quantidade de grupos; a distribuição fica equilibrada. O rodízio A–H exige que os grupos resultantes tenham exatamente 8 atletas.</div>'
-          : ''));
+    var isQueen = cfg.parceria === 'rei_rainha';
+    if (isDupla && cfg.classifAtiva && !cfg.teamCompetition.enabled) {
+      structureControls += _sec('Formato da classificatória',
+        _pill(!isQueen && (cfg.parceria === 'fixa' || cfg.parceria === 'rotation_groups_8'), "window._f2ClassificationStructure('groups')", 'Grupos') +
+        _pill(isQueen, "window._f2ClassificationStructure('rei_rainha')", 'Rainha da Praia'));
+    }
+    var currentFormation = _defaultGroupFormation(cfg);
+    var fixedPairs = _usesFixedPairs(cfg);
+    var displayPeople = fixedPairs && currentFormation.mode === 'size' && S.globalGroupPeople;
+    var displayMode = displayPeople ? 'people' : currentFormation.mode;
+    function formationButton(key, label) {
+      return _pill(displayMode === key, "window._f2GroupFormation('" + key + "',null,true)", label, key, _hasDrawnGames());
+    }
+    if (!isQueen) structureControls += _sec('Formação dos grupos',
+      '<div id="f2-group-formation-mode" role="group" aria-label="Definir grupos por">' +
+        formationButton('count','Número de grupos') + formationButton('size',fixedPairs ? 'Duplas por grupo' : 'Pessoas por grupo') +
+        (fixedPairs ? formationButton('people','Pessoas por grupo') : '') + '</div>' +
+      '<label>' + (displayMode === 'count' ? 'Número de grupos' : fixedPairs && !displayPeople ? 'Duplas por grupo' : 'Pessoas por grupo') +
+      ' <input id="f2-group-formation-value" type="number" min="' + (displayPeople ? 4 : displayMode === 'count' ? 1 : 2) +
+        '" max="' + (displayPeople ? 256 : 128) + '" step="' + (displayPeople ? 2 : 1) + '" value="' + currentFormation.value * (displayPeople ? 2 : 1) +
+        '" onchange="window._f2GroupFormation(\'' + displayMode + '\',this.value)"></label>' +
+        (cfg.parceria === 'rotation_groups_8' ? '<div>O rodízio A–H exige que os grupos resultantes tenham exatamente 8 atletas.</div>' : '') +
+        '<div id="f2-group-categories">' + _groupCategoryControls(cfg) + '</div>');
 
     // (A FORMAÇÃO das duplas — participantes montam × organizador, + times sorteados vs
     //  montados — fica nos toggles detalhados da seção "Formação de Duplas" abaixo do form.)
-    if (isDupla && cfg.classifAtiva) {
+    if (isDupla && cfg.classifAtiva && !isQueen) {
       var pr = cfg.parceria;
       // v4.4.19: "Formação das equipes" — como as duplas se formam. Montadas (organizador/
       // jogadores montam) × Sorteio (sorteadas), ambas FIXAS. Rei/Rainha (rotativo) só com 1 grupo.
@@ -1097,16 +1246,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           _pill(cfg.manualPairingPolicy === 'organizer_only', "window._f2PairAuthority('organizer_only')", 'Organização') +
           _pill(cfg.manualPairingPolicy === 'athletes_only', "window._f2PairAuthority('athletes_only')", 'Atletas') +
           _pill(cfg.manualPairingPolicy === 'open', "window._f2PairAuthority('open')", 'Organização e atletas'));
-      } else {
-        fBtns += _sec('Como serão formados os confrontos na classificatória',
-          _pill(isSorteio, "window._f2TeamForm('sorteio')", 'Parceiros sorteados') +
-          _pill(pr === 'rotation_groups_8', "window._f2TeamForm('rotation_groups_8')", 'Rodízio A–H') +
-          (um ? _pill(pr === 'rei_rainha', "window._f2TeamForm('rei_rainha')", 'Rodada Rei/Rainha') : ''));
       }
+      if (!cfg.teamCompetition.enabled) fBtns += _sec('Parceria nos jogos do grupo',
+        _pill(pr === 'fixa', "window._f2ClassificationStructure('fixed')", 'Dupla fixa', 'fixed') +
+        _pill(pr === 'rotation_groups_8', "window._f2TeamForm('rotation_groups_8')", 'Sortear parceiro a cada rodada · grupos de 8', 'rotate') +
+        (pr === 'rotation_groups_8' ? '<div>Oito pessoas por grupo. Cada atleta joga uma vez por rodada.</div>' :
+          pr === 'fixa' ? '<div>Os dois atletas formam a mesma dupla em todos os jogos.</div>' : ''));
       // v4.4.30: Sorteio + 1 grupo → toggle "Novo parceiro a cada rodada" (ON por padrão).
       // ON = sorteio_rodada (rotativo, individual); OFF = dupla sorteada 1× e fixa até o fim.
       // 2+ grupos: só dupla fixa sorteada (rotativo exige 1 grupo) → sem toggle.
-      if (isSorteio && um && pr !== 'super_eight') {
+      if (isSorteio && um && pr !== 'super_eight' && cfg.rodadas.modo === 'fixo') {
         var porRodada = pr === 'sorteio_rodada';
         fBtns += '<div style="margin-top:12px;">' + _toggleRight('Novo parceiro a cada rodada', porRodada, 'window._f2SorteioPorRodada(this.checked)') + '</div>';
       }
@@ -1192,10 +1341,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var rModo = cfg.rodadas.modo;
     var rInner;
     if (cfg.parceria === 'rotation_groups_8') {
-      var rotationCount = Math.max(1, Math.min(7, parseInt(cfg.rodadas.n, 10) || 5));
-      rInner = '<label style="display:block;font-size:.74rem;color:var(--text-muted);margin-bottom:6px;">Partidas por atleta em cada grupo</label>' +
-        '<input type="number" min="1" max="7" value="' + rotationCount + '"' + (cfg.rotationCategoryRules && _hasDrawnGames() ? ' disabled' : '') + ' onchange="window._f2RotationRounds(this.value)" style="width:82px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);">' +
-        '<div style="font-size:.72rem;color:var(--text-muted);margin-top:7px;line-height:1.45;">No rodízio A–H, cada grupo tem 8 atletas. O sorteio atribui as letras A–H; cada rodada tem 2 jogos e cada atleta joga uma vez com parceiro diferente. Os grupos são separados por categoria.</div>' + '<div id="f2-rotation-categories">' + _rotationCategoryControls(cfg) + '</div>';
+      var rotationCount = cfg.rodadas.n;
+      var rotationLocked = _hasDrawnGames() ? ' disabled' : '';
+      rInner = '<label>Partidas por atleta em cada grupo <input id="f2-rotation-rounds" type="number" min="1" max="' +
+        (cfg.rotationAllowRepeatPartners ? 128 : 7) + '" value="' + rotationCount + '"' + rotationLocked +
+        ' onchange="window._f2RotationRounds(this.value)"></label>' +
+        '<div><label><input type="checkbox" id="f2-rotation-repeat"' + (cfg.rotationAllowRepeatPartners ? ' checked' : '') + rotationLocked +
+        ' onchange="window._f2RotationRepeat(this.checked)"> Permitir repetir parceiro</label></div>' +
+        '<div>' + (cfg.rotationAllowRepeatPartners ? 'Os parceiros são sorteados em cada rodada e podem voltar a jogar juntos.' :
+          'O rodízio A–H dá um parceiro diferente por rodada, até sete jogos por atleta.') +
+        ' Adversários podem se repetir. Cada rodada tem dois jogos separados.</div><div id="f2-rotation-categories">' + _rotationCategoryControls(cfg) + '</div>';
     } else if (rotativo) {
       // Rei/Rainha (ou sorteio a cada rodada): SEMPRE nº de rodadas + agendamento (rotativo por
       // rodada). "Todos contra todos" não se aplica — mas o Nº de rodadas FICA (pedido do dono).
@@ -1212,7 +1367,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         ? _toggleRight('Ida e volta', teamTurnos.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')')
         : '<div style="font-size:0.72rem;color:var(--text-muted);">Vários grupos: classificatória somente de ida.</div>') +
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Vagas e jogos por dupla são definidos em cada categoria' + (teamTurnos.turnos === 'ida_volta' ? ' em cada turno — ida e volta dobra o total.' : '.') + '</div>';
-    } else if (um) {
+    } else if (um && !(cfg.groupCategoryRules && cfg.groupCategoryRules.length)) {
       // Pontos corridos: Nº de rodadas (PADRÃO, primeiro) × Todos contra todos.
       rInner = _pill(rModo === 'fixo', 'window._f2Modo(\'fixo\')', '🔢 Nº de rodadas') +
                _pill(rModo === 'todos', 'window._f2Modo(\'todos\')', '🔄 Todos contra todos');
@@ -1231,7 +1386,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // de prometer uma configuração inexistente, mostramos a agenda real.
       rInner = _groupScheduleControls(cfg);
     }
-    classifSchedule += _sec('Rodadas', rInner);
+    classifSchedule += _sec('Rodadas', rInner + (S.groupNotice ? '<div role="status">' + _safe(S.groupNotice) + '</div>' : ''));
     var isRankingRounds = cfg.classifAtiva && cfg.grupos === 1 && cfg.rodadas.modo === 'fixo' && !(tc && tc.enabled);
     var _canBye = cfg.parceria !== 'super_eight' && !!cfg.rodadas.allowSelfDeactivation;
     if (isRankingRounds && _canBye) {
@@ -1284,8 +1439,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       } else {
         // COM classificatória: escopo (2+ grupos) + Nº de classificados + resumo.
         var effectiveGroups = _effectiveGroupCount(cfg, _groupInfo(cfg));
-        var perGroupScope = (effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8') && cfg.classifScope !== 'overall';
-        if (effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8') {
+        var perGroupScope = (effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8' || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) && cfg.classifScope !== 'overall';
+        if (effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8' || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) {
           eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Classificação dos participantes</div>' +
             _pill(perGroupScope, 'window._f2ClassScope(\'per_group\')', '🗂️ Por grupos') +
             _pill(!perGroupScope, 'window._f2ClassScope(\'overall\')', '📊 Geral') +
@@ -1394,7 +1549,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
        * um botão que não muda nada. A conta e as fórmulas de cada desenho estão em `chaves.js`. */
       var _effectiveGroups = _effectiveGroupCount(cfg, _groupInfo(cfg));
       var _knownCount = cfg.classifAtiva && !e.qualifyAll
-        ? (cfg.classifScope === 'per_group' && (_effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8') ? _effectiveGroups * cfg.classificados : cfg.classificados)
+        ? (cfg.classifScope === 'per_group' && (_effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8' || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) ? _effectiveGroups * cfg.classificados : cfg.classificados)
         : (_peopleCount(S.t) || Number((document.getElementById('tourn-max-participants') || {}).value) || 0);
       if (cfg.disputa === 'dupla' && !cfg.classifAtiva && !e.openReiRainha) _knownCount = Math.floor(_knownCount / 2);
       if (cfg.disputa === 'dupla' && e.openReiRainha) _knownCount = Math.floor(_knownCount / 2);
@@ -1519,7 +1674,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (cfg.classifAtiva) classifSchedule += '<div id="f2-hours-slot" style="margin-top:12px;"></div><div id="f2-classif-extra" style="margin-top:4px;"></div>';
 
     var datesSlot = '<div id="f2-hours-mode-slot" style="margin-top:12px;"></div><div id="f2-phase-dates-slot" style="margin-top:12px;"></div>';
-    var formationStep = isDupla && cfg.classifAtiva ? _phaseBlock('Inscrição e formação de duplas', '#818cf8', formationControls) : '';
+    var formationStep = isDupla && cfg.classifAtiva && !isQueen ? _phaseBlock('Inscrição e formação de duplas', '#818cf8', formationControls) : '';
     var structureSummary = '<div id="f2-estrutura-block">' + _estruturaBlock(cfg) + '</div>';
     var teamChoiceStep = teamChoiceControls ? teamChoiceControls : '';
     var classifStructure = structureControls + formationStep + teamChoiceStep;
@@ -1560,7 +1715,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var eliminationStep = _phaseBlock('3. 🏆 Fase Eliminatória', '#fbbf24', e.ativa ? elimInner : '',
       _hdrRight(_elimLocked,
         _toggleRight('Ativa', e.ativa, 'window._f2Elim(this.checked)',
-          _elimLocked || (e.ativa && !cfg.classifAtiva))));
+          _elimLocked || (e.ativa && !!cfg.rotationCategoryRules && _hasDrawnGames()))));
     var review = _phaseBlock('4. Revisão das decisões', '#818cf8',
       '<p style="font-size:.85rem;color:var(--text-main);">' + _safe(_outcome) + '</p>' + structureSummary +
       (cfg.classifAtiva && !e.ativa
@@ -1624,42 +1779,75 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _norm();
     _rerender();
   };
-  window._f2GroupFormation = function (mode, value) {
-    if (!S || (mode !== 'count' && mode !== 'size')) return;
+  window._f2GroupFormation = function (mode, value, changedMode) {
+    if (!S || _hasDrawnGames() || !['count','size','people'].includes(mode)) return;
     var parsed = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
-    if (!Number.isSafeInteger(parsed) || parsed < 2 || parsed > 128) return;
-    S.cfg.groupFormation = { mode: mode, value: parsed };
+    if (changedMode) parsed = Math.max(mode === 'count' ? 1 : 2, _defaultGroupFormation(S.cfg).value);
+    else if (mode === 'people') parsed /= 2;
+    var input = document.getElementById('f2-group-formation-value');
+    if (!Number.isSafeInteger(parsed) || parsed < (mode === 'count' ? 1 : 2) || parsed > 128) {
+      if (input && input.reportValidity) input.reportValidity();
+      return;
+    }
+    S.globalGroupPeople = mode === 'people';
+    S.cfg.groupFormation = { mode: mode === 'people' ? 'size' : mode, value: parsed };
     var resolved = window.FORMAT2.resolveGroupFormation(S.cfg.groupFormation, _groupInfo(S.cfg).units, S.cfg.grupos);
     if (resolved.groups != null && !resolved.invalid) S.cfg.grupos = resolved.groups;
     _norm(); _rerender();
   };
   window._f2GroupSchedule = function (v, input) {
-    if (!S) return;
+    if (!S || _hasDrawnGames()) return;
     if (v == null) {
-      delete S.cfg.classificationSchedule;
-      _norm(); _rerender(); return;
+      if (typeof S.cfg.classificationSchedule?.allowRepeat === 'boolean') S.cfg.classificationSchedule = null;
+      else delete S.cfg.classificationSchedule;
+      S.groupNotice = ''; _norm(); _rerender(); return;
     }
-    var current = S.cfg.classificationSchedule || { gamesPerUnit: 1, mode: 'free' };
+    var current = Object.assign({gamesPerUnit:1, mode:'free', allowRepeat:false}, S.cfg.classificationSchedule);
     if (v === 'short') {
       var gi = _groupInfo(S.cfg);
       current.gamesPerUnit = Math.max(1, Math.floor(Math.max(2, gi.big || 2) / 2));
-      // Agenda curta é uma passada da fase. Impede que um ida/volta residual
-      // dobre silenciosamente o número que o organizador acabou de escolher.
       S.cfg.rodadas.turnos = 'ida';
     } else {
-      current.gamesPerUnit = Math.max(1, parseInt(v, 10) || 1);
-      var out = document.getElementById('f2-group-schedule-games-value'); if (out) out.textContent = current.gamesPerUnit;
-      // Range é atualização de valor; não desmonta o controle sob o dedo.
-      if (input) {
-        S.cfg.classificationSchedule = current;
-        var warning = document.getElementById('f2-group-schedule-warning');
-        if (warning) warning.innerHTML = _groupScheduleWarning(S.cfg);
-        var estimate = document.getElementById('f2-estrutura-block');
-        if (estimate) estimate.innerHTML = _estruturaBlock(S.cfg);
+      var n = Number(v);
+      if (!Number.isSafeInteger(n) || n < 1 || n > 128) {
+        if (input && input.reportValidity) input.reportValidity();
         return;
       }
+      current.gamesPerUnit = n;
     }
+    S.groupNotice = '';
     S.cfg.classificationSchedule = current;
+    _norm(); _rerender();
+  };
+  window._f2GroupRepeat = function (allowed, index) {
+    if (!S || _hasDrawnGames()) return;
+    var cfg = S.cfg, categories = _rotationCategories();
+    var target = index == null ? cfg.classificationSchedule : cfg.groupCategoryRules?.find(function (r) { return r.category === categories[index]; });
+    if (!target) return;
+    var previous = target.allowRepeat;
+    target.allowRepeat = allowed;
+    var tooMany = false;
+    if (!allowed) {
+      var names = index == null ? categories : [categories[index]];
+      if (names.length) tooMany = names.some(function (cat) {
+        var row = _groupPreview(cfg, cat, _categoryPeople(cat)); return row.people && row.plan.assessment.limitedGroups > 0;
+      });
+      else tooMany = _groupInfo(cfg).assessment.limitedGroups > 0;
+    }
+    if (tooMany) {
+      if (previous == null) delete target.allowRepeat; else target.allowRepeat = previous;
+      S.groupNotice = 'Reduza os jogos por unidade antes de impedir a repetição de adversários.';
+    } else S.groupNotice = '';
+    _norm(); _rerender();
+  };
+  window._f2RotationRepeat = function (allowed) {
+    if (!S || _hasDrawnGames() || S.cfg.parceria !== 'rotation_groups_8') return;
+    if (!allowed && (S.cfg.rodadas.n > 7 || (S.cfg.rotationCategoryRules || []).some(function (r) { return r.rounds > 7; }))) {
+      S.groupNotice = 'Reduza os jogos por atleta a sete antes de impedir a repetição de parceiros.';
+    } else {
+      S.cfg.rotationAllowRepeatPartners = allowed;
+      S.groupNotice = '';
+    }
     _norm(); _rerender();
   };
   window._f2GroupScheduleMode = function (mode) {
@@ -1701,14 +1889,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (S.cfg.grupos === 1) { S.cfg.parceria = 'sorteio_rodada'; }
       else { S.cfg.parceria = 'fixa'; S.cfg.formacaoDupla = 'sorteio'; }
     }
-    else if (v === 'rei_rainha') { S.cfg.parceria = 'rei_rainha'; S.cfg.formacaoDupla = 'sorteio'; }
+    else if (v === 'rei_rainha') { window._f2ClassificationStructure(v); return; }
     else if (v === 'super_eight') {
       if (S.cfg.parceria !== 'super_eight') S.cfg.rodadas.n = 7;
       S.cfg.parceria = 'super_eight'; S.cfg.formacaoDupla = 'sorteio'; S.cfg.superEightDrawMode = 'single';
       if (!S.cfg.rodadas.drawFirstDate) S.cfg.rodadas.drawManual = true;
     }
     else if (v === 'rotation_groups_8') {
+      if (S.cfg.parceria === 'fixa' && !_switchGroupUnits(true)) return;
       S.cfg.parceria = 'rotation_groups_8'; S.cfg.formacaoDupla = 'sorteio';
+      delete S.cfg.classificationSchedule;
+      if (S.cfg.groupCategoryRules) S.cfg.groupCategoryRules.forEach(function (rule) { delete rule.gamesPerUnit; delete rule.allowRepeat; });
+      if (!('rotationAllowRepeatPartners' in S.cfg)) S.cfg.rotationAllowRepeatPartners = false;
       if (!Number.isInteger(Number(S.cfg.rodadas.n)) || Number(S.cfg.rodadas.n) < 1) S.cfg.rodadas.n = 5;
     }
     _norm(); _rerender();
@@ -1726,6 +1918,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _norm(); _rerender();
   };
   window._f2RefreshRotationCategories = function () {
+    var groups = document.getElementById('f2-group-categories');
+    if (groups && S) groups.innerHTML = _groupCategoryControls(S.cfg);
     var controls = document.getElementById('f2-rotation-categories');
     if (controls && S && S.cfg.parceria === 'rotation_groups_8') controls.innerHTML = _rotationCategoryControls(S.cfg);
   };
@@ -1733,14 +1927,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!S || _hasDrawnGames() || !S.cfg.rotationCategoryRules) return;
     var rules = _currentRotationRules(), rule = rules[index];
     if (!rule) return;
-    if (rounds != null) rule.rounds = Math.max(1, Math.min(7, parseInt(rounds, 10) || S.cfg.rodadas.n));
+    if (rounds != null) {
+      var n = Number(rounds);
+      if (!Number.isSafeInteger(n) || n < 1 || n > (S.cfg.rotationAllowRepeatPartners ? 128 : 7)) return;
+      rule.rounds = n;
+    }
     if (destination === 'ranking' || (destination === 'elimination' && S.cfg.eliminatoria.ativa)) rule.destination = destination;
     S.cfg.rotationCategoryRules = rules;
     _norm(); _rerender();
   };
   window._f2RotationRounds = function (value) {
-    if (!S || S.cfg.parceria !== 'rotation_groups_8' || (S.cfg.rotationCategoryRules && _hasDrawnGames())) return;
-    var n = Math.max(1, Math.min(7, parseInt(value, 10) || 5));
+    if (!S || S.cfg.parceria !== 'rotation_groups_8' || _hasDrawnGames()) return;
+    var n = Number(value);
+    if (!Number.isSafeInteger(n) || n < 1 || n > (S.cfg.rotationAllowRepeatPartners ? 128 : 7)) return;
     S.cfg.rodadas.n = n; _norm(); _rerender();
   };
   // v4.4.30: toggle "Novo parceiro a cada rodada" dentro do Sorteio. ON = sorteio_rodada
@@ -1892,7 +2091,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var n = Math.max(1, parseInt(v, 10) || 1);
     // v4.4.41: chegar no total de inscritos (geral) = TODOS → some a barra, botão vira Todos.
     var units = _groupInfo(S.cfg).units;
-    var perGroupScope = (_effectiveGroupCount(S.cfg, _groupInfo(S.cfg)) > 1 || S.cfg.parceria === 'rotation_groups_8') && S.cfg.classifScope !== 'overall';
+    var perGroupScope = (_effectiveGroupCount(S.cfg, _groupInfo(S.cfg)) > 1 || S.cfg.parceria === 'rotation_groups_8' || (S.cfg.groupCategoryRules && S.cfg.groupCategoryRules.length)) && S.cfg.classifScope !== 'overall';
     if (!perGroupScope && units > 1 && n >= units) { S.cfg.eliminatoria.qualifyAll = true; }
     else { S.cfg.classificados = n; }
     _norm(); _rerender();
@@ -2073,7 +2272,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     S.cfg.teamCompetition.scoring[field] = value; _norm(); _rerenderSemAtrapalhar(el);
   };
   window._f2Elim = function (checked) {
-    if (!S || _faseLockState(S).elimLocked || (!checked && (!S.cfg.classifAtiva || (S.cfg.rotationCategoryRules && _hasDrawnGames())))) { _rerender(); return; }
+    if (!S || _faseLockState(S).elimLocked || (!checked && S.cfg.rotationCategoryRules && _hasDrawnGames())) { _rerender(); return; }
+    if (!checked && !S.cfg.classifAtiva) {
+      if (_hasDrawnGames()) { _rerender(); return; }
+      S.cfg.classifAtiva = true;
+      S.cfg.eliminatoria.openReiRainha = false;
+      S.cfg.rodadas.modo = 'todos';
+    }
     S.cfg.eliminatoria.ativa = !!checked;
     if (!checked && S.cfg.rotationCategoryRules) S.cfg.rotationCategoryRules.forEach(function (rule) { rule.destination = 'ranking'; });
     _norm(); _rerender();

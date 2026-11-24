@@ -43,7 +43,24 @@
       });
     }), roundsCount: totalRounds, opponentRepeatScore: bestScore, maxOpponents: bestMax };
   }
-  var api = { build: build };
+  function buildWithRepeats(ids, roundsCount, random) {
+    if (!Array.isArray(ids) || ids.length !== 8 || new Set(ids.map(identity)).size !== 8 || ids.some(function (id) { return !identity(id); })) {
+      throw new Error('O rodízio exige oito atletas distintos.');
+    }
+    if (!Number.isInteger(roundsCount) || roundsCount < 1 || roundsCount > 128) throw new Error('Quantidade de jogos por atleta inválida.');
+    random = random || Math.random;
+    var rounds = [];
+    for (var round = 0; round < roundsCount; round++) {
+      var order = ids.slice();
+      for (var i = order.length - 1; i > 0; i--) {
+        var j = Math.floor(random() * (i + 1));
+        var player = order[i]; order[i] = order[j]; order[j] = player;
+      }
+      rounds.push([[order.slice(0, 2), order.slice(2, 4)], [order.slice(4, 6), order.slice(6, 8)]]);
+    }
+    return { rounds:rounds, roundsCount:roundsCount };
+  }
+  var api = { build: build, buildWithRepeats: buildWithRepeats };
   root.ScoreplaceSuperEight = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

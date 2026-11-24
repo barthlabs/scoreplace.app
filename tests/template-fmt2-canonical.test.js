@@ -250,5 +250,19 @@ assert(host.innerHTML.includes('_applyTemplateInCreate(0)') && host.innerHTML.in
   'cada botão aplica seu modelo existente');
 assert(host.innerHTML.includes('&lt;Outro&gt;'), 'nomes dos modelos são escapados');
 
+const groupedTemplate = JSON.parse(JSON.stringify(copy({
+  groupFormation:{mode:'size',value:8,matches:['discard']},
+  groupCategoryRules:[{category:'A',groupFormation:{mode:'count',value:1,participants:['discard']},gamesPerUnit:14,allowRepeat:true,results:['discard']}],
+  rotationCategoryRules:[{category:'A',rounds:7,destination:'ranking',matches:['discard']}],
+  rotationAllowRepeatPartners:true, classificationSchedule:{gamesPerUnit:14,mode:'structured',allowRepeat:true},
+  matches:['discard'],results:['discard'],participants:['discard']
+})));
+assert.deepStrictEqual(groupedTemplate, {
+  groupFormation:{mode:'size',value:8},
+  groupCategoryRules:[{category:'A',gamesPerUnit:14,allowRepeat:true,groupFormation:{mode:'count',value:1}}],
+  rotationCategoryRules:[{category:'A',rounds:7,destination:'ranking'}],
+  rotationAllowRepeatPartners:true,classificationSchedule:{gamesPerUnit:14,mode:'structured',allowRepeat:true}
+});
+
 integration().then(() => console.log('template-fmt2-canonical: ok'))
   .catch(err => { console.error(err); process.exitCode = 1; });
