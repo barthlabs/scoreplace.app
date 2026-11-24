@@ -12364,6 +12364,10 @@ window.AppStore = {
               var _statusBeforeResult = _lt.status;
               var _tieBeforeResult = JSON.stringify(_lt.phaseTieDecisions || {});
               Object.keys(_d.tournament).forEach(function (k) { _lt[k] = _d.tournament[k]; });
+              if (typeof window._hydrateMonarchGroups === 'function') {
+                window._hydrateMonarchGroups(_lt);
+                Object.values(_lt.phaseRounds || {}).forEach(function (phase) { window._hydrateMonarchGroups(phase); });
+              }
               var _tieChangedWithResult = _tieBeforeResult !== JSON.stringify(_lt.phaseTieDecisions || {});
               /* A callable confirma a transação. O card relê o jogo físico que ela
                * gravou, sem derivar placar do payload nem consultar `results`. */
@@ -12385,11 +12389,14 @@ window.AppStore = {
               // mesmo commit. Reflita essa ocupação antes de repintar o card;
               // o listener dos jogos físicos pode chegar depois da resposta.
               if (_d.courtAdvance && _d.courtAdvance.matchId) {
-                var _nextCourtMatch = typeof window._findMatch === 'function'
-                  ? window._findMatch(_lt, String(_d.courtAdvance.matchId))
-                  : (_lt.matches || []).find(function (m) { return String(m.id) === String(_d.courtAdvance.matchId); });
-                if (_nextCourtMatch) ['court', 'courtCalledAt', 'startedAt', 'courtClockBaseAt'].forEach(function (key) {
-                  _nextCourtMatch[key] = _d.courtAdvance[key];
+                var _advancedId = String(_d.courtAdvance.matchId);
+                var _courtMatches = typeof window._collectAllMatches === 'function'
+                  ? window._collectAllMatches(_lt) : (_lt.matches || []);
+                _courtMatches.forEach(function (game) {
+                  if (!game || String(game.id) !== _advancedId) return;
+                  ['court', 'courtCalledAt', 'startedAt', 'courtClockBaseAt'].forEach(function (key) {
+                    game[key] = _d.courtAdvance[key];
+                  });
                 });
               }
               if (!_visualConfirmado && window.FirestoreDB && typeof window.FirestoreDB.loadPhysicalMatchResult === 'function') {
@@ -12492,7 +12499,7 @@ window.AppStore = {
                     _currentScoreRoute.indexOf('#bracket/' + String(tournamentId)) === 0) {
                   if (!_tieChangedWithResult && _keepBracketViewport && _statusBeforeResult !== 'finished' && _lt.status !== 'finished' &&
                       typeof window._refreshConfirmedMatchCard === 'function' &&
-                      window._refreshConfirmedMatchCard(_lt, tournamentId, matchId)) {
+                      window._refreshConfirmedMatchCard(_lt, tournamentId, matchId, _advancedId)) {
                     // O eco da própria gravação não pode remontar o detalhe três
                     // segundos depois e deslocar o card que acabamos de atualizar.
                     // A assinatura usa o mesmo estado canônico já mostrado no DOM.
@@ -15222,7 +15229,9 @@ window.AppStore = {
     var created;
     var task = Promise.resolve().then(function () {
       if (!store.currentUser || store.currentUser.uid !== actorUid) throw new Error('A conta mudou durante a criação.');
-      return window.FirestoreDB._callFn('createTournament', { tournamentId: id, config: config });
+      var request = { tournamentId:id, config:config };
+      if (data._tvRotationSourceId) request.tvRotationSourceId = data._tvRotationSourceId;
+      return window.FirestoreDB._callFn('createTournament', request);
     }).then(function (out) {
       if (!out || out.ok !== true || !out.tournament || out.tournament.id !== id) throw new Error('O servidor não confirmou a criação.');
       created = out;
@@ -15237,7 +15246,8 @@ window.AppStore = {
           patch[pair[1]] = url;
           data._creationImages[pair[1]] = url;
         });
-      })).then(function () {
+      })).then(async function () {
+        if (data._prepareTvRotation) patch.tvRotation = await data._prepareTvRotation(id);
         if (!Object.keys(patch).length) return created;
         if (!store.currentUser || store.currentUser.uid !== actorUid) throw new Error('A conta mudou durante a criação.');
         return window.FirestoreDB._callFn('updateTournamentConfiguration', { tournamentId: id, patch: patch });

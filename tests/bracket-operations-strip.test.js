@@ -61,7 +61,7 @@ const futureMatches = [
 const estimated = futureEstimates({ future:futureMatches, courts:['Quadra 1'], active:[] }, {});
 assert(estimated.get('semi-94') > estimated.get('semi-93'), 'estimativas acompanham a ordem da fila');
 
-const start = source.indexOf('function _bracketAgendaCompare(');
+const start = source.indexOf('function _bracketTabCategoryMatches(');
 const end = source.indexOf('function _bracketAgendaExpected(', start);
 assert(start > 0 && end > start);
 const dateStart = source.indexOf('function _matchCardDateTime(ms, t)');
@@ -734,7 +734,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(endFeedback.calls[0][1].monarchEndWholeBlock, false, 'Encerra envia intenção individual mesmo com preferência antiga');
     assert.equal(endFeedback.calls[1][1].monarchEndWholeBlock, true, 'Bloco envia intenção explícita de bloco');
     assert.match(endFeedback.confirmations[0][1], /Placares pendentes.*demais jogos permanecem em suas quadras/i);
-    assert.match(endFeedback.confirmations[1][1], /três jogos.*Placares pendentes/i);
+    assert.match(endFeedback.confirmations[1][1], /jogos restantes.*Placares pendentes/i);
     assert(endFeedback.notices.some(args => args[0] === 'Quadra liberada' && args[2] === 'success'));
     assert(endFeedback.notices.some(args => args[0] === 'Quadra não liberada' && args[2] === 'error'));
     const courtDialog = await page.evaluate(async () => {
@@ -1041,6 +1041,16 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       seriesCourt?.querySelector('[data-operations-nav="prev"]')?.click();
       await new Promise(resolve => setTimeout(resolve, 0));
       const seriesPreviousGame = strip.querySelector('.sp-operations-court-slot--active [data-operations-match]')?.getAttribute('data-operations-match');
+      const uniqueIds = ![...strip.querySelectorAll('[id]')].some((node, i, nodes) =>
+        nodes.findIndex(other => other.id === node.id) !== i);
+      seriesProbe.matches[2].court = 'Quadra 4';
+      seriesProbe.matches[2].courtCalledAt = '2026-11-13T11:40:00Z';
+      window._bracketCourtReleaseCache.sb_test.ready = true;
+      window._bracketCourtReleaseCache.sb_test.capabilityReady = true;
+      window._bracketOperationsRefresh(seriesProbe, root);
+      const oneCardPerCourt = strip.querySelectorAll('.sp-operations-court-slot--active [data-operations-match]').length;
+      const individualPending = !strip.querySelector('.sp-operations-pending [data-operations-nav]');
+      const enabledBlock = !strip.querySelector('[data-operations-end-mode="block"]').disabled;
       window._bracketCourtReleaseCache.sb_test.released[seriesIds[1]] = '2026-11-13T11:40:00Z';
       seriesProbe.matches[2].court = 'Quadra 4';
       seriesProbe.matches[2].courtCalledAt = '2026-11-13T11:40:00Z';
@@ -1181,7 +1191,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         groupChecks: { numeric: numeric?.name, distinct: distinct?.name, missing: !!missing,
           tieBreak: !!tieBreak, nonMonarch: !!nonMonarch, refs: refs?.matches.map(m => m.id),
           canonicalScore: roundCanonical?.matches[0].scoreP1, onlyRounds: onlyRounds?.matches.length, extra: !!extra },
-        series: { ids: seriesIds, first: seriesAfterFirst, second: seriesAfterSecond, third: seriesAfterThird,
+        series: { ids: seriesIds, uniqueIds, oneCardPerCourt, individualPending, enabledBlock, first: seriesAfterFirst, second: seriesAfterSecond, third: seriesAfterThird,
           visibleGame: seriesVisibleGame, previousGame: seriesPreviousGame },
         camis: { ids: camisGroup?.matches.map(m => m.id), otherIds: camisOther?.matches.map(m => m.id),
           labels: [camisGroup?.name, camisOther?.name, camisPrata?.name, nextRoundLabel],
@@ -1191,6 +1201,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
           examples: [fullLabels[0], fullLabels[8], fullLabels[24]] } };
     });
     assert.deepEqual(carousel.states.map(item => item.title), ['JOGO 1 (1/3)', 'JOGO 9 (2/3)', 'JOGO 17 (3/3)', 'Grupo A', 'JOGO 1 (1/3)', 'Grupo A']);
+    assert.equal(carousel.series.oneCardPerCourt, 1);
+    assert(carousel.series.individualPending && carousel.series.enabledBlock && carousel.series.uniqueIds,
+      'pendente individual, Bloco disponível e IDs únicos ao navegar até ele na quadra');
     assert.deepEqual(carousel.series.first, { active: [carousel.series.ids[1]], pending: [carousel.series.ids[0]] },
       'após jogo 1, seu placar fica pendente enquanto jogo 2 ocupa a quadra');
     assert.deepEqual(carousel.series.second, { active: [carousel.series.ids[2]], pending: carousel.series.ids.slice(0, 2) },
@@ -1452,6 +1465,48 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       .filter(row => row.querySelector('.sp-operations-stage'))
       .every(row => row.querySelector('.sp-operations-stage').getBoundingClientRect().right <= row.getBoundingClientRect().right + 1));
     assert(phaseVisible, 'a fase de cada card permanece dentro da coluna em tela estreita');
+    await page.addScriptTag({ content:fs.readFileSync('js/domain/next-match.js','utf8') });
+    const saturated = await page.evaluate(async () => {
+      const t = window._findTournamentById();
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      root.setAttribute('data-bracket-line-tabs','1');
+      window._bracketTabState = { [t.id]:{ category:'A' } };
+      t.courtNames = ['Quadra 1'];
+      t.phaseTieDecisions = {};
+      t.rounds = []; t.phaseRounds = {};
+      t.matches = ['busy','outside','a','b','c'].map((id,index) => ({ id, _gameNum:index + 1,
+        category:id === 'outside' ? 'B' : 'A', p1:'Atleta em quadra', p2:'Dupla ' + id,
+        scheduledAt:new Date(Date.UTC(2026,10,13,8,index)).toISOString() }));
+      Object.assign(t.matches[0],{ court:'Quadra 1', courtCalledAt:'2026-11-13T08:00:00Z' });
+      t._nJogos = t.matches.length;
+      const entry = { ready:true, revision:0, released:{}, postponed:[], postponedReady:[] };
+      window._bracketCourtReleaseCache = { [t.id]:entry };
+      window._callCF = async (name,data) => {
+        if (data.action !== 'postpone' || data.expectedRevision !== entry.revision) throw Error('revisão inválida');
+        entry.postponed = entry.postponed.filter(id => id !== data.matchId).concat(data.matchId);
+        entry.revision++;
+        return { data:{ ok:true } };
+      };
+      window._bracketReloadCourtState = async () => {};
+      window._bracketOperationsRefresh(t,root);
+      const strip = root._bracketOperationsStrip;
+      strip.querySelector('.sp-operations-next-scroll').scrollTop = 0;
+      const seen = [];
+      for (let i = 0; i < 7; i++) {
+        const scroller = strip.querySelector('.sp-operations-next-scroll');
+        const first = scroller.querySelector('.sp-operations-replica');
+        const skip = first?.querySelector('[data-postpone-next]');
+        seen.push({ id:skip?.dataset.postponeNext, enabled:!!skip && !skip.disabled, scroll:scroller.scrollTop,
+          available:window._bracketOperationsSelect(t).freeCourts.length });
+        if (!skip || skip.disabled) break;
+        skip.click();
+        await new Promise(resolve => setTimeout(resolve,0));
+      }
+      return seen;
+    });
+    assert.deepEqual(saturated.map(entry => entry.id), ['a','b','c','a','b','c','a']);
+    assert(saturated.every(entry => entry.enabled && entry.available === 0 && entry.scroll === 0),
+      'Pular permanece na primeira posição visível, mesmo com filtro, lotação e atletas bloqueados: ' + JSON.stringify(saturated));
     console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

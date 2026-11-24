@@ -35,4 +35,20 @@ assert.throws(()=>writeOnlyAfterValidation({...base,regionalManifests:badDigest}
 assert.strictEqual(writes,0);
 assert.strictEqual(writeOnlyAfterValidation(base).ready,true);
 assert.strictEqual(writes,1,'só o conjunto integral e confirmado habilita readiness');
-console.log('✓ readiness exige sete recibos e oito linhas regionais verificadas');
+// A nova publicação pode declarar outros alvos, mas cada um precisa do próprio
+// recibo do mesmo corte. Funções de resumo de um corte anterior não são
+// dependência do encerramento de quadra.
+const expanded={...requiredManifest,functions:[...REQUIRED_FUNCTIONS,'uploadTournamentImage']};
+const expandedExports=new Set([...exportedNames,'uploadTournamentImage']);
+assert.throws(()=>buildReadyDocument({...base,requiredManifest:expanded,exportedNames:expandedExports}),
+  /publicação central não confirmada/,'alvo adicional sem recibo não habilita readiness');
+const expandedReceipt={...receipt,entries:{...receipt.entries,uploadTournamentImage:{
+  backendCommit:commit,deployedAt:'2026-11-24T12:00:00.000Z',result:'success',mode:'only'}}};
+assert.strictEqual(buildReadyDocument({...base,requiredManifest:expanded,exportedNames:expandedExports,
+  receipt:expandedReceipt}).ready,true);
+assert.throws(()=>buildReadyDocument({...base,requiredManifest:expanded,exportedNames:expandedExports,
+  receipt:{...expandedReceipt,entries:{...expandedReceipt.entries,uploadTournamentImage:{
+    ...expandedReceipt.entries.uploadTournamentImage,backendCommit:'d'.repeat(40)}}}}),/publicação central/);
+assert.throws(()=>buildReadyDocument({...base,requiredManifest:{...requiredManifest,functions:['uploadTournamentImage']},
+  exportedNames:expandedExports,receipt:expandedReceipt}),/incluir endMatchOnCourt/);
+console.log('✓ readiness exige recibos do corte atual e oito linhas regionais verificadas');

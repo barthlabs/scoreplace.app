@@ -15453,6 +15453,10 @@ exports.createSandbox = onCall(
      * ⚠️ `isPublic` viaja igual — e não vaza: as Rules de `sandboxes` autorizam por
      * `sandboxOwnerUid` e NUNCA olham `isPublic`; quem publica na vitrine é o gatilho
      * `syncDiscoveryFeed`, que observa `tournaments/{id}` e não enxerga esta coleção. */
+    if (cfg.tvRotation) {
+      try { require("./vendor/tv-layout-core").normalizeRotation(cfg.tvRotation, origId, cfg.tvRotation, admin.storage().bucket().name); }
+      catch (error) { throw new HttpsError("failed-precondition", error.message); }
+    }
     const sbDoc = Object.assign({}, cfg, envelope);
     await sbRef.set(sbDoc);
 

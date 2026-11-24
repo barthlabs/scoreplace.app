@@ -3,9 +3,7 @@
 const { checkTargetedPublication } = require('./backend-publication-core');
 
 const REQUIRED_FUNCTIONS = Object.freeze([
-  'createTournament', 'tournamentSummary', 'tournamentSummaryMatch',
-  'tournamentSummaryParticipant', 'tournamentSummaryRegistration',
-  'tournamentSummaryLegacyGroup', 'endMatchOnCourt'
+  'endMatchOnCourt'
 ]);
 const REGIONS = Object.freeze({
   v2:['us-east1', 'us-east4', 'us-south1'],
@@ -14,9 +12,9 @@ const REGIONS = Object.freeze({
 
 function validateFunctionSet(manifest) {
   const names = manifest && manifest.functions;
-  if (!Array.isArray(names) || names.length !== REQUIRED_FUNCTIONS.length ||
+  if (!Array.isArray(names) || !names.length ||
       new Set(names).size !== names.length || REQUIRED_FUNCTIONS.some(name => !names.includes(name))) {
-    throw new Error('manifesto deve conter exatamente as sete funções requeridas, sem duplicatas ou extras');
+    throw new Error('manifesto deve incluir endMatchOnCourt, sem duplicatas');
   }
 }
 
@@ -55,7 +53,7 @@ function buildReadyDocument({ requiredManifest, receipt, exportedNames, regional
     throw new Error('commit ou digest recalculado inválido; readiness permanece false');
   }
   const publication = checkTargetedPublication(requiredManifest, receipt, sourceCommit, exportedNames);
-  if (!publication.ok || publication.verified.length !== REQUIRED_FUNCTIONS.length) {
+  if (!publication.ok || publication.verified.length !== requiredManifest.functions.length) {
     throw new Error(`publicação central não confirmada: ${publication.reason || 'conjunto incompleto'}`);
   }
   const rowsV2 = regionalRows(regionalManifests?.v2, 'v2', sourceCommit, sourceDigest);

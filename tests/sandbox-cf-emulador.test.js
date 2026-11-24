@@ -56,6 +56,8 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
    * ⛔ "creatorUid" é de OUTRA pessoa (uOrig, não o dev): é o que faz "preservou o criador"
    * ser uma medição, e não uma coincidência com quem chamou. */
   const baseDiv={ name:'Confra', sport:'Beach Tennis', isPublic:true, creatorUid:'uOrig',
+    tvRotation:{ enabled:true, mode:'interleaved', mainDurationSeconds:15, slides:[
+      { id:'a', name:'Arena', durationSeconds:5, assets:['https://storage.googleapis.com/demo-scoreplace.appspot.com/tournamentTvArt/orig_div/arena.png'] }] },
     organizerEmail:'dono@original.com', organizerName:'Dono Original',
     createdAt:'2026-06-01T10:00:00.000Z', updatedAt:'2026-08-31T23:59:00.000Z',
     remindersSent:{'7d':true}, finishNotifiedAt:'2026-08-30T00:00:00.000Z',
@@ -138,6 +140,7 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
   R['fidelidade DIVIDIDO (campos fora do envelope)']={ok:true,difs:await cmp('tournaments/orig_div','sandboxes/'+sbDivId)};
   R['fidelidade INTEIRO']={ok:true,difs:await cmp('tournaments/orig_int','sandboxes/'+sbIntId)};
   const sbDiv=(await db.doc('sandboxes/'+sbDivId).get()).data()||{};
+  R.rotacaoCopiada=canon(sbDiv.tvRotation)===canon(baseDiv.tvRotation);
   R['forma persistida DIVIDIDO']={ok:true,_semPesados:sbDiv._semPesados,_nPartes:sbDiv._nPartes,_nJogos:sbDiv._nJogos,sbState:sbDiv.sbState};
   const sbInt=(await db.doc('sandboxes/'+sbIntId).get()).data()||{};
   R['forma persistida INTEIRO']={ok:true,_semPesados:sbInt._semPesados===undefined?'(ausente)':sbInt._semPesados,sbState:sbInt.sbState};
@@ -221,7 +224,7 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
     return {ok:true,jogo:((await sbRef.collection('matches').doc('m2').get()).data()||{}).jogo};
   });
   await m('fluxo: sem espelho após placar', async()=>{
-    const espelho=await sbRef.collection('resultsSandbox').get();
+    const espelho=await db.collection('sandboxes/'+sbDivId+'/resultsSandbox').get();
     const jogo=(await sbRef.collection('matches').doc('m2').get()).data().jogo;
     return {ok:true,espelhos:espelho.size,winner:jogo.winner,scoreP1:jogo.scoreP1,scoreP2:jogo.scoreP2};
   });
@@ -329,8 +332,8 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
       registrou: !!(win._sbIdsConhecidos && win._sbIdsConhecidos[sbDivId])};
   });
   await m('FRIO: não existe espelho de resultado', async()=>{
-    const snap=await FDB._tSub(sbDivId,'results').get({source:'server'});
-    return {ok:true,espelhos:snap.size,caminho:FDB._tSub(sbDivId,'results').path};
+    const legados=await Promise.all(['results','resultsSandbox'].map(c=>db.collection('sandboxes/'+sbDivId+'/'+c).get()));
+    return {ok:true,espelhos:legados.reduce((n,snap)=>n+snap.size,0)};
   });
   await m('FRIO: jogo físico vem de matches do sandbox', async()=>{
     const r=await FDB.loadCanonicalMatch(sbDivId,'m1');
@@ -407,6 +410,7 @@ let falhas = 0;
 const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('  ✗ ' + n + (x ? '\n      ' + x : '')); falhas++; } };
 const J = (v) => JSON.stringify(v);
 console.log('──── createSandbox no Emulator real ────');
+ok('Sandbox herda as telas e URLs canônicas de patrocinadores da origem', R.rotacaoCopiada === true);
 
 console.log('\n── ① autorização server-side ──');
 ok('⛔ REAL (não é identidade de teste) é RECUSADO',
@@ -467,7 +471,8 @@ ok('⭐⭐ DEV lê o parent do sandbox', R['DEV lê parent do sandbox'].ok === t
   ok('  DEV lê sub ' + c, R['DEV lê sub ' + c].ok === true, J(R['DEV lê sub ' + c]));
   ok('  ⛔ REAL NÃO lê sub ' + c, R['REAL lê sub ' + c].ok === false, J(R['REAL lê sub ' + c]));
 });
-ok('⭐⭐ DEV lê resultsSandbox vazio', R['DEV lê resultsSandbox'].ok === true && R['DEV lê resultsSandbox'].n === 0);
+ok('E26 bloqueia a leitura direta de resultsSandbox inclusive para o dono',
+  R['DEV lê resultsSandbox'].erro === 'permission-denied', J(R['DEV lê resultsSandbox']));
 ok('⭐⭐ ⛔ REAL NÃO lê resultsSandbox', R['REAL lê resultsSandbox'].ok === false, J(R['REAL lê resultsSandbox']));
 ok('⭐⭐ ⛔ REAL NÃO lê o parent do sandbox', R['REAL lê parent do sandbox'].ok === false, J(R['REAL lê parent do sandbox']));
 
@@ -488,15 +493,10 @@ ok('⭐⭐ REAL não lista sandbox nenhum', (R['REAL query sandboxes por dono'].
   J(R['REAL query sandboxes por dono']));
 
 console.log('\n── ⑧ o collectionGroup de results ──');
-ok('⭐⭐ DEV: a ficha continua achando o results REAL',
-  (R['DEV cg results (ficha)'].paths || []).some((p) => p.indexOf('tournaments/orig_div/results/') === 0),
-  J(R['DEV cg results (ficha)']));
-ok('⭐⭐ REAL: idem (o uso legítimo não quebrou)',
-  (R['REAL cg results (ficha)'].paths || []).some((p) => p.indexOf('tournaments/orig_div/results/') === 0),
-  J(R['REAL cg results (ficha)']));
-ok('⭐⭐ ⛔ e NENHUM caminho de sandbox aparece na ficha',
-  (R['DEV cg results (ficha)'].paths || []).concat(R['REAL cg results (ficha)'].paths || [])
-    .every((p) => p.indexOf('sandboxes/') !== 0), J(R['REAL cg results (ficha)']));
+for (const role of ['DEV','REAL']) {
+  const legacy = R[role+' cg results (ficha)'];
+  ok('E26 bloqueia collectionGroup de results para '+role, legacy.erro === 'permission-denied', J(legacy));
+}
 ok('⭐⭐ ⛔ collectionGroup("resultsSandbox") é negado a todos',
   R['DEV cg resultsSandbox'].ok === false && R['REAL cg resultsSandbox'].ok === false,
   J([R['DEV cg resultsSandbox'], R['REAL cg resultsSandbox']]));
@@ -587,7 +587,7 @@ ok('⭐⭐ PLACAR veio junto (6 no jogo m1)', fr.placar === 6, J(fr.placar));
 ok('⭐ e a classificação CONGELADA também (4 linhas)', fr.congelada === 4, J(fr.congelada));
 const fr2 = R['FRIO: não existe espelho de resultado'];
 ok('⭐⭐ novo sandbox mantém índice vazio após abertura fria',
-  fr2.ok === true && fr2.espelhos === 0 && /\/resultsSandbox$/.test(fr2.caminho || ''), J(fr2));
+  fr2.ok === true && fr2.espelhos === 0, J(fr2));
 const frPhysical = R['FRIO: jogo físico vem de matches do sandbox'];
 ok('⭐⭐ rota canônica lê matches do sandbox sem resultsSandbox',
   frPhysical.ok === true && frPhysical.winner === 'a' &&

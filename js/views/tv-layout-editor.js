@@ -31,6 +31,132 @@
     savedDefaultLayout = JSON.stringify(screens[0].layout);
     activeLiveScreen = savedActiveLiveScreen = null;
   }
+  var rotation, savedRotation, artwork = new Map(), rotationNotice = '';
+  function resetRotation(value, id) {
+    artwork.forEach(function (_, url) { URL.revokeObjectURL(url); });
+    artwork = new Map();
+    try { rotation = Core.normalizeRotation(value, id, value) || Core.rotationDefaults(); }
+    catch (error) { rotation = Core.rotationDefaults(); }
+    savedRotation = JSON.stringify(rotation);
+    rotationNotice = '';
+  }
+  function rotationChanged() { return !!rotation && JSON.stringify(rotation) !== savedRotation; }
+  function prepareRotation() {
+    if (!rotationChanged()) return null;
+    // O retry conserva os arquivos selecionados e os uploads já confirmados.
+    var captured = JSON.parse(JSON.stringify(rotation)), files = new Map(artwork);
+    var original = window._editingTournament && window._editingTournament.tvRotation;
+    return async function (id) {
+      var resolved = JSON.parse(JSON.stringify(captured));
+      for (var slide of resolved.slides) {
+        for (var index = 0; index < slide.assets.length; index++) {
+          var entry = files.get(slide.assets[index]);
+          if (!entry) continue;
+          if (!entry.upload || entry.tournamentId !== id) {
+            entry.tournamentId = id;
+            entry.upload = (async function (file) {
+              var data = await new Promise(function (resolve, reject) {
+                var reader = new FileReader();
+                reader.onload = function () { resolve(reader.result); };
+                reader.onerror = function () { reject(new Error('Falha ao ler a imagem.')); };
+                reader.readAsDataURL(file);
+              });
+              return window._subirImagemTorneio(id, 'tvArt', data);
+            })(entry.file);
+          }
+          try { slide.assets[index] = await entry.upload; }
+          catch (error) { entry.upload = null; throw error; }
+        }
+      }
+      return Core.normalizeRotation(resolved, id, original);
+    };
+  }
+  function paintRotation(host) {
+    var panel = host.querySelector('[data-tv-rotation]');
+    if (!panel) return;
+    var sequence = ['1'];
+    rotation.slides.forEach(function (_, i) {
+      if (i && rotation.mode === 'interleaved') sequence.push('1');
+      sequence.push(String(i + 2));
+    });
+    function button(action, label, disabled) {
+      return '<button type="button" class="btn btn-secondary" data-rotation-action="' + action + '"' +
+        (disabled ? ' disabled' : '') + '>' + label + '</button>';
+    }
+    function seconds(key, val, label) {
+      return '<label>' + label + ' <input data-rotation-seconds="' + key + '" type="number" min="1" max="3600" required value="' + val + '" style="width:5.5em"> s</label>';
+    }
+    panel.innerHTML = '<legend>Telas de patrocinadores</legend><div class="toggle-row"><span>Alternar placar e patrocinadores</span>' +
+      '<label class="toggle-switch"><input type="checkbox" role="switch" aria-label="Alternar placar e patrocinadores" data-rotation-enabled' +
+      (rotation.enabled ? ' checked' : '') + '><span class="toggle-slider"></span></label></div>' +
+      '<div style="display:flex;gap:1em;align-items:center;flex-wrap:wrap;margin:.7em 0">' +
+      seconds('main', rotation.mainDurationSeconds, 'Tela 1 · Placar') + '<label>Ordem <select data-rotation-mode><option value="sequential">Em sequência</option>' +
+      '<option value="interleaved"' + (rotation.mode === 'interleaved' ? ' selected' : '') + '>Placar entre patrocinadores</option></select></label>' +
+      '<span aria-label="Sequência de exibição">' + sequence.join(' → ') + (sequence.length > 1 ? ' → 1…' : '') + '</span></div>' +
+      rotation.slides.map(function (slide, i) {
+        var columns = Math.ceil(Math.sqrt(slide.assets.length || 1));
+        return '<fieldset data-rotation-slide="' + i + '" style="min-width:0;margin:.6rem 0"><legend>Tela ' + (i + 2) + '</legend>' +
+          '<div style="display:flex;gap:.6em;align-items:center;flex-wrap:wrap"><label>Nome <input data-rotation-name maxlength="80" value="' + esc(slide.name) + '"></label>' +
+          seconds(i, slide.durationSeconds, 'Duração') + button('up','Mover para cima',i === 0) + button('down','Mover para baixo',i + 1 === rotation.slides.length) +
+          button('remove','Excluir tela') + '</div>' +
+          (slide.assets.length ? '<div aria-label="Prévia da tela ' + (i+2) + '" style="display:grid;width:min(100%,30rem);aspect-ratio:16/9;background:#080c14;margin:.6em 0;grid-template-columns:repeat(' +
+            columns + ',minmax(0,1fr));grid-auto-rows:minmax(0,1fr)">' + slide.assets.map(function (url,index) {
+              return '<div style="position:relative;min-height:0"><img alt="Arte ' + (index + 1) + '" src="' + esc(url) +
+                '" style="width:100%;height:100%;object-fit:contain"><button type="button" class="btn btn-secondary" data-rotation-asset="' + index +
+                '" aria-label="Retirar arte ' + (index + 1) + '" style="position:absolute;right:0;top:0">×</button></div>';
+            }).join('') + '</div>' : '') +
+          '<label>Adicionar imagens <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif" data-rotation-files' +
+          (slide.assets.length >= 12 ? ' disabled' : '') + '></label></fieldset>';
+      }).join('') + button('add','+ Tela de patrocinadores', rotation.slides.length >= 12) +
+      '<p role="status" aria-live="polite" style="margin:.4em 0">' + esc(rotationNotice) + '</p>';
+    function slideIndex(target) {
+      var field = target.closest('[data-rotation-slide]');
+      return field ? Number(field.dataset.rotationSlide) : -1;
+    }
+    function forget(url) {
+      if (artwork.has(url)) { URL.revokeObjectURL(url); artwork.delete(url); }
+    }
+    panel.oninput = function (event) {
+      var input = event.target, slide = rotation.slides[slideIndex(input)];
+      if (input.hasAttribute('data-rotation-name')) slide.name = input.value;
+      if (input.hasAttribute('data-rotation-seconds')) {
+        if (slide) slide.durationSeconds = input.valueAsNumber;
+        else rotation.mainDurationSeconds = input.valueAsNumber;
+      }
+    };
+    panel.onchange = function (event) {
+      var input = event.target, slide = rotation.slides[slideIndex(input)];
+      if (input.hasAttribute('data-rotation-enabled')) rotation.enabled = input.checked;
+      else if (input.hasAttribute('data-rotation-mode')) rotation.mode = input.value;
+      else if (input.hasAttribute('data-rotation-files')) {
+        var selected = Array.from(input.files);
+        rotationNotice = '';
+        if (selected.length + slide.assets.length > 12) rotationNotice = 'Escolha até 12 imagens por tela.';
+        else if (selected.some(function (file) { return !/^image\/(jpeg|png|webp|gif)$/.test(file.type) || !file.size || file.size >= 5 * 1024 * 1024; }))
+          rotationNotice = 'Escolha arquivos JPG, PNG, WebP ou GIF com menos de 5 MB.';
+        else selected.forEach(function (file) {
+          var url = URL.createObjectURL(file);
+          artwork.set(url, { file:file }); slide.assets.push(url);
+        });
+      } else return;
+      paintRotation(host);
+    };
+    panel.onclick = function (event) {
+      var target = event.target.closest('button');
+      if (!target) return;
+      var i = slideIndex(target), action = target.dataset.rotationAction;
+      if (action === 'add' && rotation.slides.length < 12) {
+        rotation.slides.push({ id:Array.from(crypto.getRandomValues(new Uint32Array(4)), function (n) { return n.toString(16).padStart(8,'0'); }).join(''), name:'', durationSeconds:10, assets:[] });
+      } else if (action === 'remove') rotation.slides.splice(i,1)[0].assets.forEach(forget);
+      else if (action === 'up' || action === 'down') {
+        var next = i + (action === 'up' ? -1 : 1);
+        if (next < 0 || next >= rotation.slides.length) return;
+        rotation.slides.splice(next, 0, rotation.slides.splice(i, 1)[0]);
+      } else if (target.hasAttribute('data-rotation-asset')) forget(rotation.slides[i].assets.splice(Number(target.dataset.rotationAsset),1)[0]);
+      else return;
+      rotationNotice = ''; paintRotation(host);
+    };
+  }
   function phaseNames() {
     var phases = window._editingTournament && window._editingTournament.phases || [];
     try {
@@ -192,7 +318,10 @@
         '<span style="font-size:.8rem;color:var(--text-muted)">Nenhuma</span>') + '</div></div>' +
       '<fieldset style="border:1px solid #475569;border-radius:8px"><legend>Informações nos cards em quadra</legend><div style="display:flex;flex-wrap:wrap;gap:.7rem;font-size:.8rem">' +
       Core.CARD_IDS.map(function (id) { return '<label><input type="checkbox" data-tv-card="' + id + '" ' + (layout.card[id] ? 'checked' : '') + '> ' + cardLabels[id] + '</label>'; }).join('') + '</div></fieldset>' +
+      '<fieldset data-tv-rotation style="min-width:0;border:1px solid #475569;border-radius:8px;margin:.8rem 0"></fieldset>' +
       '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.8rem 0"><button type="button" data-tv-save-live class="btn btn-primary">Salvar tela No ar</button><button type="button" data-tv-default class="btn btn-secondary">Restaurar padrão</button><button type="button" data-tv-save-template class="btn btn-primary">Salvar modelo de TV</button><select data-tv-template-list aria-label="Modelos de TV" style="max-width:220px;background:#0f172a;color:white;border:1px solid #64748b"><option value="">Modelos de TV...</option></select><button type="button" data-tv-load-template class="btn btn-secondary">Usar modelo</button><button type="button" data-tv-delete-template class="btn btn-secondary">Excluir modelo</button></div></div>';
+    if (!rotation) resetRotation(null);
+    paintRotation(host);
     var frame = host.querySelector('[data-tv-frame]');
     if (frame) {
       frame.onload = function () { scale(host); fitPreview(frame.contentDocument); };
@@ -459,13 +588,18 @@
     pendingSet = true;
     if (mounted && mounted.isConnected) { pendingSet = false; render(); }
   };
+  window._tvEditorPrepareRotation = prepareRotation;
+  window._tvEditorSetRotation = function (value, id) {
+    resetRotation(value, id);
+    if (mounted && mounted.isConnected) paintRotation(mounted);
+  };
   window._tvEditorSetActiveScreen = function (value) {
     activeLiveScreen = savedActiveLiveScreen = Number.isInteger(value) && value >= 0 && screens && value < screens.length ? value : null;
     if (mounted && mounted.isConnected) render();
   };
   window._tvEditorReadLayout = function () { return touched ? Core.normalize(screens[0].layout) : null; };
   window._tvEditorReadScreens = function () { return touched ? Core.normalizeScreens(screens) : null; };
-  window._tvEditorHasChanges = function () { return !!screens && (JSON.stringify(screens) !== savedBaseline || activeLiveScreen !== savedActiveLiveScreen); };
+  window._tvEditorHasChanges = function () { return !!screens && (JSON.stringify(screens) !== savedBaseline || activeLiveScreen !== savedActiveLiveScreen || rotationChanged()); };
   window._tvEditorSaveChanges = async function () {
     var t = window._editingTournament;
     if (!t || !t.id || !window.AppStore) throw new Error('Torneio indisponível para salvar a tela.');
@@ -474,10 +608,16 @@
     if (JSON.stringify(screens) !== savedBaseline) patch.tvScreens = window._tvEditorReadScreens();
     if (JSON.stringify(screens[0].layout) !== savedDefaultLayout) patch.tvLayout = window._tvEditorReadLayout();
     if (activeLiveScreen !== savedActiveLiveScreen) patch.tvActiveScreen = activeLiveScreen == null ? 0 : activeLiveScreen;
+    var editingRotation = rotation, editingScreens = screens, selectedScreen = activeLiveScreen;
+    var screenBaseline = JSON.stringify(screens), layoutBaseline = JSON.stringify(screens[0].layout);
+    var prepared = prepareRotation(), rotationBaseline = JSON.stringify(rotation);
+    if (prepared) patch.tvRotation = await prepared(t.id);
     await window.AppStore.addTournament(patch);
-    savedBaseline = JSON.stringify(screens);
-    savedDefaultLayout = JSON.stringify(screens[0].layout);
-    activeLiveScreen = savedActiveLiveScreen = patch.tvActiveScreen == null ? activeLiveScreen : patch.tvActiveScreen;
+    if (rotation !== editingRotation || screens !== editingScreens) return true;
+    if (prepared) savedRotation = rotationBaseline;
+    savedBaseline = screenBaseline;
+    savedDefaultLayout = layoutBaseline;
+    savedActiveLiveScreen = selectedScreen;
     return true;
   };
   window._tvEditorRefreshPreview = function () { if (mounted && mounted.isConnected) render(); };
@@ -488,13 +628,20 @@
     var details = document.getElementById('tv-personalization');
     var phase = document.getElementById('fase1-box');
     var host = document.getElementById('tv-layout-editor');
+    if (mounted && !mounted.isConnected && !host) {
+      mounted = null;
+      if (!pendingSet) resetRotation(null);
+      if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
+    }
     if (!details || !phase || !host || mounted === host) return;
     phase.parentNode.insertBefore(details, phase); mounted = host;
     if (!pendingSet) {
+      resetRotation(null);
       setState(null, null);
       var editField = document.getElementById('edit-tournament-id');
       if (window._editingTournament && (!editField || String(editField.value || '') === String(window._editingTournament.id || ''))) {
-        try { setState(window._editingTournament.tvLayout || null, window._editingTournament.tvScreens || null);
+        try { resetRotation(window._editingTournament.tvRotation, window._editingTournament.id);
+          setState(window._editingTournament.tvLayout || null, window._editingTournament.tvScreens || null);
           activeLiveScreen = savedActiveLiveScreen = Number.isInteger(window._editingTournament.tvActiveScreen) ? window._editingTournament.tvActiveScreen : null; }
         catch (e) { setState(null, null); }
       }

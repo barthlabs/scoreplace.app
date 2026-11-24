@@ -529,6 +529,40 @@ const { chromium } = require('@playwright/test');
     });
     assert.ok(frameFit.leftGap <= 1 && frameFit.clockRight < 0,
       'grade começa na borda esquerda e o relógio cabe à direita: ' + JSON.stringify(frameFit));
-    console.log('✓ editor TV: dados reais, remoção/restauração, arraste e estado intacto');
+    await page.evaluate(() => {
+      window._tvEditorSetRotation(null);
+      window.artUploads = 0;
+      window._subirImagemTorneio = async (id,type,data) => {
+        if (type !== 'tvArt' || !data.startsWith('data:image/png;base64,')) throw Error('Upload inválido');
+        return 'https://storage.googleapis.com/scoreplace-app.firebasestorage.app/tournamentTvArt/' + id + '/' + (++window.artUploads) + '.png';
+      };
+      window.AppStore.addTournament = async patch => { window.artPatch = patch; Object.assign(window._editingTournament,patch); };
+    });
+    await page.locator('[data-rotation-enabled]').check();
+    await page.locator('[data-rotation-action="add"]').click();
+    await page.locator('[data-rotation-action="add"]').click();
+    await page.locator('[data-rotation-name]').first().fill('Arena');
+    await page.locator('[data-rotation-seconds="0"]').fill('8');
+    await page.locator('[data-rotation-mode]').selectOption('interleaved');
+    await page.locator('[data-rotation-files]').first().setInputFiles(['a','b'].map(name => ({
+      name:name+'.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgo=','base64') })));
+    assert.equal(await page.locator('[data-tv-rotation] img').count(),2);
+    await page.locator('[data-rotation-action="down"]').first().click();
+    await page.locator('[data-rotation-action="remove"]').first().click();
+    await page.locator('[data-tv-save-live]').click();
+    await page.waitForFunction(()=>window.artPatch && window.artPatch.tvRotation);
+    const stored = await page.evaluate(()=>window.artPatch.tvRotation);
+    assert.deepEqual([stored.mode,stored.slides[0].name,stored.slides[0].durationSeconds,stored.slides[0].assets.length],
+      ['interleaved','Arena',8,2]);
+    assert.ok(stored.slides[0].assets.every(url=>url.startsWith('https://')));
+    await page.evaluate(()=>window._tvEditorSetRotation(window.artPatch.tvRotation,window._editingTournament.id));
+    assert.equal(await page.locator('[data-rotation-name]').first().inputValue(),'Arena');
+    await page.locator('[data-rotation-asset="1"]').click();
+    await page.locator('[data-rotation-enabled]').uncheck();
+    await page.locator('[data-tv-save-live]').click();
+    await page.waitForFunction(()=>window.artPatch.tvRotation.enabled===false);
+    assert.equal((await page.evaluate(()=>window.artPatch.tvRotation)).slides[0].assets.length,1);
+    assert.equal(await page.evaluate(()=>window.artUploads),2);
+    console.log('✓ editor TV: dados reais, layout, upload múltiplo, prévia, ordem e configuração persistida');
   } finally { await browser.close(); }
 })().catch(err => { console.error(err); process.exitCode = 1; });

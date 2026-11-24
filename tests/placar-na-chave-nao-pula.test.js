@@ -47,7 +47,7 @@ const CSS = ['style.css','components.css','layout.css','bracket.css','responsive
 /* Mesma ordem do index.html — o render de verdade, não uma montagem de HTML à mão. */
 const JS = ['js/logger.js','js/i18n.js','js/i18n-pt.js',
   'js/views/identity-core.js','js/views/persist-core.js','js/views/waitlist-core.js',
-  'js/domain/standings.js','js/views/standings-core.js','js/views/gender-ratio-core.js','js/views/sport-rules.js',
+  'js/domain/match-timing.js','js/domain/standings.js','js/views/standings-core.js','js/views/gender-ratio-core.js','js/views/sport-rules.js',
   'js/views/tournaments-utils.js','js/views/tournaments-draw.js','js/views/tournaments.js',
   'js/store.js','js/views/create-tournament.js','js/views/format2.js',
   'js/views/bracket-logic.js','js/views/bracket-model.js','js/views/bracket.js',
@@ -101,6 +101,7 @@ async function abreChave(browser, torneio, usuario, raizPx) {
       if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tid, mid);
       return Promise.resolve(true);
     };
+    window.__canonicalCommit = window.AppStore.commitResultTx;
     window.AppStore = Object.assign(window.AppStore||{}, {
       tournaments:[t], currentUser:u, isOrganizer:function(){ return !!u.org; },
       /* a porta vive no store.js, que este harness não carrega */
@@ -275,7 +276,7 @@ async function placarNaAgendaGeralNaoRemonta(browser) {
   t.rounds[0].monarchGroups.forEach((group, index) => { group.category = t.groups[index].category; });
   const alvo = t.groups[0].matches[0].id;
   const page = await abreChave(browser, t, { uid:'u-org', displayName:'Org', org:true });
-  const state = await page.evaluate((id) => {
+  const state = await page.evaluate(async (id) => {
     const tour = window.AppStore.tournaments[0];
     document.getElementById('inline-bracket-container').innerHTML =
       window._renderMonarchStage(tour, true, true, { suppressAutoAdvance:true });
@@ -299,17 +300,31 @@ async function placarNaAgendaGeralNaoRemonta(browser) {
     const scrollBefore = window.scrollY;
     const t = window.AppStore.tournaments[0];
     const m = window._findMatch(t, id);
-    m.scoreP1 = 6; m.scoreP2 = 3; m.winner = m.p1; m.resultAt = Date.now();
-    const updated = window._refreshConfirmedMatchCard(t, t.id, id);
-    return { updated, sameRoot:root.isConnected, sameAgenda:root._bracketGeneralView.isConnected,
-      originalChanged:original.querySelector('.standings-scroll table') !== oldTable,
-      copyChanged:bundle.querySelector('.bracket-geral-quarteto-standings table') !== oldCopy,
+    const next = t.rounds[0].matches.find(match => match.id !== id);
+    const when = new Date().toISOString();
+    const fresh = JSON.parse(JSON.stringify(t));
+    const result = { matchId:id, scoreP1:6, scoreP2:3, winner:m.p1, resultAt:when };
+    window._callApplyMatchResult = async () => ({ data:{ ok:true, tournament:fresh, matchResult:result,
+      courtAdvance:{ matchId:next.id, court:'Quadra 1', courtCalledAt:when, startedAt:when, courtClockBaseAt:when } } });
+    const updated = await window.__canonicalCommit.call(window.AppStore, t.id, id, { s1:6, s2:3 }, 'resultado');
+    const geometry = {
       topDelta:Math.round(document.getElementById('card-' + id).getBoundingClientRect().top - topBefore),
-      scrollDelta:Math.round(window.scrollY - scrollBefore),
-      oneCard:document.querySelectorAll('#card-' + CSS.escape(id)).length === 1 };
+      scrollDelta:Math.round(window.scrollY - scrollBefore)
+    };
+    const originalChanged = original.querySelector('.standings-scroll table') !== oldTable;
+    const copyChanged = bundle.querySelector('.bracket-geral-quarteto-standings table') !== oldCopy;
+    window._bracketGeneralView(root, false, 'fem');
+    const back = document.getElementById('card-' + id);
+    const returnedResult = back === card && back.getAttribute('data-bracket-complete') === '1' && /Editar/.test(back.textContent);
+    const group = t.rounds[0].monarchGroups.find(group => group.matchIds.includes(id));
+    const flat = t.rounds[0].matches.find(match => match.id === id);
+    const references = group.matches.find(match => match.id === id) === flat && flat.scoreP1 === 6 && flat.scoreP2 === 3;
+    window._bracketGeneralView(root, true, 'fem');
+    return { updated, returnedResult, references, sameRoot:root.isConnected, sameAgenda:root._bracketGeneralView.isConnected,
+      originalChanged, copyChanged, ...geometry, oneCard:document.querySelectorAll('#card-' + CSS.escape(id)).length === 1 };
   }, alvo);
   ok(!state.error && state.updated && state.sameRoot && state.sameAgenda &&
-    state.originalChanged && state.copyChanged && state.oneCard &&
+    state.originalChanged && state.copyChanged && state.oneCard && state.returnedResult && state.references &&
     Math.abs(state.topDelta) <= 2 && Math.abs(state.scrollDelta) <= 2,
   'placar na Geral mantém DOM/posição e atualiza a classificação do quarteto: ' + JSON.stringify(state));
   await page.close();

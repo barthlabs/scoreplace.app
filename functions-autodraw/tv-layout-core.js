@@ -144,11 +144,65 @@
     if (JSON.stringify(screens).length > 150000) fail();
     return screens;
   }
+  var ART_BUCKET = 'scoreplace-app.firebasestorage.app';
+  var MAX_ROTATION_BYTES = 100 * 1024;
+  function rotationDefaults() {
+    return { enabled:false, mode:'sequential', mainDurationSeconds:30, slides:[] };
+  }
+  function rotationSeconds(value) {
+    if (!Number.isInteger(value) || value < 1 || value > 3600) throw new Error('Escolha de 1 a 3600 segundos por tela.');
+    return value;
+  }
+  function artOwner(raw, bucket) {
+    if (typeof raw !== 'string' || raw.length > 2048 || /[\s\\#]/.test(raw)) fail();
+    var url = new URL(raw);
+    if (url.protocol !== 'https:' || url.username || url.password || url.port) fail();
+    var path;
+    if (url.origin === 'https://firebasestorage.googleapis.com') {
+      var prefix = '/v0/b/' + bucket + '/o/';
+      if (!url.pathname.startsWith(prefix)) fail();
+      path = decodeURIComponent(url.pathname.slice(prefix.length));
+    } else if (url.origin === 'https://storage.googleapis.com') {
+      if (!url.pathname.startsWith('/' + bucket + '/')) fail();
+      path = decodeURIComponent(url.pathname.slice(bucket.length + 2));
+    } else fail();
+    var parts = /^tournamentTvArt\/([A-Za-z0-9_-]{1,240})\/([A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp|gif))$/.exec(path);
+    if (!parts) fail();
+    return parts[1];
+  }
+  // O servidor fornece apenas a rotação lida dentro da transação como referência de herança.
+  function normalizeRotation(input, tournamentId, stored, bucket) {
+    if (input == null) return null;
+    exactKeys(input, ['enabled', 'mode', 'mainDurationSeconds', 'slides']);
+    if (typeof input.enabled !== 'boolean' || ['sequential','interleaved'].indexOf(input.mode) < 0 ||
+        !Array.isArray(input.slides) || input.slides.length > 12) fail();
+    var inherited = new Set();
+    (stored && Array.isArray(stored.slides) ? stored.slides : []).forEach(function (slide) {
+      if (slide && Array.isArray(slide.assets)) slide.assets.forEach(function (asset) { inherited.add(asset); });
+    });
+    var ids = new Set();
+    var rotation = { enabled:input.enabled, mode:input.mode, mainDurationSeconds:rotationSeconds(input.mainDurationSeconds),
+      slides:input.slides.map(function (slide) {
+        exactKeys(slide, ['id','name','durationSeconds','assets']);
+        if (typeof slide.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(slide.id) || ids.has(slide.id) ||
+            typeof slide.name !== 'string' || slide.name.length > 80 || /[<>\x00-\x1f\x7f]/.test(slide.name) ||
+            !Array.isArray(slide.assets) || slide.assets.length > 12) fail();
+        ids.add(slide.id);
+        return { id:slide.id, name:slide.name, durationSeconds:rotationSeconds(slide.durationSeconds),
+          assets:slide.assets.map(function (asset) {
+            if (artOwner(asset, bucket || ART_BUCKET) !== tournamentId && !inherited.has(asset)) fail();
+            return asset;
+          }) };
+      }) };
+    if (new TextEncoder().encode(JSON.stringify(rotation)).length > MAX_ROTATION_BYTES) throw new Error('As telas de patrocinadores excedem 100 KB.');
+    return rotation;
+  }
   function forPhase(screens, phaseIndex, fallback) {
     var index = Number.isInteger(Number(phaseIndex)) ? Number(phaseIndex) : 0;
     var found = Array.isArray(screens) && screens.find(function (screen) { return screen.phaseIndex === index; });
     return found ? found.layout : fallback || null;
   }
   return { IDS: IDS, CARD_IDS: CARD_IDS, normalize: normalize, normalizeScreens: normalizeScreens,
+    normalizeRotation: normalizeRotation, rotationDefaults: rotationDefaults,
     forPhase: forPhase, defaults: defaults, finalsPreset: finalsPreset, snapBox: snapBox };
 });

@@ -8,47 +8,26 @@ mode="${1:---preflight}"
 node scripts/check-vendor-fresh.js
 source_commit="$(node -e "process.stdout.write(require('./scripts/autodraw-publication-git').ultimoAutodrawImplantavel(process.cwd())||'')")"
 [[ "$source_commit" =~ ^[a-f0-9]{40}$ ]] || exit 1
-base_commit='3690dc4d6287eed4a029d9051e3db8022a62d99e'
-git cat-file -e "$base_commit^{commit}"
-git merge-base --is-ancestor "$base_commit" "$source_commit" || {
-  echo "base regional $base_commit não é ancestral de $source_commit" >&2; exit 1;
-}
+git cat-file -e "$source_commit^{commit}"
+git merge-base --is-ancestor "$source_commit" HEAD
 required_manifest='.backend-requerido-autodraw.json'
 node - "$source_commit" "$required_manifest" <<'NODE'
 const fs=require('fs');
 const {checkTargetedPublication,autodrawExports}=require('./scripts/backend-publication-core');
+const {validateFunctionSet}=require('./scripts/end-court-readiness-core');
 const [commit,file]=process.argv.slice(2);
 const manifest=JSON.parse(fs.readFileSync(file,'utf8'));
 const receipt=JSON.parse(fs.readFileSync('.backend-publicado-autodraw-funcoes.json','utf8'));
-const names=['createTournament','tournamentSummary','tournamentSummaryMatch','tournamentSummaryParticipant',
-  'tournamentSummaryRegistration','tournamentSummaryLegacyGroup','endMatchOnCourt'];
+validateFunctionSet(manifest);
 const exports=autodrawExports(fs.readFileSync('functions-autodraw/index.js','utf8'));
-if(manifest.backendCommit!==commit||manifest.functions.length!==names.length||new Set(manifest.functions).size!==names.length||
-  names.some(name=>!manifest.functions.includes(name)))throw Error('manifesto requerido não cobre exatamente as sete funções/commit');
 const checked=checkTargetedPublication(manifest,receipt,commit,exports);
-if(!checked.ok||checked.verified.length!==names.length)throw Error(checked.reason||'receipt central incompleto');
+if(!checked.ok||checked.verified.length!==manifest.functions.length)throw Error(checked.reason||'receipt central incompleto');
 NODE
-diff="$(git diff --name-only "$base_commit" "$source_commit" -- functions-autodraw | LC_ALL=C sort)"
-expected="$(printf '%s\n' \
-  functions-autodraw/court-capability-digest.js \
-  functions-autodraw/format-intent-validation-core.js \
-  functions-autodraw/index.js \
-  functions-autodraw/test-canonical-sandbox-emu.js \
-  functions-autodraw/test-draw-checkpoint-emu.js \
-  functions-autodraw/test-super-eight.js \
-  functions-autodraw/test-tournament-summary-reconcile.js \
-  functions-autodraw/tournament-create.js \
-  functions-autodraw/tournament-draw-checkpoint.js \
-  functions-autodraw/tournament-summary-core.js \
-  functions-autodraw/tournament-summary-reconcile.js \
-  functions-autodraw/vendor/format2.js \
-  functions-autodraw/vendor/phases-engine.js \
-  functions-autodraw/vendor/tournaments-draw.js \
-  functions-autodraw/vendor/tournaments-utils.js | LC_ALL=C sort)"
-[[ "$diff" == "$expected" ]] || {
-  echo "backend fora do corte end-court/summaries: $diff" >&2; exit 1;
-}
-echo "✓ diff $base_commit → HEAD: $diff"
+# O corte atual e cada função declarada precisam ter recibo central confirmado.
+# A malha usa o archive exato desse commit e seu digest integral, nunca um
+# snapshot de desenvolvimento nem a lista de arquivos de uma release antiga.
+git diff --quiet "$source_commit" HEAD -- functions-autodraw
+echo "✓ corte direcionado e recibos centrais confirmados: $source_commit"
 for version in v2 v3; do
   node scripts/check-operation-regions-mixed.js "$version" --allow-legacy-court
 done

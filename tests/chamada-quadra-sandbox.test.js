@@ -237,11 +237,13 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   assert.equal(blockState.blockCourt['block-2'], 'Quadra 5', 'guarda quadra do irmão que ainda não foi chamado');
   assert.ok(tournament.matches.filter(match => match.monarchGroup === 'A1').every(match => match.court === null),
     'os três jogos do bloco deixam de ocupar quadras');
-  await assert.rejects(endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
+  const previousAudits = releases.size;
+  const unchanged = await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
     matchId:'block-1', action:'release', monarchEndWholeBlock:true,
-    operationId:'c3f4cb3e-bda6-44ad-b2c6-4497928b12cc' } }),
-    e => e.code === 'failed-precondition' && /já foi liberado/.test(e.message),
-    'nova intenção não transforma jogo previamente liberado em falso sucesso');
+    operationId:'c3f4cb3e-bda6-44ad-b2c6-4497928b12cc' } });
+  assert.equal(unchanged.changed, false);
+  assert.deepEqual(Array.from(unchanged.releasedMatchIds), []);
+  assert.equal(releases.size, previousAudits, 'novo clique sem jogo restante não cria auditoria');
   const restoreCalled = await endOnCourt({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test', sandbox:false,
     matchId:'block-1', action:'restore', operationId:'8b994594-d074-4b96-95bf-dab9711c6114' } });
   assert.equal(restoreCalled.changed, true);

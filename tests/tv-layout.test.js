@@ -8,6 +8,39 @@ const server = require('../functions-autodraw/tv-layout-core');
 const callable = require('../functions/vendor/tv-layout-core');
 assert.deepEqual(browser.defaults(), server.defaults());
 assert.deepEqual(browser.defaults(), callable.defaults());
+const rotation = { enabled:true, mode:'interleaved', mainDurationSeconds:1, slides:[
+  { id:'slide', name:'Clube', durationSeconds:3600, assets:[] }] };
+const art = 'https://firebasestorage.googleapis.com/v0/b/scoreplace-app.firebasestorage.app/o/tournamentTvArt%2Ftorneio%2Farte.png?alt=media&token=';
+const maxURL = art.padEnd(2048,'a');
+rotation.slides[0].assets = [maxURL, 'https://storage.googleapis.com/scoreplace-app.firebasestorage.app/tournamentTvArt/torneio/a.gif'];
+for (const core of [browser,server,callable]) {
+  assert.deepEqual(core.normalizeRotation(rotation,'torneio'),rotation);
+  assert.deepEqual(core.normalizeRotation(rotation,'clone',rotation),rotation);
+  assert.throws(() => core.normalizeRotation(rotation,'clone'));
+  for (const bad of [maxURL+'x', art.replace('https:','http:'),art.replace('googleapis.com','googleapis.com.other.test'),
+    art.replace('firebasestorage.app','another.app'),art.replace('torneio','outro'), art.replace('tournamentTvArt','tournaments'),
+    art.replace('arte.png','%2e%2e%2Farte.png'),art.replace('.png','.svg'), 'data:image/png;base64,AAA']) {
+    assert.throws(() => core.normalizeRotation({...rotation,slides:[{...rotation.slides[0],assets:[bad]}]},'torneio'));
+  }
+  for (const patch of [{mode:'manual'},{enabled:1},{html:'<b>'},{mainDurationSeconds:0},{mainDurationSeconds:3601},
+    {mainDurationSeconds:1.5},{slides:Array(13).fill(rotation.slides[0])},{slides:[rotation.slides[0],rotation.slides[0]]},
+    {slides:[{...rotation.slides[0],assets:Array(13).fill(art)}]},
+    {slides:Array.from({length:12},(_,i)=>({...rotation.slides[0],id:String(i),assets:Array(12).fill(maxURL)}))}]) {
+    assert.throws(() => core.normalizeRotation({...rotation,...patch},'torneio'));
+  }
+}
+const { readArt } = require('../functions-autodraw/tournament-tv-art');
+class MediaError extends Error {}
+const pngSignature = Buffer.from([137,80,78,71,13,10,26,10]);
+for (const [type,header,extension] of [['png',pngSignature,'png'],['jpeg',Buffer.from([255,216,255]),'jpg'],
+  ['gif',Buffer.from('GIF89a'),'gif'],['webp',Buffer.from('RIFF1234WEBP'),'webp']]) {
+  assert.equal(readArt('data:image/'+type+';base64,'+header.toString('base64'),MediaError).ext,extension);
+}
+const maxFile = Buffer.alloc(5 * 1024 * 1024);
+pngSignature.copy(maxFile);
+assert.equal(readArt('data:image/png;base64,'+maxFile.subarray(0,-1).toString('base64'),MediaError).bytes.length,maxFile.length-1);
+for(const bad of ['data:image/png;base64,'+maxFile.toString('base64'),'data:image/gif;base64,','data:image/jpeg;base64,'+pngSignature.toString('base64'),
+  'data:image/svg+xml;base64,PHN2Zz4=','data:image/png;base64,PHN2Zz4=']) assert.throws(()=>readArt(bad,MediaError));
 const original = browser.defaults();
 const reordered = { card: Object.fromEntries(Object.entries(original.card).reverse()), sections: Object.fromEntries(Object.entries(original.sections).reverse()), background: '#ABCDEF', version: 1 };
 assert.deepEqual(server.normalize(reordered), browser.normalize(reordered), 'browser e servidor usam a mesma ordem canônica');

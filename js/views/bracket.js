@@ -1381,7 +1381,12 @@ window._bracketOperationsSelect = function (t) {
   var occupancy = window.ScoreplaceCourtOccupancy;
   var known = window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.knownSide;
   if (!t || !occupancy || !known || typeof window._collectAllMatches !== 'function') return null;
-  var matches = window._collectAllMatches(t) || [];
+  var seenMatchIds = new Set();
+  var matches = (window._collectAllMatches(t) || []).filter(function (item) {
+    if (!item || item.id == null || seenMatchIds.has(String(item.id))) return false;
+    seenMatchIds.add(String(item.id));
+    return true;
+  });
   var released = window._bracketCourtReleased(t.id);
   var expected = Number(t._nJogos);
   if (t._resumo || t._doCache || t._faltamPesados || (expected > 0 && new Set(matches.map(function (m) { return String(m && m.id || ''); })).size < expected)) return null;
@@ -1437,7 +1442,7 @@ window._bracketOperationsSelect = function (t) {
   // pode entrar na fila. Pular o primeiro nunca libera o segundo ou o terceiro.
   var seriesCandidates = upcoming.map(function (entry) { return entry.item.m; }).filter(function (m) {
     var group = _bracketOperationsGroup(t, m, matches);
-    return !group || String((group.matches.find(function (item) { return !occupancy.isFinished(item); }) || {}).id) === String(m.id);
+    return !group || String((group.matches.find(function (item) { return !released[String(item.id)] && !occupancy.isFinished(item); }) || {}).id) === String(m.id);
   });
   var preferred = seriesCandidates.filter(function (m) {
     return !window.ScoreplacePhaseCallOrder || window.ScoreplacePhaseCallOrder.allowed(t, matches, m, occupancy.isFinished);
@@ -1460,10 +1465,15 @@ window._bracketOperationsSelect = function (t) {
   var ordered = window._bracketPostponedOrder(candidates, postponed, ready);
   var next = window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(ordered, matches, released, t) : null;
+  var freeCourts = occupancy.freeCourts(courts, courtOccupants);
+  var explicitQueue = ordered.some(function (item) {
+    return postponed.includes(String(item.id)) || ready.includes(String(item.id));
+  });
+  var queueHead = (!freeCourts.length || explicitQueue) ? ordered[0] : next || ordered[0];
   var nextTie = tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt && !m.postponedAt; }) ||
     tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt; }) ||
     tieMatches.find(function (m) { return m.tieStatus === 'review'; });
-  var otherReady = next;
+  var otherReady = queueHead;
   var returnedTie = nextTie && nextTie.postponedAt && matches.some(function (called) {
     return called && called.courtCalledAt &&
       Date.parse(String(called.courtCalledAt)) > Date.parse(String(nextTie.postponedAt));
@@ -1471,7 +1481,7 @@ window._bracketOperationsSelect = function (t) {
   var callableTie = nextTie && (!nextTie.postponedAt || !otherReady || returnedTie) ? nextTie : null;
   // Uma simples já chamada ocupa só a própria quadra. As outras quadras
   // continuam recebendo jogos de categorias que estejam prontos na grade.
-  var suggested = callableTie || next;
+  var suggested = callableTie || queueHead;
   var waitingForTie = !suggested && tieMatches.some(function (m) {
     return m && !m.winnerKey && m.courtCalledAt;
   });
@@ -1485,14 +1495,14 @@ window._bracketOperationsSelect = function (t) {
       !m.courtCalledAt && !m.startedAt && !occupancy.occupiesCourt(m);
   }).filter(function (m) {
     var group = _bracketOperationsGroup(t, m, matches);
-    return !group || String((group.matches.find(function (item) { return !occupancy.isFinished(item); }) || {}).id) === String(m.id);
+    return !group || String((group.matches.find(function (item) { return !released[String(item.id)] && !occupancy.isFinished(item); }) || {}).id) === String(m.id);
   }).sort(function (a, b) {
     return _matchCardTimestamp(a.scheduledAt) - _matchCardTimestamp(b.scheduledAt) ||
       Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0);
   });
-  return { next: suggested, queue: queued, future: future, nextCallable: !!suggested, waitingForTie: waitingForTie,
+  return { next: suggested, queue: queued, future: future, nextCallable: !!callableTie || (!!next && next === suggested), waitingForTie: waitingForTie,
     tieCanPostpone: !!(callableTie && otherReady),
-    active: active, pending: pending, courts: courts, freeCourts: occupancy.freeCourts(courts, courtOccupants), matches: matches };
+    active: active, pending: pending, courts: courts, freeCourts: freeCourts, matches: matches };
 };
 
 // Cada clique registra somente a leva que já ocupa as quadras. A próxima
@@ -1732,10 +1742,10 @@ window._bracketMonarchGroupLabel = function (t, group) {
     : 'Grupo ' + letters + suffix;
 };
 
-function _bracketOperationsGroup(t, m, allMatches) {
+function _bracketOperationsGroup(t, m, allMatches, onCourt) {
   if (!m || !m.isMonarch || !Array.isArray(allMatches)) return null;
   var days = t && t.scheduleWindow && t.scheduleWindow.days;
-  if (!Array.isArray(days) || days.length !== 1) return null;
+  if (!onCourt && (!Array.isArray(days) || days.length !== 1)) return null;
   var byId = new Map();
   allMatches.forEach(function (match) { if (match && match.id != null && !byId.has(String(match.id))) byId.set(String(match.id), match); });
   var rounds = (t.rounds || []).slice();
@@ -2124,7 +2134,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
       '" data-tie-decision="' + safe(String(m.decisionId || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '">' +
       '<span class="sp-operations-label">' + safe(label) + stage + tiePostpone + '</span>' + (availability || '') + tieFinalNotice + tieHtml + '</div>';
   }
-  var group = _bracketOperationsGroup(t, m, allMatches);
+  var group = role.pending ? null : _bracketOperationsGroup(t, m, allMatches, role.active);
   var nav = root._bracketOperationsNav || (root._bracketOperationsNav = {});
   var saved = group && nav[slot];
   var defaultIndex = group ? group.matches.findIndex(function (match) { return String(match.id) === String(m.id); }) : 0;
@@ -2136,7 +2146,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
       group.matches.find(function (match) { return !occupancy.isFinished(match); }) || group.matches[0]
     : m;
   var selectedNumber = Number(selected._gameNum || selected.scheduledGameNumber);
-  var postponeMatch = group ? group.matches.find(function (match) { return !occupancy.isFinished(match); }) : selected;
+  var postponeMatch = m;
   var canPostponeSelected = postponeMatch && !occupancy.isFinished(postponeMatch) && !postponeMatch.isBye && !postponeMatch.isSitOut &&
     !postponeMatch.courtCalledAt && !postponeMatch.startedAt && !postponeMatch.draw && !postponeMatch.pendingResult && !postponeMatch.liveScored &&
     !(Array.isArray(postponeMatch.sets) && postponeMatch.sets.length) && !(Number(postponeMatch.scoreP1) > 0) && !(Number(postponeMatch.scoreP2) > 0);
@@ -2165,7 +2175,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
     ? _bracketScopeReplicaHtml(_bracketOperationsStandingsHtml(group, t, slot, standingsCourtHtml, standingsCategoryLabel), 'operations-standings-' + slot)
     : typeof window.renderMatchCard === 'function'
     ? window.renderMatchCard(selected, canEnter, t.id, Number.isInteger(selectedNumber) && selectedNumber > 0 ? selectedNumber : null,
-      false, null, { idScope: 'operations-' + String(selected.id || ''), readOnly:!!role.readOnly,
+      false, null, { idScope: 'operations-' + slot + '-' + String(selected.id || ''), readOnly:!!role.readOnly,
         preferFirstFreeCourt: !!role.preferFirstFreeCourt, preferredCourt: role.preferredCourt || '' }) : '';
   if (group && index < 3 && html) {
     var host = document.createElement('template');
@@ -2225,8 +2235,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         }
         footerActions.appendChild(button);
       });
-      var monarchGroup = role.active && m.isMonarch === true && !m.isTieBreak
-        ? _bracketOperationsGroup(t, m, allMatches) : null;
+      var monarchGroup = role.active && !m.isTieBreak ? group : null;
       var modeEntry = window._bracketCourtReleaseCache[String(t.id)] || {};
       var currentUser = window.AppStore && window.AppStore.currentUser;
       if (monarchGroup && monarchGroup.matches && monarchGroup.matches.length === 3 &&
@@ -2235,9 +2244,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         var seriesKey = seriesIds.slice().sort().join('|');
         var busyMap = modeEntry.monarchEndWholeBlockBusyBySeries || {};
         var busy = !!busyMap[seriesKey];
-        var released = modeEntry.released || {};
-        var blockAlreadyPartial = seriesIds.some(function (id) { return !!released[String(id)]; });
-        var canBlock = !!modeEntry.ready && !!modeEntry.capabilityReady && !busy && !blockAlreadyPartial;
+        var canBlock = !!modeEntry.ready && !!modeEntry.capabilityReady && !busy;
         var blockButton = document.createElement('button');
         blockButton.type = 'button';
         blockButton.className = 'sp-operations-end-button sp-operations-end-button--block';
@@ -2245,11 +2252,10 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         blockButton.setAttribute('data-operations-end-mode', 'block');
         blockButton.setAttribute('data-operations-action', 'block');
         blockButton.setAttribute('data-series-match-id', String(m.id));
-        blockButton.setAttribute('aria-label', 'Encerrar os três jogos deste bloco');
+        blockButton.setAttribute('aria-label', 'Encerrar os jogos restantes deste bloco');
         blockButton.setAttribute('title', busy ? 'Encerramento do bloco em andamento.' :
-          blockAlreadyPartial ? 'O bloco não pode ser encerrado junto depois que um jogo foi liberado.' :
           !canBlock ? 'Aguardando confirmação das versões operacionais publicadas.' :
-          'Enviar os três jogos do grupo para Placares pendentes');
+          'Enviar os jogos sem resultado do bloco para Placares pendentes');
         blockButton.disabled = !canBlock;
         if (busy) blockButton.setAttribute('aria-busy', 'true');
         footerActions.appendChild(blockButton);
@@ -2750,7 +2756,9 @@ window._bracketOperationsRefresh = function (t, root) {
         }, 'Entre na sua conta para postergar o jogo.').then(function () {
           // O recibo confirma a gravação, mas não inclui a nova revisão.
           // Bloqueie o próximo clique até reler a fila no servidor.
-          return window._bracketReloadCourtState(t.id, entry).catch(function () {
+          return window._bracketReloadCourtState(t.id, entry).then(function () {
+            existing._spShowQueueHead = true;
+          }).catch(function () {
             entry.ready = false;
             entry.error = new Error('Falha ao atualizar a fila');
             window._bracketEnsureCourtReleaseListener(t.id);
@@ -2868,6 +2876,11 @@ window._bracketOperationsRefresh = function (t, root) {
   });
   var visibleNextId = visibleNext && visibleNext.getAttribute('data-operations-base-match');
   var visibleNextOffset = visibleNext ? nextScrollTop - visibleNext.offsetTop : 0;
+  if (existing._spShowQueueHead) {
+    existing._spShowQueueHead = false;
+    visibleNextId = null;
+    nextScrollTop = 0;
+  }
   var pageX = window.scrollX, pageY = window.scrollY;
   var focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.sp-operations-replica');
   var focusState = focused && { match: focused.getAttribute('data-operations-match'),
@@ -2901,7 +2914,7 @@ window._bracketOperationsRefresh = function (t, root) {
   var freeCourts = state.freeCourts;
   var freeCount = freeCourts.length;
   var safe = window._safeHtml || String;
-  var nextCards = [state.next].concat(state.future || []).filter(categoryMatches).filter(function (m, index, list) {
+  var nextCards = (state.queue || []).concat(state.future || []).filter(categoryMatches).filter(function (m, index, list) {
     return m && list.findIndex(function (item) { return item && String(item.id) === String(m.id); }) === index;
   });
   var readyIds = new Set((state.queue || []).map(function (m) { return String(m.id); }));
@@ -2921,7 +2934,7 @@ window._bracketOperationsRefresh = function (t, root) {
   var nextCardsHtml = nextCards.map(function (m, index) {
     var available = readyIds.has(String(m.id)) && window.ScoreplaceNextMatch &&
       window.ScoreplaceNextMatch.firstAvailable([m], state.matches, releasedMatches, t) === m;
-    var callable = canCall && available && state.nextCallable !== false;
+    var callable = canCall && available;
     var at = estimates.get(String(m.id));
     var estimate = Number.isFinite(at) ? new Date(at).toLocaleTimeString('pt-BR', {
       hour:'2-digit', minute:'2-digit', hour12:false,
@@ -2933,7 +2946,7 @@ window._bracketOperationsRefresh = function (t, root) {
       '<strong class="sp-operations-stage">' + safe(_bracketOperationsStageLabel(m, t, state.matches)) + '</strong></div>';
     return _bracketOperationsReplica(m, t, {
       canCall:callable, active:false, readOnly:!available,
-      postponeReady:callable && index === 0,
+      postponeReady:canCall && index === 0 && readyIds.has(String(m.id)),
       postponeBusy:existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
       tieCanPostpone:!!state.tieCanPostpone && index === 0,
       preferFirstFreeCourt:true,
@@ -2957,7 +2970,14 @@ window._bracketOperationsRefresh = function (t, root) {
     '</div><div class="sp-operations-court-track" data-hscroll="ops:track">' +
     state.courts.map(function (court) {
       var allCourtGames = state.active.filter(function (m) { return String(m.court) === court; });
-      var games = allCourtGames.filter(categoryMatches);
+      var games = allCourtGames.filter(categoryMatches).filter(function (game) {
+        var group = _bracketOperationsGroup(t, game, state.matches, true);
+        if (!group) return true;
+        var first = group.matches.find(function (member) {
+          return allCourtGames.some(function (active) { return String(active.id) === String(member.id); });
+        });
+        return first && String(first.id) === String(game.id);
+      });
       return '<div class="sp-operations-court-slot' + (games.length ? ' sp-operations-court-slot--active' : '') + '">' +
         (games.length ? games.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: true, categoryFilter:categoryFilter }, court, '', root, state.matches, 'court:' + String(m.id)); }).join('') :
           '<span class="sp-operations-label">' + window._safeHtml(court) + '</span><div class="sp-operations-court-free"><span>' +
@@ -6375,7 +6395,7 @@ window._endMatchOnCourt = function (tId, matchId, button, endWholeBlock) {
   var blockMode = endWholeBlock === true;
   return _confirmCourtOperation(tId, matchId, 'release', blockMode ? 'Encerrar bloco' : position >= 0 ? 'Encerrar jogo' : 'Liberar quadra',
     blockMode
-      ? 'Encerrar os três jogos deste grupo de uma vez? Todos ficarão disponíveis em Placares pendentes; nenhum placar será alterado.'
+      ? 'Encerrar os jogos restantes deste bloco? Os jogos sem resultado irão para Placares pendentes.'
       : position >= 0
       ? 'Encerrar este jogo sem placar? Ele ficará em Placares pendentes; os demais jogos permanecem em suas quadras.'
       : 'Liberar esta quadra sem placar? O jogo ficará em Placares pendentes.', function () {
@@ -6390,7 +6410,7 @@ window._endMatchOnCourt = function (tId, matchId, button, endWholeBlock) {
     if (!data.ok) throw new Error('Não foi possível liberar a quadra.');
     var releasedCount = Array.isArray(data.releasedMatchIds) ? data.releasedMatchIds.length : 0;
     if (typeof showNotification === 'function') showNotification(blockMode ? 'Bloco encerrado' : 'Quadra liberada',
-      blockMode && releasedCount
+      data.changed === false ? 'Nenhum jogo restante para encerrar.' : blockMode && releasedCount > 1
         ? releasedCount + ' jogos enviados para Placares pendentes.'
         : 'Jogo enviado para Placares pendentes.', 'success');
     return data;

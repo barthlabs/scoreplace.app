@@ -518,6 +518,7 @@ window.FirestoreDB = {
     // desenho de TV que o organizador já alterou em outra janela.
     delete cleanData.tvLayout;
     delete cleanData.tvScreens;
+    delete cleanData.tvRotation;
     // ── IMAGEM NÃO VIAJA JUNTO COM PLACAR (1.9.49) ──────────────────────────────
     // MEDIDO nos documentos de produção: `logoData` + `coverPhotoData` são 62% do peso
     // de todos os torneios (602 KB de 966 KB). Num doc o par chega a 305 KB de 311 KB —

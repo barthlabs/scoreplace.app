@@ -1274,6 +1274,7 @@ const SUITES = [
   'tests/tv-live-snapshot.test.js',
   'tests/classificacao-final-categorias.test.js',
   'tests/tv-live-monitor-picker.test.js',
+  'tests/tv-sponsor-rotation.test.js',
   'tests/tv-layout.test.js',
   'tests/tv-layout-editor.test.js',
   'tests/tv-camis-series-fit.test.js',
@@ -1458,6 +1459,7 @@ const SUITES = [
   // antigo do torneio e apagar o resultado que outro aparelho acabou de registrar.
   'tests/atribuir-quadra-nao-sobrescreve-placar.test.js',
   'tests/chamada-quadra-sandbox.test.js',
+  'tests/end-court-remaining-emulator.test.js',
   'tests/sandbox-lifecycle.test.js',
   'tests/postpone-next-match.test.js',
   'tests/tie-card-uses-match-card.test.js',

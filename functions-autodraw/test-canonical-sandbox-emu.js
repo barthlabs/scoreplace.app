@@ -300,5 +300,54 @@ const categories = [{ id: 'light', label: 'Light' }];
     'upload autorizado gravou o objeto no emulador de Storage');
   assert.equal(JSON.stringify((await real.get()).data()), realBefore, 'upload autorizado não altera original');
 
+  const artRequest = { ...imageRequest, type:'tvArt', dataUrl:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' };
+  const deniedArt = await callFn('uploadTournamentImage', artRequest, stranger);
+  assert.equal(deniedArt.body.error.status, 'NOT_FOUND');
+  assert.equal((await callFn('uploadTournamentImage', { ...artRequest, sandbox:false }, owner)).body.error.status, 'NOT_FOUND');
+  const sbArt = await callFn('uploadTournamentImage', artRequest, owner);
+  assert.equal(sbArt.status,200,JSON.stringify(sbArt.body));
+  const sbUrl = sbArt.body.result.url;
+  assert.match(decodeURIComponent(sbUrl), new RegExp('tournamentTvArt/' + routedId + '/[a-f0-9-]+\\.gif'));
+  const png = { ...artRequest, sandbox:false, tournamentId:id, dataUrl:imageRequest.dataUrl };
+  const visitor = await token('sb-tv-participant');
+  await real.update({ coHosts:[{uid:'sb-owner',status:'active'}], memberUids:['sb-member','sb-tv-participant'] });
+  assert.equal((await callFn('uploadTournamentImage',png,visitor)).body.error.status,'PERMISSION_DENIED');
+  const ownerArt = await callFn('uploadTournamentImage',png,member);
+  const cohostArt = await callFn('uploadTournamentImage',png,owner);
+  assert.equal(ownerArt.status,200,JSON.stringify(ownerArt.body));
+  assert.equal(cohostArt.status,200,JSON.stringify(cohostArt.body));
+  const url = ownerArt.body.result.url;
+  assert.notEqual(url,cohostArt.body.result.url);
+  const foreign = sbUrl;
+  const config = { enabled:true, mainDurationSeconds:3, mode:'interleaved', slides:[
+    { id:'partner', name:'Clube', durationSeconds:7, assets:[url,cohostArt.body.result.url] }] };
+  async function update(target, rotation, actor) {
+    return callFn('updateTournamentConfiguration',{ tournamentId:target, patch:{ tvRotation:rotation } },actor);
+  }
+  assert.equal((await update(id,config,visitor)).body.error.status,'PERMISSION_DENIED');
+  const unauth = await fetch(base + 'updateTournamentConfiguration',{ method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({data:{tournamentId:id,patch:{tvRotation:config}}}) });
+  assert.equal((await unauth.json()).error.status,'UNAUTHENTICATED');
+  assert.equal((await update(id,config,member)).status,200);
+  assert.equal((await update(id,config,owner)).status,200);
+  const wrong = { ...config, slides:[{ ...config.slides[0], assets:[foreign] }] };
+  assert.equal((await update(id,wrong,owner)).body.error.status,'INVALID_ARGUMENT');
+  assert.equal((await update(routedId,wrong,owner)).status,200);
+  const cloneId = 'tour_' + Date.now() + '_' + 'e'.repeat(32);
+  const create = { tournamentId:cloneId, config:{name:'Cópia', sport:'Tênis', format:'Liga'}, tvRotationSourceId:id };
+  assert.equal((await callFn('createTournament',create,visitor)).body.error.status,'PERMISSION_DENIED');
+  const copied = await callFn('createTournament',create,owner);
+  assert.equal(copied.status,200,JSON.stringify(copied.body));
+  assert.deepEqual(copied.body.result.tournament.tvRotation,config);
+  assert.equal((await update(cloneId,{ ...config, mainDurationSeconds:18 },owner)).status,200);
+  assert.equal((await update(cloneId,wrong,owner)).body.error.status,'INVALID_ARGUMENT');
+  const ownId = 'tour_' + Date.now() + '_' + 'c'.repeat(32);
+  const ownConfig = { ...config, slides:[{...config.slides[0],assets:[url.replace(encodeURIComponent('/' + id + '/'),encodeURIComponent('/' + ownId + '/'))]}] };
+  const own = { tournamentId:ownId, config:{ ...create.config, tvRotation:ownConfig } };
+  assert.equal((await callFn('createTournament',{ ...own, config:{...own.config,tvRotation:config} },owner)).body.error.status,'INVALID_ARGUMENT');
+  const created = await callFn('createTournament',own,owner);
+  assert.equal(created.status,200,JSON.stringify(created.body));
+  assert.deepEqual(created.body.result.tournament.tvRotation,ownConfig);
+  console.log('✓ patrocinadores: uploads exclusivos, autorização, configuração, clone e referências herdadas');
   console.log('✓ comandos autodraw mantêm o sandbox isolado do torneio original');
 })().then(() => process.exit(0), (error) => { console.error(error); process.exit(1); });

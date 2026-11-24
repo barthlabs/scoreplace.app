@@ -114,6 +114,7 @@ window._cloneTournament = async function(tournamentId) {
         coverGradientBlend: t.coverGradientBlend != null ? t.coverGradientBlend : null,
         tvLayout: t.tvLayout || null,
         tvScreens: t.tvScreens || null,
+        ...(t.tvRotation ? { _tvRotationSourceId:t.id } : {}),
         logoLocked: t.logoLocked || false,
         logoShape: t.logoShape || 'square',
         logoRadius: (t.logoRadius != null ? t.logoRadius : 14),

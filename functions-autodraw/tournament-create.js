@@ -48,7 +48,7 @@ function withoutRuntimeState(value) {
   }, {});
 }
 // Dependências injetadas: este é o handler real, também executado pelos testes.
-function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig, validateCapacity, validatePolicy, validateIntent, validateTvLayout, compile, boundary, readTournament, summaryCore, summaryHelpers, now = Date.now }) {
+function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig, validateCapacity, validatePolicy, validateIntent, validateTvLayout, isAdmin, artBucket, compile, boundary, readTournament, summaryCore, summaryHelpers, now = Date.now }) {
   const fail = (code, message) => { throw new HttpsError(code, message); };
   return async function createTournament(request) {
     const uid = request.auth && request.auth.uid;
@@ -69,6 +69,7 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
     Object.keys(raw).forEach(key => {
       if (!fields.has(key) || key === 'phases' || key === 'ligaRRSchedule' || key === 'testModeEnabled') fail('invalid-argument', 'Campo de criação não permitido: ' + key);
       try { config[key] = key === 'tvLayout' && validateTvLayout ? validateTvLayout(raw[key]) :
+        key === 'tvRotation' ? require('./tv-layout-core').normalizeRotation(raw[key], id, null, artBucket && artBucket()) :
         key === 'tvScreens' ? require('./tv-layout-core').normalizeScreens(raw[key]) : cloneConfig(raw[key], 0, [key]); }
       catch (error) { fail('invalid-argument', error.message); }
     });
@@ -103,8 +104,13 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
     if (typeof config.name !== 'string' || !config.name.trim() || config.name.length > 240 ||
         typeof config.sport !== 'string' || !config.sport.trim() || config.sport.length > 120 ||
         (!hasFmt2 && (typeof config.format !== 'string' || !config.format.trim()))) fail('invalid-argument', 'Informe nome, modalidade e formato.');
-    if (Buffer.byteLength(JSON.stringify(config)) > 96 * 1024) fail('invalid-argument', 'Configuração grande demais.');
-    const hash = createHash('sha256').update(JSON.stringify(canonical(config))).digest('hex');
+    const { tvRotation, ...baseConfig } = config;
+    if (Buffer.byteLength(JSON.stringify(baseConfig)) > 96 * 1024) fail('invalid-argument', 'Configuração grande demais.');
+    const sourceId = input.tvRotationSourceId;
+    if (sourceId !== undefined && (typeof sourceId !== 'string' || !/^[A-Za-z0-9_-]{1,240}$/.test(sourceId) ||
+        sourceId.startsWith('sb_') || tvRotation !== undefined)) fail('invalid-argument', 'Origem das telas inválida.');
+    const intent = sourceId ? { config, tvRotationSourceId:sourceId } : config;
+    const hash = createHash('sha256').update(JSON.stringify(canonical(intent))).digest('hex');
     const ref = db.collection('tournaments').doc(id);
     const summaryRef = db.collection('tournaments_summary').doc(id);
     const receipt = db.collection('tournamentCreationRequests').doc(id);
@@ -122,6 +128,15 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       }
       if (snap.exists) fail('already-exists', 'Este identificador já pertence a outro torneio.');
       const t = Object.assign({}, config);
+      if (sourceId) {
+        const source = await tx.get(db.collection('tournaments').doc(sourceId));
+        if (!source.exists || !isAdmin(source.data(), uid)) fail('permission-denied', 'Só a organização pode copiar telas de patrocinadores.');
+        const stored = source.data().tvRotation;
+        if (stored) {
+          try { t.tvRotation = require('./tv-layout-core').normalizeRotation(stored, sourceId, stored, artBucket && artBucket()); }
+          catch (error) { fail('failed-precondition', error.message); }
+        }
+      }
       if (config.fmt2) {
         const out = compile(config.fmt2, { sport: t.sport, categories: config.combinedCategories || [], resultEntry: t.resultEntry || ['organizer'], lateEnrollment: t.lateEnrollment, newMatchups: t.newMatchups });
         Object.assign(t, out.topLevel);

@@ -4,18 +4,17 @@ const fs=require('fs');
 const path=require('path');
 const root=path.join(__dirname,'..');
 const script=fs.readFileSync(path.join(root,'scripts/refresh-end-court-regions.sh'),'utf8');
-assert.match(script,/base_commit='3690dc4d6287eed4a029d9051e3db8022a62d99e'/);
-assert.match(script,/git merge-base --is-ancestor "\$base_commit" "\$source_commit"/);
+assert.match(script,/git merge-base --is-ancestor "\$source_commit" HEAD/);
+assert.match(script,/git diff --quiet "\$source_commit" HEAD -- functions-autodraw/,
+  'o archive só pode representar exatamente o backend do corte atual');
 assert.match(script,/operation-source-digest\.js functions-autodraw endMatchOnCourt "\$source_commit" --from-git/);
 assert.match(script,/central-source-digest\.js "\$source_commit"/);
 assert.match(script,/git archive "\$source_commit" functions-autodraw/);
 assert.doesNotMatch(script,/git archive HEAD functions-autodraw/);
-for (const source of [
-  'functions-autodraw/test-canonical-sandbox-emu.js',
-  'functions-autodraw/test-draw-checkpoint-emu.js',
-  'functions-autodraw/tournament-draw-checkpoint.js',
-  'functions-autodraw/vendor/tournaments-draw.js'
-]) assert(script.includes(source),`refresh deve cobrir fonte já alterada desde a base: ${source}`);
+assert.doesNotMatch(script,/base_commit=|expected="\$\(printf/,
+  'não deve fixar a lista de arquivos de uma release histórica');
+assert.match(script,/validateFunctionSet\(manifest\)/,
+  'o manifesto atual precisa incluir a função de encerramento');
 assert.doesNotMatch(script,/generate-operation-regions-(?:v3-)?config\.js --check/,
   'preflight não compara os JSONs públicos antigos antes da regeneração');
 assert.match(script,/checkTargetedPublication\(manifest,receipt,commit,exports\)/);

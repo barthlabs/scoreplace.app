@@ -5186,13 +5186,20 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
     const all = drawWindow._collectAllMatches(t);
     if (!m || !Array.isArray(all)) throw new HttpsError('failed-precondition', 'Jogo não encontrado na chave completa.');
     const legacyModeEnabled = state.monarchEndWholeBlock === true;
-    const seriesMatches = m.isMonarch === true && !m.isTieBreak && m.monarchGroup != null && m.round != null && m.category
+    const groupRecords = m.isMonarch === true && !m.isTieBreak && m.monarchGroup != null && m.round != null && m.category
       ? all.filter(item => item && item.isMonarch === true && !item.isTieBreak &&
         String(item.category || '') === String(m.category) && Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
         String(item.round) === String(m.round) && String(item.monarchGroup) === String(m.monarchGroup))
-        .sort((a, b) => Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0) ||
-          Date.parse(a.scheduledAt || '') - Date.parse(b.scheduledAt || '') || String(a.id).localeCompare(String(b.id)))
       : [];
+    const groupById = new Map();
+    for (const item of groupRecords) {
+      const id = String(item.id);
+      const previous = groupById.get(id);
+      if (!previous || (!previous.courtCalledAt && item.courtCalledAt)) groupById.set(id, item);
+    }
+    const seriesMatches = Array.from(groupById.values())
+      .sort((a, b) => Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0) ||
+          Date.parse(a.scheduledAt || '') - Date.parse(b.scheduledAt || '') || String(a.id).localeCompare(String(b.id)));
     const series = seriesMatches.length === 3 ? seriesMatches : null;
     const seriesIds = series ? series.map(item => String(item.id)) : [];
     const modeEnabled = Object.prototype.hasOwnProperty.call(monarchModes, matchId) && typeof monarchModes[matchId] === 'boolean'
@@ -5231,10 +5238,10 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
       all.filter(item => item && item.isMonarch === true && !item.isTieBreak && item.monarchGroup != null && item.round != null && item.category)
         .forEach(item => {
           const key = [String(item.category), Number(item.phaseIndex || 0), String(item.round), String(item.monarchGroup)].join('|');
-          if (!grouped.has(key)) grouped.set(key, []);
-          grouped.get(key).push(String(item.id));
+          if (!grouped.has(key)) grouped.set(key, new Set());
+          grouped.get(key).add(String(item.id));
         });
-      grouped.forEach(ids => { if (ids.length === 3) ids.forEach(id => validMonarchIds.add(id)); });
+      grouped.forEach(ids => { if (ids.size === 3) ids.forEach(id => validMonarchIds.add(id)); });
       const nextModes = {};
       const nextRevisions = {};
       Object.keys(monarchModes).forEach(id => {
@@ -5253,57 +5260,49 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
       }, { mergeFields: ['monarchEndWholeBlockByMatch', 'monarchEndWholeBlockRevisionByMatch'] });
       return commitReply({ ok: true, changed, enabled: request.data.enabled, matchIds: seriesIds, revision: nextRevision });
     }
-    const hasScore = _courtOccupancy.isFinished(m) || m.draw === true || !!m.pendingResult ||
-      m.liveScored === true || (Array.isArray(m.sets) && m.sets.length > 0) ||
-      Number(m.scoreP1) > 0 || Number(m.scoreP2) > 0;
+    const hasPartialScore = item => !!item.pendingResult || item.liveScored === true ||
+      (Array.isArray(item.sets) && item.sets.length > 0) || Number(item.scoreP1) > 0 || Number(item.scoreP2) > 0;
+    const hasScore = _courtOccupancy.isFinished(m) || m.draw === true || hasPartialScore(m);
     if (action === 'release') {
-      const blockRequest = request.data.monarchEndWholeBlock === true;
-      if (released[matchId]) {
-        if (blockRequest) throw new HttpsError('failed-precondition', 'Este jogo já foi liberado; atualize a tela antes de encerrar o bloco.');
-        return commitReply({ ok: true, changed: false });
-      }
-      if (!m.court || !(m.courtCalledAt || m.startedAt) || hasScore) {
-        throw new HttpsError('failed-precondition', 'O jogo precisa estar em quadra e sem resultado.');
-      }
-      if (blockRequest) {
-        if (m.isMonarch !== true || m.isTieBreak || m.monarchGroup == null || m.round == null || !m.category)
-          throw new HttpsError('failed-precondition', 'Não foi possível identificar os três jogos deste bloco.');
-        const series = all.filter(item => item && item.isMonarch === true && !item.isTieBreak &&
-          String(item.category || '') === String(m.category) && Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
-          String(item.round) === String(m.round) && String(item.monarchGroup) === String(m.monarchGroup));
-        series.sort((a, b) => Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0) ||
-          Date.parse(a.scheduledAt || '') - Date.parse(b.scheduledAt || '') || String(a.id).localeCompare(String(b.id)));
-        if (series.length !== 3) throw new HttpsError('failed-precondition', 'O bloco precisa conter exatamente três jogos.');
-        const eligible = series.filter(item => !released[String(item.id)] && !item.isBye && !item.isSitOut &&
-          item.draw !== true && !item.pendingResult && item.liveScored !== true &&
-          !(Array.isArray(item.sets) && item.sets.length) && !(Number(item.scoreP1) > 0) && !(Number(item.scoreP2) > 0) &&
-          !_courtOccupancy.isFinished(item));
-        if (eligible.length !== 3) throw new HttpsError('failed-precondition', 'O bloco contém jogo iniciado, pontuado ou já encerrado; atualize a tela.');
+      if (request.data.monarchEndWholeBlock === true) {
+        if (seriesMatches.length > 1 && !series)
+          throw new HttpsError('failed-precondition', 'Não foi possível identificar os jogos deste bloco.');
+        const block = series || [m];
+        const records = series ? groupRecords : [m];
+        const preserved = new Set(records.filter(item => released[String(item.id)] ||
+          _courtOccupancy.isFinished(item) || item.draw === true || item.isBye || item.isSitOut).map(item => String(item.id)));
+        const eligible = block.filter(item => !preserved.has(String(item.id)));
+        if (!eligible.length) return commitReply({ ok: true, changed: false, releasedMatchIds: [] });
+        if (records.some(item => !preserved.has(String(item.id)) && hasPartialScore(item)))
+          throw new HttpsError('failed-precondition', 'Há um placar parcial em andamento no bloco. Confirme o resultado antes de encerrar.');
+        if (!records.some(item => released[String(item.id)] || (item.court && (item.courtCalledAt || item.startedAt))))
+          throw new HttpsError('failed-precondition', 'O bloco precisa ter sido chamado para a quadra.');
         const before = _antesDoMotor(t);
         const nextReleased = { ...released };
         const blockCourt = Object.assign({}, state.blockCourt || {});
         const audits = [];
-        const postponed = (Array.isArray(state.postponed) ? state.postponed : []).map(String);
-        const postponedReady = (Array.isArray(state.postponedReady) ? state.postponedReady : []).map(String);
-        series.forEach(item => {
+        const eligibleIds = new Set(eligible.map(item => String(item.id)));
+        const keepQueued = queue => (Array.isArray(queue) ? queue : []).map(String).filter(id => !eligibleIds.has(id)).slice(-all.length);
+        eligible.forEach(item => {
           const id = String(item.id);
           blockCourt[id] = item.court == null ? null : String(item.court);
           nextReleased[id] = agoraIso;
           audits.push({ matchId: id, court: item.court == null ? null : String(item.court), releasedAt: agoraIso,
-            releasedBy: uid, block: true, group: String(item.monarchGroup) });
-          item.court = null;
-          postponed.splice(0, postponed.length, ...postponed.filter(value => value !== id));
-          postponedReady.splice(0, postponedReady.length, ...postponedReady.filter(value => value !== id));
+            releasedBy: uid, block: true, group: item.monarchGroup == null ? null : String(item.monarchGroup) });
         });
-        const estimatedDurationMs = series.every(item => item.courtCalledAt)
-          ? _monarchCourtSeries.estimateLegacyDurations(t, series, agoraIso, _matchTiming) : null;
+        records.forEach(item => { if (!preserved.has(String(item.id))) item.court = null; });
+        const estimatedDurationMs = eligible.length === 3 && eligible.every(item => item.courtCalledAt)
+          ? _monarchCourtSeries.estimateLegacyDurations(t, eligible, agoraIso, _matchTiming) : null;
         _gravaTorneio(tx, ref, t, before, { agoraIso });
         tx.set(stateRef, { revision: FieldValue.increment(1), released: nextReleased, blockCourt,
-          postponed: postponed.slice(-all.length), postponedReady: postponedReady.slice(-all.length) }, { merge: true });
+          postponed: keepQueued(state.postponed), postponedReady: keepQueued(state.postponedReady) }, { merge: true });
         audits.forEach(audit => tx.create(ref.collection('courtReleases').doc(), audit));
-        return commitReply({ ok: true, changed: true, releasedAt: agoraIso, releasedMatchIds: series.map(item => String(item.id)),
+        return commitReply({ ok: true, changed: true, releasedAt: agoraIso, releasedMatchIds: eligible.map(item => String(item.id)),
           estimatedDurationMs: estimatedDurationMs || null });
       }
+      if (released[matchId]) return commitReply({ ok: true, changed: false });
+      if (!m.court || !(m.courtCalledAt || m.startedAt) || hasScore)
+        throw new HttpsError('failed-precondition', 'O jogo precisa estar em quadra e sem resultado.');
       let completedSeries = null;
       if (m.isMonarch === true && !m.isTieBreak && Array.isArray(t.scheduleWindow?.days) &&
           t.scheduleWindow.days.length === 1 && m.monarchGroup != null && m.round != null && m.category) {
@@ -6081,7 +6080,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
    * com a escolha nova é RECUSADO pelo servidor. O valor é fechado no cliente e reconferido pelo
    * motor, que cai em `repescagem` diante de qualquer coisa que não reconheça. */
   'politicaDaChave',
-  'phase1Name','rankingPrimary','tiebreakers','tiebreakersExcluded','advancedScoring','tvLayout','tvScreens','tvActiveScreen','genderCategories',
+  'phase1Name','rankingPrimary','tiebreakers','tiebreakersExcluded','advancedScoring','tvLayout','tvScreens','tvActiveScreen','tvRotation','genderCategories',
   'skillCategories','ageCategories','customCategories','combinedCategories','excludedCategories','rigor','rigorRequire',
   'fmt2','phases'
 ]);
@@ -6177,6 +6176,7 @@ exports.createTournament = onCall(require('./tournament-create').makeCreateTourn
   validateCapacity: config => require('./category-capacity-core').validateCapacityConfig(config, HttpsError),
   validatePolicy: require('./elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy,
   validateIntent: require('./format-intent-validation-core').validateNewFormatIntent,
+  isAdmin: _isTournamentAdmin, artBucket: () => getStorage().bucket().name,
   validateTvLayout: require('./tv-layout-core').normalize,
   compile: (cfg, ctx) => drawWindow.FORMAT2.compileToPhases(cfg, ctx),
   boundary: _applyWriteBoundary, readTournament: _leTorneio,
@@ -6206,12 +6206,18 @@ exports.uploadTournamentImage = onCall({ timeoutSeconds: 60, memory: '512MiB' },
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   const sandbox = tId.startsWith('sb_');
   if (data.sandbox !== undefined && data.sandbox !== sandbox) throw new HttpsError('not-found', 'Torneio não encontrado.');
-  if (!tId || !['logo', 'cover'].includes(tipo)) throw new HttpsError('invalid-argument', 'Imagem inválida.');
-  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
-  if (!match) throw new HttpsError('invalid-argument', 'Envie uma imagem JPG, PNG ou WebP.');
-  const bytes = Buffer.from(match[2], 'base64');
-  if (!bytes.length || bytes.length > 5 * 1024 * 1024) {
-    throw new HttpsError('invalid-argument', 'A imagem final deve ter no máximo 5 MB.');
+  if (!tId || !['logo', 'cover','tvArt'].includes(tipo) || (tipo === 'tvArt' && !/^[A-Za-z0-9_-]{1,240}$/.test(tId))) throw new HttpsError('invalid-argument', 'Imagem inválida.');
+  let art, match, bytes;
+  if (tipo === 'tvArt') {
+    art = require('./tournament-tv-art').readArt(dataUrl, HttpsError);
+    bytes = art.bytes;
+  } else {
+    match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+    if (!match) throw new HttpsError('invalid-argument', 'Envie uma imagem JPG, PNG ou WebP.');
+    bytes = Buffer.from(match[2], 'base64');
+    if (!bytes.length || bytes.length > 5 * 1024 * 1024) {
+      throw new HttpsError('invalid-argument', 'A imagem final deve ter no máximo 5 MB.');
+    }
   }
   const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
   await db.runTransaction(async tx => {
@@ -6222,12 +6228,14 @@ exports.uploadTournamentImage = onCall({ timeoutSeconds: 60, memory: '512MiB' },
       throw new HttpsError('permission-denied', 'Só a organização pode enviar a imagem do torneio.');
     }
   });
-  const mime = match[1];
-  const ext = mime === 'image/png' ? 'png' : (mime === 'image/webp' ? 'webp' : 'jpg');
+  const mime = art ? art.mime : match[1];
+  const ext = art ? art.ext : mime === 'image/png' ? 'png' : (mime === 'image/webp' ? 'webp' : 'jpg');
   const bucket = getStorage().bucket();
-  const file = bucket.file((sandbox ? 'sandboxes/' : 'tournaments/') + tId + '/' + tipo + '-' + Date.now() + '.' + ext);
+  const file = bucket.file(art ? 'tournamentTvArt/' + tId + '/' + randomUUID() + '.' + ext :
+    (sandbox ? 'sandboxes/' : 'tournaments/') + tId + '/' + tipo + '-' + Date.now() + '.' + ext);
   const token = randomUUID();
   await file.save(bytes, {
+    ...(art ? { preconditionOpts:{ ifGenerationMatch:0 } } : {}),
     resumable: false,
     metadata: {
       contentType: mime,
@@ -6261,6 +6269,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     if (key === 'tvLayout') {
       try { patch[key] = require('./tv-layout-core').normalize(raw[key]); }
       catch (error) { throw new HttpsError('invalid-argument', error.message); }
+    } else if (key === 'tvRotation') {
+      // Validada após autorização contra o documento fresco, inclusive nos retries.
+      return;
     } else if (key === 'tvScreens') {
       try { patch[key] = require('./tv-layout-core').normalizeScreens(raw[key]); }
       catch (error) { throw new HttpsError('invalid-argument', error.message); }
@@ -6337,6 +6348,10 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         ['isPublic', 'membersOnly', 'organizerOnly'].some(key =>
           Object.prototype.hasOwnProperty.call(patch, key) && patch[key] !== t[key])) {
       throw new HttpsError('failed-precondition', 'Desative o teste antes de mudar a visibilidade.');
+    }
+    if ('tvRotation' in raw) {
+      try { patch.tvRotation = require('./tv-layout-core').normalizeRotation(raw.tvRotation, tId, t.tvRotation, getStorage().bucket().name); }
+      catch (error) { throw new HttpsError('invalid-argument', error.message); }
     }
     if ('tvActiveScreen' in patch || 'tvScreens' in patch) {
       const availableScreens = 'tvScreens' in patch ? patch.tvScreens : t.tvScreens;

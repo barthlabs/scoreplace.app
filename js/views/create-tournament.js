@@ -6159,6 +6159,7 @@ function setupCreateTournamentModal() {
     window._renderRegistrationPrices(_regSettingsEdit && _regSettingsEdit.pricing);
     if (typeof window._tvEditorSetLayout === 'function') window._tvEditorSetLayout(t.tvLayout || null);
     if (typeof window._tvEditorSetScreens === 'function') window._tvEditorSetScreens(t.tvScreens || null);
+    if (typeof window._tvEditorSetRotation === 'function') window._tvEditorSetRotation(t.tvRotation, t.id);
     if (typeof window._tvEditorSetActiveScreen === 'function') window._tvEditorSetActiveScreen(t.tvActiveScreen);
     // W.O. não é mais configuração: sempre inicia em individual; a organização escolhe
     // individual ou dupla inteira diretamente no card, com confirmação explícita.
@@ -7752,6 +7753,7 @@ window._saveTournamentClickHandler = async function() {
             return;
           }
           var form = document.getElementById('form-create-tournament');
+          if (window._tvEditorPrepareRotation) tourData._prepareTvRotation = window._tvEditorPrepareRotation();
           if (form) form._pendingCreation = form._pendingCreation || tourData;
           createdId = await window.AppStore.addTournament((form && form._pendingCreation) || tourData);
           if (form) delete form._pendingCreation;

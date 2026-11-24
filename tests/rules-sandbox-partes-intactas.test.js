@@ -38,6 +38,7 @@ async function patch(fields, mask) {
     sbState:'ready', name:'Sandbox', _nPartes:{participants:152,matches:115,opponentHistory:1}, _nJogos:115 });
   const out = {};
   out.configuracao = await patch({name:S('Nome novo')}, ['name']);
+  out.tvRotation = await patch({tvRotation:M({enabled:{booleanValue:true}})}, ['tvRotation']);
   out.apagaPartes = await patch({_nPartes:M({participants:I(0),matches:I(114),opponentHistory:I(0)}),_nJogos:I(114)}, ['_nPartes','_nJogos']);
   console.log('__JSON__'+JSON.stringify(out));
 })().catch(e => { console.error(e.stack); process.exit(1); });
@@ -75,6 +76,7 @@ let bad = 0;
 function ok(v, text) { if (v) console.log('✓ '+text); else { bad++; console.error('✗ '+text); } }
 const current = run(path.join(ROOT,'firestore.rules'),'regras atuais');
 ok(current.configuracao === 200, 'o dono continua podendo editar configuração');
+ok(current.tvRotation === 403, 'configuração de patrocinadores no sandbox passa pela callable');
 ok(current.apagaPartes === 403, '🔒 fotografia magra não reduz inscritos/jogos (got '+current.apagaPartes+')');
 const previous = run(oldRules(),'controle sem a trava');
 ok(previous.apagaPartes === 200, 'controle: sem a trava a perda passaria (got '+previous.apagaPartes+')');

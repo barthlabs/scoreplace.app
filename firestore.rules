@@ -443,6 +443,7 @@ service cloud.firestore {
       allow update: if request.auth != null
         && request.auth.uid == resource.data.get('sandboxOwnerUid', '')
         && sbCarimboIntacto()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['tvRotation'])
         && sbPartesNaoEncolhem();
       /* Apagar é do dono: _"os dados do SB devem ficar apenas enquanto existe o SB. ao apagar
        * o SB deve apagar tudo relativo a ele para não persistir."_ (dono, 01/ago/2026). Sem
@@ -907,7 +908,7 @@ service cloud.firestore {
           'billingTermsAcceptance', '_phaseReadCertificate', 'refereeUids',
           // A tela No ar é editada pela Function autenticada. Saves genéricos
           // de jogos vindos de abas antigas nunca podem sobrescrevê-la.
-          'tvLayout', 'tvScreens', 'tvActiveScreen', 'testModeEnabled', 'testModeVisibilityBefore',
+          'tvLayout', 'tvScreens', 'tvActiveScreen', 'tvRotation', 'testModeEnabled', 'testModeVisibilityBefore',
           'preserveDrawOnTestReset', 'drawCheckpoint', 'rehearsal',
           'phaseBracketPlanV1', 'phaseBracketPlanVersion'
         ])

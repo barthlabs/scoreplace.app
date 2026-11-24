@@ -1192,7 +1192,109 @@
     lastHeartbeatAt = Date.now(); lastHeartbeatVisible = event.data.visible === true;
     syncButton();
   });
+  var rotationPlayer = null;
+  function rotationForWindow(tv) {
+    var overlay = tv.document.getElementById('tv-sponsor');
+    var signature = '', config = null, active = -1, timer = null, deadline = 0, waiting = false;
+    var assets = new Map(), failed = new Set();
+    function release(item, url) {
+      tv.clearTimeout(item.timeout);
+      item.image.onload = item.image.onerror = null;
+      item.image.removeAttribute('src');
+      assets.delete(url);
+    }
+    function reset() {
+      if (timer !== null) tv.clearTimeout(timer);
+      timer = null; waiting = false; active = -1; deadline = 0;
+      assets.forEach(release);
+      failed.clear();
+      if (overlay && config) { overlay.hidden = true; overlay.replaceChildren(); delete overlay.dataset.slide; }
+    }
+    function draw() {
+      if (active < 0) { overlay.hidden = true; overlay.replaceChildren(); delete overlay.dataset.slide; return; }
+      var slide = config.slides[active];
+      var images = Array.from(new Set(slide.assets)).filter(function (url) { return assets.has(url) && assets.get(url).state === 'ready'; })
+        .map(function (url) { return assets.get(url).image; });
+      overlay.style.gridTemplateColumns = 'repeat(' + Math.ceil(Math.sqrt(images.length)) + ',minmax(0,1fr))';
+      overlay.replaceChildren.apply(overlay, images); overlay.dataset.slide = slide.id;
+      overlay.setAttribute('aria-label', slide.name || 'Patrocinadores'); overlay.hidden = false;
+    }
+    function load(url) {
+      if (assets.has(url)) return assets.get(url);
+      var image = new tv.Image();
+      var item = { image:image, state:'loading' };
+      assets.set(url, item);
+      function finish(state) {
+        if (assets.get(url) !== item || item.state !== 'loading') return;
+        if (state === 'failed') { failed.add(url); release(item, url); }
+        else {
+          tv.clearTimeout(item.timeout);
+          item.state = state; image.onload = image.onerror = null;
+        }
+        if (active >= 0 && config.slides[active].assets.includes(url)) draw();
+        if (waiting) advance();
+        else warm();
+      }
+      image.alt = ''; image.onload = function () { finish('ready'); }; image.onerror = function () { finish('failed'); };
+      item.timeout = tv.setTimeout(function () { finish('failed'); }, 12000);
+      image.src = url;
+      return item;
+    }
+    // Encontra a próxima tela com arte útil. Uma tela ainda baixando aguarda no placar.
+    var lastSponsor = -1;
+    function candidate() {
+      var slides = config.slides, index = -1;
+      for (var offset = 1; offset <= slides.length; offset++) {
+        var next = (lastSponsor + offset) % slides.length;
+        if (slides[next].assets.some(function (url) { return !failed.has(url); })) { index = next; break; }
+      }
+      var upcoming = index < 0 ? [] : slides[index].assets.filter(function (url) { return !failed.has(url); });
+      var keep = new Set(upcoming.concat(active < 0 ? [] : slides[active].assets));
+      assets.forEach(function (item, url) { if (!keep.has(url)) release(item, url); });
+      if (index < 0) return null;
+      var states = upcoming.map(function (url) { return load(url).state; });
+      return { index:index, ready:states.includes('ready') };
+    }
+    function warm() { if (config && config.enabled) candidate(); }
+    function show(index) {
+      active = index; waiting = false;
+      if (index >= 0) lastSponsor = index;
+      draw();
+      var seconds = index < 0 ? config.mainDurationSeconds : config.slides[index].durationSeconds;
+      deadline = tv.performance.now() + seconds * 1000;
+      timer = tv.setTimeout(onDeadline, seconds * 1000);
+      warm();
+    }
+    function onDeadline() {
+      var remaining = deadline - tv.performance.now();
+      if (remaining > 0) { timer = tv.setTimeout(onDeadline, remaining); return; }
+      timer = null; advance();
+    }
+    function advance() {
+      var next = candidate();
+      if (!next) { active = -1; waiting = false; draw(); return; }
+      if (active >= 0 && (config.mode === 'interleaved' || next.index <= active)) { show(-1); return; }
+      if (!next.ready) { active = -1; waiting = true; draw(); warm(); return; }
+      show(next.index);
+    }
+    return {
+      update:function (t) {
+        if (!overlay) return;
+        var value = t && t.tvRotation;
+        var key = value && value.enabled ? JSON.stringify([value, t.tvActiveScreen]) : '';
+        if (signature === key) return;
+        signature = key; reset(); lastSponsor = -1; config = null;
+        if (!key) return;
+        try { config = window.ScoreplaceTvLayout.normalizeRotation(value, t.id, value); }
+        catch (error) { return; }
+        if (config.slides.some(function (slide) { return slide.assets.length; })) show(-1);
+      },
+      stop:reset
+    };
+  }
   function stop() {
+    if (rotationPlayer) rotationPlayer.stop();
+    rotationPlayer = null;
     dismissScreenPicker();
     if (liveMatchesUnsubscribe) liveMatchesUnsubscribe();
     liveMatchesUnsubscribe = null; liveMatches = new Map(); liveMatchTournamentId = '';
@@ -1315,6 +1417,8 @@
       return;
     }
     // O controle continua no documento original durante a apresentação.
+    if (rotationPlayer) rotationPlayer.stop();
+    rotationPlayer = null;
     popup = nextPopup; popupTournamentId = id;
     popupGeneration = Math.max(Date.now(), Number(highestGenerationById[id] || 0) + 1);
     highestGenerationById[id] = popupGeneration;
@@ -1322,10 +1426,11 @@
     syncButton();
     try {
       popup.document.open();
-      popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '<script async src="' + esc(window.location.origin + '/js/domain/match-timing.js?v=' + (window.SCOREPLACE_VERSION || '')) + '"></script><style>#tv-connection{position:fixed;right:1vw;bottom:1vw;z-index:20;padding:.4em .7em;border-radius:.5em;background:#7f1d1d;color:#fff;font-weight:800}#tv-connection[hidden],#tv-fullscreen-action[hidden]{display:none}#tv-fullscreen-action{flex:none;align-self:center;min-height:36px;padding:.3em .65em;border:2px solid #67e8f9;border-radius:.5em;background:#10263b;color:#fff;font:800 clamp(14px,1.1vw,22px) Arial;white-space:nowrap;cursor:pointer}html:fullscreen #tv-fullscreen-action{display:none}</style></head><body><div id="tv-root"></div><div id="tv-connection">Carregando jogos do servidor…</div>' + childScript(tournament.id, popupGeneration) + '</body></html>');
+      popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '<script async src="' + esc(window.location.origin + '/js/domain/match-timing.js?v=' + (window.SCOREPLACE_VERSION || '')) + '"></script><style>#tv-sponsor{position:fixed;inset:0;z-index:10;background:#080c14;display:grid;grid-auto-rows:minmax(0,1fr);pointer-events:none}#tv-sponsor[hidden]{display:none}#tv-sponsor img{width:100%;height:100%;min-width:0;min-height:0;object-fit:contain}#tv-connection{position:fixed;right:1vw;bottom:1vw;z-index:20;padding:.4em .7em;border-radius:.5em;background:#7f1d1d;color:#fff;font-weight:800}#tv-connection[hidden],#tv-fullscreen-action[hidden]{display:none}#tv-fullscreen-action{flex:none;align-self:center;min-height:36px;padding:.3em .65em;border:2px solid #67e8f9;border-radius:.5em;background:#10263b;color:#fff;font:800 clamp(14px,1.1vw,22px) Arial;white-space:nowrap;cursor:pointer}html:fullscreen #tv-fullscreen-action{display:none}</style></head><body><div id="tv-root"></div><div id="tv-sponsor" hidden></div><div id="tv-connection">Carregando jogos do servidor…</div>' + childScript(tournament.id, popupGeneration) + '</body></html>');
       popup.document.close();
       var tv = popup;
       var doc = tv.document;
+      rotationPlayer = rotationForWindow(tv);
       function enterFullscreen() {
         var requestFullscreen = doc.documentElement.requestFullscreen || doc.documentElement.webkitRequestFullscreen;
         if (!requestFullscreen) return Promise.reject(new Error('Tela cheia indisponível neste navegador.'));
@@ -1440,6 +1545,7 @@
             restyled = true;
           }
         }
+        if (rotationPlayer) rotationPlayer.update(lastCompleteTournament);
         if (markup !== lastMarkup) {
           if (typeof popup.__tvReplaceMarkup === 'function') popup.__tvReplaceMarkup(markup);
           else root.innerHTML = markup;

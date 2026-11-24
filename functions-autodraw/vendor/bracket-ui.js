@@ -345,10 +345,10 @@ function _propagateMatchUpdate(t, m) {
   // `winner` permanece somente como rótulo de apresentação para estruturas legadas.
   // Sem estes campos, cópias do mesmo jogo podiam conservar só o nome e qualquer
   // consumidor posterior voltava a inferir identidade por texto.
-  var FIELDS = ['winner', 'winnerUid', 'winnerUids', 'draw', 'scoreP1', 'scoreP2', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'isBye', 'pendingResult', 'wo', 'woAbsentSide'];
+  var FIELDS = ['winner', 'winnerUid', 'winnerUids', 'draw', 'scoreP1', 'scoreP2', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'isBye', 'pendingResult', 'wo', 'woAbsentSide', 'woAbsent', 'resultAt', 'startedAt', 'updatedAt', 'confirmedAt'];
   var updateRef = function(ref) {
     if (!ref || ref === m) return; // skip self (already mutated)
-    if (ref.id !== m.id) return;
+    if (ref.id == null || String(ref.id) !== String(m.id)) return;
     FIELDS.forEach(function(f) {
       if (m[f] === undefined) {
         delete ref[f];
@@ -391,6 +391,9 @@ function _propagateMatchUpdate(t, m) {
   }
   // 5. thirdPlaceMatch
   if (t.thirdPlaceMatch) updateRef(t.thirdPlaceMatch);
+  Object.values(t.phaseRounds || {}).forEach(function (phase) {
+    if (phase && phase !== t) _propagateMatchUpdate(phase, m);
+  });
 }
 window._propagateMatchUpdate = _propagateMatchUpdate;
 
@@ -2169,7 +2172,7 @@ window._saveEditedSetsInline = function (tId, matchId, sc, rows, overlay, onAcce
 // rodada). Reusa renderMatchCard (mesmo markup) pra evitar divergência visual.
 // Retorna true se conseguiu substituir o card; false se deve cair no fallback
 // (_rerenderBracket).
-function _finalizeRoundCardInPlace(t, m, tId, matchId) {
+function _finalizeRoundCardInPlace(t, m, tId, matchId, deferOperations) {
   if (typeof window.renderMatchCard !== 'function') return false;
   var card = document.getElementById('card-' + matchId);
   if (!card) return false; // não está no DOM (ex: dashboard) → fallback
@@ -2190,15 +2193,24 @@ function _finalizeRoundCardInPlace(t, m, tId, matchId) {
     return false;
   }
   if (!html) return false;
-  card.outerHTML = html;
-  if (typeof window._bracketOperationsRefresh === 'function') window._bracketOperationsRefresh(t);
+  // A agenda move este nó e guarda sua referência para devolvê-lo à categoria.
+  // Substituir o nó faria a troca de aba restaurar o cartão anterior ao placar.
+  var template = document.createElement('template');
+  template.innerHTML = html;
+  var updated = template.content.firstElementChild;
+  if (!updated || updated.id !== card.id) return false;
+  var minHeight = card.style.minHeight;
+  Array.from(updated.attributes).forEach(function (attr) { card.setAttribute(attr.name, attr.value); });
+  card.style.minHeight = minHeight;
+  card.replaceChildren(...updated.childNodes);
+  if (!deferOperations && typeof window._bracketOperationsRefresh === 'function') window._bracketOperationsRefresh(t);
   return true;
 }
 
 // A resposta canônica de um placar não deve remontar a grade inteira: jogos
 // concluídos podem mudar de seção/ordem e o card sob os olhos do operador salta.
 // Substituir só o card mantém a posição e troca Confirmar por Editar no mesmo lugar.
-window._refreshConfirmedMatchCard = function (t, tId, matchId) {
+window._refreshConfirmedMatchCard = function (t, tId, matchId, advancedId) {
   var card = document.getElementById('card-' + matchId);
   if (!card || !t) return false;
   // O placar da faixa "Em quadra" é lançado numa réplica. O card canônico
@@ -2263,6 +2275,10 @@ window._refreshConfirmedMatchCard = function (t, tId, matchId) {
     }
   }
   try {
+    if (advancedId && document.getElementById('card-' + advancedId)) {
+      var advanced = _findMatch(t, advancedId);
+      if (!advanced || !_finalizeRoundCardInPlace(t, advanced, tId, advancedId, true)) return false;
+    }
     changed = _finalizeRoundCardInPlace(t, m, tId, matchId);
     if (changed && monarchGroupOnScreen) {
       // A classificação é derivada dos três placares. Atualizar só o jogo e
