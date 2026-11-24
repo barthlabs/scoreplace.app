@@ -143,7 +143,10 @@ const SUITES = [
   'tests/super-eight-core.test.js',
   'tests/rotation-category-rules.test.js',
   'tests/category-rotation-sliders.test.js',
+  'tests/game-mode-selectors-browser.test.js',
+  'tests/category-qualification-browser.test.js',
   'tests/category-rotation-sliders-browser.test.js',
+  'tests/universal-phase-grid-emulator.test.js',
   'tests/category-rotation-sliders-emulator.test.js',
   'tests/group-category-rules.test.js',
   'tests/group-category-config-browser.test.js',
@@ -1021,6 +1024,8 @@ const SUITES = [
   'tests/monarch-court-series.test.js',
   'tests/camis-monarch-interleave.test.js',
   'tests/camis-interleaved-plan.test.js',
+  'tests/universal-phase-grid-browser.test.js',
+  'tests/universal-phase-grid.test.js',
   'tests/phase-grid-plan.test.js',
   'tests/monarch-predraw-grid.test.js',
   'tests/phase-call-order.test.js',
@@ -2535,6 +2540,7 @@ const MEXEM_NO_REPO = [
  *      (`lsof -ti :8097`) antes de suspeitar do paralelismo. */
 const PRENDEM_PORTA = [
   // A porta dinâmica do Firestore não isola o hub/logging compartilhado do CLI.
+  'tests/universal-phase-grid-emulator.test.js',
   'tests/category-rotation-sliders-emulator.test.js',
   'tests/group-category-config-emulator.test.js',
   'tests/end-court-remaining-emulator.test.js',

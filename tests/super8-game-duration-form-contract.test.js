@@ -18,7 +18,8 @@ const document = { getElementById: (id) => id === 'phase-call-order-editor' ? mo
   addEventListener() {} };
 vm.runInNewContext(editor, { window, document, Event });
 window._renderPhaseGridEditor();
-assert.equal(mount.innerHTML, '', 'Super 8 não mostra o campo independente de jogo eliminatório');
+assert.match(mount.innerHTML, /Gerar proposta de grade/, 'Super 8 permite gerar a grade dos jogos');
+assert.doesNotMatch(mount.innerHTML, /tourn-game-duration|elimination-play/, 'a grade não duplica a duração do formulário');
 assert.doesNotMatch(editor, /phase-grid-(?:call-time|warmup-time|elimination-play)/);
-assert.match(editor, /eliminationPlayMinutes:tournament\.gameDuration/);
+assert.match(editor, /gameDuration:Number\(\(document\.getElementById\('tourn-game-duration'\)/);
 console.log('✓ todos os formatos editam os três tempos em uma única seção');

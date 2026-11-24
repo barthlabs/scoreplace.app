@@ -30,6 +30,7 @@ const { chromium } = require('@playwright/test');
         input.value=n; input.dispatchEvent(new Event('input')); input.dispatchEvent(new Event('change'));
       },value);
     }
+    await page.locator('#f2-slider-common-0').check();
     for (const [i,count,games] of [[0,2,3],[1,1,5]]) {
       await adjust('groups',i,count); await adjust('games',i,games);
     }
@@ -52,7 +53,7 @@ const { chromium } = require('@playwright/test');
     assert.equal(phases.length,1); assert.equal(phases[0].kind,'classification');
     assert.deepEqual(phases[0].classification.groupCategoryRules,cfg.groupCategoryRules);
     assert.equal(await page.locator('main select').count(),0,'classificatória usa botões e toggles');
-    await page.locator('#f2-rotation-partners-0').check();
+    await page.locator('#f2-rotation-partners-0').uncheck();
     await adjust('games',0,14);
     assert.equal(await page.locator('#f2-rotation-games-0').inputValue(),'14');
     assert.match(await page.locator('#f2-rotation-preview-0').innerText(),/84 jogos/);
@@ -85,7 +86,7 @@ const { chromium } = require('@playwright/test');
       };
     });
     await adjust('games',0,7); assert.equal(await page.evaluate(()=>window.countMatches()),14);
-    await page.locator('#f2-rotation-partners-0').check(); await adjust('games',0,14);
+    await page.locator('#f2-rotation-partners-0').uncheck(); await adjust('games',0,14);
     assert.equal(await page.locator('#f2-rotation-games-0').inputValue(),'14');
     assert.equal(await page.evaluate(()=>window.countMatches()),28);
     assert.equal(await page.evaluate(()=>window._f2GetConfig().rotationCategoryRules[0].allowRepeatPartners),true);

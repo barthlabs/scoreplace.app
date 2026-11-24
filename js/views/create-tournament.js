@@ -5134,19 +5134,56 @@ function setupCreateTournamentModal() {
     try { f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) {}
     var setupScopeWrap = document.getElementById('setup-scope-wrap');
     if (setupScopeWrap) setupScopeWrap.style.display = 'block';
-    if (f2cfg && (f2cfg.rotationCategoryRules || (f2cfg.groupCategoryRules && f2cfg.groupCategoryRules.length)) && typeof window._f2ProjectedRotation === 'function') {
-      var capacities = null;
-      if (configuredMax > 0) {
-        var custom = document.getElementById('tourn-custom-category-capacity');
-        var overrides = custom && custom.checked ? JSON.parse(gv('tourn-max-by-category') || '{}') : {};
-        capacities = Object.fromEntries((catData.combinedCategories || []).map(function (category) {
-          return [category, Object.hasOwn(overrides, category) ? overrides[category] : iv('tourn-max-per-category', 0)];
-        }));
+    if(f2cfg && typeof window._f2ProjectCurrentPhases==='function' && window.ScoreplacePhaseGridPlan) {
+      var capacities;
+      var custom=document.getElementById('tourn-custom-category-capacity');
+      var names=catData?.combinedCategories?.length?catData.combinedCategories:[''];
+      if(configuredMax>0) {
+        var overrides={};
+        try {overrides=custom?.checked?JSON.parse(gv('tourn-max-by-category') || '{}'):{};}catch(_){}
+        capacities=Object.fromEntries(names.map(category=>[category,Object.hasOwn(overrides,category)?Number(overrides[category]):
+          names.length===1?configuredMax:iv('tourn-max-per-category',0)]));
+        // The visible capacity controls are authoritative during editing.
+        document.querySelectorAll('#category-capacity-grid input[data-category], [data-slider-capacity] input[data-category]').forEach(function(input){
+          if(custom?.checked) capacities[decodeURIComponent(input.dataset.category)]=Number(input.value);
+        });
       }
-      var plan = window._f2ProjectedRotation(capacities);
-      ladder.textContent = plan ? (plan.groupGames + plan.elimGames) + ' jogos · ' +
-        plan.groupGames + ' na classificatória · ' + plan.elimGames + ' na eliminatória' :
-        'A estimativa depende da formação dos grupos por categoria e da chave projetada.';
+      try {
+        var projection=window._f2ProjectCurrentPhases(capacities);
+        var groups=0,elimination=0;
+        projection.jobs.forEach(function(job){if(projection.phases[job.phaseIndex].kind==='classification') groups+=job.games;else elimination+=job.games;});
+        var labels=window._f2GroupFormatLabels?window._f2GroupFormatLabels():['Fase de grupos'];
+        var box=document.createElement('div');
+        var head=document.createElement('div');head.style.cssText='font-size:.8rem;margin-bottom:6px';
+        head.textContent=labels.join(' · ')+' · '+projection.people+' participantes · '+iv('tourn-court-count',1)+' quadras';
+        var summary=document.createElement('div');summary.style.cssText='font-size:.85rem;font-weight:700';
+        summary.textContent=(projection.jobs.some(job=>job.optional)?'Até ':'')+(groups+elimination)+' jogos · '+groups+' na fase de grupos · '+elimination+' na eliminatória';
+        box.append(head,summary);
+        var model=window.ScoreplacePhaseGridPlan, estimateTournament=Object.assign({},projection.tournament,{phases:projection.phases});
+        var work=projection.jobs.reduce((sum,job)=>sum+model.v2Duration(job,estimateTournament),0);
+        var timeLabel='Tempo mínimo em quadra: '+window._gruposFmtMin(Math.ceil(work/estimateTournament.courtCount));
+        var schedule=(typeof window._readEstimatedGameHours==='function'?window._readEstimatedGameHours():null) || window._estimatedGameHoursState?.saved;
+        if(schedule?.mode==='organizer' && schedule.days?.length) {
+          var activePlan=window._phaseCallOrderState?.plan || schedule.interleavedPlan;
+          estimateTournament.scheduleWindow=Object.assign({},schedule,activePlan?{interleavedPlan:activePlan}:{});
+          var arranged;
+          if(activePlan?.schema===2) {
+            try {model.assertPlan(estimateTournament,activePlan,schedule.days,window);arranged={tiles:model.expand(activePlan,estimateTournament)};}
+            catch(_) {arranged=model.suggestProjected(estimateTournament,schedule.days,window,projection);}
+          }else arranged=model.suggestProjected(estimateTournament,schedule.days,window,projection);
+          if(arranged.error) timeLabel=arranged.error;
+          else {
+            var elapsed=schedule.days.reduce(function(sum,day){
+              var tiles=arranged.tiles.filter(tile=>tile.day===day.day);
+              return sum+(tiles.length?Math.max(...tiles.map(tile=>model.minutes(tile.startTime)+tile.duration))-
+                Math.min(...tiles.map(tile=>model.minutes(tile.startTime))):0);
+            },0);
+            timeLabel='Duração estimada de operação: '+window._gruposFmtMin(elapsed);
+          }
+        }
+        var duration=document.createElement('div');duration.style.fontSize='.8rem';duration.textContent=timeLabel;box.appendChild(duration);
+        ladder.replaceChildren(box);
+      }catch(error){ladder.textContent=error.message || 'Confira a configuração dos grupos e classificados.';}
       return;
     }
     var tc = f2cfg && f2cfg.teamCompetition;
@@ -7127,7 +7164,7 @@ window._saveTournamentClickHandler = async function() {
           return String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
         }));
         const categoryCapacityInputs = customCategoryCapacity
-          ? Array.from(document.querySelectorAll('#category-capacity-grid input[data-category]')) : [];
+          ? Array.from(document.querySelectorAll('#category-capacity-grid input[data-category], [data-slider-capacity] input[data-category]')) : [];
         const validCategoryInputs = !customCategoryCapacity || (categoryCapacityInputs.length === allCapacityCategories.length &&
           categoryCapacityInputs.every(function(input) {
             const category = decodeURIComponent(input.getAttribute('data-category') || '');
@@ -8280,9 +8317,9 @@ window._gsmRenderPresets = function() {
   var presets = window._gsmPresets;
   var selected = window._gsmSelectedPreset || 'set1';
   var html = '';
-  Object.keys(presets).forEach(function(key) {
+  Object.keys(presets).filter(key=>key!=='fixedGames').forEach(function(key) {
     var p = presets[key];
-    var isActive = key === selected;
+    var isActive = key === selected || key==='custom' && selected==='fixedGames';
     html += '<button type="button" onclick="window._gsmSelectPreset(\'' + key + '\')" style="' +
       'display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px;border-radius:12px;cursor:pointer;transition:all 0.2s;' +
       'border:2px solid ' + window._spCor((isActive ? 'rgba(168,85,247,0.7)' : 'rgba(255,255,255,0.1)'), 'borda') + ';' +
@@ -8667,8 +8704,14 @@ window._tieAtToggleHtml = function (o) {
   var phaseIndex = o.phaseIndex || 0;
   var locked = !!o.locked || (typeof window._scoringPhaseHasResult === 'function' && window._scoringPhaseHasResult(phaseIndex));
   var tieLocked = typeof window._scoringPhaseHasTiebreak === 'function' && window._scoringPhaseHasTiebreak(phaseIndex);
-  return '<div id="' + pfx + '-tieat-box" style="margin-top:10px;padding:12px;border-radius:10px;border:1px solid rgba(' + cor + ',0.28);background:rgba(' + cor + ',0.07);">' +
-    '<label for="' + pfx + '-games-target" style="display:block;font-size:0.82rem;font-weight:700;color:var(--text-color);margin-bottom:5px;">' + (fixedGames ? 'Total de games jogados na partida' : 'Games para vencer o set') + '</label>' +
+  var modeAction=o.onMode || (phaseIndex ? 'window._f2ElimSetGameMode' : 'window._gsmSetGameModeInline');
+  var modes=o.countingType==='numeric'?'':'<div role="group" aria-label="Como definir os games do set" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
+    [false,true].map(function(fixed){return '<button type="button" aria-pressed="'+(fixed===fixedGames)+'"'+
+      ((locked || tieLocked)?' disabled':'')+' onclick="'+modeAction+'('+fixed+')" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border-color);background:'+
+      (fixed===fixedGames?'var(--text-main)':'var(--bg-card)')+';color:'+(fixed===fixedGames?'var(--bg-card)':'var(--text-main)')+';font-size:.8rem">'+
+      (fixed?'Games disputados no total':'Games ganhos para vencer o set')+'</button>';}).join('')+'</div>';
+  return '<div id="' + pfx + '-tieat-box" style="margin-top:10px;padding:12px;border-radius:10px;border:1px solid rgba(' + cor + ',0.28);background:rgba(' + cor + ',0.07);">' + modes +
+    '<label for="' + pfx + '-games-target" style="display:block;font-size:0.82rem;font-weight:700;color:var(--text-color);margin-bottom:5px;">' + (fixedGames ? 'Quantidade de games disputados no set' : 'Games ganhos para vencer o set') + '</label>' +
     '<input type="number" inputmode="numeric" min="1" step="1" id="' + pfx + '-games-target" class="form-control" value="' + g + '" onchange="' + o.onGames + '(this.value)" style="max-width:110px;font-size:0.9rem;"' + (locked ? ' disabled title="O primeiro placar desta fase já foi lançado."' : '') + '>' +
     (fixedGames ? '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px;">Todos jogam o total indicado; vence quem ganhar mais games.' + (g % 2 === 0 ? ' Se terminar empatado (' + (g / 2) + '–' + (g / 2) + '), o tie-break decide.' : ' Como o total é ímpar, não há empate no placar de games.') + '</div>' : '') +
     (locked ? '<small style="display:block;color:var(--text-muted);margin-top:6px;">Games bloqueados: já existe resultado nesta fase.</small>' : '') +
@@ -8709,6 +8752,7 @@ window._gsmRenderTieAt = function () {
   var box = document.getElementById('gsm-tieat-inline');
   if (!box) return;
   var g = parseInt((document.getElementById('gsm-gamesPerSet') || {}).value, 10) || 6;
+  if((document.getElementById('gsm-fixedSet') || {}).value==='true') g=Number((document.getElementById('gsm-fixedSetGames') || {}).value) || g;
   var _cfg = { type: (document.getElementById('gsm-type') || {}).value || '',
                tiebreakEnabled: (document.getElementById('gsm-tiebreakEnabled') || {}).value === 'true',
                gamesPerSet: g };
@@ -8716,13 +8760,31 @@ window._gsmRenderTieAt = function () {
   var ruleEl = document.getElementById('gsm-tieRule');
   var rule = (ruleEl && ruleEl.value) || (_cfg.tiebreakEnabled ? 'tiebreak' : 'extend');
   box.innerHTML = window._tieAtToggleHtml({
-    games: g, at: window._gsmTieAtAtual(), rule: rule, fixedGames: (document.getElementById('gsm-fixedSet') || {}).value === 'true', cor: '168,85,247', pfx: 'gsm',
+    games: g, at: window._gsmTieAtAtual(), rule: rule, fixedGames: (document.getElementById('gsm-fixedSet') || {}).value === 'true', countingType:(document.getElementById('gsm-countingType') || {}).value, cor: '168,85,247', pfx: 'gsm',
     rule: rule,
     setTwoPointAdvantage: (document.getElementById('gsm-setTwoPointAdvantage') || {}).value !== 'false',
     tiebreakTwoPointAdvantage: (document.getElementById('gsm-tiebreakTwoPointAdvantage') || {}).value !== 'false',
     onGames: 'window._gsmSetGamesInline', onRule: 'window._gsmSetTieRuleInline', onTieAt: 'window._gsmSetTieAtInline',
     onSetTwoPoint: 'window._gsmSetSetTwoPointInline', onTbTwoPoint: 'window._gsmSetTbTwoPointInline', phaseIndex: 0
   });
+};
+window._gsmSetGameModeInline=function(fixed) {
+  if(typeof fixed!=='boolean') return;
+  if((typeof window._scoringPhaseHasResult==='function' && window._scoringPhaseHasResult(0)) ||
+      (typeof window._scoringPhaseHasTiebreak==='function' && window._scoringPhaseHasTiebreak(0))) {window._gsmRenderTieAt();return;}
+  var field=document.getElementById('gsm-fixedSet');
+  if(!field || (field.value==='true')===fixed) return;
+  var wasFixed=field.value==='true', games=document.getElementById('gsm-gamesPerSet'),total=document.getElementById('gsm-fixedSetGames');
+  var displayed=Number(wasFixed ? total?.value || games?.value : games?.value) || 6;
+  field.value=String(fixed);games.value=String(displayed);
+  var type=document.getElementById('gsm-type');if(type) type.value='sets';
+  if(fixed && total) total.value=String(displayed);
+  if(fixed && displayed%2===0) {
+    document.getElementById('gsm-tieRule').value='tiebreak';document.getElementById('gsm-tiebreakEnabled').value='true';
+  }
+  window._gsmForcedCustom=!fixed;window._gsmSelectedPreset=fixed?'fixedGames':'custom';
+  window._gsmRenderPresets();window._gsmUpdateMainSummary();
+  if(typeof window._f2RefreshScoring==='function') window._f2RefreshScoring();
 };
 window._gsmSetGamesInline = function (raw) {
   var n = Number(raw);
@@ -8731,7 +8793,7 @@ window._gsmSetGamesInline = function (raw) {
   document.getElementById('gsm-countingType').value = 'tennis';
   var fixedGames = document.getElementById('gsm-fixedSet').value === 'true';
   document.getElementById('gsm-gamesPerSet').value = String(n);
-  document.getElementById('gsm-fixedSetGames').value = fixedGames ? String(n) : '6';
+  if(fixedGames) document.getElementById('gsm-fixedSetGames').value=String(n);
   if (fixedGames && n % 2 === 0) {
     document.getElementById('gsm-tieRule').value = 'tiebreak';
     document.getElementById('gsm-tiebreakEnabled').value = 'true';
@@ -9139,13 +9201,14 @@ window._f2TemplateCopy = function(fmt2Bruto) {
   var out = pick(raw, ['disputa', 'grupos', 'parceria', 'superEightDrawMode', 'superEightRounds', 'formacaoDupla', 'manualPairingOpen', 'manualPairingPolicy',
     'classifAtiva', 'classificados', 'classifScope', '_scoreBy', 'historicalSinglesOverride',
     'rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution', 'tieSinglesPoints', 'tieSinglesMargin',
-    'groupFormation', 'groupCategoryRules', 'rotationCategoryRules', 'rotationAllowRepeatPartners', 'classificationSliderMode']);
+    'groupFormation', 'groupCategoryRules', 'rotationCategoryRules', 'qualificationCategoryRules', 'rotationAllowRepeatPartners', 'classificationSliderMode']);
   if (raw.groupFormation) out.groupFormation = pick(raw.groupFormation, ['mode', 'value']);
   if (Array.isArray(raw.groupCategoryRules)) out.groupCategoryRules = raw.groupCategoryRules.map(function (rule) {
     var copied = pick(rule, ['category', 'gamesPerUnit', 'allowRepeat']);
     if (rule && rule.groupFormation) copied.groupFormation = pick(rule.groupFormation, ['mode', 'value']);
     return copied;
   });
+  if (Array.isArray(raw.qualificationCategoryRules)) out.qualificationCategoryRules=raw.qualificationCategoryRules.map(rule=>pick(rule,['category','perGroup']));
   if (Array.isArray(raw.rotationCategoryRules)) out.rotationCategoryRules = raw.rotationCategoryRules.map(function (rule) {
     var row = pick(rule, ['category', 'rounds', 'destination', 'allowRepeatPartners']);
     if (rule && rule.groupFormation) row.groupFormation = pick(rule.groupFormation, ['mode','value']);
@@ -9165,7 +9228,8 @@ window._f2TemplateCopy = function(fmt2Bruto) {
       'formacao', 'qualifyAll', 'terceiro', 'grandFinal', 'lateEnrollment', 'newMatchups',
       'scoring', 'roundBoundsEditorEnabled', 'politicaDaChave', 'openReiRainha', 'reiRainhaCut',
       'lineAssignment', 'lineRankRanges', 'bestNextByGroup', 'semeadura',
-      'finalSeriesBestOf', 'grandFinalReset', 'formationSliderMode']);
+      'finalSeriesBestOf', 'grandFinalReset', 'formationSliderMode', 'formationQualificationCategoryRules']);
+    if (Array.isArray(raw.eliminatoria.formationQualificationCategoryRules)) out.eliminatoria.formationQualificationCategoryRules=raw.eliminatoria.formationQualificationCategoryRules.map(rule=>pick(rule,['category','perGroup']));
     if (Array.isArray(raw.eliminatoria.formationCategoryRules)) out.eliminatoria.formationCategoryRules = raw.eliminatoria.formationCategoryRules.map(function (rule) {
       var row = pick(rule, ['category','rounds','destination','allowRepeatPartners']);
       row.groupFormation = pick(rule.groupFormation,['mode','value']); return row;

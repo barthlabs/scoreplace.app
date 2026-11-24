@@ -1484,6 +1484,7 @@ function _activateOfficialPhasePlanOnCall(t, calledMatch, nowIso) {
   const all = drawWindow._collectAllMatches(t) || [];
   const classified = all.filter(m => m && Number(m.phaseIndex || 0) === plan.fromPhaseIndex &&
     !m.isBye && !m.isSitOut && !m.isTieBreak);
+  if (t.scheduleWindow?.interleavedPlan?.schema===2) return false;
   const blocks = t.scheduleWindow && t.scheduleWindow.interleavedPlan && t.scheduleWindow.interleavedPlan.blocks;
   const groupBlocks = Array.isArray(blocks) ? blocks.filter(b => b && b.kind === 'groups') : [];
   const order = groupBlocks.map(b => String(b.category || ''));
@@ -2121,6 +2122,10 @@ exports.drawRound = onCall(async (request) => {
     if (!res || !res.ok) {
       // Um motor que não gerou chave nunca pode virar sucesso apenas porque a
       // estimativa da grade devolveu zero jogos.
+      if (res?.reason==='invalid-phase-grid' || res?.reason==='invalid-qualification')
+        throw new HttpsError('failed-precondition',res.message,{reason:res.reason,
+          ...(res.reason==='invalid-phase-grid' && t.scheduleWindow?.interleavedPlan?.groupAssignments?.length
+            ? {i18nKey:'phaseGrid.groupAssignmentStale'} : {})});
       throw _drawFail('failed-precondition', (res && res.reason) || 'draw-failed',
         { tId, format: t.format, teamSize: t.teamSize, enrollmentMode: t.enrollmentMode,
           participantes: (t.participants || []).length, p2Resolution: t.p2Resolution,
@@ -2166,7 +2171,7 @@ exports.drawRound = onCall(async (request) => {
         throw _drawFail('failed-precondition',
           'Não foi possível gerar uma agenda completa com a cadência escolhida.',
           { tId, matches:unscoredDrawnMatches.length, courts:t.courtCount,
-            slots:plan && plan.slots && plan.slots.length, mode:teamSchedule.mode });
+            slots:plan && plan.slots && plan.slots.length, mode:teamSchedule?.mode });
       }
     }
     // A grade estimada nasce com a chave, na mesma transação. Datas combinadas
@@ -2852,6 +2857,7 @@ exports.generateExtraTournamentRound = onCall(async (request) => {
     const round=(t.rounds||[]).find(r=>r&&Number(r.round)===expectedRound);
     if(!round) return {ok:true,changed:false};
     t.status='active';
+    _applyProjectedSchedule(t);
     const b=_gravaTorneio(tx,ref,t,before,{agoraIso});
     /* REGRESSÃO: `matchCount` volta para a tela e pode virar texto de rodada.
      * Folga e BYE são marcadores estruturais, não partidas — nunca podem inflar
@@ -3281,6 +3287,8 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       console.error('Desempate automático pendente após placar confirmado', { tId, matchId,
         error: String(err && err.message || err) });
     }
+    if (t.scheduleWindow?.interleavedPlan?.schema===2 && _courtSourceBefore?.bracket==='grand' && !_courtSourceBefore.isExtra)
+      _applyProjectedSchedule(t);
     if (t.scheduleWindow && t.scheduleWindow.interleavedPlan && _courtSourceBefore &&
         Number(_courtSourceBefore.phaseIndex || 0) === 0) {
       _materializeInterleavedReadyCategories(t, tId, _agoraIsoTx);
@@ -4832,6 +4840,7 @@ exports.closeRound = onCall(async (request) => {
       }
       /* L6.R1 · MANUAL × AUTOMÁTICO: fechar a rodada e gerar a próxima CONSOME o slot
        * agendado que estivesse devido — mesma marca, mesma transação. */
+      _applyProjectedSchedule(t);
       const _slotClose = _consumirSlotAgendado(t, Date.now(), _fzClose && _fzClose.tz);
       if (_slotClose) console.log(`closeRound: slot ${new Date(_slotClose).toISOString()} consumido pelo manual (${_fzClose.tz})`);
       const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
@@ -6123,7 +6132,7 @@ function _clonaConfigDeclarativa(value, depth, path) {
     return value;
   }
   if (Array.isArray(value)) {
-    if (value.length > 128) throw new HttpsError('invalid-argument', 'Lista de configuração grande demais.');
+    if (value.length > (['scheduleWindow.interleavedPlan.blocks','scheduleWindow.interleavedPlan.groupAssignments'].includes(at.join('.')) ? 400 : 128)) throw new HttpsError('invalid-argument', 'Lista de configuração grande demais.');
     return value.map(v => _clonaConfigDeclarativa(v, d + 1, at.concat('*')));
   }
   if (!value || Object.getPrototypeOf(value) !== Object.prototype) {
@@ -6507,7 +6516,17 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           'Pontuação e desempates ficam definidos no primeiro sorteio. (recusado: ' + changedStandings.join(', ') + ')');
       }
     }
-    const planInputsChanged = categoryConfigChanged || ['courtCount', 'gameDuration', 'callTime', 'warmupTime',
+    const existingV2=t.scheduleWindow?.interleavedPlan?.schema===2;
+    const phaseTimes = phases => (Array.isArray(phases) ? phases : []).map(phase => [
+      phase?.gameDuration || null, phase?.scoring?.setsToWin || null
+    ]);
+    const projectedInputsChanged = existingV2 && (
+      ['fmt2','maxParticipants','setupScope','superEightSetupScope'].some(k =>
+        Object.hasOwn(patch,k) && !_configAtiva.igual(patch[k],t[k])) ||
+      (Object.hasOwn(patch,'scoring') && patch.scoring?.setsToWin !== t.scoring?.setsToWin) ||
+      (Object.hasOwn(patch,'phases') && !_configAtiva.igual(phaseTimes(patch.phases),phaseTimes(t.phases)))
+    );
+    const planInputsChanged = projectedInputsChanged || categoryConfigChanged || ['courtCount', 'gameDuration', 'callTime', 'warmupTime',
       'maxParticipantsPerCategory', 'maxParticipantsByCategory'].some(key =>
       Object.prototype.hasOwnProperty.call(patch, key) && !_configAtiva.igual(patch[key], t[key]));
     if (patch.scheduleWindow !== undefined || planInputsChanged || patch.startDate !== undefined || patch.endDate !== undefined) {
@@ -6536,47 +6555,55 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         }) : t.scheduleWindow;
       const original = t.scheduleWindow && t.scheduleWindow.interleavedPlan;
       const planSupplied = !!patch.scheduleWindow && patch.scheduleWindow.interleavedPlan !== undefined;
-      if (planSupplied || (original && planInputsChanged)) {
+      if (planSupplied || (original && planInputsChanged) || (existingV2 && patch.scheduleWindow)) {
         const proposed = planSupplied ? patch.scheduleWindow.interleavedPlan : original;
-        if (!_configAtiva.igual(original, proposed) || planInputsChanged) {
+        if (!_configAtiva.igual(original, proposed) || planInputsChanged || (existingV2 && (daysChanged || !_configAtiva.igual(existingCategoryWindows,validatedWindow.categoryWindows || [])))) {
           if (hasDraw) throw new HttpsError('failed-precondition', 'A grade de jogos publicados não pode mudar depois do sorteio.');
-          const effectiveTournament = Object.assign({}, t, patch);
-          if (!proposed || proposed.schema !== 1 || proposed.editorVersion !== 2 ||
-              !Array.isArray(validatedWindow.days) || !validatedWindow.days.some(day => day.day === proposed.day) ||
-              Number(proposed.courts) !== Number(effectiveTournament.courtCount) ||
-              !Number.isSafeInteger(proposed.totalGames) || proposed.totalGames < 1 ||
-              !Number.isSafeInteger(proposed.eliminationPlayMinutes) || proposed.eliminationPlayMinutes < 1 ||
-              (planSupplied && !_configAtiva.igual(original, proposed) &&
-                Number(proposed.eliminationPlayMinutes) !== Number(effectiveTournament.gameDuration || 30)) ||
-              Number(proposed.eliminationMinutes) !== Number(proposed.eliminationPlayMinutes) +
-                Number(effectiveTournament.callTime || 0) + Number(effectiveTournament.warmupTime || 0)) {
-            throw new HttpsError('invalid-argument', 'A grade não corresponde à programação deste torneio.');
-          }
-          const proposedTiles = _phaseGridPlan.expand(proposed, effectiveTournament);
-          let expected;
-          // Quando os insumos não mudam, a referência da grade salva usa a ficha
-          // salva. Se mudarem, a proposta precisa cobrir a nova ficha inteira.
-          if (original && !planInputsChanged) expected = _phaseGridPlan.signatures(_phaseGridPlan.expand(original, t));
-          else {
-            const labels = effectiveTournament.combinedCategories;
-            const capacity = effectiveTournament.maxParticipantsByCategory || {};
-            const general = Number(effectiveTournament.maxParticipantsPerCategory);
-            if (!Array.isArray(labels) || !labels.length ||
-                labels.some(label => !Number.isSafeInteger(Number(Object.prototype.hasOwnProperty.call(capacity, label) ?
-                  capacity[label] : general)) || Number(Object.prototype.hasOwnProperty.call(capacity, label) ?
-                  capacity[label] : general) < 8 || Number(Object.prototype.hasOwnProperty.call(capacity, label) ?
-                  capacity[label] : general) % 4 !== 0)) {
-              throw new HttpsError('invalid-argument', 'Defina vagas de quatro atletas por grupo antes de salvar a grade.');
+          const effectiveTournament = Object.assign({}, t, patch,{scheduleWindow:validatedWindow});
+          if (original?.groupAssignments?.length && !Object.hasOwn(proposed || {},'groupAssignments'))
+            throw new HttpsError('failed-precondition','Atualize o aplicativo para editar a distribuição dos grupos nas quadras.');
+          if (existingV2 && proposed?.schema!==2) throw new HttpsError('failed-precondition','A grade salva exige uma ficha atualizada.');
+          if (proposed?.schema===2) {
+            try { _phaseGridPlan.assertPlan(effectiveTournament,proposed,validatedWindow.days,drawWindow); }
+            catch(error) {throw new HttpsError('invalid-argument',error.message);}
+          } else {
+            if (!proposed || proposed.schema !== 1 || proposed.editorVersion !== 2 ||
+                !Array.isArray(validatedWindow.days) || !validatedWindow.days.some(day => day.day === proposed.day) ||
+                Number(proposed.courts) !== Number(effectiveTournament.courtCount) ||
+                !Number.isSafeInteger(proposed.totalGames) || proposed.totalGames < 1 ||
+                !Number.isSafeInteger(proposed.eliminationPlayMinutes) || proposed.eliminationPlayMinutes < 1 ||
+                (planSupplied && !_configAtiva.igual(original, proposed) &&
+                  Number(proposed.eliminationPlayMinutes) !== Number(effectiveTournament.gameDuration || 30)) ||
+                Number(proposed.eliminationMinutes) !== Number(proposed.eliminationPlayMinutes) +
+                  Number(effectiveTournament.callTime || 0) + Number(effectiveTournament.warmupTime || 0)) {
+              throw new HttpsError('invalid-argument', 'A grade não corresponde à programação deste torneio.');
             }
-            expected = _phaseGridPlan.expectedSignatures(labels.map(label => ({ name:label,
-              groups:Number(Object.prototype.hasOwnProperty.call(capacity, label) ? capacity[label] : general) / 4 })));
-          }
-          if (JSON.stringify(expected) !== JSON.stringify(_phaseGridPlan.signatures(proposedTiles))) {
-            throw new HttpsError('invalid-argument', 'A grade não corresponde às categorias e vagas atuais. Gere uma nova proposta de horários.');
-          }
-          if (proposedTiles.reduce((total, tile) => total + (tile.kind === 'groups' ? 3 : 1), 0) !== Number(proposed.totalGames) ||
-              _phaseGridPlan.validate(proposedTiles, proposed, validatedWindow.days)) {
-            throw new HttpsError('invalid-argument', 'A grade contém conflito, jogo ausente ou horário fora da janela.');
+            const proposedTiles = _phaseGridPlan.expand(proposed, effectiveTournament);
+            let expected;
+            // Quando os insumos não mudam, a referência da grade salva usa a ficha
+            // salva. Se mudarem, a proposta precisa cobrir a nova ficha inteira.
+            if (original && !planInputsChanged) expected = _phaseGridPlan.signatures(_phaseGridPlan.expand(original, t));
+            else {
+              const labels = effectiveTournament.combinedCategories;
+              const capacity = effectiveTournament.maxParticipantsByCategory || {};
+              const general = Number(effectiveTournament.maxParticipantsPerCategory);
+              if (!Array.isArray(labels) || !labels.length ||
+                  labels.some(label => !Number.isSafeInteger(Number(Object.prototype.hasOwnProperty.call(capacity, label) ?
+                    capacity[label] : general)) || Number(Object.prototype.hasOwnProperty.call(capacity, label) ?
+                    capacity[label] : general) < 8 || Number(Object.prototype.hasOwnProperty.call(capacity, label) ?
+                    capacity[label] : general) % 4 !== 0)) {
+                throw new HttpsError('invalid-argument', 'Defina vagas de quatro atletas por grupo antes de salvar a grade.');
+              }
+              expected = _phaseGridPlan.expectedSignatures(labels.map(label => ({ name:label,
+                groups:Number(Object.prototype.hasOwnProperty.call(capacity, label) ? capacity[label] : general) / 4 })));
+            }
+            if (JSON.stringify(expected) !== JSON.stringify(_phaseGridPlan.signatures(proposedTiles))) {
+              throw new HttpsError('invalid-argument', 'A grade não corresponde às categorias e vagas atuais. Gere uma nova proposta de horários.');
+            }
+            if (proposedTiles.reduce((total, tile) => total + (tile.kind === 'groups' ? 3 : 1), 0) !== Number(proposed.totalGames) ||
+                _phaseGridPlan.validate(proposedTiles, proposed, validatedWindow.days)) {
+              throw new HttpsError('invalid-argument', 'A grade contém conflito, jogo ausente ou horário fora da janela.');
+            }
           }
         }
       }
@@ -6666,6 +6693,13 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const groupRules = t.fmt2?.groupCategoryRules?.length || patch.fmt2?.groupCategoryRules?.length;
     const repeatPolicy = [t.fmt2, patch.fmt2].some(cfg => cfg &&
       (typeof cfg.rotationAllowRepeatPartners === 'boolean' || typeof cfg.classificationSchedule?.allowRepeat === 'boolean'));
+    if (hasDraw) {
+      const quotaLists = cfg => [cfg?.qualificationCategoryRules || [],cfg?.eliminatoria?.formationQualificationCategoryRules || []];
+      if ((fmt2Present && !_configAtiva.igual(quotaLists(t.fmt2),quotaLists(patch.fmt2))) ||
+          (patch.phases && [1,2].some(i=>!_configAtiva.igual(t.phases?.[i]?.source?.qualificationCategoryRules || [],
+            patch.phases[i]?.source?.qualificationCategoryRules || []))))
+        throw new HttpsError('failed-precondition','Os classificados por grupo estão fixados pelo sorteio.');
+    }
     const requestedClassification = patch.phases?.[0]?.classification;
     const phaseHasRepeatPolicy = typeof requestedClassification?.rotationAllowRepeatPartners === 'boolean' ||
       typeof requestedClassification?.schedule?.allowRepeat === 'boolean';
@@ -6693,6 +6727,11 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       throw new HttpsError('failed-precondition', 'A formação dos classificados está fixada pelo sorteio.');
     }
     const population = cat => drawWindow.ScoreplaceSuperEight.categoryPopulation(Object.assign({}, t, patch), cat);
+    const effectiveIntent=patch.fmt2 || t.fmt2;
+    if (!hasDraw && (effectiveIntent?.qualificationCategoryRules?.length || effectiveIntent?.eliminatoria?.formationQualificationCategoryRules?.length)) {
+      const error=drawWindow.FORMAT2.qualificationError(effectiveIntent,nextCategories,population,patch.sport || t.sport);
+      if (error) throw new HttpsError('invalid-argument',error);
+    }
     if ((rotationRules || groupRules || secondRules) && !hasDraw && patch.combinedCategories) {
       require('./format-intent-validation-core').validateNewFormatIntent(patch.fmt2 || t.fmt2, HttpsError, t, requestedTeamSize, nextCategories, population);
     }
@@ -6734,12 +6773,18 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     // Uma ficha antiga pode reenviar phases sem a extensão. O intent fresco
     // define a geometria; pontuação e datas continuam com a configuração da fase.
     const phaseRules = patch.phases?.[0]?.classification?.rotationCategoryRules;
-    if (!hasDraw && (groupFormationMirror || rotationRules || phaseRules || secondRules || groupRules || repeatPolicy || phaseHasRepeatPolicy || patch.phases?.[0]?.classification?.groupCategoryRules) && (groupFormationMirror || fmt2Present || patch.phases || patch.combinedCategories)) {
+    const quotaIntent=[patch.fmt2,t.fmt2].some(cfg=>cfg?.qualificationCategoryRules?.length || cfg?.eliminatoria?.formationQualificationCategoryRules?.length) ||
+      patch.phases?.some(p=>p.source?.qualificationCategoryRules);
+
+    if (!hasDraw && (quotaIntent || groupFormationMirror || rotationRules || phaseRules || secondRules || groupRules || repeatPolicy || phaseHasRepeatPolicy || patch.phases?.[0]?.classification?.groupCategoryRules) && (groupFormationMirror || fmt2Present || patch.phases || patch.combinedCategories)) {
       const intent = patch.fmt2 || t.fmt2;
       if (!intent) throw new HttpsError('invalid-argument', 'As regras de rodízio exigem a configuração de formato.');
       const projected = drawWindow.FORMAT2.compileToPhases(intent, { sport:patch.sport || t.sport,
         categories:nextCategories, resultEntry:patch.resultEntry || t.resultEntry,
         lateEnrollment:patch.lateEnrollment || t.lateEnrollment, newMatchups:patch.newMatchups ?? t.newMatchups });
+      if (quotaIntent && patch.phases && [1,2].some(i=>!_configAtiva.igual(projected.phases[i]?.source?.qualificationCategoryRules || [],
+          patch.phases[i]?.source?.qualificationCategoryRules || [])))
+        throw new HttpsError('invalid-argument','As cotas por categoria divergem da origem da fase seguinte.');
       if (secondRules && patch.phases && !_configAtiva.igual(projected.phases[1]?.classification?.rotationCategoryRules || [],
           patch.phases[1]?.classification?.rotationCategoryRules || [])) {
         throw new HttpsError('invalid-argument','As regras da formação dos classificados divergem da configuração da fase.');
@@ -7141,6 +7186,10 @@ exports.applyTournamentFormat = onCall(async (request) => {
     } catch (e) {
       throw new HttpsError('invalid-argument', 'Não foi possível compilar o formato: ' + String((e && e.message) || e).slice(0, 180));
     }
+    if (t.scheduleWindow?.interleavedPlan?.schema===2) {
+      try { _phaseGridPlan.assertPlan(Object.assign({},t,out.topLevel,{fmt2:out.cfg,phases:out.phases}),t.scheduleWindow.interleavedPlan,t.scheduleWindow.days,drawWindow); }
+      catch(error) {throw new HttpsError('invalid-argument',error.message);}
+    }
     if (fmt2Clone.historicalSinglesOverride === true && out.topLevel.teamSize !== 1) {
       throw new HttpsError('failed-precondition', 'O formato individual histórico não pode mudar de modalidade.');
     }
@@ -7193,6 +7242,10 @@ function _buildPhaseTieRuntime(t, current, sourceGroups, currentCfg, phaseEngine
   const pools = overall
     ? [{ id: 'overall', rows: phaseEngine.globalStandings(eligibleGroups, calculateStandings) }]
     : eligibleGroups.map(g => ({ id: 'group-' + sourceGroups.indexOf(g), rows: calculateStandings(g), group: g }));
+  for (const pool of pools) {
+    if (nextCfg.source.qualificationCategoryRules && pool.group)
+      pool.nextPhase = drawWindow.FORMAT2.qualificationForCategory(nextCfg,pool.group.category || '');
+  }
   const criterionList = Array.isArray(tieConfig.tiebreakers) ? tieConfig.tiebreakers.filter(k => k !== 'sorteio') : null;
   const advanced = !!(phaseEngine.effectiveAdvancedScoring &&
     (phaseEngine.effectiveAdvancedScoring(t, current) || {}).enabled);
@@ -7387,9 +7440,18 @@ function _refreshAutomaticPhaseTies(t, matchId, nowIso) {
 
 // Categorias da agenda intercalada avançam no mesmo commit do último resultado.
 // A fase global só muda depois de todas as categorias terem materializado a chave.
+function _applyProjectedSchedule(t) {
+  if (t.scheduleWindow?.interleavedPlan?.schema!==2) return;
+  const proposal=drawWindow._schGradeEstimada(t);
+  if (!proposal || !proposal.cabe || !proposal.interleaved)
+    throw new HttpsError('failed-precondition','A nova rodada diverge da grade salva: '+(proposal?.reason || 'programação indisponível'));
+  drawWindow._schAplicarGrade(t);
+}
+
 function _materializeInterleavedReadyCategories(t, tId, nowIso) {
   if (t && t.phaseBracketPlanVersion === 1) return [];
   const plan = t && t.scheduleWindow && t.scheduleWindow.interleavedPlan;
+  if (plan?.schema===2 && !drawWindow.ScoreplacePhaseGridPlan.canInterleave(t)) return [];
   if (!plan || Number(t.currentPhaseIndex || 0) !== 0 || (t.phases?.[0]?.classification?.rotationCategoryRules && !t.phases[1])) return [];
   const phaseEngine = drawWindow && drawWindow._phasesEngine;
   if (!phaseEngine || typeof phaseEngine.prevPhaseGroups !== 'function' ||
@@ -7404,14 +7466,18 @@ function _materializeInterleavedReadyCategories(t, tId, nowIso) {
   const currentCfg = phaseEngine.projectPhaseCfg(t.phases[0], t, 0);
   const tbOpts = { tiebreakers:t.tiebreakers, rankingPrimary:t.rankingPrimary,
     birthByName:typeof drawWindow._tbBirthByName === 'function' ? drawWindow._tbBirthByName(t) : {} };
-  const standings = group => phaseStandingsFn(group, t, tbOpts, true);
+  const standings = group => phaseStandingsFn(group,t,tbOpts,plan.schema!==2 || !!(currentCfg.reiRainha || currentCfg.classification?.partnerRotation));
   const tieRuntime = _buildPhaseTieRuntime(t, 0, sourceGroups, currentCfg,
     phaseEngine, standings, tbOpts, t.fmt2 && t.fmt2.tieResolution);
   if (tieRuntime.overall) throw new HttpsError('failed-precondition', 'A agenda intercalada exige classificação por grupo.');
-  const expectedGroups = {};
-  (plan.blocks || []).filter(block => block.kind === 'groups').forEach(block => {
-    expectedGroups[String(block.category)] = (expectedGroups[String(block.category)] || 0) +
-      (Array.isArray(block.courts) ? block.courts.length : 0);
+  const expectedGroups = {}, expectedGames = new Map();
+  (plan.blocks || []).filter(block => block.kind === 'groups' && !block.phaseIndex).forEach(block => {
+    const category=String(block.category);
+    if (plan.schema===2) {
+      const key=JSON.stringify([category,block.groupNumber]);
+      if (!expectedGames.has(key)) expectedGroups[category]=(expectedGroups[category] || 0)+1;
+      expectedGames.set(key,(expectedGames.get(key) || 0)+block.games);
+    } else expectedGroups[category]=(expectedGroups[category] || 0)+(block.courts || []).length;
   });
   const materialized = [];
   for (const category of (t.combinedCategories || []).map(String)) {
@@ -7440,9 +7506,10 @@ function _materializeInterleavedReadyCategories(t, tId, nowIso) {
       currentCfg.classification.rotationCategoryRules;
     const rule = rotation && drawWindow.FORMAT2.rotationRuleForCategory(currentCfg.classification, category);
     if (!pools.length || (!rotation && (!expectedGroups[category] || pools.length !== expectedGroups[category]))) continue;
-    const done = pools.every(pool => {
+    const done = pools.every((pool,index) => {
       const matches = (pool.group && pool.group.matches) || [];
-      const expected = currentCfg.classification?.partnerRotation === 'groups' && rule
+      const expected = plan.schema === 2 ? expectedGames.get(JSON.stringify([category, Number(matches[0]?.groupIdx ?? matches[0]?.monarchGroup ?? index)+1])) :
+        currentCfg.classification?.partnerRotation === 'groups' && rule
         ? (pool.group?.players || []).length * rule.rounds / 4
         : rotation ? 2 * (rule ? rule.rounds : currentCfg.classification.rotationRounds) : 3;
       return matches.length === expected && matches.every(m => m && (m.winner || m.isBye));
@@ -7470,6 +7537,14 @@ function _materializeInterleavedReadyCategories(t, tId, nowIso) {
       { agoraIso:nowIso }, { category });
     if (!result || !result.ok) {
       throw new HttpsError('failed-precondition', 'Não foi possível gerar a eliminatória de ' + category + '.');
+    }
+    if (plan.schema === 2) {
+      // As simples de desempate são extras. O validador da grade confere todas
+      // as posições esportivas materializadas sem incluí-las na contagem.
+      _applyProjectedSchedule(t);
+      if (typeof drawWindow._assignGlobalGameNumbers === 'function') drawWindow._assignGlobalGameNumbers(t);
+      materialized.push(category);
+      continue;
     }
     const schedule = drawWindow._schGradeEstimada(t);
     const scheduledMatches = typeof drawWindow._collectAllMatches === 'function'
@@ -7541,6 +7616,7 @@ exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) =
       return { ok:false, reason:'prepared-phase-advances-on-calls' };
     }
     if (current === 0 && t.scheduleWindow && t.scheduleWindow.interleavedPlan &&
+        (t.scheduleWindow.interleavedPlan.schema!==2 || drawWindow.ScoreplacePhaseGridPlan.canInterleave(t)) &&
         !(request.data && request.data.tieAction)) {
       return { ok:false, reason:'interleaved-categories-advance-on-results' };
     }
@@ -7790,6 +7866,11 @@ exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) =
     }
     const materializeOpts = current > 0 && groupCapture
       ? { usarClassificacaoCongelada: true, sourceGroups, standingsForGroup: frozenEntrants } : {};
+    if (current>0 && hasMonarch && tieRuleEnabled && t.phases[next]?.source?.qualificationCategoryRules) {
+      materializeOpts.usarClassificacaoCongelada=true;
+      materializeOpts.sourceGroups=sourceGroups;
+      materializeOpts.standingsForGroup=standings;
+    }
     if (phaseTieOrder) materializeOpts.tieOrder = phaseTieOrder;
     const materialize = () => materializePhaseFn(t, standings, 'ph-' + tId + '-' + next, det, materializeOpts);
     const res = randomSeeding ? _drawSeed.withSeed(drawStamp, materialize) : materialize();
@@ -7817,6 +7898,7 @@ exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) =
       const metas = res.built.repMetaByCat && res.built.repMetaByCat.length ? res.built.repMetaByCat : [res.built.repMeta];
       metas.forEach(meta => drawWindow._buildRepechageDoubleElim(t, meta, { phaseIndex: t.currentPhaseIndex }));
     }
+    _applyProjectedSchedule(t);
     if (ignoredPending.length) {
       if (!Array.isArray(t.history)) t.history = [];
       t.history.push({ date: agoraIso, byUid: uid,
@@ -7962,6 +8044,7 @@ exports.resolvePendingDraw = onCall(async (request) => {
         t.lastAutoDrawAt=pd.generatedAt||t.lastAutoDrawAt||agoraIso; t.pendingDraw=null;
       }
     }
+    if (action==='publish') _applyProjectedSchedule(t);
     const checkpointEpoch = action === 'publish' ? _drawCheckpoint.prepareDraw(t) : null;
     const b=_gravaTorneio(tx,ref,t,antes,{agoraIso});
     return {ok:true,changed:true,action,roundIndex:pd.roundIndex,firstDraw:!!pd.firstDraw,
@@ -9310,6 +9393,7 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
             if (_windowCheck.error) console.error(`Auto-draw: agenda por categoria inválida em ${tId}:`, _windowCheck.error.message);
             return { pulou: _windowCheck.pulou };
           }
+          _applyProjectedSchedule(tf);
           _recordSeededDraw(tf, { seed: _automaticSeed, operationId: 'slot:' + _devidoFresco, at: _agoraIsoTx });
 
           // o motor também mexe em lastAutoDrawAt; a marca do slot é a nossa e fica.
@@ -9579,6 +9663,7 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
     }
     // v3.1.16 (inc 8): a rodada da fase mora em `phaseRounds[cur]`; o dedup por slot é o
     // `lastAutoDrawAt` da própria fase, e a marca canônica é `drawSlotAt` (topo).
+    _applyProjectedSchedule(tf);
     tf.phaseRounds[cur].lastAutoDrawAt = owed;
     tf.drawSlotAt = owed;
     tf.lastAutoDrawAt = new Date(owed).toISOString();
@@ -9712,6 +9797,7 @@ exports.closePhaseLeagueRound = onCall(async (request) => {
     const before=_antesDoMotor(t); _enrichParticipantsFromProfiles(t); if (typeof drawWindow._rehydrateEntryNames==='function') drawWindow._rehydrateEntryNames(t);
     const made=drawWindow._phaseGenNextLeagueRound(t,phaseIdx,{ts:nowMs,rnd:drawWindow._phaseRoundRng(tId+':'+phaseIdx+':'+(maxR+1)+':'+nowMs)});
     if(!made) return {ok:false,reason:'round-not-generated'};
+    _applyProjectedSchedule(t);
     _gravaTorneio(tx,ref,t,before,{agoraIso:nowIso}); return {ok:true,tournament:t};
   });
   if(out.ok) await _notifyIncrementalPhaseRound(out.tournament,tId,phaseIdx,nowIso);

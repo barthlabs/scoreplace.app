@@ -98,6 +98,10 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
     }
     if (config.fmt2 && validateIntent) validateIntent(config.fmt2, HttpsError, undefined, undefined, config.combinedCategories,
       category => require('./vendor/super-eight-core').categoryPopulation(config, category));
+    if (config.scheduleWindow?.interleavedPlan?.schema===2) {
+      try { const w=require('./draw-core')._window; w.ScoreplacePhaseGridPlan.assertPlan(config,config.scheduleWindow.interleavedPlan,config.scheduleWindow.days,w); }
+      catch(error) {fail('invalid-argument',error.message);}
+    }
     if (Object.hasOwn(config, 'groupFormation')) {
       validateIntent({groupFormation:config.groupFormation}, HttpsError);
       if (!config.fmt2) fail('invalid-argument', 'A formação dos grupos exige a configuração de formato.');

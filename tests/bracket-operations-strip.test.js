@@ -40,6 +40,8 @@ assert.equal(operationStage({ ...diamondRounds[0], isMonarch:true, phaseIndex:0 
 assert.equal(operationStage({ isTieBreak:true }, {}, []), 'Desempate');
 const futureStart = source.indexOf('function _bracketOperationsFutureEstimates(');
 const operationStageLabel = new Function(source.slice(stageStart, futureStart) + '\nreturn _bracketOperationsStageLabel;')();
+assert.equal(operationStageLabel({ isMonarch:true, scheduledGroupLabel:'B1', groupName:'R1 Grupo F' },
+  {phases:[{kind:'classification'}]},[]),'Classificatória · B1');
 assert.equal(operationStageLabel({ isMonarch:true, groupName:'R1 Grupo F' }, { phases:[{ kind:'classification' }] }, []),
   'Classificatória · Grupo F', 'jogo em quadra identifica o grupo da classificatória');
 assert.equal(operationStageLabel({ isMonarch:true, monarchGroup:5, category:'Fem Prata' },

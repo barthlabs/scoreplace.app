@@ -839,6 +839,44 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     var plan = t.scheduleWindow && t.scheduleWindow.interleavedPlan;
     if (!plan) return null;
     var invalid = function (reason) { return { interleaved:true, atomica:true, cabe:false, slots:[], reason:reason }; };
+    if (plan.schema===2) {
+      var model=window.ScoreplacePhaseGridPlan, slots=[], occupied=new Map(), people=new Map(), pairsByDay=new Map();
+      var jobs=model.technicalPositions(t,all,window), lookup=new Map(jobs.map(job=>[model.positionKey(job),job]));
+      var tiles=model.expand(plan,t), numbered=model.numbered(tiles,plan), byId=new Map((all || []).map(m=>[String(m.id),m]));
+      for (var tile of tiles) {
+        var key=model.positionKey(tile), job=lookup.get(key);
+        if (!job) continue; // reserva de uma fase ou rodada ainda não materializada
+        if (job.games!==tile.games) return invalid('a quantidade de jogos da reserva mudou');
+        lookup.delete(key);
+        var day=jan.dias.find(d=>d.ymd===tile.day);
+        var courtName=String(t.courtNames?.[tile.court-1] || 'Quadra '+tile.court);
+        var starts=model.gameStarts(tile,t);
+        for(var i=0;i<job.matchIds.length;i++) {
+          var id=job.matchIds[i],m=byId.get(id),ms=_ms(tile.day,model.clock(starts[i]));
+          var end=i+1<starts.length?_ms(tile.day,model.clock(starts[i+1])):_ms(tile.day,tile.startTime)+tile.duration*_MIN;
+          if(!day || ms<day.iniMs || end>day.fimMs || end<=ms || m.requiredDay && m.requiredDay!==tile.day) return invalid('horário fora da janela');
+          if(m.requiredDay) {
+            for(var side of [m.team1Obj,m.team2Obj]) {
+              if(!side?.fixedPairId) continue;
+              var pairKey=JSON.stringify([tile.day,side.fixedPairId]);
+              pairsByDay.set(pairKey,(pairsByDay.get(pairKey)||0)+1);
+            }
+          }
+          var conflict=(map,k)=>{
+            var times=map.get(k) || [];
+            if(times.some(r=>ms<r.end && end>r.ms)) return true;
+            times.push({ms:ms,end:end});map.set(k,times);return false;
+          };
+          if(conflict(occupied,courtName) || _schMatchUids(t,m).some(uid=>conflict(people,uid))) return invalid('atleta ou quadra em horários simultâneos');
+          slots.push({matchId:id,ms:ms,iso:new Date(ms).toISOString(),dia:jan.dias.indexOf(day),court:courtName,
+            durationMs:end-ms,scheduledGameNumber:numbered[tile.id]+i,groupAssignment:tile.assignment});
+        }
+      }
+      if (lookup.size) return invalid('a grade não cobre todas as partidas oficiais');
+      var teamSchedule=t.teamCompetition?.schedule || t.phases?.[0]?.teamCompetition?.schedule;
+      var cadence=!!pairsByDay.size && Array.from(pairsByDay.values()).every(n=>n===Number(teamSchedule?.gamesPerTeam));
+      return {interleaved:true,atomica:true,cabe:true,cadenceValid:cadence,slots:slots};
+    }
     if (plan.schema !== 1 || jan.dias.length < 1 || !Array.isArray(plan.blocks) || !plan.blocks.length ||
         (plan.day && !jan.dias.some(function (d) { return String(plan.day) === d.ymd; })) ||
         Number(plan.courts) !== quadras) return invalid('configuração da grade');
@@ -1913,12 +1951,17 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
             (m.scheduledKind && m.scheduledKind !== 'estimate')) return;
         var changed = m.scheduledAt !== s.iso || m.scheduledKind !== 'estimate' ||
           Number(m.scheduledGameNumber) !== s.scheduledGameNumber || m.court !== s.court ||
-          m.scheduleSource !== 'estimate' || m.scheduledBy !== '';
+          m.scheduleSource !== 'estimate' || m.scheduledBy !== '' ||
+          (s.groupAssignment && (m.scheduledGroupLabel!==s.groupAssignment.label || m.scheduledGroupEntry!==s.groupAssignment.entry));
         if (!changed) return;
         m.scheduledAt = s.iso;
         m.scheduledBy = '';
         m.scheduledKind = 'estimate';
         m.scheduledGameNumber = s.scheduledGameNumber;
+        if (s.groupAssignment) {
+          m.scheduledGroupLabel=s.groupAssignment.label;
+          m.scheduledGroupEntry=s.groupAssignment.entry;
+        }
         m.court = s.court;
         m.scheduleSource = 'estimate';
         if (Array.isArray(alterados)) alterados.push(m);

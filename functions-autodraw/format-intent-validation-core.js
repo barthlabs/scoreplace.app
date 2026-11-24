@@ -166,6 +166,17 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, ca
           (!n && f.mode==='size' && f.value<=g)) throw new HttpsError('invalid-argument','A formação escolhida não permite essa quantidade de jogos por dupla.');
     }
   }
+  const cuts=[[fmt2,prev,'qualificationCategoryRules'],[fmt2.eliminatoria,prev?.eliminatoria,'formationQualificationCategoryRules']];
+  for (const [owner,previous,key] of cuts) {
+    if (previous?.[key]?.length && !Object.hasOwn(owner || {},key))
+      throw new HttpsError('failed-precondition','Atualize a ficha para preservar as cotas de classificados.');
+    if (Object.hasOwn(owner || {},key) && !Array.isArray(owner[key]))
+      throw new HttpsError('invalid-argument','A cota de classificados exige uma lista por categoria.');
+  }
+  if (cuts.some(([owner,,key])=>owner?.[key]?.length)) {
+    const error=require('./draw-core')._window.FORMAT2.qualificationError(fmt2,categories || stored?.combinedCategories,population,stored?.sport);
+    if (error) throw new HttpsError('invalid-argument',error);
+  }
   const genericRotation = fmt2.parceria === 'rotation_groups';
   if (prev?.parceria === 'rotation_groups' && !Object.hasOwn(fmt2, 'rotationCategoryRules')) {
     throw new HttpsError('failed-precondition','Atualize a ficha para editar as regras de rodízio por categoria.');

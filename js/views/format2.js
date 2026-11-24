@@ -944,7 +944,11 @@
     if (resolved.groups === 1 && !isGroupRotation(cfg.parceria) && !(cfg.groupCategoryRules && cfg.groupCategoryRules.length)) {
       parts.push(cfg.rodadas.modo === 'fixo' ? (cfg.rodadas.n + ' rodadas') : ('todos ' + (resolved.turnos === 'ida_volta' ? 'ida/volta' : 'ida')));
     }
-    if (cfg.eliminatoria.ativa) parts.push('elim ' + cfg.eliminatoria.linhas + (cfg.eliminatoria.linhas > 1 ? ' linhas' : ' linha') + ' · top ' + cfg.classificados);
+    if (cfg.eliminatoria.ativa) {
+      var cuts=cfg.eliminatoria.formationQualificationCategoryRules?.length ? cfg.eliminatoria.formationQualificationCategoryRules : cfg.qualificationCategoryRules;
+      var detail=cuts?.length ? cuts.map(r=>(r.category ? r.category+' · ' : '')+r.perGroup+' por grupo').join(', ') : 'top '+cfg.classificados;
+      parts.push('elim '+cfg.eliminatoria.linhas+(cfg.eliminatoria.linhas>1?' linhas':' linha')+' · '+detail);
+    }
     return parts.join(' · ');
   }
 
@@ -1116,7 +1120,71 @@
   }
 
   // COMPILADOR: config → { topLevel: {t.* p/ stage-0}, phases: [p0 (+p1 elim)] }.
+  // A cota pertence à classificatória de origem. A próxima fase consome o corte
+  // a partir de cada grupo da categoria, inclusive quando ela é outra classificatória.
   function compileToPhases(cfg, opts) {
+    var result = compileBasePhases(cfg, opts);
+    var cuts = [cfg && cfg.qualificationCategoryRules, cfg && cfg.eliminatoria && cfg.eliminatoria.formationQualificationCategoryRules];
+    result.phases.forEach(function (phase, index) {
+      var rules = cuts[index - 1];
+      if (phase.source && phase.source.type === 'previous_phase' && Array.isArray(rules) && rules.length) {
+        phase.source = Object.assign({}, phase.source, {qualificationCategoryRules:rules, scope:'per_group',
+          byGroupRank:true, flatOverall:false, qualifyMode:'per_group', qualifyQuantity:'top'});
+        delete phase.officialGroupBracketOrder;
+      }
+    });
+    return result;
+  }
+  function qualificationForCategory(phase, category) {
+    var source = phase && phase.source;
+    var rule = source && source.qualificationCategoryRules && source.qualificationCategoryRules.find(function (r) { return r.category === (category || ''); });
+    if (!rule) return phase;
+    var previous = source.mapping && source.mapping.length ? source.mapping : [{dest:'main'}];
+    var mapping = _buildMapping(previous.map(function (m) {return m.dest;}), previous.map(function (m) {return m.label;}), rule.perGroup, previous.length);
+    var resolved = Object.assign({},source,{qualifyTopN:rule.perGroup,mapping:mapping,byGroupRank:true,scope:'per_group',
+      flatOverall:false,qualifyQuantity:'top',qualifyMode:'per_group',perGroupQuota:rule.perGroup});
+    delete resolved.qualificationCategoryRules;
+    return Object.assign({},phase,{source:resolved,mapping:mapping,gruposClassified:rule.perGroup});
+  }
+  function qualificationError(cfg, categories, population, sport) {
+    var lists=[cfg.qualificationCategoryRules,cfg.eliminatoria?.formationQualificationCategoryRules];
+    if (!lists.some(list=>list!=null)) return '';
+    var names=categories && categories.length ? categories : [''];
+    var phases=compileToPhases(cfg,{sport:sport,categories:names.filter(Boolean)}).phases;
+    var eligible=names.filter(cat=>!cfg.rotationCategoryRules?.some(r=>r.category===cat && r.destination==='ranking'));
+    var counts=new Map(names.map(cat=>[cat,Number(population?.(cat)) || 0]));
+    for (var index=0;index<2;index++) {
+      var rules=lists[index],phase=phases[index],next=phases[index+1];
+      if (rules!=null && (!Array.isArray(rules) || rules.length && (!next || phase?.kind!=='classification' ||
+          rules.length!==eligible.length || new Set(rules.map(r=>r?.category)).size!==rules.length)))
+        return 'Confira as categorias que avançam desta classificatória.';
+      if (!phase || !next) continue;
+      for (var cat of eligible) {
+        var rule=rules?.find(r=>r?.category===cat);
+        if (rules?.length && (!rule || Object.keys(rule).some(k=>!['category','perGroup'].includes(k)) ||
+            !Number.isInteger(rule.perGroup) || rule.perGroup<1 || rule.perGroup>128))
+          return 'Informe de 1 a 128 classificados por grupo para cada categoria que avança.';
+        var local=qualificationForCategory(next,cat),mapping=local.source?.mapping || [];
+        if (rule && (rule.perGroup<mapping.length || next.source?.bestNextByGroup?.count ||
+            next.source?.lineAssignment==='rank_ranges' && JSON.stringify(mapping)!==JSON.stringify(next.source.mapping)))
+          return 'A quantidade de classificados precisa respeitar as faixas de colocação e as vagas extras configuradas.';
+        var people=counts.get(cat);
+        if (!people) continue;
+        var groupedFixed=phase.fixedPairs && !phase.reiRainha && cfg.disputa==='dupla';
+        var units=groupedFixed ? people/2 : people;
+        var groups=phase.reiRainha ? Math.ceil(units/4) : groupPlanForCategory(phase,cat,units,false).assessment.groups;
+        var smallest=Math.floor(units/groups);
+        var depth=Number(local.source?.qualifyTopN || local.gruposClassified) || smallest;
+        if (rule && rule.perGroup>smallest) return (cat ? cat+' · ' : '')+'O menor grupo tem '+smallest+' unidades classificáveis.';
+        var count=local.source?.qualifyQuantity==='all' ? units :
+          local.source?.scope==='per_group' ? groups*Math.min(smallest,depth) : Math.min(units,depth);
+        if (rule && !groupedFixed && next.fixedPairs && count%2) return 'A quantidade de classificados deixa uma pessoa sem parceiro.';
+        counts.set(cat,groupedFixed ? count*2 : count);
+      }
+    }
+    return '';
+  }
+  function compileBasePhases(cfg, opts) {
     opts = opts || {};
     cfg = normalize(cfg, opts.sport);
     var isDupla = cfg.disputa === 'dupla';
@@ -1604,6 +1672,8 @@
     summary: summary,
     projectLegacyPhases: projectLegacyPhases,
     compileToPhases: compileToPhases,
+    qualificationForCategory:qualificationForCategory,
+    qualificationError:qualificationError,
     translateLegacyTournament: translateLegacyTournament,
     assessGroupSchedule: assessGroupSchedule,
     resolveTurnos: resolveTurnos,

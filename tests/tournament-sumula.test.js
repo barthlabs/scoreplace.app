@@ -59,6 +59,8 @@ const superEightGames = Array.from({length:14}, (_, i) => ({
 const superEightModel = core.collect(superEight, superEightGames);
 assert.strictEqual(superEightModel.matches.length, 14, 'Super 8 leva todos os 14 confrontos à súmula');
 assert.deepStrictEqual(superEightModel.days, ['2026-11-21']);
+const assignedModel=core.collect(superEight,superEightGames.map(m=>({...m,scheduledGroupLabel:'B1'})));
+assert(core.makePages(assignedModel)[0].commands.join(' ').includes('(B1)'));
 const superEightPages = core.makePages(superEightModel);
 assert(superEightPages.length >= 2, 'Super 8 gera páginas para as duas quadras');
 assert(!superEightPages.slice(0, 2).some(page => page.commands.join('\n').includes('Sem categoria')),

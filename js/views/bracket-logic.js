@@ -2046,6 +2046,16 @@ function _isEliminationBracket(t) {
     legacy === 'Dupla Eliminatória';
 }
 
+function _grandFinalResetMatch(final) {
+  var reset={id:String(final.id)+'-EXTRA',round:(final.round || 1)+1,bracket:'grand',phaseIndex:final.phaseIndex || 0,
+    p1:final.p1,p2:final.p2,p1Uid:final.p1Uid || null,p2Uid:final.p2Uid || null,
+    team1Uids:_slotUids(final,'p1'),team2Uids:_slotUids(final,'p2'),team1Obj:_slotObj(final,'p1'),team2Obj:_slotObj(final,'p2'),
+    winner:null,isExtra:true,label:'Partida de reinício'};
+  if (final.category!=null) reset.category=final.category;
+  return reset;
+}
+window._grandFinalResetMatch=_grandFinalResetMatch;
+
 function _advanceWinner(t, completedMatch) {
   const winner = completedMatch.winner;
   const loser = winner === completedMatch.p1 ? completedMatch.p2 : completedMatch.p1;
@@ -2283,16 +2293,7 @@ function _advanceWinner(t, completedMatch) {
       var _existingReset = (t.matches || []).filter(function (m) { return String(m.id) === _resetId; })[0];
       if (window._matchWinnerSide(completedMatch) === 2) {
         if (!_existingReset) {
-          var _resetMatch = {
-            id: _resetId, round: (completedMatch.round || 1) + 1,
-            bracket: 'grand', phaseIndex: completedMatch.phaseIndex || 0,
-            p1: completedMatch.p1, p2: completedMatch.p2,
-            p1Uid: completedMatch.p1Uid || null, p2Uid: completedMatch.p2Uid || null,
-            team1Uids: _slotUids(completedMatch, 'p1'), team2Uids: _slotUids(completedMatch, 'p2'),
-            team1Obj: _slotObj(completedMatch, 'p1'), team2Obj: _slotObj(completedMatch, 'p2'),
-            winner: null, isExtra: true, label: 'Partida de reinício'
-          };
-          if (completedMatch.category != null) _resetMatch.category = completedMatch.category;
+          var _resetMatch = _grandFinalResetMatch(completedMatch);
           t.matches.push(_resetMatch);
         }
       } else if (_existingReset) {
@@ -7104,7 +7105,7 @@ function _phaseGenNextLeagueRound(t, phaseIdx, det) {
     rankingSitOutScoring: cfg.rankingSitOutScoring || t.rankingSitOutScoring || { mode: 'average' },
     participants: st.pool.slice(),
     rounds: st.rounds, matches: [],
-    combinedCategories: [], skillCategories: [],
+    combinedCategories: Array.from(new Set(st.pool.map(p=>p.category).filter(Boolean))), skillCategories: [],
     scoring: cfg.scoring, tiebreakers: t.tiebreakers, // v3.1.39: phase-only (cfg=fase; completa pós-migração)
     equilibrado: cfg.equilibrado, clusterSize: cfg.clusterSize,
     allowSelfDeactivation: false,

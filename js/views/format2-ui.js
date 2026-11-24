@@ -126,10 +126,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       el.style.opacity = locked ? '0.65' : '';
     });
   }
+  window._f2RefreshScoring=function(){if(S) _rerender();};
   window._f2PlaceExtSections = _placeExt; // pra chamar de fora após o mount
 
   function _rerender() {
     if (!S) return;
+    if(S.rendering){S.rerenderPending=true;return;}
+    var renderingState=S;renderingState.rendering=true;
+    try {
     if (S.mode === 'form') {
       _syncTeamSize();
       _stashExt();
@@ -144,6 +148,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     } else {
       var c = document.getElementById('view-container');
       if (c) window.renderFormatoPage(c);
+    }
+    } finally {
+      renderingState.rendering=false;
+      if(S===renderingState && renderingState.rerenderPending){renderingState.rerenderPending=false;_rerender();}
     }
   }
 
@@ -353,6 +361,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _elimScoringDesc(sc) {
     if (!sc) return '';
+    if(sc.fixedSet) return (Number(sc.fixedSetGames || sc.gamesPerSet) || 6)+' games disputados no total; vence quem ganhar mais games.';
     if (typeof window._gsmBuildDescFromValues !== 'function') return '';
     return window._gsmBuildDescFromValues(sc.setsToWin, sc.gamesPerSet, sc.tiebreakEnabled,
       sc.tiebreakPoints, sc.superTiebreak, sc.superTiebreakPoints, _elimTieAtAtual({ scoring: sc }), sc.tieRule);
@@ -417,9 +426,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var eff = _elimEffScoring(e);
     var selKey = _elimSelKey(e);
     var grid = '';
-    ['set1', 'best3', 'best5', 'fixedGames', 'custom'].forEach(function (k) {
+    ['set1', 'best3', 'best5', 'custom'].forEach(function (k) {
       var p = P[k]; if (!p) return;
-      var active = (selKey === k);
+      var active = (selKey === k || k==='custom' && selKey==='fixedGames');
       var desc = (k === 'fixedGames')
         ? ((Number(eff && eff.fixedSetGames) || Number(eff && eff.gamesPerSet) || 6) + ' games jogados; vence quem ganhar mais')
         : (k === 'custom')
@@ -444,7 +453,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">' + grid + '</div>' +
       // A eliminatória pode herdar ou escolher seus próprios games e regra de empate.
       ((typeof window._tieAtToggleHtml === 'function' && eff)
-        ? window._tieAtToggleHtml({ games: (eff && eff.fixedSet ? (eff.fixedSetGames || eff.gamesPerSet) : eff.gamesPerSet) || 6, fixedGames: !!eff.fixedSet, at: _elimTieAtAtual(e),
+        ? window._tieAtToggleHtml({ games: (eff && eff.fixedSet ? (eff.fixedSetGames || eff.gamesPerSet) : eff.gamesPerSet) || 6, fixedGames: !!eff.fixedSet, countingType:eff.countingType, at: _elimTieAtAtual(e),
             rule: eff.tieRule || (eff.tiebreakEnabled !== false ? 'tiebreak' : 'extend'),
             setTwoPointAdvantage: eff.setTwoPointAdvantage !== undefined ? eff.setTwoPointAdvantage : (eff.twoPointAdvantage !== undefined ? eff.twoPointAdvantage : Number(eff.tiebreakMargin || 2) >= 2),
             tiebreakTwoPointAdvantage: eff.tiebreakTwoPointAdvantage !== undefined ? eff.tiebreakTwoPointAdvantage : (eff.twoPointAdvantage !== undefined ? eff.twoPointAdvantage : Number(eff.tiebreakMargin || 2) >= 2),
@@ -755,32 +764,34 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ? Math.ceil(Math.max(0, Number(gi && gi.units) || 0) / 8)
       : Math.max(1, Number(cfg && cfg.grupos) || 1);
   }
-  function _categoryProjection(cfg, capacities) {
-    var categories = cfg.parceria === 'rotation_groups' ? _sliderCategories() : _rotationCategories(), groupGames = 0, groups = [];
-    for (var ci = 0; ci < categories.length; ci++) {
-      var category = categories[ci];
-      var people = capacities ? Number(capacities[category]) : _categoryPeople(category);
-      if (!Number.isSafeInteger(people) || people < 1 || people > 4096) return null;
-      var row = _groupPreview(cfg, category, people);
-      if (row.plan.error) return null;
-      groupGames += row.plan.matches;
-      var a = row.plan.assessment;
-      for (var i = 0; i < a.groups; i++) {
-        var size = a.base + (i < a.remainder ? 1 : 0);
-        groups.push({ category:category, name:category + ' · ' + (i + 1),
-          players:Array.from({length:size}, function (_, j) { return 'Vaga ' + ci + '-' + i + '-' + j; }) });
-      }
-    }
-    if (!groups.length) return null;
-    var phases = window.FORMAT2.compileToPhases(cfg, { sport:S.sport, categories:categories }).phases;
-    var projection = { combinedCategories:categories, groups:groups, phases:phases };
-    var next = phases[1] && window._sumulaUpcomingBracket(projection, 1);
-    if (phases[1] && (!next || next.pending || !next.categories || next.categories.some(function (c) { return c.partial; }))) return null;
-    return { groupGames:groupGames, elimGames:next ? next.categories.reduce(function (total,c) { return total + c.matches.length; }, 0) : 0 };
+  window._f2ProjectCurrentPhases=function(capacities) {
+    if(!S || !window.ScoreplacePhaseGridPlan) return null;
+    var cats=_sliderCategories(), limits=capacities || Object.fromEntries(cats.map(cat=>[cat,_sliderPopulation(cat,0)]));
+    var val=function(id,fallback){var e=document.getElementById(id);return e ? Number(e.value)||0 : fallback || 0;};
+    var t=Object.assign({},S.t || {},{sport:S.sport,fmt2:S.cfg,participants:[],matches:[],rounds:[],groups:[],
+      combinedCategories:cats.filter(Boolean),maxParticipantsByCategory:limits,maxParticipantsPerCategory:0,
+      maxParticipants:cats.reduce((n,cat)=>n+Number(limits[cat] || 0),0),
+      courtCount:Math.max(1,val('tourn-court-count',S.t?.courtCount || 1)),
+      gameDuration:val('tourn-game-duration',S.t?.gameDuration || 30),callTime:val('tourn-call-time',S.t?.callTime),
+      warmupTime:val('tourn-warmup-time',S.t?.warmupTime),scoring:_scoringInicial() || S.t?.scoring});
+    var setup=document.getElementById('setup-first-round-only');
+    if(setup) t.setupScope=setup.checked?'first_round':'every_game';
+    var result=window.ScoreplacePhaseGridPlan.project(t,window);
+    return Object.assign(result,{tournament:t});
+  };
+  function _categoryProjection(cfg,capacities) {
+    try {
+      var result=window._f2ProjectCurrentPhases(capacities);
+      if(!result) return null;
+      var groupGames=0,elimGames=0;
+      result.jobs.forEach(function(job){if(result.phases[job.phaseIndex].kind==='classification') groupGames+=job.games;else elimGames+=job.games;});
+      return {groupGames:groupGames,elimGames:elimGames};
+    }catch(_){return null;}
   }
-  window._f2ProjectedRotation = function (capacities) {
-    if (!S || !(S.cfg.rotationCategoryRules || (S.cfg.groupCategoryRules && S.cfg.groupCategoryRules.length))) return null;
-    return _categoryProjection(S.cfg, capacities);
+  window._f2ProjectedRotation=function(capacities){return S ? _categoryProjection(S.cfg,capacities) : null;};
+  window._f2GroupFormatLabels=function(){
+    if(!S || !S.cfg.classifAtiva) return ['Eliminatória'];
+    return [...new Set(_sliderRules(0).map(rule=>_sliderData(rule,0).preview.split(' · ')[0]))];
   };
   // Linha de estimativa (inscritos + tempo de jogos).
   function _estimateLine(cfg) {
@@ -1019,7 +1030,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _sliderPopulation(category, phase) {
     if (phase > 0) {
       // A formação usa classificados. Sem um elenco confirmado, a geometria fica projetada.
-      if (!S.cfg.eliminatoria.qualifyAll) {
+      if (S.cfg.qualificationCategoryRules || !S.cfg.eliminatoria.qualifyAll) {
         var rules = _sliderRules(0), rule = rules.find(function (r) { return r.category === category; });
         var roster = _sliderPopulation(category, 0);
         if (!roster || !rule) return 0;
@@ -1027,7 +1038,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         if (layout.invalid) return 0;
         var groupCount = S.cfg.classifScope === 'per_group' ? layout.groups : 1;
         var perUnit = S.cfg.disputa === 'dupla' && S.cfg.parceria === 'fixa' ? 2 : 1;
-        return Math.min(roster, S.cfg.classificados * groupCount * perUnit);
+        var quota=S.cfg.qualificationCategoryRules?.find(r=>r.category===category);
+        return Math.min(roster, (quota?quota.perGroup:S.cfg.classificados) * (quota?layout.groups:groupCount) * perUnit);
       }
     }
     var actual = _categoryPeople(category);
@@ -1086,6 +1098,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var cfg = S.cfg, sport = _sliderSport(phase), team = cfg.teamCompetition.schedule;
     var saved = phase ? cfg.eliminatoria.formationCategoryRules : cfg.rotationCategoryRules;
     var marker=phase ? cfg.eliminatoria.formationSliderMode : cfg.classificationSliderMode;
+    var quotas=phase ? cfg.eliminatoria.formationQualificationCategoryRules : cfg.qualificationCategoryRules;
     var rows = _sliderCategories().map(function (category) {
       var row = saved?.find(function (r) { return r.category === category; });
       var ordinary = cfg.groupCategoryRules?.find(function (r) { return r.category === category; });
@@ -1104,6 +1117,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         rounds = Math.max(1, Math.floor(groupSize / (pairs ? 2 : 1)) - 1);
       }
       return {category:category,groupFormation:formation,rounds:rounds || 7,
+        perGroup:quotas?.find(q=>q.category===category)?.perGroup || cfg.classificados || 2,
         allowRepeatPartners:sport === 'rotation' ? row?.allowRepeatPartners ?? (!queen && cfg.rotationAllowRepeatPartners === true)
           : sport !== 'team' && (ordinary?.allowRepeat ?? cfg.classificationSchedule?.allowRepeat ?? false),
         destination:phase || cfg.eliminatoria.ativa && (!row || row.destination === 'elimination') ? 'elimination' : 'ranking'};
@@ -1149,6 +1163,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var preview = error || (name+' · '+(people ? count+(count===1?' grupo':' grupos')+' · '+sizeText+' pessoas por grupo · '+matches+' jogos'
       : 'A divisão final depende do elenco da categoria')+' · '+rule.rounds+' jogos por jogador');
     return {num:count,size:size,sizeText:sizeText,people:people,error:error,preview:preview,unit:unit,minimum:minimum,
+      qualifierLimit:sizes.length?Math.floor(Math.min.apply(null,sizes)/unit):128,
       maxGames:Math.max(rule.rounds,rule.allowRepeatPartners ? 128 : Math.max(1,Math.floor((size || 128)/unit)-1))};
   }
   function _sliderId(kind,phase,index) { return 'f2-rotation-'+kind+'-'+(phase ? phase+'-' : '')+index; }
@@ -1157,49 +1172,73 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!S.sliderModes[phase]) {
       var saved = phase ? S.cfg.eliminatoria.formationCategoryRules : S.cfg.rotationCategoryRules ||
         S.cfg.groupCategoryRules?.length && S.cfg.groupCategoryRules || S.cfg.teamCompetition.schedule?.groupFormationByCategory;
-      var signature = r => JSON.stringify([r.groupFormation,r.rounds,r.allowRepeatPartners]);
+      var signature = r => JSON.stringify([r.groupFormation,r.rounds,r.allowRepeatPartners,r.perGroup]);
       var marker=phase ? S.cfg.eliminatoria.formationSliderMode : S.cfg.classificationSliderMode;
-      S.sliderModes[phase] = {common:marker ? marker==='common' : !!saved && rules.length>1 && rules.every(r=>signature(r)===signature(rules[0]))};
+      S.sliderModes[phase] = {common:marker ? marker==='common' : !saved || !rules.length || rules.every(r=>signature(r)===signature(rules[0]))};
     }
     return S.sliderModes[phase];
   }
   function _copySliderValues(rule, source) {
     return Object.assign({},rule,{groupFormation:Object.assign({},source.groupFormation),rounds:source.rounds,
-      allowRepeatPartners:source.allowRepeatPartners});
+      allowRepeatPartners:source.allowRepeatPartners,perGroup:source.perGroup});
+  }
+  function _sliderToggle(id,label,on,change,disabled) {
+    return '<label style="display:flex;align-items:center;gap:9px;font-size:.82rem;margin:10px 0;cursor:pointer;color:var(--text-main)">'+
+      '<span class="toggle-switch toggle-sm" style="flex-shrink:0"><input type="checkbox" id="'+id+'" aria-label="'+label+'"'+
+      (on?' checked':'')+(disabled?' disabled':'')+' onchange="'+change+'"><span class="toggle-slider"></span></span>'+label+'</label>';
+  }
+  function _qualificationEnabled(rule,phase) {
+    return S.cfg.eliminatoria.ativa && (phase || rule.destination==='elimination');
   }
   function _rotationSliderCards(phase) {
     var disabled = _hasDrawnGames() ? ' disabled' : '', rules = _sliderRules(phase), sport = _sliderSport(phase);
     var mode = _sliderMode(phase,rules);
-    var html = '<div data-rotation-phase="'+phase+'">';
+    var html = '<div data-rotation-phase="'+phase+'" style="min-width:0;max-width:860px;width:100%;color:var(--text-main)">';
     if (rules.length>1) {
-      html += '<label><input type="checkbox" id="f2-slider-common-'+phase+'"'+(mode.common?' checked':'')+disabled+
-        ' onchange="window._f2SliderCommon('+phase+',this.checked)"> Mesma configuração para todas</label> <span>'+
-        (mode.common?'':'Personalizar por categoria')+'</span>';
+      html += _sliderToggle('f2-slider-common-'+phase,'Personalizar por categoria',!mode.common,
+        'window._f2SliderCommon('+phase+',!this.checked)',!!disabled)+
+        '<div style="font-size:.75rem;color:var(--text-muted)">'+(mode.common?'Mesma configuração para todas as categorias':'Configuração de cada categoria')+'</div>';
       if (mode.common) ['count','size'].forEach(function (key) {
         html += '<button type="button" data-slider-priority="'+key+'" aria-pressed="'+(rules[0].groupFormation.mode===key)+'"'+disabled+
           ' onclick="window._f2SliderPriority('+phase+',\''+key+'\')">'+(key==='size'?'Pessoas por grupo':'Grupos por categoria')+'</button>';
       });
     }
+    function preview(rule,index,data) {
+      return '<div data-slider-category="'+index+'" style="min-width:0;overflow-wrap:anywhere;color:var(--text-main)">'+
+        (phase?'':'<div data-slider-capacity></div>')+
+        '<div data-slider-population style="font-size:.8rem">'+_safe(rule.category || 'Classificação geral')+' · '+
+        (data.people ? data.people+' pessoas' : 'Quantidade a definir')+'</div>'+
+        '<div id="'+_sliderId('preview',phase,index)+'" role="status" style="font-size:.78rem;margin:6px 0">'+_safe(data.preview)+'</div></div>';
+    }
     rules.forEach(function (rule,index) {
       var data = _sliderData(rule,phase);
-      function slider(kind,label,value,shown,min,max,step) {
+      if(mode.common && index) return;
+      function slider(kind,label,value,shown,min,max,step,extraDisabled) {
         var id = _sliderId(kind,phase,index);
-        return '<label for="'+id+'" style="display:block;margin-top:8px">'+label+' <output id="'+id+'-value">'+shown+'</output></label>' +
-          '<input id="'+id+'" type="range" min="'+min+'" max="'+max+'" step="'+(step || 1)+'" value="'+value+'" style="width:100%"'+disabled+
-          ' oninput="window._f2RotationSlider('+phase+','+index+',\''+kind+'\',this.value)" onchange="window._f2RotationSliderDone()">';
+        return '<div style="min-width:0"><label for="'+id+'" style="display:block;font-size:.82rem;margin-bottom:5px;color:var(--text-main)">'+label+
+          ' <output id="'+id+'-value" style="font-weight:700">'+shown+'</output></label>' +
+          '<input id="'+id+'" type="range" min="'+min+'" max="'+max+'" step="'+(step || 1)+'" value="'+value+'" style="width:100%;min-width:0;box-sizing:border-box"'+disabled+(extraDisabled?' disabled':'')+
+          ' oninput="window._f2RotationSlider('+phase+','+index+',\''+kind+'\',this.value)" onchange="window._f2RotationSliderDone()"></div>';
       }
-      html += '<fieldset data-slider-category="'+index+'" style="margin:8px 0;padding:10px;border:1px solid var(--sp-b-255-255-255-02);border-radius:10px"><legend>'+_safe(rule.category || 'Classificação geral')+'</legend>'+
-        (phase?'':'<div data-slider-capacity></div>')+
-        '<div data-slider-population>'+ (data.people ? data.people+' pessoas na '+(phase?'formação':'categoria') : 'Quantidade de pessoas a definir')+'</div>'+
+      var eligible=_qualificationEnabled(rule,phase) || mode.common && rules.some(r=>_qualificationEnabled(r,phase));
+      var maxQual=Math.max(1,rule.perGroup,data.qualifierLimit);
+      html += '<fieldset style="min-width:0;box-sizing:border-box;margin:8px 0;padding:10px;border:1px solid var(--sp-b-255-255-255-02);border-radius:10px"><legend style="font-size:.85rem;color:var(--text-main)">'+
+        _safe(mode.common?'Mesma configuração para todas':rule.category || 'Classificação geral')+'</legend>'+
+        '<div data-slider-layout style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;max-width:820px">'+
         slider('groups','Número de grupos',data.num || 1,data.num || 'A definir',1,Math.max(1,data.num,Math.min(128,data.people ? Math.floor(data.people/data.minimum) : 128)))+
         slider('size','Pessoas por grupo',Math.max(data.minimum,data.size),data.sizeText,data.minimum,Math.max(data.minimum,data.size,Math.min(128*data.unit,data.people || 128*data.unit)),data.unit)+
         slider('games','Jogos por jogador',rule.rounds,rule.rounds,1,data.maxGames)+
-        (sport==='team' ? '<div>Cada jogador mantém sua dupla. A grade por times usa adversários distintos.</div>' :
-        '<label><input id="'+_sliderId('partners',phase,index)+'" type="checkbox"'+(rule.allowRepeatPartners?' checked':'')+disabled+
-        ' onchange="window._f2RotationSlider('+phase+','+index+',\'partners\',this.checked);window._f2RotationSliderDone()"> '+
-        (sport==='rotation'?'Permitir repetir parceiro':'Permitir repetir adversário')+'</label>')+
-        '<div id="'+_sliderId('preview',phase,index)+'" role="status">'+_safe(data.preview)+'</div></fieldset>';
+        slider('qualifiers',sport==='pairs'?'Duplas classificadas por grupo':'Classificados por grupo',rule.perGroup,rule.perGroup,1,maxQual,1,!eligible)+'</div>'+
+        (!eligible?'<div style="font-size:.75rem;color:var(--text-muted);margin-top:8px">Sem próxima fase para esta categoria.</div>':'')+
+        (sport==='team' ? '<div style="font-size:.75rem">Cada jogador mantém sua dupla. A grade por times usa adversários distintos.</div>' :
+        _sliderToggle(_sliderId('partners',phase,index),sport==='rotation'?'Não repetir parceiro':'Não repetir adversário',!rule.allowRepeatPartners,
+          'window._f2RotationSlider('+phase+','+index+',\'partners\',!this.checked);window._f2RotationSliderDone()',!!disabled))+
+        (mode.common?'':preview(rule,index,data))+'</fieldset>';
     });
+    if(mode.common) rules.forEach((rule,index)=>{html+=preview(rule,index,_sliderData(rule,phase));});
+    var quotas=phase?S.cfg.eliminatoria.formationQualificationCategoryRules:S.cfg.qualificationCategoryRules;
+    if(!quotas && S.cfg.eliminatoria.ativa && (S.cfg.eliminatoria.qualifyAll || S.cfg.classifScope==='overall'))
+      html+='<div style="font-size:.75rem;color:var(--text-muted)">Ao ajustar classificados, o avanço passa a ser definido por grupo. O corte salvo permanece até esse ajuste.</div>';
     var stored=phase ? S.cfg.eliminatoria.formationCategoryRules : S.cfg.rotationCategoryRules || S.cfg.groupCategoryRules;
     if (stored?.length && (stored.length!==rules.length || stored.some(r=>!rules.some(current=>current.category===r.category)))) {
       html += '<button type="button"'+disabled+' onclick="window._f2ApplySliderCategories('+phase+')">Aplicar às categorias atuais</button>';
@@ -1210,10 +1249,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!S || _hasDrawnGames()) return;
     _storeSliderRules(phase,_sliderRules(phase)); window._f2RotationSliderDone();
   };
-  function _storeSliderRules(phase,rules) {
+  function _storeSliderRules(phase,rules,qualificationChanged) {
     var cfg = S.cfg, sport = _sliderSport(phase);
     var marker=_sliderMode(phase,rules).common ? 'common' : 'category';
     if (phase) cfg.eliminatoria.formationSliderMode=marker; else cfg.classificationSliderMode=marker;
+    var quotaKey=phase?'formationQualificationCategoryRules':'qualificationCategoryRules',holder=phase?cfg.eliminatoria:cfg;
+    if(qualificationChanged || holder[quotaKey]) {
+      holder[quotaKey]=rules.filter(r=>_qualificationEnabled(r,phase)).map(r=>({category:r.category,perGroup:r.perGroup}));
+    }
+    rules=rules.map(function(r){var clean=Object.assign({},r);delete clean.perGroup;return clean;});
     if (phase) { cfg.eliminatoria.formationCategoryRules=rules; return; }
     if (!cfg.classifAtiva && cfg.eliminatoria.openReiRainha) cfg.eliminatoria.openReiRainha=false;
     cfg.classifAtiva=true; cfg.rodadas.modo='todos'; cfg.rodadas.turnos='ida';
@@ -1267,15 +1311,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (kind==='partners') rule.allowRepeatPartners=value===true;
     else if (!Number.isInteger(number) || number<1 || number>(kind==='size'?128*before.unit:128)) return;
     else if (kind==='games') rule.rounds=number;
+    else if (kind==='qualifiers' && (_qualificationEnabled(rule,phase) || mode.common && rules.some(r=>_qualificationEnabled(r,phase)))) rule.perGroup=number;
     else if (kind==='size' && number>=before.minimum && number%before.unit===0) rule.groupFormation={mode:'size',value:number};
     else if (kind==='groups') rule.groupFormation={mode:'count',value:number};
     else return;
     if (mode.common) rules=rules.map(r=>_copySliderValues(r,rule));
-    _storeSliderRules(phase,rules);
+    _storeSliderRules(phase,rules,kind==='qualifiers');
     rules.forEach(function (r,i) {
       if (i!==index && !mode.common) return;
       var data=_sliderData(r,phase);
-      [['groups',data.num,data.num||'A definir'],['size',data.size,data.sizeText],['games',r.rounds,r.rounds]].forEach(function (field) {
+      [['groups',data.num,data.num||'A definir'],['size',data.size,data.sizeText],['games',r.rounds,r.rounds],['qualifiers',r.perGroup,r.perGroup]].forEach(function (field) {
         var id=_sliderId(field[0],phase,i), input=document.getElementById(id), out=document.getElementById(id+'-value');
         if (input && field[1]) { if(field[0]==='games') input.max=String(data.maxGames); input.value=field[1]; }
         if (out) out.textContent=field[2];
@@ -1283,7 +1328,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var preview=document.getElementById(_sliderId('preview',phase,i)); if (preview) preview.textContent=data.preview;
     });
   };
-  window._f2RotationSliderDone=function () { if (S) { _norm(); _rerender(); } };
+  window._f2RotationSliderDone=function () { if (S) { _norm(); _rerender(); if(typeof window._renderPhaseEstimate==='function') window._renderPhaseEstimate(); } };
   window._f2RotationConfigError=function () {
     if (!S) return '';
     for (var phase of [0,1]) {
@@ -1296,7 +1341,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (rules.length!==names.length || rules.some(r=>!names.includes(r.category))) return 'Ajuste as regras às categorias atuais antes de salvar.';
       for (var r of rules) { var data=_sliderData(r,phase); if (data.error) return (r.category ? r.category+' · ' : '')+data.error; }
     }
-    return '';
+    return window.FORMAT2.qualificationError ? window.FORMAT2.qualificationError(S.cfg,_sliderCategories(),category=>_sliderPopulation(category,0),S.sport) : '';
   };
   function _groupCategoryControls(cfg) {
     var categories = _rotationCategories();
@@ -1694,34 +1739,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         // COM classificatória: escopo (2+ grupos) + Nº de classificados + resumo.
         var effectiveGroups = _effectiveGroupCount(cfg, _groupInfo(cfg));
         var perGroupScope = (effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8' || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) && cfg.classifScope !== 'overall';
-        if (effectiveGroups > 1 || cfg.parceria === 'rotation_groups_8' || (cfg.groupCategoryRules && cfg.groupCategoryRules.length)) {
-          eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Classificação dos participantes</div>' +
-            _pill(perGroupScope, 'window._f2ClassScope(\'per_group\')', '🗂️ Por grupos') +
-            _pill(!perGroupScope, 'window._f2ClassScope(\'overall\')', '📊 Geral') +
-            '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;">' + (perGroupScope
-              ? 'Os melhores de CADA grupo avançam para a eliminatória.'
-              : 'Uma classificação GERAL une todos os grupos; os melhores no geral avançam.') + '</div>';
-        }
-        // v4.4.36: Quantos avançam — TODOS × Os melhores (com slider). Todos = todos os
-        // participantes da classificatória entram no bracket (semeados pela classificação).
-        var qAll = !!e.qualifyAll;
-        eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Quem avança para a eliminatória</div>' +
-          _pill(!qAll, 'window._f2QualifyAll(false)', '🏅 Os melhores') +
-          _pill(qAll, 'window._f2QualifyAll(true)', '👥 Todos') + '<div style="height:10px;"></div>';
-        if (!qAll) {
-          var classLabel = perGroupScope ? 'Nº de classificados por grupo' : 'Nº de classificados (total) para a eliminatória';
-          // v4.4.41: o slider (geral) vai ATÉ o nº de unidades inscritas (duplas/jogadores);
-          // chegar no total vira "Todos". Sem inscritos, cap generoso (64) pra passar de 32.
-          var _units = _groupInfo(cfg).units;
-          var classMax = perGroupScope ? 8 : (_units > 1 ? _units : 64);
-          if (cfg.classificados > classMax) classMax = cfg.classificados; // nunca corta valor salvo
-          eb += '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;">' + classLabel + '</div>' +
-            '<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">' +
-            '<input type="range" min="1" max="' + classMax + '" value="' + cfg.classificados + '" oninput="window._f2ClassLive(this.value)" onchange="window._f2Class(this.value)" style="flex:1;accent-color:#fbbf24;">' +
-            '<span id="f2-class-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:var(--sp-c-fde68a,#fde68a);">' + cfg.classificados + '</span></div>';
-        } else {
-          eb += '<div style="font-size:0.74rem;color:var(--sp-c-fde68a,#fde68a);margin-bottom:6px;">Todos os participantes da classificatória entram no bracket, semeados pela classificação.</div>';
-        }
+        var qAll=!!e.qualifyAll;
+        eb += '<div style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">'+
+          (cfg.qualificationCategoryRules ? cfg.qualificationCategoryRules.map(r=>_safe(r.category || 'Classificação geral')+': '+r.perGroup+' por grupo').join(' · ')
+            : 'Defina o corte nos sliders de classificados da fase de grupos.')+'</div>';
         if (!qAll && perGroupScope && e.lineAssignment !== 'rank_ranges' && !e.openReiRainha) {
           var extra = e.bestNextByGroup || { count: 0, metric: 'points_per_game', destIndex: 0 };
           eb += '<div style="margin:12px 0;padding:10px;border:1px solid rgba(129,140,248,.25);border-radius:8px;">' +
@@ -2203,6 +2224,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var controls = document.getElementById('f2-rotation-categories');
     if (controls && S && S.cfg.parceria === 'rotation_groups_8') controls.innerHTML = _rotationCategoryControls(S.cfg);
   };
+  function _reconcileQualificationDestinations() {
+    if(!S) return;
+    var cfg=S.cfg, eligible=_sliderCategories().filter(cat=>cfg.classifAtiva && cfg.eliminatoria.ativa &&
+      !cfg.rotationCategoryRules?.some(r=>r.category===cat && r.destination==='ranking'));
+    S.qualificationDrafts=S.qualificationDrafts || [{},{}];
+    [0,1].forEach(function(phase){
+      var holder=phase?cfg.eliminatoria:cfg,key=phase?'formationQualificationCategoryRules':'qualificationCategoryRules';
+      if(!Array.isArray(holder[key])) return;
+      holder[key].forEach(row=>{S.qualificationDrafts[phase][row.category]=row.perGroup;});
+      holder[key]=(phase && !cfg.eliminatoria.openReiRainha?[]:eligible).map(category=>({category:category,
+        perGroup:S.qualificationDrafts[phase][category] || cfg.classificados || 2}));
+    });
+  }
   window._f2RotationRule = function (index, rounds, destination) {
     if (!S || _hasDrawnGames() || !S.cfg.rotationCategoryRules) return;
     var rules = S.cfg.rotationCategoryRules.map(function (rule) {return Object.assign({},rule);}), rule = rules[index];
@@ -2214,6 +2248,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     if (destination === 'ranking' || (destination === 'elimination' && S.cfg.eliminatoria.ativa)) rule.destination = destination;
     S.cfg.rotationCategoryRules = rules;
+    _reconcileQualificationDestinations();
     _norm(); _rerender();
   };
   window._f2RotationRounds = function (value) {
@@ -2562,6 +2597,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!checked && S.cfg.eliminatoria.formationCategoryRules) S.cfg.eliminatoria.formationCategoryRules=null;
     S.cfg.eliminatoria.ativa = !!checked;
     if (!checked && S.cfg.rotationCategoryRules) S.cfg.rotationCategoryRules.forEach(function (rule) { rule.destination = 'ranking'; });
+    _reconcileQualificationDestinations();
     _norm(); _rerender();
   };
   window._f2ClassifAtiva = function (checked) {
@@ -2569,6 +2605,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!checked && S.cfg.parceria==='rotation_groups') { S.cfg.rotationCategoryRules=null; S.cfg.parceria='fixa'; }
     if (!checked && S.cfg.eliminatoria.formationCategoryRules) S.cfg.eliminatoria.formationCategoryRules=null;
     S.cfg.classifAtiva = !!checked;
+    _reconcileQualificationDestinations();
     _norm(); _rerender();
   };
   window._f2Linhas = function (n) { if (!S) return; S.cfg.eliminatoria.linhas = parseInt(n, 10) || 1; _norm(); _rerender(); };
@@ -2646,6 +2683,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var ini = (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
     window._f2SetElimScoring(ini && _mesmoFormato(sc, ini) ? null : sc);
   }
+  window._f2ElimSetGameMode=function(fixed) {
+    if(!S || typeof fixed!=='boolean') return;
+    if((typeof window._scoringPhaseHasResult==='function' && window._scoringPhaseHasResult(1)) ||
+        (typeof window._scoringPhaseHasTiebreak==='function' && window._scoringPhaseHasTiebreak(1))) {_rerender();return;}
+    var base=_elimEffScoring(S.cfg.eliminatoria);
+    if(!base || !!base.fixedSet===fixed) return;
+    var displayed=Number(base.fixedSet ? base.fixedSetGames || base.gamesPerSet : base.gamesPerSet) || 6;
+    _setElimGameRule(Object.assign({fixedSet:fixed,gamesPerSet:displayed},fixed?{fixedSetGames:displayed}:{},
+      fixed && displayed%2===0?{tieRule:'tiebreak',tiebreakEnabled:true}:{}));
+  };
   window._f2ElimSetGames = function (raw) {
     var n = Number(raw);
     if (!Number.isInteger(n) || n < 1 || (typeof window._scoringPhaseHasResult === 'function' && window._scoringPhaseHasResult(1))) { _rerender(); return; }
@@ -2653,7 +2700,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var fixed = !!(current && current.fixedSet);
     _setElimGameRule(n === 1 && !fixed
       ? { gamesPerSet: n, fixedSet: false, tieRule: 'extend', tiebreakEnabled: false, tiebreakAt: '' }
-      : { gamesPerSet: n, fixedSet: fixed, fixedSetGames: fixed ? n : 6,
+      : { gamesPerSet: n, fixedSet: fixed, ...(fixed?{fixedSetGames:n}:{}),
           ...(fixed && n % 2 === 0 ? { tieRule: 'tiebreak', tiebreakEnabled: true } : {}) });
   };
   window._f2ElimSetTieAt = function (raw) {
@@ -2756,7 +2803,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
   window._f2ElimEndTime = function (v, el) { if (!S) return; S.cfg.eliminatoria.endTime = String(v || ''); _norm(); _rerenderSemAtrapalhar(el); };
   // v4.5.51: abrir a eliminatória com rodada Rei/Rainha (grupos de 4 formam as duplas).
-  window._f2ElimOpenRR = function (checked) { if (!S) return; if (!checked && S.cfg.eliminatoria.formationCategoryRules) S.cfg.eliminatoria.formationCategoryRules=null; S.cfg.eliminatoria.openReiRainha = !!checked; _norm(); _rerender(); };
+  window._f2ElimOpenRR = function (checked) { if (!S) return; if (!checked && S.cfg.eliminatoria.formationCategoryRules) S.cfg.eliminatoria.formationCategoryRules=null; S.cfg.eliminatoria.openReiRainha = !!checked; _reconcileQualificationDestinations(); _norm(); _rerender(); };
   window._f2ElimName = function (value) { if (!S) return; S.cfg.eliminatoria.nome = String(value || '').slice(0, 40); };
   window._f2ElimRRCut = function (n) { if (!S) return; S.cfg.eliminatoria.reiRainhaCut = (parseInt(n, 10) === 2) ? 2 : 4; _norm(); _rerender(); };
   // Formação/pareamento e semeadura são escolhas independentes.

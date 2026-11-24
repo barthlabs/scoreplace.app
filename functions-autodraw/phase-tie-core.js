@@ -299,7 +299,7 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
   for (const pool of pools) {
     const compare = compareForPool(pool);
     let rows = rankInitialRows(pool.rows, compare, compare.originalOrder);
-    const ties = allBoundaryTies(rows, boundariesFor(nextPhase, rows.length), compare);
+    const ties = allBoundaryTies(rows, boundariesFor(pool.nextPhase || nextPhase, rows.length), compare);
     for (const tie of ties) {
       if (tie.players.some(player => drawPosition(player, compare.originalOrder) == null)) {
         throw new Error('ordem do sorteio original ausente para atleta empatado');

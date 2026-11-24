@@ -115,6 +115,9 @@ const monarchTv = { ...t, id: 'monarch-tv', courtNames: ['Quadra 1'], teamCompet
   match(33, 'Quadra 1', 'BLAST', 'VENOM', { isMonarch:true, monarchGroup:0, round:1, phaseIndex:0 })
 ] };
 const monarchSnapshot = window._tvLiveBuildSnapshot(monarchTv, Date.parse('2026-10-22T21:03:00Z'));
+const assignedSnapshot = window._tvLiveBuildSnapshot({...monarchTv,matches:monarchTv.matches.map(m=>({...m,scheduledGroupLabel:'B1'}))}, Date.parse('2026-10-22T21:03:00Z'));
+assert.equal(assignedSnapshot.courts[0].phase,'Classificatória · B1');
+assert.equal(assignedSnapshot.results[0].groupName,'B1');
 assert.equal(monarchSnapshot.courts[0].phase, 'Classificatória · Grupo A1', 'quadra da TV identifica o grupo');
 assert.equal(monarchSnapshot.results[0].seriesPosition, '1 de 3');
 assert.equal(monarchSnapshot.results[0].groupName, 'Grupo A1');
@@ -196,6 +199,11 @@ assert.equal(window._tvLiveBuildSnapshot(samePlayerQueue).nextGame.number, 21,
   'TV pula próximo jogo quando uma atleta já disputa outra partida');
 assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot(emptyQueue)), /Próximos jogos ainda não definidos/);
 const fourFuture = { ...t, matches: [20, 21, 22, 23, 24].map(n => match(n, 'Quadra 4', 'VORTEX', 'BLAST')) };
+const assignedGames={...t,phases:[{kind:'classification',classification:{partnerRotation:'groups'}}],
+  scheduleWindow:{interleavedPlan:{schema:2}},matches:[20,21].map((n,i)=>match(n,'Quadra '+(i+1),'VORTEX','BLAST',
+    {isMonarch:true,monarchGroup:0,round:1,scheduledGroupLabel:'B1',p1:'Dupla '+n+' A',p2:'Dupla '+n+' B'}))};
+const assignedQueue=window._tvLiveBuildSnapshot(assignedGames);
+assert.deepEqual(Array.from(assignedQueue.nextGames,g=>[g.number,g.groupName,!!g.series]),[[20,'B1',false],[21,'B1',false]]);
 const fourSnapshot = window._tvLiveBuildSnapshot(fourFuture);
 assert.equal(fourSnapshot.nextGames.map(g => g.number).join(','), '20,21,22,23,24', 'TV anuncia toda a fila na ordem para rolagem automática');
 assert.match(window._tvLiveBodyHtml(fourSnapshot), /PRÓXIMOS JOGOS[\s\S]*data-tv-autoscroll="upcoming"[\s\S]*JOGO 20[\s\S]*JOGO 23/);

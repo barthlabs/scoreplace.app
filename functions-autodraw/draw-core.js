@@ -228,6 +228,7 @@ g.window.ScoreplaceTeamCompetition = require('./vendor/team-competition.js');
 g.window.ScoreplaceRealtimeFreshness = require('./vendor/realtime-freshness.js');
 g.window._isRemoteFirestoreSnapshot = g.window.ScoreplaceRealtimeFreshness.isRemoteSnapshot;
 require('./vendor/identity-core.js');
+require('./vendor/phase-grid-plan.js');
 require('./vendor/schedule-poll.js');      // grade estimada: só o núcleo puro é chamado pela CF
 require('./vendor/team-formation.js');     // convite de dupla: máquina pura compartilhada
 require('./vendor/waitlist-core.js');            // cânone da LISTA DE ESPERA (3 storages) —
@@ -884,6 +885,22 @@ function drawInitial(t, opts) {
   // (as duplas entram COMO ESTÃO no Suíço). Ver project_draw_canonization_cf_phase23_deferred.
 
   const _E0 = win._phasesEngine;
+  if (t.fmt2) {
+    const error=win.FORMAT2.qualificationError(t.fmt2,t.combinedCategories,cat=>win.ScoreplaceSuperEight.categoryPopulation(t,cat),t.sport);
+    if (error) return {ok:false,reason:'invalid-qualification',message:error};
+  }
+  const grid=t.scheduleWindow?.interleavedPlan;
+  if (grid?.schema===2) {
+    try {
+      const actual=win.ScoreplaceSuperEight.rotationRoster(t);
+      const cats=t.combinedCategories?.length ? t.combinedCategories : [''];
+      const count=cat=>actual.filter(player=>!cat || player.categories[0]===cat || !player.categories.length && cats.length===1).length;
+      if (cats.some((cat,i)=>count(cat)!==grid.capacities?.[i]))
+        throw new Error('O número de inscritos mudou. Atualize as vagas e gere novamente a grade antes do sorteio.');
+      win.ScoreplacePhaseGridPlan.assertPlan(t,grid,t.scheduleWindow.days,win);
+    }
+    catch (error) { return {ok:false,reason:'invalid-phase-grid',message:error.message}; }
+  }
   const _cfg0 = win._buildPhase0Cfg(t);
   _cfg0.maxDrawOperations = require('./write-plan').TETO_OPERACOES;
 

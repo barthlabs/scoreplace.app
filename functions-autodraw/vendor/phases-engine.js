@@ -402,6 +402,7 @@
     } : null;
     return {
       shuffle: _shuffleDet || undefined,
+      perGroupQuota:src.perGroupQuota,
       scope: src.scope || 'per_group',
       lineAssignment: src.lineAssignment === 'rank_ranges' ? 'rank_ranges' : 'strategy',
       bestNextByGroup: src.bestNextByGroup || null,
@@ -468,6 +469,22 @@
     //     distribuídas em ordem (1+4→linha0, 2+3→linha1).
     //   • 'draw_among' (Sorteio): embaralha, pareia adjacente, distribui em ordem.
     // keep (duplas já formadas) passa direto, distribuído tiered.
+    var unpaired = new Map();
+    function routeGroup(pool, destinations) {
+      if (opts.perGroupQuota && fixedPairs && pool.length % 2 && basis !== 'team' && !_isTeamEntry(pool[0])) {
+        var key = destinations.join('|'), pending = unpaired.get(key) || [];
+        pending.push(pool[pool.length - 1]);
+        unpaired.set(key,pending);
+        pool = pool.slice(0,-1);
+      }
+      _distributePool(pool,destinations);
+    }
+    function finishPairing() {
+      unpaired.forEach(function (pool,key) {
+        if (pool.length % 2) throw new Error('O corte deixa um classificado sem parceiro.');
+        _distributePool(pool,key.split('|'));
+      });
+    }
     function _distributePool(pool, destKeys) {
       var nLines = destKeys.length;
       if (!pool || !pool.length || !nLines) return;
@@ -552,7 +569,7 @@
         mapping.forEach(function (mp) {
           var from = Math.max(1, parseInt(mp.rankFrom, 10) || 1);
           var to = Math.max(from, parseInt(mp.rankTo, 10) || from);
-          _distributePool(standings.slice(from - 1, to >= 999 ? undefined : to), [mp.dest]);
+          routeGroup(standings.slice(from - 1, to >= 999 ? undefined : to), [mp.dest]);
         });
       }
       if (_useOverall) routeRanges(_globalStandings(prevGroups || [], computeStandings, opts));
@@ -569,6 +586,7 @@
           }
         }
       }
+      finishPairing();
       if (pairingStrategy === 'top') _ordenaDuplasPorMeritoCombinado(byDest, opts);
       return byDest;
     }
@@ -594,12 +612,13 @@
       (prevGroups || []).forEach(function (g) {
         var standings = computeStandings(g) || [];
         var depth = (maxRankTo >= 999 || maxRankTo <= 0) ? standings.length : Math.min(maxRankTo, standings.length);
-        _distributePool(standings.slice(0, depth), destKeys);
+        routeGroup(standings.slice(0, depth), destKeys);
         if (opts.bestNextByGroup && standings[depth]) {
           _nextCandidates.push({ entry: standings[depth], groupIndex: _nextCandidates.length,
             played: Number(standings[depth].played || 0) });
         }
       });
+      finishPairing();
       var _bestNext = opts.bestNextByGroup;
       if (_bestNext && Number(_bestNext.count) > 0) {
         if (['points_per_game', 'win_rate', 'total_points'].indexOf(_bestNext.metric) < 0) {
@@ -1280,7 +1299,7 @@
       phaseCfg.officialGroupBracketOrder.indexOf(loneCategory) >= 0);
     var multi = !!(t && Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) || officialSingle;
     if (!multi) {
-      var one = buildPhaseBrackets(groups, phaseCfg, computeStandings, idPrefix, det);
+      var one = buildPhaseBrackets(groups, categoryQualification(phaseCfg,loneCategory), computeStandings, idPrefix, det);
       var lone = t && Array.isArray(t.combinedCategories) && t.combinedCategories.length === 1
         ? String(t.combinedCategories[0]) : '';
       if (lone) _stampCategory(one, lone);
@@ -1297,7 +1316,7 @@
     var combined = { matches: [], waitlist: [], categoryBuilds: [], repMetaByCat: [] };
     _splitCategoryItems(groups, order, _groupCategory).forEach(function (bucket) {
       var cat = bucket.category, ci = bucket.index;
-      var cfg = Object.assign({}, phaseCfg, { _surplusCategory: cat });
+      var cfg = Object.assign({}, categoryQualification(phaseCfg,cat), { _surplusCategory: cat });
       if (Array.isArray(phaseCfg.officialGroupBracketOrder) &&
           phaseCfg.officialGroupBracketOrder.indexOf(cat) >= 0) {
         // Planilha oficial: cada posição da chave corresponde ao vencedor do
@@ -1475,7 +1494,17 @@
   // Transição → pool: deriva o pool ÚNICO de classificados de prevGroups (standings
   // ranqueadas + distribuição por seed). É a ENTRADA da fase. A Fase 0 não usa isto
   // (o pool é a inscrição); a Fase N usa pra transformar a fase anterior em pool.
+  function categoryQualification(cfg,category) {
+    if (!cfg?.source?.qualificationCategoryRules?.length) return cfg;
+    return _realFormat2().qualificationForCategory(cfg,category);
+  }
   function _poolFromPrev(prevGroups, phaseCfg, computeStandings) {
+    if (phaseCfg && phaseCfg.source && phaseCfg.source.qualificationCategoryRules) {
+      return phaseCfg.source.qualificationCategoryRules.reduce(function (entries,rule) {
+        var source = prevGroups.filter(function (group) {return _groupCategory(group) === rule.category;});
+        return entries.concat(_poolFromPrev(source,categoryQualification(phaseCfg,rule.category),computeStandings));
+      },[]);
+    }
     var src = (phaseCfg && phaseCfg.source) || {};
     var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs === true) : false; // grupos: individual por padrão
     var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
@@ -1489,7 +1518,7 @@
     // MUDARIA é `includeInactive`, e incluir inativo num pool de Liga/Grupos é outra
     // decisão — não se enfia num conserto de divergência.
     var byDest = buildEntrantsByDest(prevGroups, [{ dest: 'main', rankFrom: 1, rankTo: maxRankTo }],
-      fixedPairs, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
+      fixedPairs, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis, perGroupQuota:src.perGroupQuota });
     return byDest.main || [];
   }
 
@@ -1943,19 +1972,19 @@
     } else throw new Error('Domínio da fase ausente ou inválido.');
     return cfg;
   }
-  var _nodePhaseProjector = null;
-  function _realPhaseProjector() {
-    if (typeof window !== 'undefined' && window.FORMAT2) return window.FORMAT2.projectLegacyPhases;
+  var _nodeFormat2 = null;
+  function _realFormat2() {
+    if (typeof window !== 'undefined' && window.FORMAT2) return window.FORMAT2;
     // Testes Node isolados não têm o shell do navegador. Carregar o MESMO FORMAT2
     // em VM, sem criar um tradutor alternativo nem mexer no global.window dos testes.
     if (typeof require === 'function' && typeof module !== 'undefined' && module.exports) {
-      if (!_nodePhaseProjector) {
+      if (!_nodeFormat2) {
         var fs = require('fs'), path = require('path'), vm = require('vm');
         var sandbox = { window: {} };
         vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'format2.js'), 'utf8'), sandbox);
-        _nodePhaseProjector = sandbox.window.FORMAT2 && sandbox.window.FORMAT2.projectLegacyPhases;
+        _nodeFormat2 = sandbox.window.FORMAT2;
       }
-      return _nodePhaseProjector;
+      return _nodeFormat2;
     }
     return null;
   }
@@ -1974,7 +2003,7 @@
         : cfg.elimination && cfg.elimination.bracketType;
       if (domain != null) return _validatedPhaseCfg(_copyPhaseValue(cfg));
     }
-    var projector = _realPhaseProjector();
+    var projector = _realFormat2()?.projectLegacyPhases;
     if (typeof projector !== 'function') throw new Error('Tradutor de fases indisponível.');
     if (!context || !Number.isInteger(index) || index < 0) throw new Error('Contexto de fase obrigatório.');
     // O tradutor lê campos do topo e copia cada fase: não duplicar elenco/jogos
@@ -2500,6 +2529,15 @@
   // o orquestrador e o pré-cheque usam isto em vez de montar mapping/flags à mão.
   function selectQualifiers(prevGroups, cfg, ctx) {
     ctx = ctx || {};
+    if (cfg?.source?.qualificationCategoryRules) {
+      var result={};
+      cfg.source.qualificationCategoryRules.forEach(function (rule) {
+        var groups=prevGroups.filter(group=>_groupCategory(group)===rule.category);
+        var entries=selectQualifiers(groups,categoryQualification(cfg,rule.category),ctx);
+        Object.keys(entries).forEach(dest=>{result[dest]=(result[dest] || []).concat(entries[dest]);});
+      });
+      return result;
+    }
     var mapping = mappingDaTransicao(cfg);
     var fixedPairs = cfg ? (cfg.fixedPairs !== false) : true;
     var pairingStrategy = (cfg && cfg.pairingStrategy) || 'top';
@@ -2514,6 +2552,16 @@
   function buildPhaseLeagueStage(prevGroups, phaseCfg, computeStandings, idPrefix, det) {
     det = det || {};
     idPrefix = idPrefix || 'phl';
+    if (phaseCfg._categoryFormation) {
+      var names=Array.from(new Set(prevGroups.map(_groupCategory)));
+      var pool=names.flatMap(function (category) {
+        var groups=prevGroups.filter(g=>_groupCategory(g)===category);
+        return _poolFromPrev(groups,categoryQualification(phaseCfg,category),computeStandings).map(function (entry) {
+          return Object.assign({},entry,{category:category,categories:category?[category]:[]});
+        });
+      });
+      return genLeagueFromPool(pool,phaseCfg,idPrefix);
+    }
     return genLeagueFromPool(_poolFromPrev(prevGroups, phaseCfg, computeStandings), phaseCfg, idPrefix);
   }
 
@@ -3140,6 +3188,11 @@
       }, []));
       if (!matches.length) return false;
       if (!groupPending.length) continue;
+      if (source.qualificationCategoryRules) {
+        var local=categoryQualification(next,_groupCategory(group));
+        if (!local.source.perGroupQuota) return false;
+        cutoff=local.source.perGroupQuota;
+      }
       var rows = _groupTeamStandings(group, { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary });
       if (!Array.isArray(rows) || rows.length <= cutoff ||
           rows.slice(0, cutoff).some(function (row, index) {
@@ -3271,6 +3324,24 @@
       // devia; e flaky no phase-brick4 — às vezes 8 duplas, às vezes 6/7). Corrigido na
       // Fase 2 de testes do roadmap 1.0 (jun/2026).
       if (leagueMs.some(function (m) { return m.isMonarch; })) {
+        if (t.phases[phaseIdx+1]?.source?.qualificationCategoryRules || t.scheduleWindow?.interleavedPlan?.schema===2) {
+          var pools=new Map();
+          leagueMs.forEach(function (m) {
+            var key=JSON.stringify([m.category || '',m.monarchGroup ?? m.groupIdx ?? 0]);
+            if (!pools.has(key)) pools.set(key,{name:key,category:m.category || '',matches:[]});
+            pools.get(key).matches.push(m);
+          });
+          return Array.from(pools.values()).map(function (group) {
+            var roster=new Map();
+            group.matches.forEach(m=>[1,2].forEach(side=>(m['team'+side] || []).forEach((name,i)=>{
+              roster.set(name,m['team'+side+'Uids']?.[i] || '');
+            })));
+            group.players=Array.from(roster.keys());
+            group.playersUids=Array.from(roster.values());
+            group.standings=standingsDaFaseAnterior(group,t,{tiebreakers:t.tiebreakers},true,phaseIdx);
+            return group;
+          });
+        }
         var lnamesI = {};
         leagueMs.forEach(function (m) {
           (m.team1 || []).concat(m.team2 || []).forEach(function (n) {
@@ -3401,6 +3472,8 @@
     var built;
     if (_mon || _fmt === 'league') {
       var _cfgL = _mon ? Object.assign({}, cfg, { fixedPairs: false, ligaCadence: 'incremental' }) : cfg;
+      if (_mon && (cfg.source?.qualificationCategoryRules || t.phases[nextIdx+1]?.source?.qualificationCategoryRules ||
+          t.scheduleWindow?.interleavedPlan?.schema===2)) _cfgL=Object.assign({},_cfgL,{_categoryFormation:true});
       built = buildPhaseLeagueStage(groups, _cfgL, cs, _id, det);    // incremental devolve só o pool
     } else if (_fmt === 'groups') {
       built = buildPhaseGroupStage(groups, cfg, cs, _id, det);
@@ -3513,6 +3586,7 @@
       var _slim = (built.pool || []).map(function (e) {
         var nm = e.displayName || e.name;
         var o = { displayName: nm, name: nm };
+        if (e.category) {o.category=e.category; o.categories=[e.category];}
         var u = e.p1Uid || e.uid; if (u) o.uid = u;
         return o;
       });

@@ -1,5 +1,16 @@
 // ─── English translations ───────────────────────────────────────────────────
 window._translations['en'] = {
+  'phaseGrid.distribute': 'Assign groups to courts',
+  'phaseGrid.name': 'Group name',
+  'phaseGrid.entry': 'Wave',
+  'phaseGrid.phase': 'Phase',
+  'phaseGrid.group': 'Group',
+  'phaseGrid.court': 'Court',
+  'phaseGrid.apply': 'Apply assignments',
+  'phaseGrid.cancel': 'Cancel',
+  'phaseGrid.remove': 'Remove assignments',
+  'phaseGrid.pending': 'Apply or cancel the assignments before drawing.',
+  'phaseGrid.groupAssignmentStale': 'Review the capacities and groups and generate the schedule again.',
   'progress.awaitingCourtCall': 'Waiting for first court call',
   'draw.monarchPairBlockedTitle': 'Pairs after standings',
   'draw.monarchPairBlockedBody': 'In the initial King/Queen phase, entries are individual. Pairs are formed after the standings are final.',

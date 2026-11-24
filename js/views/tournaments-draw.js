@@ -2242,6 +2242,7 @@ window._linhaDoHistorico = function (log) {
 window._requiresMonarchPreDrawReview = function (t) {
     // O Super 8 já define os 14 confrontos pelo ciclo de parcerias. A grade
     // opcional de horários de Rei/Rainha não é pré-requisito para esse sorteio.
+    if (t?.scheduleWindow?.interleavedPlan?.schema===2 && t.scheduleWindow.mode!=='participants') return true;
     if (t && (t.superEight === true || (Array.isArray(t.phases) && t.phases.some(function (p) { return p && p.superEight === true; })))) return false;
     var schedule = t && t.scheduleWindow;
     if (!schedule || schedule.mode === 'participants') return false;
@@ -3894,10 +3895,11 @@ window.generateDrawFunction = function (tId) {
             // motivo — foi exatamente o que aconteceu no 1º teste real na staging.
             if (typeof window._hideLoading === 'function') window._hideLoading();
             if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+            var gridMessage=err?.details?.i18nKey==='phaseGrid.groupAssignmentStale' && window._t ? window._t('phaseGrid.groupAssignmentStale') : '';
             if (typeof window._phaseGridDrawFinished === 'function')
-                window._phaseGridDrawFinished(tId, (err && err.message) || 'O servidor não confirmou o sorteio.');
+                window._phaseGridDrawFinished(tId, gridMessage || (err && err.message) || 'O servidor não confirmou o sorteio.');
             var _code = (err && err.code) || '';
-            var _msg = (err && err.message) || String(err);
+            var _msg = gridMessage || (err && err.message) || String(err);
             window._lastSaveError = { tournamentId: tId, code: _code, message: _msg, at: new Date().toISOString() };
             if (/already-drawn/.test(_msg)) {
                 showNotification('⚠️ Já sorteado', 'Outro organizador sorteou este torneio agora há pouco. Atualize a tela pra ver a chave.', 'warning');

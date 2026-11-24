@@ -105,6 +105,7 @@
         at: dated ? timestamp(m.scheduledAt) : NaN, phaseIndex:Number(m.phaseIndex) || 0,
         court: text(m.court) || plannedCourts[text(m.id)] || '',
         number:Number(m.scheduledGameNumber) || plannedNumbers[text(m.id)] || matchNumber(m), category: text(m.category || m.categoryName),
+        groupLabel:text(m.scheduledGroupLabel || (t.scheduleWindow?.interleavedPlan?.groupAssignments?.length && m.groupName) || ''),
         round: m.round == null ? '' : String(m.round), bracket:text(m.bracket || 'main'),
         elimination: typeof root._isEliminationPhase === 'function' && root._isEliminationPhase(t, Number(m.phaseIndex) || 0),
         isThirdPlace:!!m.isThirdPlace, nextMatchId:text(m.nextMatchId), nextSlot:text(m.nextSlot),
@@ -395,7 +396,7 @@
       p.write(String(m.number || '-'), left+3, y+rowHeight/2+3, 8, true);
       p.write(m.time, hourX+3, y+rowHeight/2+3, 7.5);
       var categoryWidth = namesX - courtX - 14;
-      var categoryLabel = model.showCategories ? (m.category || 'Sem categoria') : '';
+      var categoryLabel = [m.groupLabel,model.showCategories ? (m.category || 'Sem categoria') : ''].filter(Boolean).join(' · ');
       var categoryLines = categoryLabel ? (sideLines(categoryLabel, categoryWidth, 5.5, false)
         || [fitLabel(categoryLabel, categoryWidth, 5.5, false)]) : [];
       if (categoryLines[0]) p.write(categoryLines[0], courtX+3, y+10, 5.5);

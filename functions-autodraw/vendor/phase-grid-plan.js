@@ -1,5 +1,5 @@
-// Grade editável das reservas de quadra por fase. Cada célula classificatória
-// representa uma série de três partidas; cada célula eliminatória, uma partida.
+// Grade editável das reservas de quadra por fase. Uma reserva pode conter uma
+// partida ou a série oficial de três combinações do mesmo quarteto.
 (function (root) {
   'use strict';
   function minutes(value) {
@@ -23,6 +23,12 @@
   function ordinal(tile, plan) { return String(tile.day || plan.day || '') + 'T' + tile.startTime; }
   function expand(plan, tournament) {
     if (!plan || !Array.isArray(plan.blocks)) return [];
+    if (plan.schema===2) return bindAssignments(plan.blocks.map(function (block,i) {
+      var tile=Object.assign({},block,{id:'p'+i,court:block.courts[0],duration:v2Duration(block,tournament || {})});
+      delete tile.courts;
+      tile.windows=(tournament?.scheduleWindow?.categoryWindows || []).filter(row=>row.category===block.category);
+      return tile;
+    }),plan.groupAssignments);
     var tiles = [];
     plan.blocks.forEach(function (block, bi) {
       (block.courts || []).forEach(function (court, ci) {
@@ -67,13 +73,17 @@
       return ordinal(a, plan).localeCompare(ordinal(b, plan)) || a.court - b.court || a.id.localeCompare(b.id);
     }).forEach(function (tile) {
       result[tile.id] = next;
-      next += tile.kind === 'groups' ? 3 : 1;
+      next += plan.schema===2 ? tile.games : tile.kind === 'groups' ? 3 : 1;
     });
     return result;
   }
   function gameStarts(tile, tournament) {
     var first = minutes(tile.startTime);
-    if (tile.kind !== 'groups') return [first];
+    if (tile.games===1 || tile.kind !== 'groups') return [first];
+    if (tile.games === 3) {
+      var playMinutes=matchMinutes(tournament,tile.phaseIndex), setup=tile.duration - 3 * playMinutes;
+      return [first,first+setup+playMinutes,first+setup+2*playMinutes];
+    }
     var play = Number(tournament.gameDuration) || 30;
     var preparation = (Number(tournament.callTime) || 0) + (Number(tournament.warmupTime) || 0);
     return [first, first + preparation + play, first + preparation + 2 * play];
@@ -126,6 +136,7 @@
       return !/^\d{4}-\d{2}-\d{2}$/.test(d.day || '') || !Number.isFinite(minutes(d.startTime)) ||
         !Number.isFinite(minutes(d.endTime)) || minutes(d.endTime) <= minutes(d.startTime);
     })) return 'Defina os dias de jogo com início e fim válidos.';
+    if (plan.schema===2) return validateReservations(tiles,plan,days);
     var byCourt = {}, byStage = {}, groupNumbers = {};
     for (var i = 0; i < tiles.length; i++) {
       var tile = tiles[i], dayForTile = dayOf(tile, plan, days), at = minutes(tile.startTime), finish = at + tile.duration;
@@ -202,6 +213,11 @@
     next.blocks = tiles.slice().sort(function (a, b) {
       return ordinal(a, plan).localeCompare(ordinal(b, plan)) || a.court - b.court || a.id.localeCompare(b.id);
     }).map(function (tile) {
+      if (plan.schema===2) {
+        var position=Object.assign({},tile,{courts:[tile.court]});
+        ['id','court','duration','matchIds','windows','assignment'].forEach(k=>delete position[k]);
+        return position;
+      }
       var block = { kind:tile.kind, category:tile.category, day:tile.day || plan.day,
         startTime:tile.startTime, courts:[tile.court] };
       if (tile.kind === 'groups') block.groupStart = tile.groupNumber;
@@ -214,6 +230,7 @@
     if (mode !== 'compact' && mode !== 'spread') return { error:'Modo de distribuição inválido.' };
     var days = daysOf(plan, day).slice().sort(function (a, b) { return a.day.localeCompare(b.day); });
     if (!days.length) return { error:'Defina os dias do torneio.' };
+    if (plan.schema===2) return arrange(tiles,days,plan.courts,mode==='spread');
     function absolute(tile) {
       var key = tile.day || plan.day;
       return Date.parse(key + 'T00:00:00Z') / 60000 + minutes(tile.startTime);
@@ -390,7 +407,472 @@
     var error = validate(tiles, plan, days);
     return error ? { error:error } : { plan:toPlan(plan, tiles), tiles:tiles };
   }
-  var api = { minutes:minutes, clock:clock, duration:duration, expand:expand, validate:validate,
+  // A posição de uma reserva vem dos eixos esportivos. IDs, nomes e o resultado
+  // hipotético da projeção nunca são parte da configuração gravada.
+  function positionKey(tile) {
+    return JSON.stringify([tile.phaseIndex,tile.category,tile.bracket,tile.groupNumber,tile.round,tile.sequence,tile.requiredDay || '']);
+  }
+  function memberKeys(match) {
+    var keys = [];
+    [1,2].forEach(function (side) {
+      var names=match['team'+side] || [], ids=match['team'+side+'Uids'] || [], slots=match['team'+side+'SlotIds'] || [];
+      if (!names.length && !ids.length && !slots.length) {
+        var person=match['p'+side+'Uid'] || match['p'+side];
+        if(person && person!=='TBD' && person!=='BYE') keys.push(String(person));
+      }
+      for (var i=0;i<Math.max(names.length,ids.length,slots.length);i++)
+        if (ids[i] || slots[i] || names[i]) keys.push(String(ids[i] || slots[i] || names[i]));
+    });
+    return keys;
+  }
+  function technicalPositions(t, list, context) {
+    var groups=new Map(), byId=new Map(), jobs=[], fields=new Map();
+    var real=(list || []).filter(function (m) {
+      if (!m || m.id == null || m.isSitOut || m.isTieBreak || m.isBye || (context._isByeMatch && context._isByeMatch(m)) || byId.has(m.id)) return false;
+      byId.set(m.id,m);return true;
+    });
+    var wave=new Map(), predecessors=new Map();
+    real.forEach(m=>[m.nextMatchId,m.loserMatchId,m.loserNextMatchId].filter(Boolean).forEach(id=>{
+      if (!predecessors.has(id)) predecessors.set(id,[]);
+      predecessors.get(id).push(m.id);
+    }));
+    real.filter(m=>m.isExtra && m.bracket==='grand').forEach(m=>{
+      var previous=real.find(other=>other.bracket==='grand' && !other.isExtra && String(other.id)+'-EXTRA'===String(m.id));
+      if (previous) predecessors.set(m.id,[previous.id]);
+    });
+    function depth(id,visiting) {
+      if (wave.has(id)) return wave.get(id);
+      if (visiting.has(id)) throw new Error('A chave contém uma dependência circular.');
+      visiting.add(id);
+      var d=1+(predecessors.get(id)||[]).reduce((n,p)=>Math.max(n,depth(p,visiting)),0);
+      visiting.delete(id);wave.set(id,d);return d;
+    }
+    real.forEach(function (m) {
+      var phaseIndex=Number(m.phaseIndex) || 0, phase=t.phases[phaseIndex], isGroup=phase?.kind==='classification';
+      var category=String(m.category || m.team1Obj?.category || (t.combinedCategories?.length===1 ? t.combinedCategories[0] : '') || '');
+      var bracket=m.bracket || (isGroup ? 'league' : 'main');
+      var groupNumber=isGroup ? 1+Number(m.groupIdx ?? m.monarchGroup ?? 0) : 0;
+      // No rodízio independente o monarchGroup operacional identifica a partida.
+      // O grupo esportivo e a rodada vêm de groupIdx/round.
+      if (m.isMonarch && phase?.classification?.partnerRotation !== 'groups' && m.groupIdx==null &&
+          (t.superEight || phase.superEight)) groupNumber=1;
+      var round=Math.max(1,Number(m.round) || Number(m.roundIndex || 0)+1);
+      var stage=isGroup ? round : Math.max(depth(m.id,new Set()),round);
+      var field={phaseIndex:phaseIndex,kind:isGroup?'groups':'elimination',category:category,groupNumber:groupNumber,
+        bracket:bracket,round:round,wave:stage};
+      var key=JSON.stringify([phaseIndex,category,bracket,groupNumber,round,m.requiredDay || '']);
+      fields.set(key,field);
+      if (!groups.has(key)) groups.set(key,[]);
+      groups.get(key).push(m);
+    });
+    groups.forEach(function (items,key) {
+      var base=fields.get(key);
+      items.sort((a,b)=>String(a.id).localeCompare(String(b.id),'en',{numeric:true}));
+      var quartet=items.length===3 && items.every(m=>m.isMonarch && (m.rotationSeries || !t.phases[base.phaseIndex]?.classification?.partnerRotation));
+      if (quartet) {
+        var roster=memberKeys(items[0]).sort().join('\0');
+        var partitions=new Set(items.map(m=>{
+          var members=memberKeys(m);
+          return JSON.stringify([members.slice(0,2).sort(),members.slice(2).sort()].sort());
+        }));
+        quartet=new Set(memberKeys(items[0])).size===4 && partitions.size===3 && items.every(m=>memberKeys(m).sort().join('\0')===roster);
+      }
+      var waves=[];
+      (quartet?[items]:items.map(m=>[m])).forEach(function (part,sequence) {
+        var job=Object.assign({},base,{sequence:sequence+1,games:part.length,matchIds:part.map(m=>String(m.id))});
+        if (base.kind!=='groups') job.wave=Math.max(depth(part[0].id,new Set()),job.round);
+        if (base.kind==='groups') {
+          var people=memberKeys(part[0]);
+          var batch=waves.findIndex(used=>people.every(person=>!used.has(person)));
+          if (batch<0) {batch=waves.length;waves.push(new Set());}
+          people.forEach(person=>waves[batch].add(person));
+          job.wave=base.wave;
+          if (batch) job.wave+=batch/(items.length+1);
+        }
+        if (base.phaseIndex>0 && canInterleave(t)) job.categoryAdvance=true;
+        if (part[0].requiredDay) job.requiredDay=part[0].requiredDay;
+        if (part.every(m=>m.condicional===true || m.conditional===true || (m.bracket==='grand' && m.isExtra))) job.optional=true;
+        jobs.push(job);
+      });
+    });
+    return jobs;
+  }
+  function project(tournament,context) {
+    var ctx=context || root, engine=ctx._phasesEngine, format=ctx.FORMAT2;
+    if (!engine || !format || !tournament) throw new Error('Defina o formato da fase antes de gerar a grade.');
+    var cats=tournament.combinedCategories?.length ? tournament.combinedCategories.slice() : [''];
+    var fmt=tournament.fmt2 || format.configFromTournament(tournament,tournament.sport);
+    var compiled=format.compileToPhases(fmt,{sport:tournament.sport,categories:cats.filter(Boolean)});
+    var phases=compiled.phases.map(function (phase,i) {
+      var saved=tournament.phases?.[i];
+      if (!saved || saved.kind!==phase.kind) return phase;
+      return Object.assign({},phase,{scoring:phase.scoring || saved.scoring,gameDuration:saved.gameDuration});
+    }), first=phases[0], roster=[], units=[], capacities=[];
+    var t=Object.assign({},tournament,compiled.topLevel,{phases:phases,fmt2:compiled.cfg,combinedCategories:cats.filter(Boolean),
+      scheduleWindow:{interleavedPlan:{schema:2}},participants:roster,rounds:[],groups:[],matches:[],standings:[],checkedIn:{},absent:{},
+      currentPhaseIndex:0,status:'closed',phaseCategoryMaterialized:{},_phaseMaterialized:0});
+    var tc=compiled.cfg.teamCompetition, pairDays=new Map((tc?.schedule?.pairDayAssignments || []).map(row=>[row.fixedPairId,row.day]));
+    function completeBracket(built, phaseIndex) {
+      if (built.needsDoubleElim && ctx._buildDoubleElimBracket) {
+        var parts=phaseIndex && cats.length>1 ? (built.categoryBuilds || []).filter(part=>part.built?.needsDoubleElim) : [];
+        if (parts.length) parts.forEach(part=>ctx._buildDoubleElimBracket(t,{phaseIndex,category:part.category}));
+        else ctx._buildDoubleElimBracket(t,{phaseIndex});
+      }
+      if (built.needsRepechageDoubleElim && ctx._buildRepechageDoubleElim) {
+        var metas=built.repMetaByCat?.length ? built.repMetaByCat : [built.repMeta];
+        metas.forEach(meta=>ctx._buildRepechageDoubleElim(t,meta,{phaseIndex}));
+      }
+    }
+    cats.forEach(function (cat,ci) {
+      var n=Number(tournament.maxParticipantsByCategory?.[cat] || tournament.maxParticipantsPerCategory ||
+          (cats.length===1 ? tournament.maxParticipants : 0)) || ctx.ScoreplaceSuperEight?.categoryPopulation(tournament,cat);
+      if (!Number.isSafeInteger(n) || n<2 || n>2048) throw new Error('Informe a quantidade de pessoas de '+(cat || 'classificação geral')+'.');
+      if (roster.length+n>4096) throw new Error('A grade ultrapassa o limite de 400 posições.');
+      var fixed=fmt.disputa==='dupla' && (first.kind==='elimination' || first.fixedPairs) && !first.reiRainha && !first.superEight;
+      if (fixed && n%2) throw new Error('O número de pessoas precisa formar duplas completas em '+(cat||'classificação geral')+'.');
+      capacities.push(n);
+      var categoryId=(tournament.categoryDefinitions || []).find(d=>d.label===cat)?.id;
+      var datedPairs=(tc?.schedule?.rosterSnapshot || []).filter(row=>row.categoryId===categoryId);
+      var dayCounts=new Map();
+      for (var i=0;i<n;i++) {
+        var name='Vaga '+ci+'-'+i,person={uid:'grid-'+ci+'-'+i,name:name,displayName:name,category:cat,categories:cat?[cat]:[],ligaActive:true};
+        roster.push(person);
+        if (!fixed) units.push(person);
+        else if (i%2) {
+          var p=roster[roster.length-2];
+          var team={name:p.name+' / '+name,displayName:p.name+' / '+name,p1Name:p.name,p2Name:name,p1Uid:p.uid,p2Uid:person.uid,
+            category:cat,categories:cat?[cat]:[],participants:[p,person]};
+          if (tc?.enabled && tc.teamCount) {
+            var position=Math.floor(i/2), pair=datedPairs[position], day=pairDays.get(pair?.fixedPairId);
+            if (day) {
+              team.competitionPlayDay=day;
+              position=dayCounts.get(day)||0;dayCounts.set(day,position+1);
+            }
+            team.fixedPairId='grid-pair-'+ci+'-'+i;
+            team.competitionTeamId='team-'+(position%tc.teamCount);
+          }
+          units.push(team);
+        }
+      }
+    });
+    t.participants=units;
+    var cfg=ctx._buildPhase0Cfg(t);
+    cfg.maxDrawOperations=400;
+    if (cfg.classification?.structure==='groups' && !tc?.enabled) {
+      var initialMatches=cats.reduce(function (sum,cat) {
+        var size=units.filter(person=>person.category===cat).length;
+        return sum+format.groupPlanForCategory(cfg,cat,size,false).matches;
+      },0);
+      if (initialMatches>1200) throw new Error('A grade ultrapassa o limite de 400 posições.');
+    }
+    var built=engine.generatePhase(units,cfg,{t:t,phaseIndex:0,ordered:true,idPrefix:'grid0',catOf:p=>p.category || ''});
+    if (!built.appliedToT) {
+      var stored=engine.storePhase(t,0,built);
+      if (!stored.ok) throw new Error('A formação não produziu partidas oficiais para a grade.');
+      completeBracket(built,0);
+    }
+    function gamesOfPhase(index) {
+      var result=(t.matches || []).filter(m=>(m.phaseIndex || 0)===index);
+      var rounds=index ? t.phaseRounds?.[index]?.rounds : t.rounds;
+      (rounds || []).forEach(r=>(r.matches || []).forEach(m=>{m.phaseIndex=index;result.push(m);}));
+      return result;
+    }
+    var jobs=[];
+    for (var index=0;index<phases.length;index++) {
+      var nativeRounds=index ? t.phaseRounds?.[index]?.rounds : t.rounds;
+      var requested=Number(phases[index].rounds || (index===0 ? fmt.rodadas?.n : 0)) || 1;
+      if (index && t.phaseRounds?.[index] && !nativeRounds?.length) {
+        ctx._phaseGenNextLeagueRound(t,index,{rnd:()=>0.37});
+        nativeRounds=t.phaseRounds[index].rounds;
+      }
+      if (nativeRounds?.length) {
+        var latestRound=()=>Math.max(...nativeRounds.map(r=>Number(r.round) || 1));
+        while (latestRound()<requested) {
+          nativeRounds.filter(r=>r.status!=='finished').forEach(function (round) {
+            (round.matches || []).forEach(m=>{if (!m.winner) {m.winner=m.p1;m.scoreP1=4;m.scoreP2=3;}});
+            round.status='finished';
+          });
+          var count=nativeRounds.length;
+          if (index) ctx._phaseGenNextLeagueRound(t,index,{rnd:()=>0.37}); else ctx._generateNextRound(t);
+          if (nativeRounds.length===count) throw new Error('A fase não conseguiu formar a rodada seguinte.');
+          if (nativeRounds.length>400) throw new Error('A grade ultrapassa o limite de 400 posições.');
+        }
+      }
+      var games=gamesOfPhase(index);
+      if (phases[index].grandFinalReset===true) {
+        games.filter(m=>m.bracket==='grand' && !m.isExtra).forEach(function (m) {
+          var reset=ctx._grandFinalResetMatch(m);
+          if (!games.some(other=>other.id===reset.id)) games.push(reset);
+        });
+      }
+      var section=technicalPositions(t,games,ctx);
+      jobs.push.apply(jobs,section);
+      if (jobs.length>400) throw new Error('A grade ultrapassa o limite de 400 posições.');
+      if (index+1===phases.length) break;
+      games.forEach(m=>{if(!m.winner){m.winner=m.p1;m.winnerUids=m.team1Uids || [];m.scoreP1=4;m.scoreP2=3;}});
+      var ind=phases[index].reiRainha || phases[index].superEight || !!phases[index].classification?.partnerRotation;
+      var next=engine.materializeNextPhase(t,g=>engine.standingsDaFaseAnterior(g,t,{},ind,index),'grid'+(index+1),
+        {agoraIso:'2000-01-01T00:00:00Z',rnd:()=>0.37});
+      if (!next.ok) throw new Error('Confira os classificados da fase '+(index+1)+' ('+next.error+').');
+      completeBracket(next.built || {},index+1);
+    }
+    if (!jobs.length) throw new Error('A configuração não produz partidas para agendar.');
+    return {jobs:jobs,capacities:capacities,phases:phases,people:capacities.reduce((a,b)=>a+b,0)};
+  }
+  function matchMinutes(t,phase) {
+    var cfg=t.phases?.[phase], scoring=cfg?.scoring || t.scoring;
+    var sets=root._setsEsperadosDe?.(scoring?.setsToWin) || root._setsEsperadosDaFase?.(t,cfg) || 1;
+    return Math.max(1,Math.round((Number(cfg?.gameDuration || t.gameDuration) || 30)*sets));
+  }
+  function v2Duration(job,t) {
+    var play=matchMinutes(t,job.phaseIndex),first=t.setupScope==='first_round' || t.superEightSetupScope==='first_round';
+    return play*job.games+(first && job.round>1 ? 0 : (Number(t.callTime)||0)+(Number(t.warmupTime)||0));
+  }
+  function canInterleave(t) {
+    var phases=t.phases || [], next=phases[1];
+    return phases.length===2 && phases[0].kind==='classification' && next.kind==='elimination' &&
+      (t.combinedCategories || []).length>1 && next.source?.scope==='per_group' && next.source.flatOverall!==true;
+  }
+  function groupKey(row) {
+    return JSON.stringify([row.phaseIndex,row.category,row.groupNumber]);
+  }
+
+  function sportGroups(tiles) {
+    var groups=new Map();
+    for (var tile of tiles) {
+      if (tile.kind!=='groups') continue;
+      var key=groupKey(tile);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(tile);
+    }
+    return groups;
+  }
+
+  function suggestedAssignments(tiles, courts, tournament) {
+    var phases=new Map(), result=[], categories=tournament?.combinedCategories || [];
+    for (var list of sportGroups(tiles).values()) {
+      var first=list[0], waves=new Map();
+      list.forEach(tile=>waves.set(tile.wave,(waves.get(tile.wave)||0)+1));
+      var code=String(first.category || '').match(/(?:^|[\s(\[])([A-Za-z])(?:[)\]]|$)$/);
+      var group={phaseIndex:first.phaseIndex,category:first.category,groupNumber:first.groupNumber,
+        label:(code ? code[1].toUpperCase() : (first.category || 'Grupo')+' ')+first.groupNumber,
+        demand:Math.min(courts,Math.max(...waves.values()))};
+      if (!phases.has(first.phaseIndex)) phases.set(first.phaseIndex,[]);
+      phases.get(first.phaseIndex).push(group);
+    }
+    for (var groups of phases.values()) {
+      groups.sort((a,b)=>categories.indexOf(a.category)-categories.indexOf(b.category) ||
+        a.category.localeCompare(b.category) || a.groupNumber-b.groupNumber);
+      var count=Math.ceil(groups.reduce((n,g)=>n+g.demand,0)/courts), filled=[];
+      for (var group of groups) {
+        var siblings=groups.filter(g=>g.category===group.category);
+        var entry=Math.floor(siblings.indexOf(group)*count/siblings.length);
+        while ((filled[entry] || 0)+group.demand>courts) entry++;
+        var start=filled[entry] || 0;
+        filled[entry]=start+group.demand;
+        result.push({phaseIndex:group.phaseIndex,category:group.category,groupNumber:group.groupNumber,
+          label:group.label,entry:entry+1,courts:Array.from({length:group.demand},(_,i)=>start+i+1)});
+      }
+    }
+    return result;
+  }
+
+  function canonicalGroupLabel(value) {
+    if (typeof value!=='string') return '';
+    var label=value.replace(/[\p{Zs}\t\n\r\u2028\u2029]+/gu,' ').trim().normalize('NFC');
+    return /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u.test(label) ||
+      Array.from(label).length>48 ? '' : label;
+  }
+
+  function validatedAssignments(tiles,rows,courts) {
+    if (!Array.isArray(rows) || rows.length>400) throw new Error('Distribuição de grupos inválida.');
+    if (!rows.length) return [];
+    var groups=sportGroups(tiles), names=new Set(), reservations=new Set(), entries=new Map();
+    var normalized=rows.map(function (row) {
+      if (!row || Object.keys(row).sort().join(',')!=='category,courts,entry,groupNumber,label,phaseIndex' ||
+          !groups.delete(groupKey(row))) throw new Error('Confira a fase, a categoria e o grupo de cada distribuição.');
+      var name=canonicalGroupLabel(row.label);
+      var nameKey=JSON.stringify([row.phaseIndex,row.category,name.toLowerCase().normalize('NFD').replace(/\p{M}/gu,'')]);
+      if (!name || names.has(nameKey)) throw new Error('Use nomes distintos de até 48 caracteres para os grupos de cada categoria.');
+      names.add(nameKey);
+      if (!Number.isSafeInteger(row.entry) || row.entry<1 || row.entry>400 ||
+          !Array.isArray(row.courts) || !row.courts.length || row.courts.length>courts)
+        throw new Error('Escolha uma entrada e pelo menos uma quadra para cada grupo.');
+      if (!entries.has(row.phaseIndex)) entries.set(row.phaseIndex,new Set());
+      entries.get(row.phaseIndex).add(row.entry);
+      for (var court of row.courts) {
+        var key=JSON.stringify([row.phaseIndex,row.entry,court]);
+        if (!Number.isSafeInteger(court) || court<1 || court>courts || reservations.has(key))
+          throw new Error('Cada quadra deve pertencer a um único grupo na mesma entrada.');
+        reservations.add(key);
+      }
+      return Object.assign({},row,{label:name,courts:row.courts.slice().sort((a,b)=>a-b)});
+    });
+    if (groups.size) throw new Error('Distribua todos os grupos classificatórios desta grade.');
+    for (var set of entries.values()) if (set.size!==Math.max(...set))
+      throw new Error('Numere as entradas consecutivamente, começando em 1.');
+    return normalized;
+  }
+
+  function bindAssignments(tiles,rows) {
+    var assignments=new Map((rows || []).map(row=>[groupKey(row),row]));
+    return tiles.map(function (tile) {
+      var copy=Object.assign({},tile);
+      delete copy.assignment;
+      if (copy.kind==='groups' && assignments.has(groupKey(copy))) copy.assignment=assignments.get(groupKey(copy));
+      return copy;
+    });
+  }
+
+  function applyAssignments(tiles,plan,days,rows) {
+    try {
+      var assignments=validatedAssignments(tiles,rows,plan.courts);
+      var nextPlan=Object.assign({},plan,{groupAssignments:assignments});
+      var result=arrange(bindAssignments(tiles,assignments),days,plan.courts,false);
+      if (result.error) return result;
+      var error=validateReservations(result.tiles,nextPlan,days);
+      return error ? {error:error} : {tiles:result.tiles,plan:toPlan(nextPlan,result.tiles)};
+    } catch(error) { return {error:error.message}; }
+  }
+
+  function precedes(a,b) {
+    if (a.phaseIndex!==b.phaseIndex) return a.phaseIndex<b.phaseIndex && (!b.categoryAdvance || a.category===b.category);
+    if (a.assignment && b.assignment) {
+      if (a.assignment.entry!==b.assignment.entry) return a.assignment.entry<b.assignment.entry;
+      if (a.groupNumber!==b.groupNumber || a.category!==b.category) return false;
+    }
+    if (a.category!==b.category) return false;
+    return (a.kind!=='groups' || a.groupNumber===b.groupNumber || a.bracket==='league') && a.wave<b.wave;
+  }
+  function windowAllows(tile, day, start) {
+    return (!tile.requiredDay || tile.requiredDay===day) && (!tile.windows?.length ||
+      tile.windows.some(row=>row.day===day && start>=minutes(row.startTime) && start+tile.duration<=minutes(row.endTime)));
+  }
+  function arrange(jobs,days,courts,spread) {
+    var categories=Array.from(new Set(jobs.map(job=>job.category)));
+    var pending=jobs.slice().sort((a,b)=>a.phaseIndex-b.phaseIndex || a.wave-b.wave ||
+      categories.indexOf(a.category)-categories.indexOf(b.category) || a.groupNumber-b.groupNumber || a.sequence-b.sequence);
+    var placed=[],cursor=0;
+    var remaining=new Map(), successors=new Map(), readyAt=new Map();
+    jobs.forEach(function (job) {
+      remaining.set(job,0); successors.set(job,[]); readyAt.set(job,0);
+    });
+    jobs.forEach(function (before) {
+      jobs.forEach(function (after) {
+        if (!precedes(before,after)) return;
+        successors.get(before).push(after);
+        remaining.set(after,remaining.get(after)+1);
+      });
+    });
+    for (var day of days) {
+      var origin=Date.parse(day.day+'T00:00:00Z')/60000;
+      var end=origin+minutes(day.endTime), start=origin+minutes(day.startTime);
+      var lanes=Array(courts).fill(start);
+      for (var at=start; at<end && pending.length;) {
+        for (var court=0;court<courts && pending.length;court++) {
+          if (lanes[court]>at) continue;
+          var ready=pending.filter(job=>(!job.assignment || job.assignment.courts.includes(court+1)) && windowAllows(job,day.day,at-origin) && at+job.duration<=end &&
+            remaining.get(job)===0 && readyAt.get(job)<=at);
+          if (!ready.length) continue;
+          var item=ready[spread ? (cursor++ % ready.length) : 0];
+          pending.splice(pending.indexOf(item),1);
+          var finish=at+item.duration;
+          lanes[court]=finish;
+          placed.push(Object.assign({},item,{day:day.day,court:court+1,startTime:clock(at-origin)}));
+          successors.get(item).forEach(function (after) {
+            remaining.set(after,remaining.get(after)-1);
+            readyAt.set(after,Math.max(readyAt.get(after),finish));
+          });
+        }
+        var openings=pending.flatMap(job=>(job.windows || []).filter(row=>row.day===day.day).map(row=>origin+minutes(row.startTime)));
+        var next=Math.min(...lanes.concat(openings).filter(finish=>finish>at));
+        if (!Number.isFinite(next)) break;
+        at=next;
+      }
+    }
+    if(pending.length) return {error:'A janela de jogos não comporta '+pending.length+' reservas. Amplie o horário ou a quantidade de quadras.'};
+    return {tiles:placed};
+  }
+  function suggestProjected(t,days,context,projection) {
+    try {
+      projection=projection || project(t,context);
+      var courts=Number(t.courtCount);
+      if (!Number.isSafeInteger(courts) || courts<1 || courts>128 || !days.length) throw new Error('Informe os dias e as quadras disponíveis.');
+      var jobs=projection.jobs.map((job,i)=>{var tile=Object.assign({},job,{id:'p'+i,duration:v2Duration(job,Object.assign({},t,{phases:projection.phases}))});delete tile.matchIds;return tile;});
+      jobs.forEach(job=>{job.windows=(t.scheduleWindow?.categoryWindows || []).filter(row=>row.category===job.category);});
+      var total=jobs.reduce((n,j)=>n+j.games,0);
+      var plan={schema:2,editorVersion:2,day:days[0].day,days:days.map(d=>({day:d.day,startTime:d.startTime,endTime:d.endTime})),courts:courts,totalGames:total,capacities:projection.capacities};
+      plan.inputSignature=signatureOf(t,projection);
+      var saved=t.scheduleWindow?.interleavedPlan;
+      if (saved && Object.hasOwn(saved,'groupAssignments')) return applyAssignments(jobs,plan,days,saved.groupAssignments);
+      var result=arrange(jobs,days,courts,false);
+      return result.error ? result : {tiles:result.tiles,plan:toPlan(plan,result.tiles)};
+    } catch(error) {return {error:error.message};}
+  }
+  function validateReservations(tiles,plan,days) {
+    var keys=new Set(),placed=[];
+    for(var tile of tiles) {
+      var day=dayOf(tile,plan,days), at=minutes(tile.startTime);
+      if (tile.assignment && !tile.assignment.courts.includes(tile.court)) return 'A quadra escolhida pertence a outro grupo nesta entrada.';
+      if (!day || !Number.isFinite(at) || outsideWindow(tile,day) || !Number.isInteger(tile.court) ||
+          tile.court<1 || tile.court>plan.courts || !Number.isInteger(tile.duration) || tile.duration<=0 ||
+          !windowAllows(tile,tile.day,at)) return 'Confira o dia, horário e a quadra de cada partida.';
+      var key=positionKey(tile);
+      if (keys.has(key)) return 'Há uma posição de jogo duplicada na grade.';
+      keys.add(key);
+      var start=Date.parse(tile.day+'T00:00:00Z')/60000+at,end=start+tile.duration;
+      for(var other of placed) {
+        if (tile.court===other.tile.court && start<other.end && end>other.start) return 'Dois jogos ocupam a mesma quadra.';
+        if (precedes(other.tile,tile) && other.end>start || precedes(tile,other.tile) && end>other.start)
+          return 'Uma partida começa antes de terminar a fase ou rodada que a precede.';
+      }
+      placed.push({tile:tile,start:start,end:end});
+    }
+    return null;
+  }
+  function signatureOf(t,projected) {
+    var values=[projected.capacities,(t.scheduleWindow?.categoryWindows || []).map(r=>[r.category,r.day,r.startTime,r.endTime]),
+      projected.phases.map(p=>[p.kind,p.formatCode,p.classification,p.elimination,p.groupFormation,p.gruposCount,p.source,
+        p.gameDuration,p.scoring?.setsToWin,p.rounds,p.fixedPairs,p.grandFinalPolicy,p.grandFinalReset,p.finalSeriesBestOf,
+        p.teamCompetition?.schedule,p.teamCompetition?.teamCount]),
+      t.scoring?.setsToWin || 0,t.gameDuration || 30,t.callTime || 0,t.warmupTime || 0,t.setupScope || t.superEightSetupScope || '',
+      projected.jobs.map(j=>[positionKey(j),j.wave,j.games,j.optional || false,j.requiredDay || '']).sort()];
+    var raw=JSON.stringify(values,function (_,v) {
+      if (!v || typeof v!=='object' || Array.isArray(v)) return v;
+      return Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]]));
+    }), hash=2166136261;
+    for (var i=0;i<raw.length;i++) hash=Math.imul(hash^raw.charCodeAt(i),16777619);
+    return (hash>>>0).toString(16);
+  }
+  function assertPlan(t,plan,days,ctx) {
+    function reject(msg) {throw new Error(msg);}
+    function closed(o,keys) {return o && typeof o==='object' && !Array.isArray(o) && Object.keys(o).every(k=>keys.includes(k));}
+    if (!closed(plan,['schema','editorVersion','day','days','courts','totalGames','capacities','inputSignature','blocks','groupAssignments']) ||
+        plan.schema!==2 || plan.editorVersion!==2 || !Array.isArray(plan.blocks) || !plan.blocks.length || plan.blocks.length>400 ||
+        !Number.isSafeInteger(plan.courts) || Number(t.courtCount)!==plan.courts || Number(plan.courts)<1 ||
+        !Array.isArray(days) || !days.length || plan.day!==days[0].day || !Array.isArray(plan.days) || plan.days.length!==days.length ||
+        !plan.days.every((d,i)=>closed(d,['day','startTime','endTime']) && ['day','startTime','endTime'].every(k=>d[k]===days[i][k])) ||
+        JSON.stringify(plan).length>256*1024) reject('Grade inválida, excessiva ou incompatível com a janela de jogos.');
+    var projected=project(t,ctx), expected=new Map(projected.jobs.map(j=>[positionKey(j),j]));
+    if (plan.blocks.length!==expected.size || plan.totalGames!==projected.jobs.reduce((n,j)=>n+j.games,0) ||
+        JSON.stringify(plan.capacities)!==JSON.stringify(projected.capacities) || plan.inputSignature!==signatureOf(t,projected))
+      reject('A grade está desatualizada para as regras e o elenco desta edição. Gere a proposta novamente.');
+    if (Object.hasOwn(plan,'groupAssignments')) {
+      var assignments=validatedAssignments(projected.jobs,plan.groupAssignments,plan.courts);
+      if (assignments.some((row,i)=>row.label!==plan.groupAssignments[i].label)) reject('Confira os nomes dos grupos na distribuição.');
+    }
+    for (var block of plan.blocks) {
+      if (!closed(block,['phaseIndex','kind','category','bracket','round','wave','groupNumber','sequence','games','requiredDay','optional','categoryAdvance','day','startTime','courts']) ||
+          !Array.isArray(block.courts) || block.courts.length!==1 || !Number.isSafeInteger(block.courts[0])) reject('Reserva de quadra inválida.');
+      var key=positionKey(block),job=expected.get(key);
+      if (!job || job.games!==block.games || job.wave!==block.wave || job.kind!==block.kind ||
+          job.optional!==block.optional || job.categoryAdvance!==block.categoryAdvance || job.requiredDay!==block.requiredDay) reject('A grade diverge das posições reais da fase.');
+      expected.delete(key);
+    }
+    var error=validate(expand(plan,Object.assign({},t,{phases:projected.phases})),plan,days);
+    if(error) reject(error);
+  }
+  var api = { suggestedAssignments:suggestedAssignments,applyAssignments:applyAssignments,bindAssignments:bindAssignments,precedes:precedes,v2Duration:v2Duration,canInterleave:canInterleave,assertPlan:assertPlan,project:project,technicalPositions:technicalPositions,positionKey:positionKey,suggestProjected:suggestProjected, minutes:minutes, clock:clock, duration:duration, expand:expand, validate:validate,
     move:move, toPlan:toPlan, preset:preset, stageKey:stageKey, groupLabel:groupLabel, numbered:numbered,
     gameStarts:gameStarts, eliminationLabels:eliminationLabels, suggest:suggest,
     expectedSignatures:expectedSignatures, signatures:signatures,

@@ -1,3 +1,12 @@
+## 2.7.59 — 24/nov/2026 (grupos, classificados e distribuição de quadras)
+
+- Quatro sliders em duas linhas por classificatória: grupos/pessoas e jogos/classificados por grupo. O modo comum mostra um único conjunto por padrão; a personalização mantém conjuntos e cortes por categoria. O toggle Não repetir parceiro fica ligado por padrão; simples e duplas fixas mantêm a opção correspondente de adversários.
+- O corte por grupo e categoria é persistido, validado e transmitido à fase seguinte, incluindo a formação das duplas e o desempate no corte. A configuração de 16 pessoas em dois grupos com quatro classificadas e 32 em quatro grupos com duas classificadas produz quatro duplas finais por categoria.
+- A grade pode ser gerada a partir do formato configurado, sem exigir Rei/Rainha ou eliminatória. Oito pessoas mantêm duas partidas independentes por rodada; somente quartetos de três jogos constituem a série Rei/Rainha. O resumo usa o motor real para contagem e duração.
+- Antes do sorteio, o organizador pode nomear e distribuir os grupos por entrada e quadras. O mapa é validado e aplicado aos jogos reais, com nomes consistentes na operação, TV e súmulas. B1/C1/C2 podem usar seis quadras na primeira entrada e B2/C3/C4 as mesmas quadras na seguinte.
+- Seletor único para games disputados no total ou games ganhos para vencer o set. Quantidade, sets e políticas de desempate são conservados; sete games totais permanecem disponíveis para qualquer torneio.
+- Corrigida a leitura das vagas deslocadas para os controles por categoria no salvamento. Campos inválidos seguem recusados. A atualização do formulário preserva os campos externos mesmo quando a remoção do campo focado dispara outro evento.
+
 ## 2.7.58 — 24/nov/2026 (configuração por categoria e patrocinadores)
 
 - Cada categoria de cada classificatória tem três sliders junto à capacidade: grupos, pessoas por grupo e jogos por jogador. O modo comum aplica a mesma regra por número de grupos ou por pessoas por grupo; a personalização conserva regras próprias. A escolha do modo é persistida.

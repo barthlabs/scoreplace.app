@@ -64,12 +64,12 @@ win._gsmPresets = {
 };
 
 win._gsmRenderTieAt();
-ok(/Games para vencer o set/.test(nodes['gsm-tieat-inline'].innerHTML), 'campo de games aparece na fase inicial');
+ok(/Games ganhos para vencer o set/.test(nodes['gsm-tieat-inline'].innerHTML), 'campo de games aparece na fase inicial');
 ok(/5-5/.test(nodes['gsm-tieat-inline'].innerHTML), '6 games dispara decisão em 5-5');
 nodes['gsm-type'].value = 'simple';
 nodes['gsm-tiebreakEnabled'].value = 'false';
 win._gsmRenderTieAt();
-ok(/Games para vencer o set/.test(nodes['gsm-tieat-inline'].innerHTML),
+ok(/Games ganhos para vencer o set/.test(nodes['gsm-tieat-inline'].innerHTML),
   'formato simples sem tie-break também oferece a regra de games');
 win._gsmSetTieRuleInline('extend');
 ok(nodes['gsm-type'].value === 'sets', 'editar a regra ativa o placar por sets');

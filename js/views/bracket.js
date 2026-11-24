@@ -1728,6 +1728,7 @@ window._bracketMonarchGroupLabel = function (t, group) {
   var original = String(group && group.name || '');
   var first = group && group.matches && group.matches[0];
   if (!first) return original;
+  if (first.scheduledGroupLabel) return first.scheduledGroupLabel;
   var source = window._currentBracketTournament && window._currentBracketTournament.id === t.id
     ? window._currentBracketTournament : t;
   var all = [];
@@ -1971,6 +1972,7 @@ function _bracketOperationsStage(m, t, allMatches) {
 function _bracketOperationsStageLabel(m, t, allMatches) {
   var stage = _bracketOperationsStage(m, t, allMatches);
   if (!m || stage !== 'Classificatória') return stage;
+  if (m.scheduledGroupLabel) return stage+' · '+m.scheduledGroupLabel;
   var groupSource = m.groupName || m.monarchGroup == null ? m : (allMatches || []).find(function (item) { return item && item.groupName &&
     Number(item.monarchGroup) === Number(m.monarchGroup) && Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
     String(item.category || '') === String(m.category || ''); }) || m;
@@ -12267,7 +12269,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     const _hideTechnicalGroupHeader = _isTeamScheduleGS;
     const groupHeader = _hideTechnicalGroupHeader
       ? (_woGsChip ? '<div style="display:flex;justify-content:flex-end;margin:0 0 1rem;">' + _woGsChip + '</div>' : '')
-      : '<div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:' + window._spCor(isMyGroupGS ? '#22d3ee' : groupColor, 'color') + ';font-size:1rem;font-weight:800;">' + window._safeHtml(sg.name) + myGroupBadge + '</h3>' + (_woGsChip ? '<span style="margin-left:auto;">' + _woGsChip + '</span>' : '') + '</div>';
+      : '<div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:' + window._spCor(isMyGroupGS ? '#22d3ee' : groupColor, 'color') + ';font-size:1rem;font-weight:800;">' + window._safeHtml(sg.matches?.[0]?.scheduledGroupLabel || sg.name) + myGroupBadge + '</h3>' + (_woGsChip ? '<span style="margin-left:auto;">' + _woGsChip + '</span>' : '') + '</div>';
     const groupShellClass = _isTeamScheduleGS ? 'team-schedule-bracket' : 'card';
     const groupShellStyle = _isTeamScheduleGS
       ? 'scroll-margin-top:var(--scroll-anchor,120px);'

@@ -28,6 +28,62 @@
     var category = tile.category.replace(/^Fem\s+/i, 'Feminino ').replace(/^Masc\s+/i, 'Masculino ');
     return (tile.kind === 'groups' ? 'Classificatória' : 'Eliminatórias') + ' · ' + category;
   }
+  function tr(key,fallback) {
+    var full='phaseGrid.'+key, text=window._t?.(full);
+    return text && text!==full ? text : fallback;
+  }
+  function assignmentPanel(state) {
+    if (state.locked || state.plan.schema!==2 || !state.tiles.some(tile=>tile.kind==='groups')) return '';
+    var btn=(action,name)=>'<button type="button" class="btn btn-secondary" onclick="window._phaseGridAssignments(\''+
+      action+'\')">'+esc(name)+'</button>';
+    if (!state.assignmentDraft) return btn('open',tr('distribute','Distribuir grupos nas quadras'));
+    var rows=state.assignmentDraft.map(function (r,i) {
+      return '<fieldset data-assignment="'+i+'"><legend>'+esc(tr('phase','Fase')+' '+(r.phaseIndex+1)+' · '+
+        r.category+' · '+tr('group','Grupo')+' '+r.groupNumber)+'</legend><label>'+esc(tr('name','Nome do grupo'))+
+        ' <input type="text" data-field="label" value="'+esc(r.label)+'"></label><label>'+esc(tr('entry','Entrada'))+
+        ' <input type="number" data-field="entry" min="1" max="400" value="'+esc(r.entry)+'"></label><div>'+
+        Array.from({length:state.plan.courts},function (_,c) {
+          var label=state.tournament.courtNames?.[c] || tr('court','Quadra')+' '+(c+1);
+          return '<button type="button" class="phase-grid-day" data-assignment-court="'+(c+1)+'" aria-pressed="'+
+            r.courts.includes(c+1)+'">'+esc(label)+'</button>';
+        }).join(' ')+'</div></fieldset>';
+    });
+    return '<div class="phase-grid-assignments"><div class="phase-grid-assignment-rows">'+rows.join('')+
+      '</div>'+btn('apply',tr('apply','Aplicar distribuição'))+btn('cancel',tr('cancel','Cancelar'))+
+      (state.plan.groupAssignments?.length?btn('remove',tr('remove','Remover distribuição')):'')+'</div>';
+  }
+  window._phaseGridAssignments=function (action) {
+    var state=window._phaseCallOrderState;
+    if (!state || state.locked || state.saving || state.plan?.schema!==2) return;
+    if (action==='open') {
+      state.assignmentDraft=state.plan.groupAssignments?.length ? JSON.parse(JSON.stringify(state.plan.groupAssignments)) :
+        model.suggestedAssignments(state.tiles,state.plan.courts,state.tournament);
+    } else if (action==='cancel') delete state.assignmentDraft;
+    else if (action==='apply' || action==='remove') {
+      if (!state.assignmentDraft) return;
+      var result=model.applyAssignments(state.tiles,state.plan,daysOf(state),action==='remove'?[]:state.assignmentDraft);
+      if (result.error) {showError(result.error);return;}
+      state.plan=result.plan; state.tiles=result.tiles; state.touched=true; state.selectedId=null;
+      delete state.assignmentDraft;
+      if (!state.preDrawId && typeof window._recalcDuration==='function') window._recalcDuration();
+    } else return;
+    redraw(true);
+  };
+  function editAssignment(event) {
+    var el=event.target, row=el.closest?.('[data-assignment]');
+    if (!row) return;
+    var state=window._phaseCallOrderState, rule=state?.assignmentDraft?.[Number(row.dataset.assignment)];
+    if (!rule || state.locked || state.saving) return;
+    if (event.type==='input' && el.dataset.field==='label') rule.label=el.value;
+    if (event.type==='input' && el.dataset.field==='entry') rule.entry=Number(el.value);
+    if (event.type==='click' && el.dataset.assignmentCourt) {
+      var court=Number(el.dataset.assignmentCourt), active=rule.courts.includes(court);
+      rule.courts=active?rule.courts.filter(c=>c!==court):rule.courts.concat(court);
+      el.setAttribute('aria-pressed',String(!active));
+    }
+  }
+  document.addEventListener('click',editAssignment);
+  document.addEventListener('input',editAssignment);
   function timeMarks(tiles, tournament, start, last) {
     var blocks = new Set([start]);
     var games = new Set();
@@ -53,14 +109,6 @@
   function redraw(keepScroll) {
     var mount = section(), state = window._phaseCallOrderState;
     if (!mount) { if (overlayOpen) window._closePhaseGridEditor(); return; }
-    var formatConfig = typeof window._f2GetConfig === 'function' ? window._f2GetConfig() : null;
-    // O Super 8 tem uma só fase classificatória. A proposta de eliminatória
-    // mostrava um tempo independente (25) que não alimentava gameDuration.
-    if (formatConfig && formatConfig.parceria === 'super_eight') {
-      if (overlayOpen) window._closePhaseGridEditor();
-      mount.innerHTML = '';
-      return;
-    }
     if (overlayOpen && !overlay()) {
       overlayOpen = false;
       document.body.style.overflow = previousBodyOverflow;
@@ -89,6 +137,7 @@
     mount.innerHTML = '<section class="phase-grid-editor phase-grid-launcher" aria-label="Grade de fases e quadras">' +
       '<div><h3>Grade de fases e quadras</h3><p>' + state.tiles.length + ' blocos em ' + daysOf(state).length +
       ' dia(s). ' + (state.touched ? 'Ajustes pendentes de salvar no torneio.' : 'Abra para conferir e ajustar a programação.') + '</p></div>' +
+      (!state.locked && !state.preDrawId ? '<button type="button" class="btn btn-secondary" onclick="window._phaseGridSuggest()">Gerar nova proposta</button><p id="phase-grid-proposal-message" role="alert" hidden></p>' : '') +
       '<button type="button" class="btn btn-secondary" onclick="window._openPhaseGridEditor()">Abrir grade em tela ampla</button></section>';
     if (!overlayOpen) return;
     var root = overlay();
@@ -125,7 +174,7 @@
       '<div class="phase-grid-controls">' +
       (state.locked ? '<p class="phase-grid-locked">O sorteio já publicou os jogos. A grade pode ser conferida; movê-la agora alteraria horários e números de jogos.</p>' :
       '<div class="phase-grid-presets"><button type="button" class="btn btn-secondary" onclick="window._phaseGridPreset(\'compact\')">Concentrar antes</button>' +
-      '<button type="button" class="btn btn-secondary" onclick="window._phaseGridPreset(\'spread\')">Espalhar ao longo do torneio</button></div>' +
+      '<button type="button" class="btn btn-secondary" onclick="window._phaseGridPreset(\'spread\')">Espalhar ao longo do torneio</button></div>' + assignmentPanel(state) +
       '<p class="phase-grid-drag-help">Arraste sobre outro bloco para trocar posições; solte numa vaga livre para mover.</p>') + '</div>' +
       '<p id="phase-grid-message" class="phase-grid-error" role="alert" hidden></p>' +
       '<div class="phase-grid-viewport"><div class="phase-grid-head" style="--phase-grid-courts:' + columns + '"><span>Hora</span>' +
@@ -141,7 +190,9 @@
             var top = (model.minutes(tile.startTime) - start) * 3, tileHeight = tile.duration * 3 - 3;
             var id = esc(tile.id), groupName = model.groupLabel(tile);
             var title = tile.kind === 'groups' ? label(tile) : eliminationNames[tile.id];
-            var short = tile.kind === 'groups' ? 'Grupo ' + groupName + ' · 3 jogos' : tile.category;
+            var series = tile.kind === 'groups' && (state.plan.schema === 1 || tile.games === 3);
+            var short = state.plan.schema === 2 ? ('Fase ' + (tile.phaseIndex + 1) + (tile.kind === 'groups' ? ' · ' + (tile.assignment?.label || tr('group','Grupo')+' '+tile.groupNumber) + (tile.assignment ? ' · '+tr('entry','Entrada')+' '+tile.assignment.entry : '') : '') +
+              ' · Rodada ' + tile.round + (series ? ' · 3 jogos' : '') + (tile.optional ? ' · Se necessário' : '')) : tile.kind === 'groups' ? 'Grupo ' + groupName + ' · 3 jogos' : tile.category;
             var gameTimes = model.gameStarts(tile, state.tournament);
             var accent = 'phase-grid-cat-' + (categories.indexOf(tile.category) % 6);
             var overflow = model.outsideWindow(tile, day), collision = overlapping.has(tile.id);
@@ -152,7 +203,7 @@
               (state.locked ? '' : ' draggable="' + (window.matchMedia && window.matchMedia('(pointer:fine)').matches ? 'true' : 'false') + '"' +
                 ' ondragstart="window._phaseGridDragStart(event,\'' + id + '\')" onkeydown="window._phaseGridKey(event,\'' + id + '\')"') + '>' +
               '<strong>' + esc(title) + '</strong><small>' + esc(short) + '</small>' +
-              (tile.kind === 'groups' ? '<div class="phase-grid-series">' + [0,1,2].map(function (offset) {
+              (series ? '<div class="phase-grid-series">' + [0,1,2].map(function (offset) {
                 return '<span>JOGO ' + (numbers[tile.id] + offset) + ' <small>(' + (offset + 1) + '/3) · ' + model.clock(gameTimes[offset]) + '</small></span>';
               }).join('') + '</div>' : '<span class="phase-grid-single">JOGO ' + numbers[tile.id] + '</span>') +
               '<small>' + esc(tile.startTime) + '–' + esc(model.clock(model.minutes(tile.startTime) + tile.duration)) +
@@ -186,22 +237,12 @@
     var schedule = window._estimatedGameHoursState;
     if (!schedule || schedule.mode !== 'organizer') { fail('Selecione jogos determinados pelo organizador.'); return; }
     var cfg = typeof window._f2GetConfig === 'function' ? window._f2GetConfig() : null;
-    if (!cfg || cfg.parceria !== 'rei_rainha' || cfg.classifAtiva === false ||
-        !cfg.eliminatoria || cfg.eliminatoria.ativa === false) {
-      fail('A proposta automática desta grade requer classificatória Rei/Rainha seguida de eliminatórias.'); return;
-    }
+    if (!cfg) { fail('Defina o formato das fases.'); return; }
     var categoryNames = window._getCreateFormCategoryData && window._getCreateFormCategoryData().combinedCategories || [];
     var custom = !!(document.getElementById('tourn-custom-category-capacity') || {}).checked;
     var capacity = {};
     try { capacity = JSON.parse((document.getElementById('tourn-max-by-category') || {}).value || '{}'); } catch (e) {}
     var general = Number((document.getElementById('tourn-max-per-category') || {}).value);
-    var categories = categoryNames.map(function (name) {
-      var participants = custom ? Number(capacity[name]) : general;
-      return { name:name, groups:participants / 4 };
-    });
-    if (!categories.length || categories.some(function (cat) { return !Number.isInteger(cat.groups); })) {
-      fail('Defina a capacidade de cada categoria em múltiplos de quatro atletas.'); return;
-    }
     var dayKeys = typeof window._estimatedGameDays === 'function' ? window._estimatedGameDays() : [];
     var savedDays = schedule.saved && schedule.saved.days || [];
     var start = (document.getElementById('tourn-start-time') || {}).value || '08:00';
@@ -213,15 +254,31 @@
         endTime:changed.endTime || original.endTime || end };
     });
     var tournament = Object.assign({}, window._phaseCallOrderState && window._phaseCallOrderState.tournament || {}, {
+      fmt2:cfg, combinedCategories:categoryNames, sport:(document.getElementById('select-sport') || {}).value,
+      maxParticipantsByCategory:custom ? capacity : {}, maxParticipantsPerCategory:general,
+      maxParticipants:Number((document.getElementById('tourn-max-participants') || {}).value),
+      courtCount:Number((document.getElementById('tourn-court-count') || {}).value),
+      setupScope:(document.getElementById('setup-first-round-only') || {}).checked === false ? 'every_game' : 'first_round',
       gameDuration:Number((document.getElementById('tourn-game-duration') || {}).value),
       callTime:Number((document.getElementById('tourn-call-time') || {}).value),
       warmupTime:Number((document.getElementById('tourn-warmup-time') || {}).value),
       courtNames:((document.getElementById('tourn-court-names') || {}).value || '').split(',').map(function (s) { return s.trim(); })
     });
-    var result = model.suggest({ days:days, courts:Number((document.getElementById('tourn-court-count') || {}).value),
-      gameDuration:tournament.gameDuration, callTime:tournament.callTime, warmupTime:tournament.warmupTime,
-      eliminationPlayMinutes:tournament.gameDuration,
-      categories:categories });
+    var result;
+    try {
+      var limits=Object.fromEntries((categoryNames.length?categoryNames:['']).map(function (name) {
+        return [name, name ? (custom ? Number(capacity[name]) : general) : tournament.maxParticipants];
+      }));
+      var projection=typeof window._f2ProjectCurrentPhases==='function' ? window._f2ProjectCurrentPhases(limits) : null;
+      if (projection) tournament=Object.assign({},tournament,projection.tournament,{phases:projection.phases});
+      var staged=typeof window._readEstimatedGameHours==='function' ? window._readEstimatedGameHours() : null;
+      if (staged?.error) {fail(staged.error);return;}
+      tournament.scheduleWindow=Object.assign({},tournament.scheduleWindow || {},staged || {},{days:days});
+      if (staged?.days?.length) {days=staged.days;tournament.scheduleWindow.days=days;}
+      var activePlan=window._phaseCallOrderState?.plan;
+      if (activePlan?.groupAssignments) tournament.scheduleWindow.interleavedPlan=activePlan;
+      result=model.suggestProjected(tournament,days,window,projection);
+    } catch(error) {fail(error.message);return;}
     if (result.error) { fail(result.error); return; }
     schedule.touched = true;
     window._phaseCallOrderState = { tournament:tournament, plan:result.plan, day:days[0], tiles:result.tiles,
@@ -250,7 +307,7 @@
     var root = overlay(); if (root) root.remove();
     overlayOpen = false;
     document.body.style.overflow = previousBodyOverflow;
-    var state = window._phaseCallOrderState; if (state) state.selectedId = null;
+    var state = window._phaseCallOrderState; if (state) {state.selectedId = null;delete state.assignmentDraft;}
     if (state && state.preDrawId) {
       var mount = document.getElementById('phase-grid-predraw-mount'); if (mount) mount.remove();
       window._phaseCallOrderState = preDrawPreviousState;
@@ -279,6 +336,7 @@
   window._phaseGridSaveAndDraw = async function () {
     var state = window._phaseCallOrderState;
     if (!state || !state.preDrawId || state.saving || state.presetBusy) return;
+    if (state.assignmentDraft) {showError(tr('pending','Aplique ou cancele a distribuição antes de sortear.'));return;}
     var button = document.getElementById('phase-grid-draw-button');
     state.saving = true;
     if (button) {

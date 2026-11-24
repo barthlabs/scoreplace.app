@@ -162,12 +162,26 @@ ok('  → e escopo Geral com 2+ linhas de 2+ grupos degenera pra POR GRUPO (regr
 // porque quem ESCREVE o campo só o liga pro Rei/Rainha. Se alguém passar a gravar
 // `flatOverall:true` em outro formato (ex.: Fase de Grupos de verdade, onde os grupos NÃO
 // rotacionam), a premissa cai e o achatamento passaria a valer onde não deve — por isso a
-// premissa é medida aqui, no fonte, e não assumida.
-var f2 = fs.readFileSync(path.join(ROOT, 'js/views/format2.js'), 'utf8');
-var escritas = f2.match(/flatOverall:[^\n]*/g) || [];
-ok('format2.compileToPhases só liga flatOverall pro Rei/Rainha (' + escritas.length + ' escrita(s))',
-  escritas.length >= 1 && escritas.every(function (l) { return /parceria\s*===\s*'rei_rainha'/.test(l); }),
-  escritas.join('\n      '));
+// premissa é medida nas fases compiladas, incluindo a resolução dos cortes locais.
+require(path.join(ROOT,'js/views/format2.js'));
+['rei_rainha','fixa','rotation_groups','super_eight'].forEach(function (parceria) {
+  ['overall','per_group'].forEach(function (scope) {
+    var cfg=window.FORMAT2.defaultConfig('Beach Tennis');
+    Object.assign(cfg,{disputa:'dupla',parceria:parceria,grupos:parceria==='rei_rainha'?1:2,
+      rodadas:{modo:'fixo',n:scope==='overall'?3:1},classifScope:scope});
+    Object.assign(cfg.eliminatoria,{ativa:true,openReiRainha:false});
+    var fases=window.FORMAT2.compileToPhases(cfg,{sport:'Beach Tennis',categories:['A']}).phases;
+    var proxima=fases[1], geral=proxima && proxima.source.flatOverall===true;
+    ok('classificação geral no compilador · '+parceria+' · '+scope,
+      !!geral===(parceria==='rei_rainha' && scope==='overall'));
+    if (!proxima) return;
+    var comCota=Object.assign({},proxima,{source:Object.assign({},proxima.source,{
+      qualificationCategoryRules:[{category:'A',perGroup:2}]})});
+    var resolvida=window.FORMAT2.qualificationForCategory(comCota,'A');
+    ok('corte local sempre usa o grupo · '+parceria+' · '+scope,
+      resolvida.source.scope==='per_group' && resolvida.source.flatOverall===false);
+  });
+});
 
 // ── 4. a SEGUNDA divergência: o default do mapping ──────────────────────────────────
 var cfgSemMapping = { name: 'X', formatCode: 'elim_simples', fixedPairs: true, pairingStrategy: 'top',

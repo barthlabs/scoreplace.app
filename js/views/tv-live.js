@@ -96,8 +96,13 @@
       : (match[slot === 'p1' ? 'team1Uids' : 'team2Uids'] || match[slot + 'Uid']);
     return Array.isArray(uids) ? uids : (uids ? [uids] : []);
   }
+  function independentRotation(t,match) {
+    var phase=t.phases?.[Number(match?.phaseIndex || 0)];
+    return t.scheduleWindow?.interleavedPlan?.schema===2 && !!match?.isMonarch && match.rotationSeries!==true &&
+      !!(phase?.classification?.partnerRotation || phase?.superEight || (!match.phaseIndex && t.superEight));
+  }
   function monarchSeries(t, current, matches, occupancy, teams, latestUpdateId) {
-    if (!current || current.isMonarch !== true || current.monarchGroup == null || current.round == null || !current.category) return null;
+    if (independentRotation(t,current) || !current || current.isMonarch !== true || current.monarchGroup == null || current.round == null || !current.category) return null;
     var games = matches.filter(function (game) {
       return game && game.isMonarch === true && !game.isTieBreak &&
         String(game.category || '') === String(current.category) &&
@@ -125,6 +130,7 @@
     });
   }
   function monarchGroupName(match) {
+    if (match.scheduledGroupLabel) return match.scheduledGroupLabel;
     var label = String(match.groupName || '').replace(/^R\d+\s+/i, '').trim();
     if (!label && match.monarchGroup != null) label = 'Grupo ' + String.fromCharCode(65 + Number(match.monarchGroup));
     if (!label || /\bGrupo\s+[A-Z]+\d+\b/i.test(label)) return label;
@@ -345,10 +351,10 @@
       if (!m) return { name: name };
       var a = sideName(t, m, 'p1'), b = sideName(t, m, 'p2');
       var phase = courtPhase(m);
-      var groupSource = m.groupName || m.monarchGroup == null ? m : matches.find(function (item) { return item && item.groupName &&
+      var groupSource = m.scheduledGroupLabel || m.groupName || m.monarchGroup == null ? m : matches.find(function (item) { return item && item.groupName &&
         Number(item.monarchGroup) === Number(m.monarchGroup) && Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
         String(item.category || '') === String(m.category || ''); }) || m;
-      return { name: name, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', category: String(m.category || m.tierLabel || ''), phase: phase + (phase === 'Classificatória' && (m.isMonarch || m.monarchGroup != null || m.groupName) ? ' · ' + monarchGroupName(groupSource) : ''),
+      return { name: name, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', category: String(m.category || m.tierLabel || ''), phase: phase + (phase === 'Classificatória' && (m.isMonarch || m.monarchGroup != null || m.groupName || m.scheduledGroupLabel) ? ' · ' + monarchGroupName(groupSource) : ''),
         latest: !!latestUpdateId && String(m.id || '') === latestUpdateId,
         series: monarchSeries(t, m, matches, occupancy, teams, latestUpdateId),
         a:a, b:b, aUids:sideUids(t, m, 'p1'), bUids:sideUids(t, m, 'p2'), ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams),
@@ -412,7 +418,7 @@
       var b = m.p2 || (Array.isArray(m.team2) ? m.team2.join(' / ') : '');
       if (!window.ScoreplaceNextMatch || !window.ScoreplaceNextMatch.knownSide(a) ||
           !window.ScoreplaceNextMatch.knownSide(b)) return false;
-      if (!m.isMonarch || m.monarchGroup == null) return true;
+      if (!m.isMonarch || m.monarchGroup == null || independentRotation(t,m)) return true;
       var peers = matches.filter(function (game) {
         return game && game.isMonarch && !game.isTieBreak &&
           String(game.category || '') === String(m.category || '') &&
@@ -455,7 +461,7 @@
     });
     var nextGames = nextQueue.filter(function (m) {
       if (!m || (!tieOverride && nextMatch && String(m.id) === String(nextMatch.id))) return false;
-      if (m.isMonarch && m.monarchGroup != null && !futureGroups.some(function (game) { return String(game.id) === String(m.id); })) return false;
+      if (m.isMonarch && !independentRotation(t,m) && m.monarchGroup != null && !futureGroups.some(function (game) { return String(game.id) === String(m.id); })) return false;
       if (publishedElimination.indexOf(m) !== -1 && Number(m.round || 1) > 1 &&
           (!window.ScoreplaceNextMatch.knownSide(m.p1) || !window.ScoreplaceNextMatch.knownSide(m.p2))) return true;
       return m.isTieBreak || !window.ScoreplaceNextMatch || typeof window.ScoreplaceNextMatch.firstAvailable !== 'function' ||
@@ -468,7 +474,7 @@
     var announcedGroups = new Set();
     nextGames = nextGames.filter(function (game) {
       var source = game.source || (nextMatch && String(game.number) === String(nextGame && nextGame.number) ? nextMatch : null);
-      if (!source || !source.isMonarch || source.monarchGroup == null) return true;
+      if (!source || !source.isMonarch || source.monarchGroup == null || independentRotation(t,source)) return true;
       var groupKey = [source.category, source.phaseIndex || 0, source.round, source.monarchGroup].join('|');
       if (announcedGroups.has(groupKey)) return false;
       announcedGroups.add(groupKey);
@@ -478,7 +484,8 @@
     // da categoria seguinte, mesmo quando há mais de quatro partidas.
     nextGames.forEach(function (game) {
       var source = game.source || (nextMatch && String(game.number) === String(nextGame && nextGame.number) ? nextMatch : null);
-      if (!source || !source.isMonarch || source.monarchGroup == null) return;
+      if (source?.scheduledGroupLabel) game.groupName=source.scheduledGroupLabel;
+      if (!source || !source.isMonarch || source.monarchGroup == null || independentRotation(t,source)) return;
       var peers = matches.filter(function (m) { return m && m.isMonarch && !m.isTieBreak && !occupancy.isFinished(m) &&
         String(m.category || '') === String(source.category || '') &&
         Number(m.phaseIndex || 0) === Number(source.phaseIndex || 0) &&
@@ -511,7 +518,7 @@
         var duration = !m.wo && estimatedMs >= 1000 && Number.isFinite(estimatedMs)
           ? '≈' + clock.elapsed(0, estimatedMs)
           : (!m.wo && ended > gameStart && gameStart > 0 ? clock.elapsed(gameStart, ended) : '');
-        var series = m.isMonarch && !m.isTieBreak ? matches.filter(function (peer) {
+        var series = m.isMonarch && !m.isTieBreak && !independentRotation(t,m) ? matches.filter(function (peer) {
           return peer && peer.isMonarch && !peer.isTieBreak &&
             String(peer.category || '') === String(m.category || '') &&
             Number(peer.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
@@ -527,7 +534,7 @@
           : 'Horário indisponível';
         var hasScore = !m.wo && ended > 0 && ((m.scoreP1 != null && m.scoreP2 != null) ||
           (Array.isArray(m.sets) && m.sets.some(function (set) { return set && set.gamesP1 != null && set.gamesP2 != null; })));
-        return { id: String(m.id || ''), resultAt: ended, hasScore: hasScore, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', time: resultTime, category: String(m.category || ''), stage: courtPhase(m), groupName: m.isMonarch ? monarchGroupName(m) : '', seriesPosition: seriesPosition, a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
+        return { id: String(m.id || ''), resultAt: ended, hasScore: hasScore, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', time: resultTime, category: String(m.category || ''), stage: courtPhase(m), groupName: m.scheduledGroupLabel || (m.isMonarch ? monarchGroupName(m) : ''), seriesPosition: seriesPosition, a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
           ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams), scoreA: m.wo ? 'W.O.' : gameScore(m, 1, true), scoreB: m.wo ? 'W.O.' : gameScore(m, 2, true), duration: duration };
       });
     // Uma decisão por W.O. pode entrar no histórico depois do placar mais
@@ -727,7 +734,7 @@
         esc(game.groupName) + ' · <span class="tv-upcoming-category">' + esc(game.category) + '</span>' + (game.stage ? ' · <span class="tv-upcoming-stage">' + esc(game.stage) + '</span>' : '') + '</small><div class="tv-upcoming-series">' +
         game.series.map(function (item) { return '<div class="tv-upcoming-series-game"><b>JOGO ' + esc(item.number) + '</b><span class="tv-upcoming-series-left">' + players(item.a) +
           '</span><i>×</i><span class="tv-upcoming-series-right">' + players(item.b) + '</span></div>'; }).join('') + '</div></article>';
-      return '<article class="tv-upcoming-item' + firstClass + '"><small>JOGO ' + esc(game.number) + ' · <span class="tv-upcoming-category">' + esc(game.category) + '</span>' + (game.stage ? ' · <span class="tv-upcoming-stage">' + esc(game.stage) + '</span>' : '') + '</small>' +
+      return '<article class="tv-upcoming-item' + firstClass + '"><small>JOGO ' + esc(game.number) + (game.groupName ? ' · '+esc(game.groupName) : '') + ' · <span class="tv-upcoming-category">' + esc(game.category) + '</span>' + (game.stage ? ' · <span class="tv-upcoming-stage">' + esc(game.stage) + '</span>' : '') + '</small>' +
       '<div class="tv-result-match"><div class="tv-result-side tv-result-left" style="--team:' + esc(game.ta.color) + '">' + (game.ta.name ? '<span class="tv-result-team">' + esc(game.ta.name) + '</span>' : '') + '<div class="tv-result-players">' + players(game.a) + '</div></div>' +
       '<div class="tv-result-versus">VS</div>' +
       '<div class="tv-result-side tv-result-right" style="--team:' + esc(game.tb.color) + '"><div class="tv-result-players">' + players(game.b) + '</div>' + (game.tb.name ? '<span class="tv-result-team">' + esc(game.tb.name) + '</span>' : '') + '</div></div></article>'; }

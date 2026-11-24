@@ -1,5 +1,16 @@
 // ─── Portuguese (pt-BR) translations ────────────────────────────────────────
 window._translations['pt'] = {
+  'phaseGrid.distribute': 'Distribuir grupos nas quadras',
+  'phaseGrid.name': 'Nome do grupo',
+  'phaseGrid.entry': 'Entrada',
+  'phaseGrid.phase': 'Fase',
+  'phaseGrid.group': 'Grupo',
+  'phaseGrid.court': 'Quadra',
+  'phaseGrid.apply': 'Aplicar distribuição',
+  'phaseGrid.cancel': 'Cancelar',
+  'phaseGrid.remove': 'Remover distribuição',
+  'phaseGrid.pending': 'Aplique ou cancele a distribuição antes de sortear.',
+  'phaseGrid.groupAssignmentStale': 'Revise as vagas e os grupos e gere a grade novamente.',
   'progress.awaitingCourtCall': 'Aguardando chamada à quadra',
   'draw.monarchPairBlockedTitle': 'Duplas após a classificação',
   'draw.monarchPairBlockedBody': 'Na fase inicial Rei/Rainha, as inscrições são individuais. As duplas serão formadas depois da classificação.',

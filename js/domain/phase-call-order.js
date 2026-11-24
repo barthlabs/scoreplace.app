@@ -18,6 +18,7 @@
   function stages(t) {
     var windowConfig = t && t.scheduleWindow || {};
     var blocks = windowConfig.interleavedPlan && windowConfig.interleavedPlan.blocks;
+    if (windowConfig.interleavedPlan?.schema===2) return [];
     var available = [];
     if (Array.isArray(blocks)) blocks.forEach(function (b) {
       if (!b || (b.kind !== 'groups' && b.kind !== 'elimination') || !b.category) return;
@@ -105,6 +106,17 @@
   }
   function allowed(t, matches, match, finished) {
     var plan = t && t.scheduleWindow && t.scheduleWindow.interleavedPlan;
+    if (plan?.schema===2) {
+      if (!match || match.isTieBreak) return true;
+      var model=root.ScoreplacePhaseGridPlan;
+      if (!model && typeof require==='function') model=require('./phase-grid-plan.js');
+      if (!model) return false;
+      var jobs=model.technicalPositions(t,matches,root), byId=new Map(matches.map(m=>[String(m.id),m]));
+      if (plan.groupAssignments?.length) jobs=model.bindAssignments(jobs,plan.groupAssignments);
+      var target=jobs.find(job=>job.matchIds.includes(String(match.id)));
+      return !target || jobs.every(job=>!model.precedes(job,target) ||
+        job.matchIds.every(id=>finished(byId.get(id))));
+    }
     if (plan && plan.editorVersion === 2 && Array.isArray(plan.blocks)) {
       var intervals = {};
       plan.blocks.forEach(function (block) {

@@ -172,8 +172,9 @@ async function formRoundTrip(t) {
   try {
     const page = await browser.newPage();
     await page.setContent('<main id="f2-config-mount"></main>');
+    for(const domain of ['standings','team-competition','phase-grid-plan']) await page.addScriptTag({path:require.resolve('../js/domain/'+domain+'.js')});
     for (const file of ['sport-rules', 'standings-core', 'super-eight-core', 'format2', 'tournaments-categories',
-      'bracket-model', 'chaves', 'chaves-adapter', 'phases-engine', 'tournaments-utils', 'format2-ui']) {
+      'bracket-model', 'chaves', 'chaves-adapter', 'phases-engine', 'tournaments-utils', 'bracket-logic','bracket-policy','tournaments-draw','schedule-poll','format2-ui']) {
       await page.addScriptTag({path:require.resolve('../js/views/' + file + '.js')});
     }
     await page.evaluate(t => {
@@ -186,6 +187,7 @@ async function formRoundTrip(t) {
         el.value=n;el.dispatchEvent(new Event('input'));el.dispatchEvent(new Event('change'));
       },value);
     }
+    await page.locator('#f2-slider-common-0').check();
     await degree(0,5); await degree(1,7);
     const fields=page.locator('#f2-rotation-destinations fieldset');
     await fields.nth(1).locator('[data-value="ranking"]').click();
