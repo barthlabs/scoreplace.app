@@ -8,8 +8,8 @@
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "253f2dc0db9845aed1b8f857bcedc577d70f1dbd",
-      "deployedAt": "2026-11-23T06:23:40.097Z",
+      "backendCommit": "b3c4ec5f636f6772df5a4df21eb5013bbce30405",
+      "deployedAt": "2026-11-24T14:37:39.060Z",
       "result": "success",
       "mode": "only"
     },
@@ -38,8 +38,8 @@
       "mode": "only"
     },
     "createTournament": {
-      "backendCommit": "b159a697d5e5cbe2f5db805ae7d1e3cfd9e7bcb8",
-      "deployedAt": "2026-11-24T01:32:03.831Z",
+      "backendCommit": "b3c4ec5f636f6772df5a4df21eb5013bbce30405",
+      "deployedAt": "2026-11-24T14:37:39.060Z",
       "result": "success",
       "mode": "only"
     },
@@ -50,8 +50,8 @@
       "mode": "only"
     },
     "uploadTournamentImage": {
-      "backendCommit": "3e4277a9911ad927d686c0bd038de7fe94944339",
-      "deployedAt": "2026-10-19T05:41:01.059Z",
+      "backendCommit": "b3c4ec5f636f6772df5a4df21eb5013bbce30405",
+      "deployedAt": "2026-11-24T14:37:39.060Z",
       "result": "success",
       "mode": "only"
     },
@@ -164,8 +164,8 @@
       "mode": "only"
     },
     "endMatchOnCourt": {
-      "backendCommit": "b159a697d5e5cbe2f5db805ae7d1e3cfd9e7bcb8",
-      "deployedAt": "2026-11-24T01:32:03.831Z",
+      "backendCommit": "b3c4ec5f636f6772df5a4df21eb5013bbce30405",
+      "deployedAt": "2026-11-24T14:37:39.060Z",
       "result": "success",
       "mode": "only"
     },
