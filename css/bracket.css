@@ -3,6 +3,7 @@
 .sp-operations-track {
   display: flex;
   align-items: stretch;
+  flex-wrap: wrap;
   gap: 10px;
   max-width: 100%;
   min-width: 0;
@@ -11,7 +12,9 @@
   padding: 4px;
   overflow: clip;
   overflow-anchor: none;
-  --sp-operations-line-height: 18px;
+  --sp-operations-card-width: 380px;
+  --sp-operations-panel-frame: 22px; /* bordas (2 × 3px) e padding (2 × 8px) */
+  --sp-operations-line-height: max(18px, 1.125rem);
   --sp-operations-card-height: 120px;
 }
 .sp-operations-court-track::-webkit-scrollbar { display: none; }
@@ -54,25 +57,45 @@
   box-sizing: border-box;
   overflow-anchor: none;
 }
+/* O scrollbar nativo participa da largura intrínseca do painel. A medida
+   compartilhada é a área do cartão, não a caixa externa da lista. */
+.sp-operations-next, .sp-operations-pending {
+  flex: none;
+  width: max-content;
+  max-width: 100%;
+  min-width: min(100%, calc(var(--sp-operations-card-width) + var(--sp-operations-panel-frame)));
+}
+.sp-operations-next .sp-operations-replica, .sp-operations-pending .sp-operations-replica {
+  width: var(--sp-operations-card-width);
+  max-width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+}
+.sp-operations-next-scroll, .sp-operations-pending-track { scrollbar-gutter:stable; }
 .sp-operations-next {
   position: relative;
-  height:calc(var(--sp-operations-card-height) + 2 * var(--sp-operations-line-height) + 22px);
-  flex: 0 0 min(31%, 380px);
+  height:calc(var(--sp-operations-card-height) + 2 * var(--sp-operations-line-height) + var(--sp-operations-panel-frame));
   border-color: var(--sp-c-fbbf24, #fbbf24);
   overflow:hidden;
 }
 .sp-operations-next-scroll { display:flex;flex-direction:column;align-content:start;gap:8px;height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin; }
 .sp-operations-phase-advance { display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-card-hover);color:var(--text-bright);font-size:.82rem; }
 .sp-operations-phase-advance button { white-space:normal;text-align:center; }
-.sp-operations-next .sp-operations-replica { display:grid;grid-template-rows:var(--sp-operations-line-height) var(--sp-operations-line-height) var(--sp-operations-card-height);gap:0;flex:0 0 auto; }
+.sp-operations-next .sp-operations-replica { display:grid;grid-template-rows:minmax(var(--sp-operations-line-height),max-content) minmax(var(--sp-operations-line-height),max-content) var(--sp-operations-card-height);gap:0;flex:0 0 auto; }
 .sp-operations-next-scroll > .sp-operations-empty { min-height:54px; }
-.sp-operations-courts { display:grid;grid-template-rows:var(--sp-operations-line-height) calc(var(--sp-operations-line-height) + var(--sp-operations-card-height));flex:1 1 0;grid-template-columns:minmax(0,1fr); }
-.sp-operations-pending { display:grid;grid-template-rows:var(--sp-operations-line-height) calc(var(--sp-operations-line-height) + var(--sp-operations-card-height));flex:0 0 min(31%,380px);border-color:var(--sp-c-38bdf8,#38bdf8);overflow:hidden; }
+.sp-operations-courts {
+  display: grid;
+  grid-template: var(--sp-operations-line-height) auto / minmax(0, 1fr);
+  flex: 1 0 min(100%, calc(var(--sp-operations-card-width) + var(--sp-operations-panel-frame) + 1rem));
+  overflow: hidden;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+.sp-operations-pending { display:grid;grid-template-rows:var(--sp-operations-line-height) calc(var(--sp-operations-line-height) + var(--sp-operations-card-height));grid-template-columns:minmax(0,1fr);border-color:var(--sp-c-38bdf8,#38bdf8);overflow:hidden; }
 .sp-operations-pending-track { display:flex;flex-direction:column;gap:8px;overflow-y:auto;overflow-x:hidden;min-height:0; }
 .sp-operations-availability { display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;color:var(--sp-c-4ade80,#4ade80);font-size:.69rem;font-weight:800;line-height:14px; }
 .sp-operations-availability--busy { color:var(--sp-c-f87171,#f87171); }
 .sp-operations-pending .sp-operations-label { display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;color:var(--sp-c-38bdf8,#38bdf8); }
-.sp-operations-pending .sp-operations-stage { font-size:.72rem;overflow:hidden;text-overflow:ellipsis; }
+.sp-operations-pending .sp-operations-stage, .sp-operations-court-slot .sp-operations-stage { min-width:0;max-width:60%;font-size:.72rem;white-space:normal;overflow-wrap:anywhere;text-align:right; }
 .sp-operations-pending .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-38bdf8,#38bdf8)!important; }
 .sp-operations-section-title {
   display: block;
@@ -98,10 +121,10 @@
   box-sizing: border-box;
   min-height: 0;
 }
-.sp-operations-court-slot { display:grid;grid-template-rows:var(--sp-operations-line-height) var(--sp-operations-card-height);flex:0 0 380px;min-width:0; }
+.sp-operations-court-slot { display:grid;grid-auto-rows:max-content;align-content:start;grid-template-columns:minmax(0,1fr);flex:0 0 min(100%,var(--sp-operations-card-width));min-width:0; }
 .sp-operations-replica { display:flex;flex-direction:column;gap:7px;min-width:0;width:100%; }
 .sp-operations-court-slot .sp-operations-replica,
-.sp-operations-pending-track .sp-operations-replica { display:grid;grid-template-rows:var(--sp-operations-line-height) var(--sp-operations-card-height);gap:0; }
+.sp-operations-pending-track .sp-operations-replica { display:grid;grid-template-rows:minmax(var(--sp-operations-line-height),max-content) var(--sp-operations-card-height);gap:0; }
 .sp-operations-replica > .sp-match-card { width:100%;max-width:none;min-height:0;height:var(--sp-operations-card-height);box-sizing:border-box;padding-bottom:14px!important; }
 .sp-operations-replica .sp-mc-head { gap:4px;margin-bottom:6px; }
 .sp-operations-replica .sp-mc-head [data-match-time-status] { white-space:nowrap; }
@@ -187,13 +210,12 @@
   font-size: .82rem;
 }
 .sp-operations-court-free span { color: var(--text-muted); }
-.sp-operations-label { color: var(--sp-c-fbbf24, #fbbf24); font-size: .74rem; font-weight: 800; line-height:var(--sp-operations-line-height); }
+.sp-operations-label { color: var(--sp-c-fbbf24, #fbbf24); overflow-wrap:anywhere;min-height:var(--sp-operations-line-height); font-size: .74rem; font-weight: 800; line-height:var(--sp-operations-line-height); }
 .sp-operations-next .sp-operations-label { display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0; }
 .sp-operations-stage { margin-left:auto;color:var(--text-bright);font-size:.82rem;font-weight:900;white-space:nowrap; }
 .sp-operations-next .sp-operations-availability > span { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.sp-operations-next .sp-operations-stage { flex:0 0 auto;font-size:.72rem; }
+.sp-operations-next .sp-operations-stage { min-width:0;max-width:60%;font-size:.72rem;white-space:normal;overflow-wrap:anywhere;text-align:right; }
 .sp-operations-court-slot .sp-operations-label { display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0; }
-.sp-operations-court-slot .sp-operations-stage { font-size:.72rem;overflow:hidden;text-overflow:ellipsis; }
 .sp-operations-postpone { box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;align-self:center;flex:0 0 auto;height:18px;min-height:18px;max-height:18px;border:1px solid var(--sp-c-38bdf8,#38bdf8);border-radius:7px;background:#075985;color:#fff;font:inherit;font-size:.66rem;font-weight:800;line-height:14px;padding:1px 7px;cursor:pointer; }
 .sp-operations-postpone:disabled { opacity:.55;cursor:wait; }
 .sp-operations-courts .sp-operations-label { color: var(--sp-c-22c55e, #22c55e); }
@@ -205,11 +227,6 @@
 .sp-bracket-presence-button { display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;padding:0;border:0;background:transparent;color:inherit;line-height:0;cursor:pointer;border-radius:50%; }
 .sp-bracket-presence-button:focus-visible { outline:2px solid #38bdf8;outline-offset:2px; }
 .sp-bracket-presence-button:disabled { opacity:.55;cursor:wait; }
-@media (max-width: 690px) {
-  .sp-operations-track { flex-direction:column; }
-  .sp-operations-next, .sp-operations-pending, .sp-operations-courts { flex:none; width:100%; }
-  .sp-operations-court-slot { flex-basis:min(100%,380px); }
-}
 /* A barra da chave é uma única superfície opaca. Esta pintura cobre a área
    acima dela inclusive quando o browser arredonda topbar/Voltar em subpixels;
    topbar e Voltar (z 100/101) continuam à frente e clicáveis. */

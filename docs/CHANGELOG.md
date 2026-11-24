@@ -1,3 +1,7 @@
+## 2.7.54 — 24/nov/2026 (largura dos cartões de operação)
+
+- Próximo jogo, Placares pendentes e Em quadra mostram cartões da mesma largura. Quando o espaço é menor, as seções passam para a linha seguinte e os cabeçalhos têm espaço para quebrar o texto.
+
 ## 2.7.53 — 24/nov/2026 (faixa de controle das chaves)
 
 - A faixa com Próximo jogo, Placares pendentes e Em quadra aparece uma única vez após atualizar as chaves ou alternar entre abas.

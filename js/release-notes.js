@@ -1,3 +1,4 @@
+// 2.7.54 — Próximo jogo, Placares pendentes e Em quadra mostram cartões da mesma largura. Quando o espaço é menor, as seções passam para a linha seguinte e os cabeçalhos têm espaço para quebrar o texto.
 // 2.7.53 — A faixa com Próximo jogo, Placares pendentes e Em quadra aparece uma única vez após atualizar as chaves ou alternar entre abas.
 // 2.7.52 — Encerrar bloco envia os três jogos para Placares pendentes e libera a quadra. Encerrar jogo envia só a partida escolhida. Na operação, só as quadras rolam para os lados e o relógio cabe no card. A tela No ar abre em uma janela independente e a escolha do monitor ativa a tela cheia. Nas ferramentas, Editar vem primeiro e o modo de teste mantém sua configuração ao salvar outros campos.
 // 2.7.51 — Atualização consolidada de produção com as correções validadas desde a última publicação.
@@ -1931,6 +1932,7 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800;color:var(--sp-c-a7f3d0,#a7f3d0);font-size:1rem;margin-bottom:8px;">🎾 v2.7 — Torneios sem interrupção <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(Novembro, 2026)</span></div>' +
       '<ul style="margin:0;padding-left:1.1rem;font-size:0.86rem;line-height:1.5;color:var(--text-main);">' +
+        '<li>Próximo jogo, Placares pendentes e Em quadra mostram cartões da mesma largura. Quando o espaço é menor, as seções passam para a linha seguinte e os cabeçalhos têm espaço para quebrar o texto.</li>' +
         '<li>A faixa com Próximo jogo, Placares pendentes e Em quadra aparece uma única vez após atualizar as chaves ou alternar entre abas.</li>' +
         '<li>Na operação, Próximo jogo e Placares pendentes têm rolagem vertical independente. Deslize para os lados em Em quadra para ver outras quadras. Jogos prontos de outra fase continuam disponíveis para chamada.</li>' +
         '<li>Encerrar bloco libera a quadra e envia os três jogos para Placares pendentes. Encerrar jogo envia apenas a partida escolhida.</li>' +

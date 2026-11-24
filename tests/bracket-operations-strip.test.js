@@ -75,7 +75,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
 assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' }] } }, false), '13/11 08:00');
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ ignoreDefaultArgs:['--hide-scrollbars'] });
   try {
     const page = await browser.newPage();
     await page.setContent('<main id="view-container"><section id="tourn-grid-container"></section><nav data-bracket-tabs-root="1" data-tournament-id="sb_test"></nav><section id="rounds"><article id="card-m2" class="sp-match-card"></article></section></main>');
@@ -454,38 +454,85 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       return { height: track.clientHeight, content: track.scrollHeight, mobileHeight: getComputedStyle(track).height };
     });
     assert(mobileClip.content <= mobileClip.height, 'mobile não pode cortar cards após resize: ' + JSON.stringify(mobileClip));
-    for (const width of [600, 900, 1440, 1971]) {
-      await page.setViewportSize({ width, height: 800 });
-      const geometry = await page.evaluate(() => {
+    await page.evaluate(() => {
+      const t = window._findTournamentById();
+      t.courtNames = ['Quadra 4','Quadra 5','Quadra 6','Quadra 7','Quadra 8'];
+      t.matches.push({ id:'width-active', _gameNum:3, court:'Quadra 4', courtCalledAt:'2026-10-22T18:02:00Z',
+        p1:'Mariana de Almeida / Fernanda Souza', p2:'Carolina Nunes / Bianca Serrano' });
+      t._nJogos = t.matches.length;
+    });
+    for (const layout of [
+      { width:320, rows:'three' }, { width:360, zoom:1.25, rows:'three' },
+      { width:600, rows:'three' }, { width:900, rows:'two' }, { width:965, rows:'two' },
+      { width:1440, rows:'one' }, { width:1971, rows:'one' },
+      { width:1930, container:965, rows:'two', classic:true }, { width:320, rows:'three', classic:true },
+      { width:1930, zoom:2, rows:'two' }
+    ]) {
+      await page.setViewportSize({ width:layout.width, height:900 });
+      const geometry = await page.evaluate(({zoom=1,container,classic}) => {
+        document.getElementById('geometry-scrollbars')?.remove();
+        if (classic) {
+          const style = document.createElement('style');
+          style.id = 'geometry-scrollbars';
+          const lists = ':is(.sp-operations-next-scroll,.sp-operations-pending-track,.sp-operations-courts)';
+          style.textContent = lists + '{scrollbar-width:auto!important}' + lists + '::-webkit-scrollbar{width:10px}';
+          document.head.append(style);
+        }
+        const detail = document.getElementById('view-container');
+        detail.style.zoom = zoom;
+        detail.style.width = container ? container + 'px' : '';
         const t = window._findTournamentById();
         const root = document.querySelector('[data-bracket-tabs-root]');
-        window._bracketCourtReleaseCache = { sb_test: { released: { m1: '2026-10-22T18:05:00Z' } } };
+        window._bracketCourtReleaseCache = { sb_test: { ready:true, released:{ m1:'2026-10-22T18:05:00Z' } } };
         window._bracketOperationsRefresh(t, root);
         const strip = root._bracketOperationsStrip;
-        const rect = selector => strip.querySelector(selector).getBoundingClientRect();
-        const next = rect('.sp-operations-next .sp-match-card');
-        const pending = rect('.sp-operations-pending .sp-match-card');
-        const free = rect('.sp-operations-court-free');
-        const panels = [...strip.querySelectorAll('.sp-operations-next,.sp-operations-pending,.sp-operations-courts')].map(el => el.getBoundingClientRect());
-        const label = rect('.sp-operations-court-slot > .sp-operations-label');
-        const availability = rect('.sp-operations-availability');
-        return { next: [next.top, next.bottom], pending: [pending.top, pending.bottom],
-          free: [free.top, free.bottom], panels: panels.map(r => [r.top, r.bottom]),
-          labels: [label.top, availability.top], clipped: strip.querySelector('.sp-operations-track').scrollHeight > strip.querySelector('.sp-operations-track').clientHeight };
-      });
-      const aligned = (a, b) => Math.abs(a[0] - b[0]) <= 3 && Math.abs(a[1] - b[1]) <= 3;
-      if (width <= 690) {
-        assert(geometry.panels[1][0] >= geometry.panels[0][1] && geometry.panels[2][0] >= geometry.panels[1][1]);
-        assert(Math.abs((geometry.next[1]-geometry.next[0])-(geometry.pending[1]-geometry.pending[0])) <= 3);
-        assert(!geometry.clipped);
-        continue;
-      }
-      assert(aligned(geometry.next, geometry.pending) && aligned(geometry.next, geometry.free),
-        'cards e slot livre devem ocupar a mesma região em ' + width + 'px: ' + JSON.stringify(geometry));
-      assert(geometry.panels.every(panel => aligned(panel, geometry.panels[0])) &&
-        Math.abs(geometry.labels[0] - geometry.labels[1]) <= 3 && !geometry.clipped,
-      'as três seções e cabeçalhos devem alinhar sem corte em ' + width + 'px: ' + JSON.stringify(geometry));
+        const panels = ['.sp-operations-next','.sp-operations-pending','.sp-operations-courts'].map(s => strip.querySelector(s));
+        const cards = panels.map(p => p.querySelector('.sp-match-card'));
+        const bounds = panels.map(p => p.getBoundingClientRect());
+        const rects = cards.map(c => c.getBoundingClientRect());
+        const track = strip.querySelector('.sp-operations-court-track');
+        const top = bounds.map(r => r.top);
+        const rows = Math.abs(top[0]-top[2]) <= 1 ? 'one' : Math.abs(top[0]-top[1]) <= 1 ? 'two' : 'three';
+        const fixedX = bounds.map(r => r.x);
+        track.scrollLeft = track.scrollWidth;
+        const independent = track.scrollLeft > 0 && panels.slice(0,2).every((p,i) => Math.abs(p.getBoundingClientRect().x-fixedX[i]) <= 1);
+        track.scrollLeft = 0;
+        const headerFit = cards.every(card => {
+          const replica = card.closest('.sp-operations-replica');
+          const label = replica.querySelector('.sp-operations-label');
+          label.firstChild.textContent = 'Quadra principal da classificatória feminina na categoria intermediária';
+          const stage = replica.querySelector('.sp-operations-stage');
+          if (stage) stage.textContent = 'Classificatória feminina de duplas · Grupo Diamante';
+          const r = label.getBoundingClientRect();
+          const next = label.nextElementSibling.getBoundingClientRect();
+          const text = document.createRange();
+          text.selectNodeContents(label.firstChild);
+          const line = text.getBoundingClientRect();
+          return r.bottom <= next.top + 1 && line.bottom <= r.bottom + 1 && [...label.children].every(el =>
+            el.getBoundingClientRect().left >= line.right - 1 && el.getBoundingClientRect().right <= r.right + 1);
+        });
+        const beforeClip = strip.querySelector('.sp-operations-track');
+        const list = strip.querySelector('.sp-operations-next-scroll');
+        return { rows, gutter:list.offsetWidth-list.clientWidth, widths:rects.map(r => r.width/zoom), cardTops:rects.map(r => r.top),
+          heights:rects.map(r=>r.height/zoom), independent, headerFit,
+          clipped:beforeClip.scrollWidth > beforeClip.clientWidth+1 || beforeClip.scrollHeight > beforeClip.clientHeight+1 };
+      }, layout);
+      const msg = JSON.stringify({layout,geometry});
+      assert.equal(geometry.rows,layout.rows,msg);
+      if (layout.classic) assert(geometry.gutter >= 10,msg);
+      assert(Math.max(...geometry.widths)-Math.min(...geometry.widths) <= 1, msg);
+      assert(Math.max(...geometry.heights)-Math.min(...geometry.heights) <= 3, msg);
+      if (layout.width >= 600) assert(geometry.widths.every(w=>Math.abs(w-380) <= 1),msg);
+      if (layout.rows === 'one') assert(Math.max(...geometry.cardTops)-Math.min(...geometry.cardTops) <= 3,msg);
+      assert(geometry.independent && geometry.headerFit && !geometry.clipped,msg);
     }
+    await page.evaluate(() => {
+      const t = window._findTournamentById();
+      t.matches.pop();
+      t.courtNames = ['Quadra 4','Quadra 5'];
+      t._nJogos = t.matches.length;
+      document.getElementById('view-container').style.cssText = '';
+    });
     const futureCard = await page.evaluate(() => {
       const t = window._findTournamentById();
       const root = document.querySelector('[data-bracket-tabs-root]');
