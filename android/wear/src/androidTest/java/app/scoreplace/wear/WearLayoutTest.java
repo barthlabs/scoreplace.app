@@ -45,9 +45,9 @@ public class WearLayoutTest {
         state.put("tieRulePending", false).put("isFinished", true).put("active", false);
         state.put("canReplay", true).put("winner", 2);
         state.getJSONObject("teams").getJSONObject("2").put("players", new JSONArray("['Tester']"));
-        checkPage(state, R.id.winner_overlay, "Tester", "20", "21", "Fechar", "Iniciar");
+        checkPage(state, R.id.winner_overlay, "Vencedor · Tester", "20", "21", "Fechar", "Iniciar");
         state.put("isDoubles", true).put("canMix", true).put("rrSuggest", true).put("winner", 1);
-        checkPage(state, R.id.winner_overlay, "Alexandriamarques\nJosé Luís", "🎲", "👑", "⚥");
+        checkPage(state, R.id.winner_overlay, "Vencedor · Alexandriamarques\nJosé Luís", "🎲", "👑", "⚥");
         state.put("reiRainha", true).put("rrRound", 2);
         checkPage(state, R.id.winner_overlay, "👑 Resultado Final");
         state.put("rrRound", 3).put("rrStandings", new JSONArray("[{'name':'Alexandriamarques','wins':3}]"));
@@ -65,17 +65,37 @@ public class WearLayoutTest {
         instrumentation.runOnMainSync(() -> {
             try {
                 View viewport = activity.findViewById(R.id.watch_viewport);
-                ScrollView page = activity.findViewById(pageId);
+                View root = activity.findViewById(pageId);
+                ScrollView page = root instanceof ScrollView ? (ScrollView) root : activity.findViewById(R.id.winner_scroll);
                 require(page.isShown() && page.getHeight() > 0, "missing page " + pageId);
                 require(activity.getResources().getConfiguration().isScreenRound(), "requires round AVD");
                 Rect bounds = new Rect();
-                require(page.getGlobalVisibleRect(bounds), "hidden scroll viewport");
+                require(root.getGlobalVisibleRect(bounds), "hidden scroll viewport");
                 double cx = viewport.getWidth() / 2.0, cy = viewport.getHeight() / 2.0;
                 double dx = Math.max(cx - bounds.left, bounds.right - cx);
                 double dy = Math.max(cy - bounds.top, bounds.bottom - cy);
                 require(Math.hypot(dx, dy) <= Math.min(cx, cy) + 1, "outside round face: " + bounds);
+                if (pageId == R.id.winner_overlay) {
+                    View footer = activity.findViewById(R.id.replay_controls);
+                    require(footer.isShown() == (state.optBoolean("canReplay") && !state.optBoolean("reiRainha")),
+                            "incorrect replay visibility");
+                    if (footer.isShown()) {
+                        if (footer.getParent() == root) inspect(null, footer);
+                        for (int id : new int[] {R.id.btn_replay_cancel, R.id.btn_replay_confirm}) {
+                            TextView button = activity.findViewById(id);
+                            require(button.getLineCount() == 1, "split action label: " + button.getText());
+                        }
+                        if (!state.optBoolean("isDoubles") &&
+                                activity.getResources().getConfiguration().fontScale <= 1.241f) {
+                            for (int id : new int[] {R.id.winner_arc_sport, R.id.winner_names, R.id.winner_score_l,
+                                    R.id.winner_score_r, R.id.btn_replay_cancel, R.id.btn_replay_confirm}) {
+                                assertFullyVisible(activity.findViewById(id));
+                            }
+                        }
+                    }
+                }
                 inspect(page, page);
-                for (String label : expected) require(hasLabel(page, label), "missing label: " + label);
+                for (String label : expected) require(hasLabel(root, label), "missing label: " + label);
                 if (pageId == R.id.serve_overlay) {
                     ViewGroup list = activity.findViewById(R.id.serve_list);
                     require(list.getChildAt(1).performClick() && list.getChildAt(1).isSelected(),
@@ -112,7 +132,8 @@ public class WearLayoutTest {
                     area.left = 0;
                     area.right = text.getWidth();
                     area.offset(0, text.getCompoundPaddingTop());
-                    bringIntoView(page, text, area, label);
+                    if (page == null) assertFullyVisible(text);
+                    else bringIntoView(page, text, area, label);
                 }
                 textCount++;
             }
@@ -121,7 +142,8 @@ public class WearLayoutTest {
             int min = Math.round(48 * view.getResources().getDisplayMetrics().density);
             require(view.getWidth() >= min && view.getHeight() >= min,
                     "small target " + view.getId() + " " + view.getWidth() + "x" + view.getHeight());
-            if (view.getHeight() <= page.getHeight()) {
+            if (page == null) assertFullyVisible(view);
+            else if (view.getHeight() <= page.getHeight()) {
                 bringIntoView(page, view, new Rect(0, 0, view.getWidth(), view.getHeight()), "target " + view.getId());
             }
             touchCount++;
@@ -130,6 +152,12 @@ public class WearLayoutTest {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) inspect(page, group.getChildAt(i));
         }
+    }
+
+    private static void assertFullyVisible(View view) {
+        Rect visible = new Rect();
+        require(view.getLocalVisibleRect(visible) && visible.equals(new Rect(0, 0, view.getWidth(), view.getHeight())),
+                "clipped in initial frame: " + view.getId() + " " + visible);
     }
 
     private static void bringIntoView(ScrollView page, View view, Rect local, String label) {

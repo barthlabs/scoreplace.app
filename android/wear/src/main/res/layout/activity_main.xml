@@ -69,47 +69,57 @@
                 android:textColor="#FFFFFF" />
         </LinearLayout>
     </ScrollView>
-    <ScrollView style="@style/WearPage" android:id="@+id/winner_overlay" android:visibility="gone">
-        <LinearLayout style="@style/WearColumn">
-            <TextView style="@style/WearCaption" android:id="@+id/winner_arc_sport" />
-            <TextView style="@style/WearCaption" android:id="@+id/winner_label" />
-            <TextView
-                style="@style/WearText"
-                android:id="@+id/winner_names"
-                android:textColor="@color/team_blue"
-                android:textSize="19sp"
-                android:textStyle="bold" />
-            <LinearLayout style="@style/WearRow">
-                <TextView style="@style/WearScore" android:id="@+id/winner_score_l" />
-                <TextView style="@style/WearCaption" android:text="–" android:layout_width="wrap_content" />
-                <TextView style="@style/WearScore" android:id="@+id/winner_score_r" />
-            </LinearLayout>
-            <TextView style="@style/WearText" android:id="@+id/rr_series_label" android:visibility="gone" />
-            <TextView
-                style="@style/WearAction"
-                android:id="@+id/btn_rr_next"
-                android:text="Próximo jogo"
-                android:backgroundTint="@color/rr_amber_dark"
-                android:textColor="#FFFFFF"
-                android:visibility="gone" />
-            <TextView
-                style="@style/WearText"
-                android:id="@+id/rr_final_title"
-                android:text="👑 Rei/Rainha"
-                android:visibility="gone" />
-            <LinearLayout
-                style="@style/WearColumn"
-                android:id="@+id/rr_standings"
-                android:visibility="gone" />
-            <TextView
-                style="@style/WearCaption"
-                android:id="@+id/winner_waiting"
-                android:text="Aguardando o celular…"
-                android:visibility="gone" />
-            <LinearLayout
-                style="@style/WearColumn"
-                android:id="@+id/replay_controls"
-                android:visibility="gone">
+    <LinearLayout
+        style="@style/WearColumn"
+        android:id="@+id/winner_overlay"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+        <ScrollView
+            style="@style/WearPage"
+            android:id="@+id/winner_scroll"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+            <LinearLayout style="@style/WearColumn">
+                <TextView style="@style/WearCaption" android:id="@+id/winner_arc_sport" />
+                <TextView
+                    style="@style/WearText"
+                    android:id="@+id/winner_names"
+                    android:textColor="@color/team_blue"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+                <LinearLayout style="@style/WearRow">
+                    <TextView style="@style/WearScore" android:id="@+id/winner_score_l" />
+                    <TextView
+                        style="@style/WearCaption"
+                        android:text="–"
+                        android:layout_width="wrap_content" />
+                    <TextView style="@style/WearScore" android:id="@+id/winner_score_r" />
+                </LinearLayout>
+                <TextView
+                    style="@style/WearText"
+                    android:id="@+id/rr_series_label"
+                    android:visibility="gone" />
+                <TextView
+                    style="@style/WearAction"
+                    android:id="@+id/btn_rr_next"
+                    android:text="Próximo jogo"
+                    android:backgroundTint="@color/rr_amber_dark"
+                    android:textColor="#FFFFFF"
+                    android:visibility="gone" />
+                <TextView
+                    style="@style/WearText"
+                    android:id="@+id/rr_final_title"
+                    android:text="👑 Rei/Rainha"
+                    android:visibility="gone" />
+                <LinearLayout
+                    style="@style/WearColumn"
+                    android:id="@+id/rr_standings"
+                    android:visibility="gone" />
+                <TextView
+                    style="@style/WearCaption"
+                    android:id="@+id/winner_waiting"
+                    android:text="Aguardando o celular…"
+                    android:visibility="gone" />
                 <LinearLayout
                     style="@style/WearColumn"
                     android:id="@+id/reshuffle_row"
@@ -163,21 +173,34 @@
                             android:contentDescription="Duplas mistas" />
                     </LinearLayout>
                 </LinearLayout>
-                <TextView
-                    style="@style/WearAction"
-                    android:id="@+id/btn_replay_cancel"
-                    android:text="Fechar"
-                    android:backgroundTint="@color/win_red"
-                    android:textColor="#100606" />
-                <TextView
-                    style="@style/WearAction"
-                    android:id="@+id/btn_replay_confirm"
-                    android:text="Iniciar"
-                    android:backgroundTint="@color/start_green"
-                    android:textColor="@color/start_green_text" />
             </LinearLayout>
+        </ScrollView>
+        <LinearLayout
+            style="@style/WearRow"
+            android:id="@+id/replay_controls"
+            android:gravity="top|center_horizontal"
+            android:visibility="gone"
+            android:baselineAligned="false">
+            <TextView
+                style="@style/WearAction"
+                android:id="@+id/btn_replay_cancel"
+                android:text="Fechar"
+                android:backgroundTint="@color/win_red"
+                android:textColor="#100606"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="2dp" />
+            <TextView
+                style="@style/WearAction"
+                android:id="@+id/btn_replay_confirm"
+                android:text="Iniciar"
+                android:backgroundTint="@color/start_green"
+                android:textColor="@color/start_green_text"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_marginStart="2dp" />
         </LinearLayout>
-    </ScrollView>
+    </LinearLayout>
     <ScrollView style="@style/WearPage" android:id="@+id/tie_overlay" android:visibility="gone">
         <LinearLayout style="@style/WearColumn">
             <TextView style="@style/WearCaption" android:text="Empate" />

@@ -78,7 +78,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private TextView pointLeft, pointRight, gamesLeft, gamesRight, gamesLabel;
     private TextView nameL1, nameL2, nameR1, nameR2;
     private View winnerOverlay, replayControls, reshuffleRow, tieOverlay;
-    private TextView winnerLabel, winnerNames, winnerScoreL, winnerScoreR;
+    private TextView winnerNames, winnerScoreL, winnerScoreR;
     private TextView setsLeft, setsRight;
     private TextView winnerSport;
     private TextView hrPill;      // ♥ BPM em cápsula no topo-centro (cor da faixa de queima)
@@ -162,7 +162,6 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         setsRight = findViewById(R.id.sets_arc_right);
         hrPill = findViewById(R.id.hr_pill);
         winnerOverlay = findViewById(R.id.winner_overlay);
-        winnerLabel = findViewById(R.id.winner_label);
         winnerNames = findViewById(R.id.winner_names);
         winnerScoreL = findViewById(R.id.winner_score_l);
         winnerScoreR = findViewById(R.id.winner_score_r);
@@ -238,6 +237,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         btnReplayCancel.setOnClickListener(v -> {
             replayDismissed = true;
             replayControls.setVisibility(View.GONE);
+            reshuffleRow.setVisibility(View.GONE);
             sendIntent("close", 0);
         });
         btnReplayConfirm.setOnClickListener(v -> {
@@ -266,6 +266,9 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         btnTieExtend.setOnClickListener(v -> sendResolveTie("extend"));
         btnTieTiebreak.setOnClickListener(v -> sendResolveTie("tiebreak"));
 
+        View viewport = findViewById(R.id.watch_viewport);
+        viewport.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) ->
+                fitReplayActions(v.getWidth() - v.getPaddingLeft() - v.getPaddingRight()));
         applyPreviewExtras();
     }
 
@@ -288,6 +291,34 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         }
         int bpm = it.getIntExtra("sp_bpm", 0);
         if (bpm > 0) { lastBpm = bpm; renderHeartRate(); }
+    }
+
+    private void fitReplayActions(int width) {
+        LinearLayout actions = (LinearLayout) replayControls;
+        LinearLayout fixedPanel = (LinearLayout) winnerOverlay;
+        LinearLayout scrollContent = (LinearLayout) ((android.widget.ScrollView)
+                findViewById(R.id.winner_scroll)).getChildAt(0);
+        int columnWidth = (width - dp(4)) / 2;
+        boolean stacked = false;
+        for (TextView button : new TextView[] { btnReplayCancel, btnReplayConfirm }) {
+            float needed = button.getPaint().measureText(button.getText().toString())
+                    + button.getPaddingLeft() + button.getPaddingRight();
+            if (needed > columnWidth) stacked = true;
+        }
+        LinearLayout destination = stacked ? scrollContent : fixedPanel;
+        if (actions.getParent() == destination) return;
+        ((ViewGroup) actions.getParent()).removeView(actions);
+        actions.setOrientation(stacked ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+        for (int index = 0; index < actions.getChildCount(); index++) {
+            View button = actions.getChildAt(index);
+            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) button.getLayoutParams();
+            lp.width = stacked ? ViewGroup.LayoutParams.MATCH_PARENT : 0;
+            lp.weight = stacked ? 0 : 1;
+            lp.setMarginStart(!stacked && index == 1 ? dp(2) : 0);
+            lp.setMarginEnd(!stacked && index == 0 ? dp(2) : 0);
+            button.setLayoutParams(lp);
+        }
+        destination.addView(actions);
     }
 
     private int dp(float value) {
@@ -828,13 +859,19 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             String sportW = s.optString("sportName", "");
             winnerSport.setText((isCasualW ? "⚡ " : "🏆 ") + (sportW.isEmpty() ? "Partida" : sportW));
             if (winner == 1 || winner == 2) {
-                winnerLabel.setText("Vencedor");
-                winnerNames.setText(teamNames(teams, winner));
+                String label = "Vencedor";
+                String names = teamNames(teams, winner);
+                String prefix = names.isEmpty() ? label : label + " · ";
+                SpannableString summary = new SpannableString(prefix + names);
+                summary.setSpan(new ForegroundColorSpan(getColor(R.color.meta)), 0, prefix.length(),
+                                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                summary.setSpan(new android.text.style.RelativeSizeSpan(0.75f), 0, prefix.length(),
+                                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 winnerNames.setTextColor(getColor(winner == 1 ? R.color.team_blue : R.color.team_red));
-                winnerNames.setVisibility(View.VISIBLE);
+                winnerNames.setText(summary);
             } else {
-                winnerLabel.setText("Empate");
-                winnerNames.setVisibility(View.GONE);
+                winnerNames.setText("Empate");
+                winnerNames.setTextColor(getColor(R.color.meta));
             }
             // Placar em GAMES; número do vencedor VERDE, do perdedor VERMELHO.
             int gl = games != null ? games.optInt(leftTeam - 1, 0) : 0;
@@ -851,6 +888,8 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
 
             boolean canReplay = s.optBoolean("canReplay", false);
             boolean isDoubles = s.optBoolean("isDoubles", false);
+            reshuffleRow.setVisibility(canReplay && !replayDismissed && isDoubles && !reiRainha
+                    ? View.VISIBLE : View.GONE);
 
             // Rei/Rainha manda no fim de jogo: a série de 3 continua (duplas
             // rotacionam) ou, no 3º, encerra e mostra a classificação individual.
@@ -887,7 +926,6 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
                 rrStandings.setVisibility(View.GONE);
                 if (canReplay && !replayDismissed) {
                     replayControls.setVisibility(View.VISIBLE);
-                    reshuffleRow.setVisibility(isDoubles ? View.VISIBLE : View.GONE);
                     winnerWaiting.setVisibility(View.GONE);
                     // As três chaves de símbolo. A COROA cresce e fica dourada
                     // quando há sugestão de fechar a série (2 pares distintos
