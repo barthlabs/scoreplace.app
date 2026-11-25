@@ -215,6 +215,7 @@ window._renderEstimatedGameHours = function (datesChanged) {
   }
   if (!days.length || !multipleDays) {
     mount.innerHTML = '';
+    if (typeof window._renderPhaseCallOrder === 'function') window._renderPhaseCallOrder();
     if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh();
     return;
   }
