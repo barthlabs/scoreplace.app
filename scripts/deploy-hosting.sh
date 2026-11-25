@@ -83,7 +83,7 @@ printf '%s\n' "$$" > "$SP_LOCK/pid"
 _sp_state() { printf '%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "${2:-}" > "$SP_STATE"; }
 _sp_state 'iniciando' "pid=$$ log=$SP_LOG"
 exec > >(tee -a "$SP_LOG") 2>&1
-_sp_finish() { local rc=$?; if [[ "${SP_BACKUPS_PENDING:-0}" == 1 ]]; then _sp_state published-backups-pending "rc=$rc site confirmado; retome com --resume-backups"; rm -rf "$SP_LOCK"; exit "$rc"; fi; _sp_state "$([[ $rc -eq 0 ]] && echo concluído || echo falhou)" "rc=$rc"; rm -rf "$SP_LOCK"; exit "$rc"; }
+_sp_finish() { local rc=$?; if [[ -n "${AUDITORIA_TRANSICAO:-}" ]]; then rm -f "$AUDITORIA_TRANSICAO" || true; fi; if [[ "${SP_BACKUPS_PENDING:-0}" == 1 ]]; then _sp_state published-backups-pending "rc=$rc site confirmado; retome com --resume-backups"; rm -rf "$SP_LOCK"; exit "$rc"; fi; _sp_state "$([[ $rc -eq 0 ]] && echo concluído || echo falhou)" "rc=$rc"; rm -rf "$SP_LOCK"; exit "$rc"; }
 trap _sp_finish EXIT
 
 # ⛔⛔ A CONTA DE SERVIÇO TEM DE VENCER A SESSÃO DE USUÁRIO VELHA.
@@ -455,7 +455,7 @@ echo "  ✓ CACHE_NAME do SW = versão do app ($VER_APP)"
 # Escape só com uma linha `sem-gpt: <motivo>` num commit a publicar, e SP_SEM_GPT=1.
 fase "nota+gates locais"
 AUDITORIA_TRANSICAO="$(mktemp "${TMPDIR:-/tmp}/sp-transicao-classificatoria.XXXXXX")"
-trap 'rm -f "$AUDITORIA_TRANSICAO"' EXIT
+# A limpeza do arquivo pertence a _sp_finish; não substituir o trap de estado/lock.
 echo "▸ auditando slots classificatórios legados em produção (somente leitura)…"
 if ! node "$RAIZ/scripts/auditar-transicao-classificatoria-legada.js" > "$AUDITORIA_TRANSICAO"; then
   cat "$AUDITORIA_TRANSICAO"

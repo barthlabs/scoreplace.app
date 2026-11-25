@@ -319,6 +319,8 @@ function cenario(opcoes) {
   return {
     status: r.status, saida: (r.stdout || '') + (r.stderr || ''),
     remotoAntes: remotoAntes2, remotoDepois, shaRelease: shaRelease2, chamouFirebase, publicado, pushChamado,
+    estado:fs.existsSync(path.join(base,'scoreplace-deploy','status'))?fs.readFileSync(path.join(base,'scoreplace-deploy','status'),'utf8'):'',
+    lockExiste:fs.existsSync(path.join(base,'scoreplace-deploy','lock')),
     ordem:fs.existsSync(path.join(marcas,'ordem.txt'))?fs.readFileSync(path.join(marcas,'ordem.txt'),'utf8'):'',
     retomar:()=>spawnSync('bash',['scripts/deploy-hosting.sh','--resume-backups'],{cwd:repo,encoding:'utf8',env:{...process.env,PATH:bin+':'+process.env.PATH,TMPDIR:base}}),
     lerFirebase:()=>fs.existsSync(path.join(marcas,'firebase.txt'))?fs.readFileSync(path.join(marcas,'firebase.txt'),'utf8'):'',
@@ -374,6 +376,8 @@ ok(sh.indexOf('# MARCO: contingencia-depois-do-site')>sh.indexOf('echo "✓ NO A
    ok(/deploy --only hosting/.test(c.chamouFirebase),'falha do backup acontece após publicar site');
    ok(c.ordem.indexOf('principal')<c.ordem.indexOf('hosting') && c.ordem.indexOf('hosting')<c.ordem.indexOf('backup'),'ordem principal → site → backup');
    ok(/contingência pendente/.test(c.saida),'mensagem preserva confirmação do site');
+   ok(/published-backups-pending/.test(c.estado),'estado terminal preserva entrega parcial');
+   ok(!c.lockExiste,'falha de backup libera o lock');
    const uploads=c.lerFirebase(),resume=c.retomar();
    eq(c.lerFirebase(),uploads,'retomada de backups não repete upload');
    ok(resume.status!==0,'backup ainda divergente continua pendente');
@@ -399,6 +403,8 @@ console.log('▸ ③ preflight VERDE: publica e então atualiza backup');
   const c = cenario(true);
   try {
     ok(/preflight VERDE/.test(c.saida), 'o preflight passou');
+    ok(/concluído/.test(c.estado),'sucesso deixa estado terminal concluído');
+    ok(!c.lockExiste,'sucesso libera o lock');
     ok(/deploy --only hosting/.test(c.chamouFirebase), '⭐ o Hosting foi chamado');
     eq(c.remotoDepois, c.shaRelease, '⭐ o backup remoto avançou depois do Hosting');
     ok(c.remotoDepois !== c.remotoAntes, 'ou seja: o push de backup aconteceu');
