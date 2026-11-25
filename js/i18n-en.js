@@ -1,5 +1,7 @@
 // ─── English translations ───────────────────────────────────────────────────
 window._translations['en'] = {
+  'tv.super8.loadingGames': 'Loading matches',
+  'tv.super8.awaitingDraw': 'Awaiting draw',
   'phaseGrid.distribute': 'Assign groups to courts',
   'phaseGrid.name': 'Group name',
   'phaseGrid.entry': 'Wave',

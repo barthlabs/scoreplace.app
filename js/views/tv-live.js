@@ -253,13 +253,14 @@
           (game.groupIdx != null ? Number(game.groupIdx)+1 === row.groupNumber : game.scheduledGroupLabel === row.label) &&
           game.isMonarch && !game.isBye && !game.isSitOut && !game.isTieBreak;
       });
-      var people = new Set(games.flatMap(game=>(game.team1Uids || game.team1 || []).concat(game.team2Uids || game.team2 || [])));
       var rule = (phase.classification.rotationCategoryRules || []).find(rule=>rule.category===row.category);
       var configured = rule?.groupFormation?.mode === 'size' && Number(rule.groupFormation.value) === 8;
+      if (!configured) return null;
       var rounds = new Map();
       games.forEach(function(game) { var round=Number(game.round || 1); rounds.set(round,(rounds.get(round) || 0)+1); });
-      if (games.length ? people.size !== 8 || games.length !== 14 || rounds.size !== 7 || Array.from(rounds.values()).some(count=>count!==2) : !configured) return null;
-      return { row:row, games:games };
+      // Structure chooses the board. Player account links never choose a format.
+      var complete=games.length===14 && rounds.size===7 && Array.from(rounds.values()).every(count=>count===2);
+      return { row:row, games:games, complete:complete };
     }).filter(Boolean);
   }
   function eventDayLayout(core) {
@@ -416,7 +417,7 @@
       var row=entry.row;
       if(row.courts?.length!==2) return;
       function belongs(game) { return belongsToRow(game,row); }
-      var games=entry.games.slice();
+      var games=entry.complete ? entry.games.slice() : [];
       var names=row.courts.map(c=>courtNames[c-1]);
       if(names.some(name=>!name) || new Set(names).size!==2 ||
           allActive.some(game=>names.includes(String(game.court)) && !belongs(game))) return;
@@ -444,7 +445,7 @@
         });
       });
       var activeIds=new Set(allActive.map(game=>String(game.id)));
-      cards[0].super8Group={key:key,label:row.label,category:row.category,courts:cards.map(card=>({name:card.name,occurrence:card.nameOccurrence || 0})),
+      cards[0].super8Group={key:key,label:row.label,category:row.category,loading:!entry.complete && entry.games.length>0,courts:cards.map(card=>({name:card.name,occurrence:card.nameOccurrence || 0})),
         rounds:new Set(games.map(game=>Number(game.round || 1))).size,
         games:games.map(function(game) {
           var done=occupancy.isFinished(game),active=activeIds.has(String(game.id));
@@ -773,13 +774,15 @@
       if(!card.super8Group) return cardHtml(card,options);
       options=options || {court:true,number:true,category:true,players:true,score:true,timer:true};
       var group=card.super8Group;
+      var waitingLabel=typeof window._t==='function' ? window._t(group.loading?'tv.super8.loadingGames':'tv.super8.awaitingDraw') :
+        (group.loading?'Carregando jogos':'Aguardando sorteio');
       var title=group.courts.map(c=>c.name).join(' e ');
       var anchors=group.courts.map(function(c,i) {
         return '<span class="tv-super8-court-anchor" style="left:'+i*50+'%" data-tv-court="'+esc(c.name)+'" data-court-occurrence="'+c.occurrence+'"></span>';
       }).join('');
       return '<div class="tv-super8-group" data-super8-group="'+esc(group.key)+'">'+anchors+
         '<article class="tv-court tv-court-series"><div class="tv-court-top"><h2>'+(options.court?esc(title)+' · ':'')+esc('Grupo '+group.label)+'</h2>'+
-        (options.category?'<span>'+esc(group.category)+'</span>':'')+'<b class="tv-court-phase">'+(group.games.length ? group.rounds+' rodadas · '+group.games.length+' jogos' : 'Aguardando sorteio')+'</b></div>'+
+        (options.category?'<span>'+esc(group.category)+'</span>':'')+'<b class="tv-court-phase">'+(group.games.length ? group.rounds+' rodadas · '+group.games.length+' jogos' : esc(waitingLabel))+'</b></div>'+
         '<div class="tv-super8-lanes">'+group.courts.map(function(court,lane) {
           return '<section class="tv-super8-lane"><h3>'+esc(court.name)+'</h3><div class="tv-super8-games tv-series-games" data-tv-autoscroll="'+esc('super8:'+group.key+':'+court.name+':'+court.occurrence)+'">'+group.games.filter(game=>game.lane===lane).map(function(game,index) {
           function side(name,uids,score,n) {
@@ -790,7 +793,7 @@
           return '<div class="tv-series-game tv-series-'+game.status+'"><b>'+(options.number?'JOGO '+esc(game.number)+'<br>':'')+'<small>'+(index+1)+'º jogo</small>'+
             (options.timer && game.timerStart?'<br><small data-tv-start="'+game.timerStart+'">00:00:00</small>':'')+'</b>'+
             side(game.a,game.aUids,game.scoreA,1)+'<span class="tv-series-versus">×</span>'+side(game.b,game.bUids,game.scoreB,2)+'</div>';
-        }).join('')+(group.games.length?'':'<p>Aguardando sorteio</p>')+'</div></section>';
+        }).join('')+(group.games.length?'':'<p>'+esc(waitingLabel)+'</p>')+'</div></section>';
         }).join('')+'</div></article></div>';
     }).join('');
   }
@@ -1126,7 +1129,7 @@
       'pinArmed=!!(current&&resultCycle&&savedAt&&Date.now()-savedAt>=0&&Date.now()-savedAt<30000);' +
       'if(pinArmed){resultPosition=0;list.scrollTop=0;}}if(first)first.classList.toggle("tv-result-pinned",pinArmed);}' +
       'function prepareBoxLoops(){var previous=boxLoops;boxLoops={};document.querySelectorAll("[data-tv-autoscroll]").forEach(function(node){' +
-      'var key=node.getAttribute("data-tv-autoscroll"),old=previous[key];node.querySelectorAll(":scope > [data-tv-loop-repeat]").forEach(function(copy){copy.remove();});' +
+      'var key=node.getAttribute("data-tv-autoscroll"),old=previous[key];if(old&&key.indexOf("super8:")===0&&old.node===node)old.position=node.scrollTop;node.querySelectorAll(":scope > [data-tv-loop-repeat]").forEach(function(copy){copy.remove();});' +
       'if(node.scrollHeight<=node.clientHeight+2||!node.children.length)return;' +
       'var originals=Array.from(node.children),first=originals[0];originals.forEach(function(child){var copy=child.cloneNode(true);copy.setAttribute("data-tv-loop-repeat","");copy.setAttribute("aria-hidden","true");node.appendChild(copy);});' +
       'var repeat=node.querySelector(":scope > [data-tv-loop-repeat]");var cycle=repeat&&first?repeat.offsetTop-first.offsetTop:0;' +

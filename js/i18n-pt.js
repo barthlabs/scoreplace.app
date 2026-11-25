@@ -1,5 +1,7 @@
 // ─── Portuguese (pt-BR) translations ────────────────────────────────────────
 window._translations['pt'] = {
+  'tv.super8.loadingGames': 'Carregando jogos',
+  'tv.super8.awaitingDraw': 'Aguardando sorteio',
   'phaseGrid.distribute': 'Distribuir grupos nas quadras',
   'phaseGrid.name': 'Nome do grupo',
   'phaseGrid.entry': 'Entrada',

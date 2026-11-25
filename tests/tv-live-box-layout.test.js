@@ -152,6 +152,8 @@ const { chromium } = require('@playwright/test');
       await camisPage.close();
       for(const viewport of [{width:1920,height:1080},{width:3840,height:2160}]) {
         const super8Page=await browser.newPage({viewport});
+        await super8Page.route('**/js/domain/match-timing.js*',route=>route.fulfill({path:path.join(__dirname,'../js/domain/match-timing.js'),contentType:'application/javascript'}));
+        await super8Page.route('https://qr.example/**',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>'}));
         await super8Page.setContent(fs.readFileSync(super8Capture,'utf8'),{waitUntil:'domcontentloaded'});
         const geometry=await super8Page.evaluate(()=>{
           const rect=el=>el.getBoundingClientRect().toJSON();
@@ -186,6 +188,11 @@ const { chromium } = require('@playwright/test');
         await super8Page.waitForTimeout(100);
         assert.equal(await lanes.first().evaluate(n=>n.scrollTop),110,'reduced motion keeps manual scrolling');
         assert.equal(await lanes.nth(1).evaluate(n=>n.scrollTop),45,'court scroll positions are independent');
+        await super8Page.evaluate(()=>window.dispatchEvent(new Event('resize')));
+        assert.equal(await lanes.first().evaluate(n=>n.scrollTop),110,'resize preserves manual court scrolling');
+        assert.equal(await lanes.nth(1).evaluate(n=>n.scrollTop),45,'resize preserves the other court position independently');
+        await super8Page.evaluate(()=>window.dispatchEvent(new Event('load')));
+        assert.equal(await lanes.first().evaluate(n=>n.scrollTop),110,'late asset load preserves manual court scrolling');
         await super8Page.evaluate(()=>{
           const root=document.getElementById('tv-root'),draft=root.cloneNode(true);
           draft.querySelectorAll('[data-tv-loop-repeat],[data-tv-repeat]').forEach(n=>n.remove());
