@@ -33,15 +33,24 @@ assert.ok(verify(WWW, { log() {}, error(message) { throw new Error(message); } }
   'o shell gerado pelo Vite mantém suas referências resolvíveis e ordenadas');
 assert.ok(!fs.existsSync(path.join(WWW, 'version.txt')),
   'o pacote padrão continua sem version.txt para o auto-update nativo consultar a rede');
+assert(!fs.existsSync(path.join(WWW,'release.json')),'o pacote nativo não carrega metadados de publicação do Hosting');
+const identityFiles=['.deploy-alignment.json','release.json'];
+const originals=identityFiles.map(file=>fs.existsSync(path.join(ROOT,file))?fs.readFileSync(path.join(ROOT,file)):null);
 const regionalConfig = path.join(ROOT, 'operation-regions.json');
 const fixtureConfig = !fs.existsSync(regionalConfig);
 if (fixtureConfig) fs.writeFileSync(regionalConfig, JSON.stringify({ schema: 2, fixture: true }));
 try {
+  if(!originals[0]) {
+    const identity={commit:'a'.repeat(40),versao:fs.readFileSync(path.join(ROOT,'version.txt'),'utf8').trim()};
+    identityFiles.forEach(file=>fs.writeFileSync(path.join(ROOT,file),JSON.stringify(identity)));
+  }
   build('--hosting');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(WWW,'release.json'),'utf8')),JSON.parse(fs.readFileSync(path.join(ROOT,'release.json'),'utf8')),'o Hosting realmente inclui a identidade no diretório www publicado');
   assert.ok(fs.existsSync(path.join(WWW, 'version.txt')) && fs.existsSync(path.join(WWW, 'native-update-policy.json')),
     'o artefato específico do Hosting inclui seus endpoints públicos de atualização');
   execFileSync(process.execPath, ['scripts/check-hosting-artifact.js'], { cwd: ROOT, stdio: 'pipe' });
 } finally {
+  identityFiles.forEach((file,i)=>{if(originals[i])fs.writeFileSync(path.join(ROOT,file),originals[i]);else fs.rmSync(path.join(ROOT,file),{force:true});});
   if (fixtureConfig) fs.rmSync(regionalConfig);
 }
 console.log('✅ ' + parsed.files.length + ' arquivos com hashes estáveis via Vite');

@@ -63,6 +63,15 @@ if (HOSTING) {
     }
     fs.copyFileSync(source, path.join(WWW, file));
   });
+  const stampFile=path.join(ROOT,'.deploy-alignment.json');
+  if(fs.existsSync(stampFile)) {
+    const stamp=JSON.parse(fs.readFileSync(stampFile,'utf8'));
+    const release=JSON.parse(fs.readFileSync(path.join(ROOT,'release.json'),'utf8'));
+    if(!/^[a-f0-9]{40}$/.test(release.commit || '') || release.commit!==stamp.commit ||
+      release.versao!==stamp.versao || release.versao!==fs.readFileSync(path.join(ROOT,'version.txt'),'utf8').trim())
+      throw new Error('Identidade pública do artefato diverge do corte congelado');
+    fs.copyFileSync(path.join(ROOT,'release.json'),path.join(WWW,'release.json'));
+  }
 }
 
 const bytes = (function dirSize(d) {

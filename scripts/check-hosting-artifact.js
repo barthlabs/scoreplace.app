@@ -30,6 +30,12 @@ must(fs.readFileSync(path.join(OUT, 'operation-regions.json'), 'utf8') === fs.re
   '`operation-regions.json` publicado é a configuração regional verificada nesta mesma fonte');
 must(fs.readFileSync(path.join(OUT, 'operation-regions-v3.json'), 'utf8') === fs.readFileSync(path.join(ROOT, 'operation-regions-v3.json'), 'utf8'),
   '`operation-regions-v3.json` publicado é a configuração regional verificada nesta mesma fonte');
+if(fs.existsSync(path.join(ROOT,'.deploy-alignment.json'))) {
+  const stamp=JSON.parse(fs.readFileSync(path.join(ROOT,'.deploy-alignment.json'),'utf8'));
+  const release=JSON.parse(fs.readFileSync(path.join(OUT,'release.json'),'utf8'));
+  must(release.commit===stamp.commit && release.versao===stamp.versao,
+    '`release.json` servido identifica o mesmo commit e versão do corte congelado');
+}
 must(verify(OUT, { log() {}, error(message) { throw new Error(message); } }),
   'o shell do artefato resolve todos os recursos locais e preserva dependências');
 console.log('✅ ' + checks + ' verificações — Hosting serve somente o artefato Vite');
