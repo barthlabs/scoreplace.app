@@ -138,6 +138,7 @@
           pair[0].startTime!==pair[1].startTime || pair[0].duration!==pair[1].duration ||
           pair[0].duration*pixelsPerMinute<132 || (i && rounds[i]!==rounds[i-1]+1)) return;
         var at=model.minutes(pair[0].startTime);
+        if(at+pair[0].duration>1440) return;
         if(end!==null && end!==at) return; end=at+pair[0].duration;
       }
       result.push({tiles:items,courts:courts,rounds:rounds});
@@ -148,7 +149,7 @@
   function renderGroupPanels(root,state,visible,start,columns,numbers) {
     if(state.plan.schema!==2) return;
     var body=root.querySelector('.phase-grid-body');
-    visualGroups(visible).forEach(function(group){
+    visualGroups(visible.filter(tile=>tile.day===dayOf(state).day)).forEach(function(group){
       var first=group.tiles.slice().sort((a,b)=>a.round-b.round || a.court-b.court)[0];
       var finish=Math.max(...group.tiles.map(tile=>model.minutes(tile.startTime)+tile.duration));
       var panel=document.createElement('section'); panel.className='phase-grid-super-group';

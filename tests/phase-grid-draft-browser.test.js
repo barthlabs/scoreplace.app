@@ -40,9 +40,9 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  const pure=await page.evaluate(()=>{
   var list=_phaseCallOrderState.tiles.filter(x=>x.kind==='groups' && x.assignment.label==='B1');
   var count=tiles=>_phaseGridVisualGroups(tiles).length;
-  var cases=[list.filter((_,i)=>i!==0),list.map((x,i)=>({...x,day:i?'2026-12-02':x.day})),list.map(x=>({...x,games:3})),list.map(x=>({...x,court:x.court===2?3:x.court})),list.map((x,i)=>({...x,startTime:i===0?'08:01':x.startTime})),list.map(x=>({...x,duration:10}))];
+  var cases=[list.filter((_,i)=>i!==0),list.map((x,i)=>({...x,day:i?'2026-12-02':x.day})),list.map(x=>({...x,games:3})),list.map(x=>({...x,court:x.court===2?3:x.court})),list.map((x,i)=>({...x,startTime:i===0?'08:01':x.startTime})),list.map(x=>({...x,duration:10})),list.filter(x=>x.round===1).map(x=>({...x,startTime:'23:55',duration:25}))];
   return [count(list),...cases.map(count)];
- });assert.deepEqual(pure,[1,0,0,0,0,0,0]);
+ });assert.deepEqual(pure,[1,0,0,0,0,0,0,0]);
  await page.screenshot({path:'/tmp/sp-2765-group-grid.png'});
  await page.evaluate(()=>{window._phaseCallOrderState.locked=true;document.getElementById('tourn-game-duration').value=10;window._phaseGridRefreshDraft()});
  assert.deepEqual(await page.evaluate(()=>_phaseCallOrderState.plan),plan,'locked intacto');
