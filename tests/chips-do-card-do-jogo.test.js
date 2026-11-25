@@ -113,7 +113,7 @@ const collectOriginal = W._collectAllMatches;
 W._collectAllMatches = function () { return tConcentrado.rounds[0].matches; };
 W._isUserAuthority = function () { return true; };
 const busyCard = W.renderMatchCard(mConcentrado, true, tConcentrado.id, 1);
-ok(/border:3px solid #ef4444/.test(busyCard) && /Atleta em quadra/.test(busyCard),
+ok(/data-match-player-busy="1"/.test(busyCard) && /Atleta em quadra/.test(busyCard),
   'jogo com atleta ativo em outra quadra recebe borda vermelha e explicação');
 ok(/aria-label="Quadra" disabled/.test(busyCard) && /aria-label="Confirmar chamada para a quadra" disabled/.test(busyCard),
   'atribuição e chamada de quadra ficam desativadas enquanto atleta joga');

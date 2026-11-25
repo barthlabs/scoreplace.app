@@ -1072,6 +1072,10 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
   assert.equal(groupSnapshot.courts.filter(c=>c.super8Group).length,3);
   assert.deepEqual(Array.from(groupSnapshot.courts.filter(c=>c.super8Group),c=>c.super8Group.label),['B1','C1','C2']);
   assert(groupSnapshot.courts.filter(c=>c.super8Group).every(c=>c.super8Group.games.length===14 && c.super8Group.rounds===7));
+  assert(groupSnapshot.courts[0].super8Group.games.find(g=>g.round===2 && g.lane===0).blocked,'previsão da próxima rodada avisa atletas ainda em quadra');
+  assert.match(window._tvLiveBodyHtml(groupSnapshot),/tv-series-player-busy/);
+  const freedSnapshot=window._tvLiveBuildSnapshot(idle);
+  assert(freedSnapshot.courts.filter(c=>c.super8Group).every(c=>c.super8Group.games.every(g=>!g.blocked)),'previsão volta ao normal sem ocupantes');
   let groupHtml=window._tvLiveBodyHtml(groupSnapshot);
   assert.equal((groupHtml.match(/data-super8-group=/g)||[]).length,3);
   assert.equal((groupHtml.match(/data-tv-court=/g)||[]).length,6,'sponsors still target six physical courts');

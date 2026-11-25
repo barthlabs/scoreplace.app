@@ -888,6 +888,92 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       assert(races.failure.errors.includes('erro de atribuição'));
       assert.deepEqual(races.occupied.calls, assignments);
       assert(!races.occupied.called && races.occupied.errors.some(message => message.includes('ocupada')));
+      await real.addStyleTag({path:'css/bracket.css'});
+      const conflicts = await real.evaluate(async () => {
+        document.body.innerHTML = '<main id="view-container"><section id="tourn-grid-container"></section><nav data-bracket-tabs-root="1" data-tournament-id="sb_conflict"></nav></main>';
+        window._t = (key,params) => key === 'bracket.playerInCourt' ? 'Atleta em quadra' : key === 'bracket.matchNum' ? 'JOGO '+params.n : key;
+        window._bracketEnsureCourtReleaseListener = window._bracketEnsureCourtCapability = () => {};
+        window._tournamentResultsComplete = () => false;
+        window._resultEntryIncludes = () => false;
+        const target = {id:'candidate',p1:'Ana / Bia',p2:'Cris / Dani',team1Uids:['a','b'],team2Uids:['c','d'],
+          court:'Quadra 2',category:'A',_gameNum:2,scheduledAt:new Date().toISOString()};
+        const active = {id:'occupied',p1:'Ana / Eva',p2:'Fabi / Gabi',team1Uids:['a','e'],team2Uids:['f','g'],
+          court:'Quadra 1',courtCalledAt:new Date().toISOString(),_gameNum:1};
+        const t = {id:'sb_conflict',creatorUid:'org',format:'Liga',scoring:{type:'simple'},matches:[active,target],_nJogos:2,
+          courtNames:['Quadra 1','Quadra 2','Quadra 3']};
+        window._findTournamentById = () => t;
+        window._bracketCourtReleaseCache = {[t.id]:{ready:true,revision:0,released:{},postponed:[],postponedReady:[]}};
+        const root = document.querySelector('[data-bracket-tabs-root]');
+        let calls = 0; window._callCF = () => {calls++;return Promise.resolve({data:{ok:true,courtCalledAt:new Date().toISOString()}});};
+        window._bracketOperationsRefresh(t,root);
+        const find = () => root._bracketOperationsStrip.querySelector('.sp-operations-next [data-match-player-id="candidate"]');
+        const read = () => {const card=find();return {border:getComputedStyle(card).borderTopColor,
+          disabled:card.querySelector('.sp-match-confirm').disabled,selectDisabled:card.querySelector('select').disabled,
+          warning:card.closest('.sp-operations-replica').querySelector('[data-operations-availability-label]').textContent,court:card.querySelector('select').value};};
+        const initial = read();
+        const button = find().querySelector('.sp-match-confirm');button.disabled=false;
+        await window._confirmMatchCourtCall(button,t.id,target.id);
+        const blockedCalls = calls;
+        window._bracketCourtReleaseCache[t.id].released.occupied = new Date().toISOString();
+        window._bracketOperationsRefresh(t,root);
+        const released = read();
+        // Preserve the same nodes while a court select has focus: occupancy
+        // changes must still disable it and restore it without a reload.
+        const focused = find().querySelector('select');focused.value='Quadra 3';focused.focus();
+        delete window._bracketCourtReleaseCache[t.id].released.occupied;
+        window._bracketOperationsRefresh(t,root);
+        const focusedBlocked = read();
+        const sameSelect = focused === find().querySelector('select');
+        window._bracketCourtReleaseCache[t.id].released.occupied = new Date().toISOString();
+        window._bracketOperationsRefresh(t,root);
+        const focusedReleased = read();
+        focused.blur();
+        await window._confirmMatchCourtCall(find().querySelector('.sp-match-confirm'),t.id,target.id);
+        return {initial,released,focusedBlocked,focusedReleased,sameSelect,blockedCalls,calls};
+      });
+      assert.equal(conflicts.initial.border,'rgb(239, 68, 68)','vermelho prevalece sobre dourado do próximo jogo');
+      assert(conflicts.initial.disabled && conflicts.initial.selectDisabled);
+      assert.equal(conflicts.initial.warning,'Atleta em quadra');
+      assert.equal(conflicts.blockedCalls,0,'chamada forçada é recusada antes da CF');
+      for (const state of [conflicts.released,conflicts.focusedReleased]) {
+        assert.equal(state.border,'rgb(251, 191, 36)','liberado volta automaticamente ao dourado');
+        assert(!state.disabled && !state.selectDisabled,JSON.stringify(state));
+        assert.notEqual(state.warning,'Atleta em quadra');
+      }
+      assert.equal(conflicts.focusedBlocked.border,'rgb(239, 68, 68)');
+      assert.equal(conflicts.focusedBlocked.court,'Quadra 3','ocupação nova preserva escolha pendente de quadra livre');
+      assert(conflicts.focusedBlocked.disabled && conflicts.sameSelect,'sincroniza sem recriar seletor focado');
+      assert.equal(conflicts.calls,1,'após liberação a chamada pode chegar ao servidor');
+      await real.addScriptTag({content:source.slice(source.indexOf('window._super8StandingsGroups = function'),source.indexOf('// ── Rei/Rainha da Praia Rendering'))});
+      const seriesPosition = await real.evaluate(() => {
+        const category='A', matches=[];
+        for(let round=1;round<=7;round++) for(let lane=0;lane<2;lane++) matches.push({
+          id:'series-'+round+'-'+lane,round,phaseIndex:0,groupIdx:0,isMonarch:true,scheduledGroupLabel:'A',category,
+          _gameNum:100+matches.length,scheduledAt:new Date(Date.now()+round*60000).toISOString(),
+          p1:lane?'E / F':'A / B',p2:lane?'G / H':'C / D',
+          team1:lane?['E','F']:['A','B'],team2:lane?['G','H']:['C','D'],
+          team1Uids:lane?['e','f']:['a','b'],team2Uids:lane?['g','h']:['c','d']});
+        const t={id:'sb_series_position',creatorUid:'org',format:'Liga',matches,_nJogos:14,
+          courtNames:['Quadra 1','Quadra 2'],phases:[{kind:'classification',classification:{partnerRotation:'groups',
+            rotationCategoryRules:[{category,groupFormation:{mode:'size',value:8}}]}}]};
+        window._findTournamentById=()=>t;
+        const root=document.querySelector('[data-bracket-tabs-root]');root.setAttribute('data-tournament-id',t.id);
+        window._bracketCourtReleaseCache[t.id]={ready:true,revision:0,released:{},postponed:[],postponedReady:[]};
+        const read=()=>[...root._bracketOperationsStrip.querySelectorAll('.sp-operations-next .sp-operations-series-position')].map(el=>({text:el.textContent,
+          parent:el.parentElement.textContent,below:el.getBoundingClientRect().top>el.parentElement.getBoundingClientRect().top}));
+        window._bracketOperationsRefresh(t,root);const first=read();
+        const original=window.renderMatchCard(matches[0],false,t.id,100);
+        matches.filter(m=>m.round===1).forEach(m=>{m.winner=m.p1;m.resultAt=new Date().toISOString();});
+        window._bracketOperationsRefresh(t,root);const second=read();
+        const tie=window._bracketOperationsReplica({...matches[2],isTieBreak:true,tieSeries:[]},t,{readOnly:true},'Próximo','',root,matches,'counter-tie');
+        return {first,second,originalHasCounter:original.includes('sp-operations-series-position'),tieHasCounter:tie.includes('sp-operations-series-position')};
+      });
+      assert(seriesPosition.first.length,JSON.stringify(seriesPosition));
+      assert.equal(seriesPosition.first[0].text,'(1/7)');
+      assert.match(seriesPosition.first[0].parent,/100/);
+      assert(seriesPosition.first[0].below,'contador fica abaixo do número do jogo');
+      assert.equal(seriesPosition.second[0].text,'(2/7)');
+      assert(!seriesPosition.originalHasCounter && !seriesPosition.tieHasCounter,'sem duplicar contador no card original nem no desempate');
     } finally { await real.close(); }
     const scoringPage = await browser.newPage();
     try {
@@ -1543,7 +1629,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketOperationsRefresh(t,root);
       return { full, released:snapshot() };
     });
-    assert.deepEqual(saturated.full, { ids:['a','b','c'], skip:false, free:0, readOnly:true });
+    assert.deepEqual(saturated.full, { ids:['a','b','c'], skip:false, free:0, readOnly:false });
     assert.deepEqual(saturated.released.ids, ['a','b','c']);
     assert.equal(saturated.released.free, 1);
     console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');

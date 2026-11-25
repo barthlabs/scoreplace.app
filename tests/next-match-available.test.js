@@ -86,3 +86,18 @@ for (const [label, guard] of [
   `desempate ${label} permite Ana distinta com outro UID`);
 }
 console.log('✓ próximo jogo pula participantes ocupados e respeita identidade');
+
+// Any of the four people blocks another confrontation, independently of court.
+for (const index of [0,1,2,3]) {
+  const names=['P1','P2','P3','P4'], ids=['u1','u2','u3','u4'];
+  const candidate={id:'four',p1:names.slice(0,2).join(' / '),p2:names.slice(2).join(' / '),team1Uids:ids.slice(0,2),team2Uids:ids.slice(2)};
+  for (const court of ['Quadra 1','Quadra 2']) {
+    const occupied={id:'other',p1:names[index]+' / Outra',p2:'Terceira / Quarta',team1Uids:[ids[index],'other'],court,courtCalledAt:'2026-11-25T12:00:00Z'};
+    assert.equal(next.firstAvailable([candidate],[occupied],{}),null,'qualquer posição bloqueia em '+court);
+    assert.equal(next.firstAvailable([candidate],[{...occupied,courtCalledAt:null}],{}).id,'four','previsão não ocupa');
+    assert.equal(next.firstAvailable([candidate],[{...occupied,winner:occupied.p1,resultAt:'2026-11-25T13:00:00Z'}],{}).id,'four','resultado libera atleta');
+    assert.equal(next.firstAvailable([candidate],[occupied],{other:'released'}).id,'four','encerramento libera atleta');
+  }
+}
+assert.equal(next.conflictsWithActive({id:'manual-next',team1:['Ana','Bia'],team1Uids:[null,null],team1ManualIds:['slot-a','slot-b'],team2:['Cris','Dani'],team2ManualIds:['slot-c','slot-d']},
+  [{id:'manual-active',team1:['Nome corrigido','Eva'],team1Uids:[null,null],team1ManualIds:['slot-d','slot-e']}]),true,'identidade manual bloqueia mesmo com nome corrigido');

@@ -2201,6 +2201,22 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
     ? window.renderMatchCard(selected, canEnter, t.id, Number.isInteger(selectedNumber) && selectedNumber > 0 ? selectedNumber : null,
       false, null, { idScope: 'operations-' + slot + '-' + String(selected.id || ''), readOnly:!!role.readOnly,
         preferFirstFreeCourt: !!role.preferFirstFreeCourt, preferredCourt: role.preferredCourt || '' }) : '';
+  if (!role.active && !role.pending && !selected.isTieBreak && html && typeof window._super8StandingsGroups === 'function') {
+    var seriesGroup = window._super8StandingsGroups(t, allMatches).find(function (entry) {
+      return entry.matches.some(function (game) { return String(game.id) === String(selected.id); });
+    });
+    var seriesRounds = seriesGroup && new Set(seriesGroup.matches.map(function (game) { return Number(game.round); }).filter(function (round) { return Number.isInteger(round) && round > 0; }));
+    if (seriesRounds && seriesRounds.has(Number(selected.round))) {
+      var seriesHost = document.createElement('template'); seriesHost.innerHTML = html;
+      var seriesTitle = seriesHost.content.querySelector('.sp-mc-head > div:first-child > div:first-child > span:first-child');
+      if (seriesTitle) {
+        var position = document.createElement('small'); position.className = 'sp-operations-series-position';
+        position.textContent = '(' + Number(selected.round) + '/' + seriesRounds.size + ')';
+        seriesTitle.appendChild(position);
+        html = seriesHost.innerHTML;
+      }
+    }
+  }
   if (group && index < 3 && html) {
     var host = document.createElement('template');
     host.innerHTML = html;
@@ -2585,6 +2601,17 @@ window._bracketOperationsRefresh = function (t, root) {
   // sob o dedo, inclusive nos navegadores que não dão foco a botões.
   if (existing && (existing._spCourtBusy || existing.querySelector('.sp-match-confirm:active') ||
       existing.contains(document.activeElement) && document.activeElement.matches('.sp-operations-replica .sp-match-court select'))) {
+    Array.prototype.forEach.call(existing.querySelectorAll('.sp-match-card[data-match-player-id]'), function (card) {
+      var id = card.getAttribute('data-match-player-id');
+      var current = state.matches.find(function (match) { return String(match.id) === id; });
+      var occupancy = window.ScoreplaceCourtOccupancy;
+      var busy = !!(current && occupancy && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(
+        current, occupancy.activeMatches(state.matches, window._bracketCourtReleased(t.id), t)));
+      if (card.getAttribute('data-match-player-busy') !== (busy ? '1' : '0')) {
+        var select = card.querySelector('select[data-match-id]');
+        _syncMatchCourtCopies(t.id, id, select && select.value);
+      }
+    });
     _bracketOperationsApplyCategoryFilter(root, existing, tournamentId);
     return;
   }
@@ -2927,18 +2954,21 @@ window._bracketOperationsRefresh = function (t, root) {
   var nextCardsHtml = nextCards.map(function (m, index) {
     var available = readyIds.has(String(m.id)) && window.ScoreplaceNextMatch &&
       window.ScoreplaceNextMatch.firstAvailable([m], state.matches, releasedMatches, t) === m;
+    var playerBusy = !!(window.ScoreplaceNextMatch && window.ScoreplaceCourtOccupancy &&
+      window.ScoreplaceNextMatch.conflictsWithActive(m, window.ScoreplaceCourtOccupancy.activeMatches(state.matches, releasedMatches, t)));
     var callable = canCall && available;
     var at = estimates.get(String(m.id));
     var estimate = Number.isFinite(at) ? new Date(at).toLocaleTimeString('pt-BR', {
       hour:'2-digit', minute:'2-digit', hour12:false,
       timeZone:typeof _matchCardTimeZone === 'function' ? _matchCardTimeZone(t) : 'America/Sao_Paulo'
     }) : '';
-    var availability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '"><span>' +
-      (index === 0 ? freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') :
-        (estimate ? '🕒 ≈ ' + safe(estimate) : (available ? 'PRONTO PARA CHAMAR' : 'AGUARDANDO DEFINIÇÃO'))) + '</span>' +
+    var normalLabel = index === 0 ? freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') :
+      (estimate ? '🕒 ≈ ' + estimate : (available ? 'PRONTO PARA CHAMAR' : 'AGUARDANDO DEFINIÇÃO'));
+    var availability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + (playerBusy ? ' sp-operations-availability--player-busy' : '') + '"><span data-operations-availability-label data-availability-normal="' + safe(normalLabel) + '">' +
+      safe(playerBusy ? _matchPlayerBusyLabel() : normalLabel) + '</span>' +
       '<strong class="sp-operations-stage">' + safe(_bracketOperationsStageLabel(m, t, state.matches)) + '</strong></div>';
     return _bracketOperationsReplica(m, t, {
-      canCall:callable, active:false, readOnly:!available,
+      canCall:callable, active:false, readOnly:!readyIds.has(String(m.id)),
       finalTie:m.isTieBreak && canCall && index === 0 && readyIds.has(String(m.id)) && !state.tieCanPostpone,
       preferFirstFreeCourt:true,
       preferredCourt:(root._bracketOperationsManualCourt || {})[String(m.id)] || '',
@@ -6264,7 +6294,7 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t, opts) {
     const all = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t).filter(function (item) { return item && !released[String(item.id)]; }) : [];
     const occupancy = window.ScoreplaceCourtOccupancy;
     const playerBusy = !!(isReady && occupancy && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(
-      e.match, all.filter(function (item) { return occupancy.occupiesCourt(item); })));
+      e.match, occupancy.activeMatches(all, released, t)));
     // Seletor de quadra — só em jogo PRONTO (todos presentes). Organizador vê
     // dropdown editável; demais veem a quadra como etiqueta (quando já definida).
     let courtHtml = '';
@@ -6288,7 +6318,7 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t, opts) {
       <div style="font-size:0.6rem;font-weight:800;color:rgba(255,255,255,0.2);letter-spacing:2px;padding:0 2px;">VS</div>
       ${renderSideRow(e.match.p2)}
       ${courtHtml}
-      ${playerBusy ? '<span class="sp-match-player-busy">Atleta em quadra</span>' : ''}
+      ${playerBusy ? '<span class="sp-match-player-busy">' + _matchPlayerBusyLabel() + '</span>' : ''}
     </div>`;
   };
 
@@ -6439,6 +6469,9 @@ window._cancelCourtAction = function (tId, matchId, action, button) {
   }).finally(function () { if (button && button.isConnected) button.disabled = false; });
   });
 };
+function _matchPlayerBusyLabel() {
+  return typeof window._t === 'function' ? window._t('bracket.playerInCourt') : 'Atleta em quadra';
+}
 function _syncMatchCourtCopies(tId, matchId, value, persisted) {
   var edit = _matchCourtEdits.get(_matchCourtKey(tId, matchId));
   if (edit && edit.pending) value = edit.requested;
@@ -6449,6 +6482,23 @@ function _syncMatchCourtCopies(tId, matchId, value, persisted) {
   var occupancy = window.ScoreplaceCourtOccupancy;
   var active = occupancy ? occupancy.activeMatches(allMatches, released, t) : [];
   var playerBusy = !!(m && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(m, active));
+  Array.prototype.forEach.call(document.querySelectorAll('.sp-match-card[data-match-player-id]'), function (card) {
+    if (card.getAttribute('data-match-player-id') !== String(matchId)) return;
+    card.setAttribute('data-match-player-busy', playerBusy ? '1' : '0');
+    var replica = card.closest('.sp-operations-replica');
+    var availability = replica && replica.querySelector('.sp-operations-availability');
+    var label = availability && availability.querySelector('[data-operations-availability-label]');
+    if (availability) availability.classList.toggle('sp-operations-availability--player-busy', playerBusy);
+    if (label) {
+      if (playerBusy && !label.hasAttribute('data-availability-normal')) label.setAttribute('data-availability-normal', label.textContent);
+      if (playerBusy) label.textContent = _matchPlayerBusyLabel();
+      else if (label.hasAttribute('data-availability-normal')) { label.textContent = label.getAttribute('data-availability-normal'); label.removeAttribute('data-availability-normal'); }
+    }
+    var row = card.querySelector('.sp-match-operational');
+    var warning = row && row.querySelector('.sp-match-player-busy');
+    if (warning && !playerBusy) warning.remove();
+    else if (row && playerBusy && !warning) { warning = document.createElement('span'); warning.className = 'sp-match-player-busy'; warning.textContent = _matchPlayerBusyLabel(); row.appendChild(warning); }
+  });
   var copies = Array.prototype.filter.call(document.querySelectorAll('select[data-match-id]'), function (node) {
     return node.getAttribute('data-match-id') === String(matchId);
   });
@@ -10815,9 +10865,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _playerInAnotherCourt = false;
   if (_isConcentratedEvent && t && !m.winner && window.ScoreplaceCourtOccupancy && window.ScoreplaceNextMatch &&
       typeof window._collectAllMatches === 'function') {
-    var _activeForCard = window._collectAllMatches(t).filter(function (item) {
-      return item && !_releasedForCard[String(item.id)] && window.ScoreplaceCourtOccupancy.occupiesCourt(item);
-    });
+    var _activeForCard = window.ScoreplaceCourtOccupancy.activeMatches(window._collectAllMatches(t), _releasedForCard, t);
     _playerInAnotherCourt = window.ScoreplaceNextMatch.conflictsWithActive(m, _activeForCard);
   }
   var _courtCardHtml = '';
@@ -10874,7 +10922,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     if (_playerInAnotherCourt) {
       _courtCardHtml = _courtCardHtml.replace('aria-label="Quadra"', 'aria-label="Quadra" disabled title="Atleta já está em outra quadra"')
         .replace('aria-label="Confirmar chamada para a quadra"', 'aria-label="Confirmar chamada para a quadra" disabled')
-        .replace(/<\/div>$/, '<span class="sp-match-player-busy">Atleta em quadra</span></div>');
+        .replace(/<\/div>$/, '<span class="sp-match-player-busy">' + _matchPlayerBusyLabel() + '</span></div>');
     }
   } else if (_isConcentratedEvent && m.court) {
     _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div class="sp-match-court sp-match-court--readonly">' + window._safeHtml(String(m.court)) + '</div>' + (m.courtCalledAt && _canOperateCourt ? '<span class="sp-match-confirm sp-match-confirm--locked">✓ OK</span>' : '') + _estimatedTimeHtml + '</div>';
@@ -11508,7 +11556,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // este contorno porque são renderizados em modo somente leitura.
   var _courtActive = !_readOnly && !m.winner && !m.wo && !m.isBye && !m.isSitOut &&
     !!m.court && !!m.courtCalledAt && !_releasedForCard[String(m.id)];
-  var _cardBorderStyle = _playerInAnotherCourt ? '3px solid #ef4444' : _courtActive ? '3px solid #22c55e' :
+  var _cardBorderStyle = _courtActive ? '3px solid #22c55e' :
     (_isMyMatch ? '2px' : '1px') + ' solid ' +
     (hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' :
       hasPending ? 'rgba(251,191,36,0.5)' : cardBorder);
@@ -11526,7 +11574,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _operationalPresence = _isConcentratedEvent && !isDecided && !isByeMatch
     ? (matchReady ? 'complete' : (matchPartial ? 'partial' : 'none')) : '';
   var _matchHtml = `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-team-names="${window._safeHtml(_searchTeamNames)}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-phase-label="${window._safeHtml(_phaseAgendaLabel)}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-pending-match="${_isPendingMatch ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-scheduled-game-number="${_plannedGameNumber > 0 ? _plannedGameNumber : ''}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_cardBorderStyle};${_courtActive ? '' : _lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};">
+    <div id="card-${m.id}" class="sp-match-card" data-match-player-id="${window._safeHtml(String(m.id))}" data-match-player-busy="${_playerInAnotherCourt ? '1' : '0'}" data-players="${_searchNames}" data-team-names="${window._safeHtml(_searchTeamNames)}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-phase-label="${window._safeHtml(_phaseAgendaLabel)}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-pending-match="${_isPendingMatch ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-scheduled-game-number="${_plannedGameNumber > 0 ? _plannedGameNumber : ''}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_cardBorderStyle};${_courtActive ? '' : _lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}

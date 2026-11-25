@@ -120,6 +120,17 @@ async function run() {
   for (let i = 0; i < firstRound.length; i++) {
     const called = await invoke(functions.assignMatchCourt, {matchId:firstRound[i].id, court:'Quadra ' + (i + 1), confirmCall:true});
     assert.equal(called.ok, true);
+    if (i === 0) {
+      const candidate = rotationGames.find(m => m.round === 2 &&
+        m.team1Uids.concat(m.team2Uids).some(uid => firstRound[0].team1Uids.concat(firstRound[0].team2Uids).includes(uid)));
+      assert(candidate);
+      for (const court of ['Quadra 1','Quadra 2']) {
+        await assert.rejects(invoke(functions.assignMatchCourt,{matchId:candidate.id,court,confirmCall:true}),
+          /já está em quadra/, 'callable recusa atleta ocupado na mesma quadra ou em outra');
+        assert(!(await rotationRef.collection('matches').doc(candidate.id).get()).data().jogo.courtCalledAt,
+          'tentativa recusada não grava chamada');
+      }
+    }
   }
   const secondRef = rotationRef.collection('matches').doc(firstRound[1].id);
   const secondCalled = (await secondRef.get()).data().jogo;
@@ -142,6 +153,10 @@ async function run() {
   assert.equal((await secondRef.get()).data().jogo.courtCalledAt, secondCalled.courtCalledAt);
   assert.equal((await secondRef.get()).data().jogo.court, 'Quadra 2');
   assert.equal((await rotationRef.get()).data().testModeEnabled, true);
+  await invoke(functions.endMatchOnCourt,{matchId:firstRound[1].id,action:'release'});
+  const nextRoundGame=rotationGames.find(m=>m.round===2);
+  const afterRelease=await invoke(functions.assignMatchCourt,{matchId:nextRoundGame.id,court:'Quadra 1',confirmCall:true});
+  assert.equal(afterRelease.ok,true,'após liberar todos os atletas a callable permite a próxima formação');
   console.log('✓ rodízio: duas quadras, encerramento individual, placar físico e teste preservado');
   console.log('end-court physical: OK');
 }
