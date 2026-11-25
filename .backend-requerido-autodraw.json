@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "32781266742195d1e912e70151dd1064cc4eb884",
-  "scopeNote": "Entradas de grupos completas, cruzamentos explícitos e classificação por identidade com política de pontuação nas substituições; sem migração de dados.",
+  "backendCommit": "cfe6abc143cb9864f55a3d67c94961a616578ac5",
+  "scopeNote": "Sorteio e agenda canônicos por categoria; preserva todas as portas do corte anterior e sincroniza encerramento central e regional sem alterar torneios.",
   "functions": [
     "createTournament",
     "updateTournamentConfiguration",
@@ -34,6 +34,8 @@
     "tournamentSummaryMatch",
     "tournamentSummaryParticipant",
     "tournamentSummaryRegistration",
-    "tournamentSummaryLegacyGroup"
+    "tournamentSummaryLegacyGroup",
+    "setDrawBalanceChoice",
+    "splitLatePair"
   ]
 }

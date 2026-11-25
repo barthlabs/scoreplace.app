@@ -146,7 +146,7 @@ for (const version of ['v2', 'v3']) {
     // nos manifestos operacionais; o backend central em us-central1 tem recibo
     // separado e mais recente. Usar HEAD aqui atestaria uma implantação
     // regional que ainda não ocorreu.
-    const recordedScoreCommit = 'c079a91c2ba72a379dd09ceb440d8192a7a79f79';
+    const recordedScoreCommit = '32781266742195d1e912e70151dd1064cc4eb884';
     const recordedScoreDigest = sourceDigest('applyMatchResult', recordedScoreCommit,
       sourceDescriptor('functions-autodraw', recordedScoreCommit, true));
     const scoreFresh = original.filter(row => row.name === `sp-op-score-${version}`)
