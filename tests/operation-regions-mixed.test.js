@@ -146,7 +146,7 @@ for (const version of ['v2', 'v3']) {
     // nos manifestos operacionais; o backend central em us-central1 tem recibo
     // separado e mais recente. Usar HEAD aqui atestaria uma implantação
     // regional que ainda não ocorreu.
-    const recordedScoreCommit = '32781266742195d1e912e70151dd1064cc4eb884';
+    const recordedScoreCommit = 'c7d0a3a669dba8651f1fb5727e3bcc0eded1da46';
     const recordedScoreDigest = sourceDigest('applyMatchResult', recordedScoreCommit,
       sourceDescriptor('functions-autodraw', recordedScoreCommit, true));
     const scoreFresh = original.filter(row => row.name === `sp-op-score-${version}`)
@@ -161,6 +161,18 @@ for (const version of ['v2', 'v3']) {
       .every(row => row.commit === recordedEndCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedEndCourtCommit, endCourtSources));
     assert.equal(run(original, false, {}, false, false, true).status === 0, scoreFresh && courtFresh && endCourtFresh,
       'corte dirigido só aceita as revisões de placar, chamada, encerramento e controle efetivamente publicadas');
+    // Only the exact score revision deployed to all eight destinations is current.
+    const previousScoreCommit = '32781266742195d1e912e70151dd1064cc4eb884';
+    const unpublishedScoreCommit = execFileSync('git', ['rev-parse','HEAD'], {cwd:root,encoding:'utf8'}).trim();
+    for (const rejectedCommit of [previousScoreCommit, unpublishedScoreCommit]) {
+      const rejectedDigest = sourceDigest('applyMatchResult', rejectedCommit,
+        sourceDescriptor('functions-autodraw',rejectedCommit,true));
+      const rejected = original.map(row => row.name === `sp-op-score-${version}`
+        ? {...row,commit:rejectedCommit,sourceDigest:rejectedDigest} : row);
+      assert.equal(run(rejected).status,0,'intact historical source is still auditable');
+      assert.notEqual(run(rejected,false,{},false,false,true).status,0,
+        'old or undeployed score source cannot satisfy the current publication');
+    }
     const staleEndCourt = 'b159a697d5e5cbe2f5db805ae7d1e3cfd9e7bcb8';
     const staleDigest = sourceDigest('endMatchOnCourt', staleEndCourt,
       sourceDescriptor('functions-autodraw', staleEndCourt, true));
