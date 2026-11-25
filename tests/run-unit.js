@@ -128,6 +128,9 @@ const SUITES = [
   'tests/end-court-refresh-contract.test.js',
   'tests/regulamento-neon.test.js',
   'tests/regulamento-cult.test.js',
+  'tests/tournament-regulation-core.test.js',
+  'tests/tournament-regulation-emulator.test.js',
+  'tests/tournament-regulation-browser.test.js',
   'tests/neon-sequencia-fotos.test.js',
   'tests/tournament-import.test.js',
   'tests/discovery-cache-account-scope.test.js',
@@ -2551,6 +2554,7 @@ const MEXEM_NO_REPO = [
  * ⛔ Se estas duas voltarem a falhar com "Port ... is not open", procure emulador órfão
  *      (`lsof -ti :8097`) antes de suspeitar do paralelismo. */
 const PRENDEM_PORTA = [
+  'tests/tournament-regulation-emulator.test.js',
   // A porta dinâmica do Firestore não isola o hub/logging compartilhado do CLI.
   'tests/universal-phase-grid-emulator.test.js',
   'tests/canonical-draw-balance-emulator.test.js',

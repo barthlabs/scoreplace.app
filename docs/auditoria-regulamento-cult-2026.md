@@ -48,3 +48,7 @@ Classificação primária: vitórias. Desempate: saldo de games, confronto diret
 ## Artefatos e verificações
 
 HTML e PDF locais usam a mesma fonte de conteúdo. O gerador `tools/generate-cult-regulation-pdf.cjs` imprime o HTML em Chromium isolado, sem rede externa, e registra SHA256 de ambos no manifesto. O teste confere hashes, texto do PDF, ausência de quartas, cortes, quatro páginas, isolamento por identidade e contraste AA. Todas as páginas foram renderizadas com Poppler e inspecionadas. Desktop e mobile são verificados com dados sintéticos; não se usa o navegador pessoal nem se grava em produção.
+
+## Implementação final por arquivo
+
+O usuário determinou que a arte pertença ao banco do torneio, com upload e substituição pelo organizador. Por isso não há desvio por ID do CULT em rules.js. O documento corrigido é preservado em docs/regulamentos/cult-2026 como artefato de entrega; o app lê regulations/current dentro do torneio e exibe o original do Storage. A operação administrativa para anexar esse PDF foi expressamente autorizada, com ator administrativo identificado, backup privado, CAS e conferência de bytes, sem simular autenticação de organizador.

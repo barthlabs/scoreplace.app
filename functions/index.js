@@ -16042,3 +16042,11 @@ exports.revogarPasskey = onCall(
     return { ok: true };
   }
 );
+
+// Regulamento é um anexo administrativo do torneio, independente do motor de sorteio.
+exports.uploadTournamentRegulation = onCall({ timeoutSeconds:120, memory:'512MiB', concurrency:4 }, request =>
+  require('./tournament-regulation').makeService({ db:admin.firestore(), storage:admin.storage(), HttpsError }).upload(request));
+
+// O arquivo original só é entregue depois de revalidar a permissão do torneio.
+exports.getTournamentRegulationFile = onCall({ timeoutSeconds:120, memory:'512MiB', concurrency:4 }, request =>
+  require('./tournament-regulation').makeService({ db:admin.firestore(), storage:admin.storage(), HttpsError }).getFile(request));

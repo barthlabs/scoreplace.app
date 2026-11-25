@@ -1,12 +1,109 @@
-// Documento da organização: identidade histórica exata, inclusive em cópias de teste vinculadas.
-window._isCultTournament = function(t) {
-  const id = 'tour_1793227218863_f9a70f41fdf7250b0199ba263caa424a';
-  return !!t && (t.id === id || (t.isSandbox === true && t.sandboxOf === id &&
-    typeof t.id === 'string' && t.id.startsWith('sb_' + id + '_')));
-};
+// Render e upload do arquivo original, independentes de nomes ou IDs de torneios.
+(function () {
+  const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  window._regulationControls = function(t, regulation) {
+    if (!window._souOrganizador(t)) return '';
+    return '<div class="card mb-3" data-regulation-controls><h3>Regulamento do torneio</h3>' +
+      '<p>Envie um PDF ou JPEG de até 5 MB. O arquivo original será exibido com sua arte e fontes. Para corrigir, envie uma nova versão.</p>' +
+      '<input data-regulation-input type="file" accept="application/pdf,image/jpeg,.pdf,.jpg,.jpeg" hidden>' +
+      '<button type="button" class="btn btn-primary" data-regulation-upload>' + (regulation ? 'Substituir ou corrigir regulamento' : 'Enviar regulamento') + '</button>' +
+      '<p data-regulation-status role="status" aria-live="polite"></p></div>';
+  };
+  let activeBlob = null;
+  window._releaseRegulationBlob = function(container) {
+    if (activeBlob && (!container || activeBlob.container === container)) {
+      URL.revokeObjectURL(activeBlob.url); activeBlob = null;
+    }
+  };
+  if (window.addEventListener) window.addEventListener('hashchange', () => {
+    if (activeBlob && activeBlob.hash !== window.location.hash) window._releaseRegulationBlob();
+  });
+  window._validRegulationAttachment = function(t, r) {
+    if (!r || r.version !== 1 || !uuid.test(r.revision || '') || !['application/pdf','image/jpeg'].includes(r.contentType)) return false;
+    const ext = r.contentType === 'application/pdf' ? 'pdf' : 'jpg';
+    return !r.url && r.storagePath === 'tournamentRegulations/' + t.id + '/' + r.revision + '.' + ext &&
+      Number.isInteger(r.sizeBytes) && r.sizeBytes > 0 && r.sizeBytes <= 5 * 1024 * 1024 && /^[0-9a-f]{64}$/.test(r.sha256 || '');
+  };
+  window._renderRegulationAttachment = function(container, t, regulation, controls) {
+    window._releaseRegulationBlob();
+    const header = window._renderBackHeader({ href:'#tournaments/' + t.id, label:'Voltar' });
+    if (!window._validRegulationAttachment(t, regulation)) {
+      container.innerHTML = header + controls + '<p role="alert">O arquivo do regulamento não pôde ser validado. A organização pode substituir o arquivo.</p>';
+      window._bindRegulationUpload(container, t, regulation); return;
+    }
+    container.innerHTML = header + controls + '<h2>Regulamento</h2><p>' + esc(regulation.fileName || 'Regulamento') + '</p>' +
+      '<div data-regulation-reader role="status">Abrindo regulamento…</div>';
+    window._bindRegulationUpload(container, t, regulation);
+    const reader = container.querySelector('[data-regulation-reader]');
+    window.FirestoreDB.loadTournamentRegulationFile(t.id, regulation.revision).then(async result => {
+      if (container.querySelector('[data-regulation-reader]') !== reader) return;
+      const r = result && result.regulation;
+      if (!window._validRegulationAttachment(t, r) || r.revision !== regulation.revision || r.sha256 !== regulation.sha256 || typeof result.base64 !== 'string' || result.base64.length > 6990520) throw new Error('Arquivo do regulamento inválido.');
+      const text = atob(result.base64), bytes = Uint8Array.from(text, c => c.charCodeAt(0));
+      if (bytes.length !== r.sizeBytes) throw new Error('Arquivo do regulamento incompleto.');
+      if (crypto.subtle) {
+        const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2,'0')).join('');
+        if (hash !== r.sha256) throw new Error('O arquivo não passou na conferência.');
+      }
+      if (container.querySelector('[data-regulation-reader]') !== reader) return;
+      const url = URL.createObjectURL(new Blob([bytes], {type:r.contentType}));
+      window._releaseRegulationBlob(); activeBlob = {container,url,hash:window.location.hash};
+      const view = r.contentType === 'application/pdf'
+        ? '<iframe data-regulation-document title="Regulamento do torneio" src="' + url + '#toolbar=1" style="display:block;width:100%;height:78vh;min-height:550px;border:1px solid var(--border-color);border-radius:12px;"></iframe>'
+        : '<img data-regulation-document alt="Regulamento do torneio" src="' + url + '" style="display:block;width:100%;height:auto;">';
+      reader.removeAttribute('role');
+      reader.innerHTML = '<p><a class="btn btn-primary" href="' + url + '" target="_blank" rel="noopener">Abrir original</a> ' +
+        '<a class="btn btn-secondary" href="' + url + '" download="' + esc(r.fileName || 'Regulamento') + '">Baixar arquivo</a></p>' + view;
+    }).catch(() => {
+      if (container.querySelector('[data-regulation-reader]') !== reader) return;
+      reader.setAttribute('role','alert'); reader.innerHTML = '<p>Não foi possível abrir o regulamento. Recarregue para conferir a versão atual.</p><button class="btn btn-secondary" type="button" data-regulation-retry>Tentar novamente</button>';
+      reader.querySelector('[data-regulation-retry]').onclick = () => renderRules(container, t.id);
+    });
+  };
+  window._bindRegulationUpload = function(container, t, regulation) {
+    if (!container.querySelector) return;
+    const button = container.querySelector('[data-regulation-upload]'), input = container.querySelector('[data-regulation-input]');
+    if (!button || !input) return;
+    button.onclick = () => input.click();
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const status = container.querySelector('[data-regulation-status]');
+      if (!['application/pdf','image/jpeg'].includes(file.type) || !file.size || file.size > 5 * 1024 * 1024) {
+        status.textContent = 'Envie um PDF ou JPEG de até 5 MB.'; input.value = ''; return;
+      }
+      button.disabled = true; input.disabled = true; status.textContent = 'Enviando e conferindo o regulamento…';
+      const epoch = {}; container._regulationEpoch = epoch;
+      try {
+        const dataUrl = await new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
+        const request = { tournamentId:t.id, sandbox:String(t.id).startsWith('sb_'), requestId:crypto.randomUUID(),
+          expectedRevision:regulation && regulation.revision || '', fileName:file.name, dataUrl };
+        const send = () => window._callCF('uploadTournamentRegulation', request, { unauth:'Entre na sua conta para enviar o regulamento.', falha:'Não foi possível enviar o regulamento.' });
+        let reply;
+        try { reply = await send(); }
+        catch (error) {
+          // Resposta perdida após commit: o mesmo requestId recupera o recibo sem duplicar a troca.
+          if (!(error instanceof TypeError) && !['functions/internal','functions/unavailable','functions/deadline-exceeded'].includes(error && error.code)) throw error;
+          reply = await send();
+        }
+        const result = reply && reply.data || reply;
+        if (!result || result.ok !== true || !result.regulation) throw new Error('O servidor não confirmou o regulamento.');
+        if (container._regulationEpoch !== epoch || !container.contains(button)) return;
+        renderRules(container, t.id, { regulation:result.regulation });
+        const nextStatus = container.querySelector('[data-regulation-status]');
+        if (nextStatus) nextStatus.textContent = result.superseded ? 'Exibindo a versão atual, substituída por outro envio.' : 'Regulamento atualizado.';
+      } catch (error) {
+        if (container._regulationEpoch === epoch && container.contains(button)) status.textContent = error && error.message || 'Não foi possível enviar. O regulamento anterior continua disponível.';
+      } finally { button.disabled = false; input.disabled = false; input.value = ''; }
+    };
+  };
+})();
+
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
-function renderRules(container, tournamentId) {
+function renderRules(container, tournamentId, regulationState) {
+  window._releaseRegulationBlob(container);
   const _t = window._t || function(k) { return k; };
   const tId = tournamentId || window._lastActiveTournamentId;
   const t = tId && window.AppStore ? window._findTournamentById(tId) : null;
@@ -21,15 +118,26 @@ function renderRules(container, tournamentId) {
     return;
   }
 
-  if (window._isCultTournament(t)) {
-    const regulationUrl = '/assets/regulamento-cult-2026.html?v=2.7.69';
-    container.innerHTML = window._renderBackHeader({ href: '#tournaments/' + t.id, label: _t('rules.back') }) + `
-      <div class="d-flex justify-between align-center mb-4" style="flex-wrap:wrap;gap:1rem;">
-        <h2 style="margin:0;">Regulamento · CULT</h2>
-        <a class="btn btn-primary" href="${regulationUrl}" target="_blank" rel="noopener">Abrir regulamento para imprimir</a>
-        <a class="btn btn-secondary" href="/assets/regulamento-cult-2026.pdf?v=2.7.69" download="Regulamento_CULT_2026.pdf">Baixar PDF</a>
-      </div>
-      <iframe data-cult-regulation title="Chaves e regulamento CULT Sol &amp; Saque por Glyvée" src="${regulationUrl}" style="display:block;width:100%;height:80vh;min-height:550px;border:1px solid var(--border-color);border-radius:12px;"></iframe>`;
+  // A referência vem da subcoleção; nunca é guardada no objeto serializável do torneio.
+  if (!regulationState && window.FirestoreDB && window.FirestoreDB.loadTournamentRegulation) {
+    const epoch = {};
+    container._regulationEpoch = epoch;
+    container.innerHTML = window._renderBackHeader({ href: '#tournaments/' + t.id, label: _t('rules.back') }) +
+      '<p data-regulation-loading role="status">Carregando regulamento…</p>';
+    const loading = container.querySelector('[data-regulation-loading]');
+    window.FirestoreDB.loadTournamentRegulation(t.id).then(regulation => {
+      if (container._regulationEpoch === epoch && container.querySelector('[data-regulation-loading]') === loading) renderRules(container, t.id, { regulation });
+    }).catch(() => {
+      if (container._regulationEpoch !== epoch || !container.querySelector('[data-regulation-loading]')) return;
+      container.innerHTML = window._renderBackHeader({ href: '#tournaments/' + t.id, label: _t('rules.back') }) +
+        '<p role="alert">Não foi possível carregar o regulamento. Reabra esta página para tentar novamente.</p>';
+    });
+    return;
+  }
+  const regulation = regulationState && regulationState.regulation || null;
+  const regulationControls = window._regulationControls(t, regulation);
+  if (regulation) {
+    window._renderRegulationAttachment(container, t, regulation, regulationControls);
     return;
   }
 
@@ -253,6 +361,7 @@ function renderRules(container, tournamentId) {
     const pdfUrl = '/assets/regulamento-neon-nightmare-2026.pdf';
     container.innerHTML = `
       ${window._renderBackHeader({ href: '#tournaments/' + t.id, label: _t('rules.back') })}
+      ${regulationControls}
       <div class="d-flex justify-between align-center mb-4" style="flex-wrap:wrap;gap:1rem;">
         <h2 style="margin:0;">Regulamento</h2>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
@@ -261,11 +370,13 @@ function renderRules(container, tournamentId) {
         </div>
       </div>
       <iframe data-neon-regulation title="Regulamento oficial NEON NIGHTMARE 2026" src="${pdfUrl}#toolbar=1" style="display:block;width:100%;height:min(78vh,1100px);min-height:600px;border:1px solid var(--border-color);border-radius:12px;background:#fff;"></iframe>`;
+    window._bindRegulationUpload(container, t, regulation);
     return;
   }
 
   container.innerHTML = `
     ${window._renderBackHeader({ href: '#tournaments/' + t.id, label: _t('rules.back') })}
+    ${regulationControls}
 
     <div class="d-flex justify-between align-center mb-4" style="flex-wrap:wrap;gap:1rem;">
       <div>
@@ -367,4 +478,5 @@ function renderRules(container, tournamentId) {
       }
     </style>
   `;
+  window._bindRegulationUpload(container, t, regulation);
 }

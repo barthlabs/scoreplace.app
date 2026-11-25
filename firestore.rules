@@ -392,6 +392,16 @@ service cloud.firestore {
      * consulta que não constranja esse campo é recusada inteira ("rules are not filters").
      * É de propósito — é o que impede varredura da coleção. */
     match /sandboxes/{sandboxId} {
+      // Regulamento original: leitura privada do dono; escrita só pela callable.
+      match /regulations/{documentId} {
+        allow get: if documentId == 'current' && request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/sandboxes/$(sandboxId)).data.get('sandboxOwnerUid', '');
+        allow list, write: if false;
+      }
+      match /regulationRevisions/{revisionId} {
+        allow read, write: if false;
+      }
+
       match /operationControl/{controlId} {
         allow read, write: if false;
       }
@@ -513,6 +523,16 @@ service cloud.firestore {
     }
 
     match /tournaments/{tournamentId} {
+      // Mesma visibilidade do torneio; não expõe a lista de revisões administrativas.
+      match /regulations/{documentId} {
+        allow get: if documentId == 'current'
+          && canReadTournamentData(get(/databases/$(database)/documents/tournaments/$(tournamentId)).data);
+        allow list, write: if false;
+      }
+      match /regulationRevisions/{revisionId} {
+        allow read, write: if false;
+      }
+
       // A captura e a restauração bloqueiam escritas de cliente. Durante o
       // checkpoint, a função mantém o marcador no documento raiz.
       function rehearsalClientUnlocked() {

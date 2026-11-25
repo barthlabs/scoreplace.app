@@ -1,8 +1,9 @@
-## 2.7.69 — 25/nov/2026 (regulamento CULT e PDF corrigido)
+## 2.7.69 — 25/nov/2026 (regulamento original por torneio)
 
-- Regulamento único reconstruído das capturas, com fontes abertas locais e identidade visual marrom/creme/amarelo. PDF de quatro páginas gerado do mesmo HTML, com manifesto de hashes.
-- Corrigidas as quartas indevidas: B e C avançam oito atletas formando quatro duplas fixas para semifinais, final e terceiro lugar. Cortes B4/C2, cruzamentos conferidos no motor canônico, sem alterações no banco.
-- Auditoria das regras e testes de identidade, PDF, contraste, desktop/mobile e isolamento dos demais torneios.
+- Upload genérico PDF/JPEG pela organização, com visualização do arquivo original e substituição/correção por nova versão. Metadata em regulations/current; arquivo imutável no Storage e histórico server-only. Sem IDs de torneio no render.
+- Callable autenticada UID-only no pacote principal, verificação de bytes, CAS e recibo idempotente; cliente antigo não sobrescreve regulamento ao salvar o pai. Rules separam leitura do documento atual, histórico privado e upload exclusivamente no servidor.
+- PDF do CULT corrigido para semifinais em duplas e corte B4/C2, entregue em Downloads e autorizado para anexar pelo mesmo fluxo de persistência.
+- Provas em Auth/Functions/Firestore/Storage Emulator e Chromium isolado para PDF/JPEG, limite de5MiB, concorrência, permissões, cliente antigo, resposta perdida e navegação.
 
 ## 2.7.60 — 24/nov/2026 (preservação e escopo das vagas no editor)
 

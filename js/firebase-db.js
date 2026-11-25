@@ -469,6 +469,19 @@ window.FirestoreDB = {
       ? window._projectTournamentPhasesForRead(tournament) : tournament;
   },
 
+  // Referência de arquivo separada do pai: saves antigos de jogos não a sobrescrevem.
+  async loadTournamentRegulationFile(tournamentId, revision) {
+    return this._callFn('getTournamentRegulationFile', {
+      tournamentId:String(tournamentId), sandbox:this._ehSandbox(tournamentId), revision:String(revision)
+    }, {semLogin:true, falha:'Não foi possível abrir o regulamento.'});
+  },
+
+  async loadTournamentRegulation(tournamentId) {
+    if (!this.db) throw new Error('Banco de dados indisponível.');
+    var snap = await this._tDoc(String(tournamentId)).collection('regulations').doc('current').get();
+    return snap.exists ? snap.data() : null;
+  },
+
   async saveTournament(tourData, options) {
     if (tourData && (tourData._resumo === true || tourData.requiresFullRead === true)) throw new Error('Resumo de torneio é somente leitura; carregue o documento canônico antes de salvar.');
     if (!this.db) return;
