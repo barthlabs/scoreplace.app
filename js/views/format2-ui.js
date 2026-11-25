@@ -1835,8 +1835,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           _pill(e.semeadura === 'performance', 'window._f2Semeadura(\'performance\')', '🏅 Cabeças protegidas') +
           _pill(e.semeadura === 'equilibrio', 'window._f2Semeadura(\'equilibrio\')', '⚖️ Confrontos parelhos') +
           _pill(e.semeadura === 'sorteio', 'window._f2Semeadura(\'sorteio\')', '🎲 Posições sorteadas') +
+          _pill(e.semeadura === 'grupos', 'window._f2Semeadura(\'grupos\')', 'Cruzar grupos') +
           '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' +
-          (e.semeadura === 'sorteio'
+          (e.semeadura === 'grupos' ? 'As duplas são formadas por colocação dentro de cada grupo; os grupos se cruzam em espelho (1 × último, 2 × penúltimo).' : e.semeadura === 'sorteio'
             ? 'As posições na chave são sorteadas entre os classificados; o sorteio fica vinculado à operação publicada.'
             : e.semeadura === 'equilibrio'
             ? 'Colocações próximas se enfrentam desde a primeira rodada.'
@@ -2823,7 +2824,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2ElimRRCut = function (n) { if (!S) return; S.cfg.eliminatoria.reiRainhaCut = (parseInt(n, 10) === 2) ? 2 : 4; _norm(); _rerender(); };
   // Formação/pareamento e semeadura são escolhas independentes.
   window._f2Formacao = function (v) { S.cfg.eliminatoria.formacao = v; _norm(); _rerender(); };
-  window._f2Semeadura = function (v) { S.cfg.eliminatoria.semeadura = v; _norm(); _rerender(); };
+  window._f2Semeadura = function (v) {
+    if (!S || _hasDrawnGames()) return;
+    var e=S.cfg.eliminatoria;
+    if(v==='grupos') delete e.groupCrossChangeConfirmed;
+    else if(e.semeadura==='grupos') e.groupCrossChangeConfirmed=true;
+    e.semeadura=v; _norm(); _rerender();
+  };
   /* window._f2Terceiro APAGADO (2.1.41): setter SEM CHAMADOR de um campo que `_norm()`
    * força a `true` na linha seguinte. Decoy — faz o próximo leitor consertar o lugar
    * errado. [[project_third_place_always]] [[feedback_funcao_dentro_de_outra_nao_existe]] */

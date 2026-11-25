@@ -373,5 +373,20 @@ console.log('   colunas geradas: ' + tc.rounds.length + ' · jogadores sorteados
   catch (error) { assert(/tipografia/.test(error.message), 'peso fora do limite é recusado'); }
 }
 
+// The same 48-player projection runs in the vendor and browser source modules.
+{
+  const fs=require('fs'),path=require('path'),vm=require('vm');
+  const {w,scenario,D}=require('../tests/universal-phase-grid.test');
+  const t=scenario(['Categoria B','Categoria C'],[16,32],[8,8],[7,7],[4,2]);t.fmt2.eliminatoria.semeadura='grupos';
+  const server=w.ScoreplacePhaseGridPlan.suggestProjected(t,D,w);
+  for(const file of ['js/views/format2.js','js/views/phases-engine.js','js/domain/phase-grid-plan.js'])
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),{window:w,console});
+  const client=w.ScoreplacePhaseGridPlan.suggestProjected(t,D,w);
+  assert(!server.error && !client.error,'cruzamento por grupos produz grade nos dois motores');
+  assert(JSON.stringify(server.plan)===JSON.stringify(client.plan),'cliente e vendor têm posições idênticas no Super 8 de 48 pessoas');
+  const labels=result=>result.tiles.filter(t=>t.kind==='elimination' && t.round===1).map(t=>w.ScoreplacePhaseGridPlan.matchupLabel(t,result.tiles));
+  assert(JSON.stringify(labels(server))===JSON.stringify(labels(client)),'cliente e vendor descrevem os mesmos cruzamentos B/C');
+}
+
 console.log('\n' + (failures === 0 ? '✅ TODOS OS TESTES PASSARAM' : '❌ ' + failures + ' FALHA(S)'));
 process.exit(failures === 0 ? 0 : 1);

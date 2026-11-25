@@ -170,6 +170,11 @@
     var last = visible.reduce(function (max, tile) { return Math.max(max, Math.min(1440,Date.parse(tile.day+'T00:00:00Z')/60000-dayOrigin+model.minutes(tile.startTime)+tile.duration)); }, end);
     var height = (last - start) * 3, columns = Number(state.plan.courts);
     var numbers = model.numbered(state.tiles, state.plan);
+    var descriptionKey=state.plan.inputSignature+'|'+JSON.stringify(state.plan.groupAssignments || []);
+    if(!state.locked && state.descriptionKey!==descriptionKey && model.describeProjectedTiles) {
+      state.tiles=model.describeProjectedTiles(state.tournament,state.tiles,window);
+      state.descriptionKey=descriptionKey;
+    }
     var eliminationNames = model.eliminationLabels(state.tiles);
     var overlapping = model.overlapIds(state.tiles, state.plan);
     var categories = Array.from(new Set(state.tiles.map(function (tile) { return tile.category; })));
@@ -212,7 +217,8 @@
             var carry=at<0, segmentStart=Math.max(0,at), segmentEnd=Math.min(1440,at+tile.duration);
             var top = (segmentStart - start) * 3, tileHeight = (segmentEnd-segmentStart) * 3 - 3;
             var id = esc(tile.id), groupName = model.groupLabel(tile);
-            var title = tile.kind === 'groups' ? label(tile) : eliminationNames[tile.id];
+            var title = tile.kind === 'groups' ? label(tile) : eliminationNames[tile.id]+' · '+tile.category;
+            var matchup=model.matchupLabel?.(tile,state.tiles) || '';
             var series = tile.kind === 'groups' && (state.plan.schema === 1 || tile.games === 3);
             var short = state.plan.schema === 2 ? ('Fase ' + (tile.phaseIndex + 1) + (tile.kind === 'groups' ? ' · ' + (tile.assignment?.label || tr('group','Grupo')+' '+tile.groupNumber) + (tile.assignment ? ' · '+tr('entry','Entrada')+' '+tile.assignment.entry : '') : '') +
               ' · Rodada ' + tile.round + (series ? ' · 3 jogos' : '') + (tile.optional ? ' · Se necessário' : '')) : tile.kind === 'groups' ? 'Grupo ' + groupName + ' · 3 jogos' : tile.category;
@@ -226,6 +232,7 @@
               (state.locked || carry ? '' : ' draggable="' + (window.matchMedia && window.matchMedia('(pointer:fine)').matches ? 'true' : 'false') + '"' +
                 ' ondragstart="window._phaseGridDragStart(event,\'' + id + '\')" onkeydown="window._phaseGridKey(event,\'' + id + '\')"') + '>' +
               '<strong>' + esc(title) + '</strong><small>' + esc(short) + '</small>' +
+              (matchup?'<small class="phase-grid-matchup">'+esc(matchup)+'</small>':'')+
               (series ? '<div class="phase-grid-series">' + [0,1,2].map(function (offset) {
                 return '<span>JOGO ' + (numbers[tile.id] + offset) + ' <small>(' + (offset + 1) + '/3) · ' + model.clock(gameTimes[offset]) + '</small></span>';
               }).join('') + '</div>' : '<span class="phase-grid-single">JOGO ' + numbers[tile.id] + '</span>') +

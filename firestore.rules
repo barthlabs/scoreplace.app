@@ -888,6 +888,8 @@ service cloud.firestore {
           || (request.auth.uid == 'B17n7JCXYOfqahlcLZ0fKxGGyUu1'
             && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
               'isPublic', 'membersOnly', 'organizerOnly', 'memberUids', 'refereeUids'])))
+        && (resource.data.get('fmt2', {}).get('eliminatoria', {}).get('semeadura', '') != 'grupos'
+          || (igual('fmt2') && igual('phases')))
         && rehearsalClientUnlocked()
         && rehearsalPrivacyIntact()
         && (

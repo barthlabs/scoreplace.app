@@ -128,7 +128,31 @@
         });
       });
     });
+    tiles.forEach(function(tile){if(tile.display?.stage) result[tile.id]=tile.display.stage;});
     return result;
+  }
+  function describeProjectedTiles(t,tiles,context) {
+    var descriptions=new Map(project(t,context).jobs.map(job=>[positionKey(job),job.display]));
+    return tiles.map(tile=>Object.assign({},tile,{display:descriptions.get(positionKey(tile))}));
+  }
+  function matchupLabel(tile,tiles) {
+    if(!tile.display?.sources?.some(Boolean)) return '';
+    var byPosition=new Map(tiles.map(other=>[positionKey(other),other]));
+    function sourceLabel(source) {
+      if(!source) return 'A definir';
+      if(source.groupNumber) {
+        var row=tiles.find(other=>other.kind==='groups' && other.phaseIndex===tile.phaseIndex-1 && other.category===tile.category && other.groupNumber===source.groupNumber);
+        var code=row?.assignment?.label || groupCode(tile.category,source.groupNumber);
+        return source.ranks.map(rank=>rank+'º').join('+')+' · '+code;
+      }
+      var previous=byPosition.get(source.position);
+      return (source.outcome==='winner'?'Vencedor':'Perdedor')+' da '+(previous?.display?.stage || 'partida')+' '+(previous?.sequence || '');
+    }
+    return tile.display.sources.map(sourceLabel).join(' × ');
+  }
+  function groupCode(category,number) {
+    var code=String(category || '').match(/(?:^|[\s(\[])([A-Za-z])(?:[)\]]|$)$/);
+    return (code ? code[1].toUpperCase() : (category || 'Grupo')+' ')+number;
   }
   function outsideWindow(tile, day) {
     var at = minutes(tile && tile.startTime), start = minutes(day && day.startTime), end = minutes(day && day.endTime);
@@ -234,7 +258,7 @@
     }).map(function (tile) {
       if (plan.schema===2) {
         var position=Object.assign({},tile,{courts:[tile.court]});
-        ['id','court','duration','matchIds','windows','assignment'].forEach(k=>delete position[k]);
+        ['id','court','duration','matchIds','windows','assignment','display'].forEach(k=>delete position[k]);
         return position;
       }
       var block = { kind:tile.kind, category:tile.category, day:tile.day || plan.day,
@@ -444,7 +468,7 @@
     });
     return keys;
   }
-  function technicalPositions(t, list, context) {
+  function technicalPositions(t, list, context, origins) {
     var groups=new Map(), byId=new Map(), jobs=[], fields=new Map();
     var real=(list || []).filter(function (m) {
       if (!m || m.id == null || m.isSitOut || m.isTieBreak || m.isBye || (context._isByeMatch && context._isByeMatch(m)) || byId.has(m.id)) return false;
@@ -512,6 +536,29 @@
         if (part[0].requiredDay) job.requiredDay=part[0].requiredDay;
         if (part.every(m=>m.condicional===true || m.conditional===true || (m.bracket==='grand' && m.isExtra))) job.optional=true;
         jobs.push(job);
+      });
+    });
+    var jobByMatch=new Map();
+    jobs.forEach(job=>job.matchIds.forEach(id=>jobByMatch.set(id,job)));
+    jobs.filter(job=>job.kind==='elimination').forEach(function(job) {
+      var m=byId.get(job.matchIds[0]);
+      var peers=jobs.filter(other=>other.phaseIndex===job.phaseIndex && other.category===job.category && other.bracket===job.bracket);
+      var last=Math.max(...peers.map(other=>other.round));
+      var stage=m.isThirdPlace ? '3º lugar' : job.round===last ? 'Final' :
+        job.round===last-1 ? 'Semifinal' : job.round===last-2 ? 'Quartas de final' : 'Eliminatória';
+      job.display={stage:stage,sources:[null,null]};
+      [1,2].forEach(function(side) {
+        var team=m['team'+side+'Obj'];
+        var ids=m['team'+side+'Uids'] || team?.participants?.map(p=>p.uid) || [];
+        var rows=ids.map(id=>origins?.get(JSON.stringify([job.category,String(id)]))).filter(Boolean);
+        if(rows.length===ids.length && rows.length && rows.every(row=>row.groupNumber===rows[0].groupNumber))
+          job.display.sources[side-1]={category:job.category,groupNumber:rows[0].groupNumber,ranks:rows.map(row=>row.rank).sort((a,b)=>a-b)};
+        if(job.display.sources[side-1]) return;
+        var slot='p'+side;
+        var before=real.find(other=>other.nextMatchId===m.id && other.nextSlot===slot ||
+          (other.loserNextMatchId || other.loserMatchId)===m.id && (other.loserNextSlot || other.loserSlot)===slot);
+        var previous=before && jobByMatch.get(String(before.id));
+        if(previous) job.display.sources[side-1]={outcome:before.nextMatchId===m.id?'winner':'loser',position:positionKey(previous)};
       });
     });
     return jobs;
@@ -596,7 +643,7 @@
       (rounds || []).forEach(r=>(r.matches || []).forEach(m=>{m.phaseIndex=index;result.push(m);}));
       return result;
     }
-    var jobs=[];
+    var jobs=[], origins=new Map();
     for (var index=0;index<phases.length;index++) {
       var nativeRounds=index ? t.phaseRounds?.[index]?.rounds : t.rounds;
       var requested=Number(phases[index].rounds || (index===0 ? fmt.rodadas?.n : 0)) || 1;
@@ -624,12 +671,20 @@
           if (!games.some(other=>other.id===reset.id)) games.push(reset);
         });
       }
-      var section=technicalPositions(t,games,ctx);
+      var section=technicalPositions(t,games,ctx,origins);
       jobs.push.apply(jobs,section);
       if (jobs.length>400) throw new Error('A grade ultrapassa o limite de 400 posições.');
       if (index+1===phases.length) break;
       games.forEach(m=>{if(!m.winner){m.winner=m.p1;m.winnerUids=m.team1Uids || [];m.scoreP1=4;m.scoreP2=3;}});
       var ind=phases[index].reiRainha || phases[index].superEight || !!phases[index].classification?.partnerRotation;
+      origins=new Map();
+      var sourceGroups=index===0 ? engine.prevPhaseGroups(t) : engine.bracketPhaseGroups(t,index);
+      (sourceGroups || []).forEach(function(group) {
+        var category=String(group.category || '');
+        engine.standingsDaFaseAnterior(group,t,{},ind,index).forEach(function(row,rank) {
+          if(row.uid) origins.set(JSON.stringify([category,String(row.uid)]),{groupNumber:Number(group.groupIdx || 0)+1,rank:rank+1});
+        });
+      });
       var next=engine.materializeNextPhase(t,g=>engine.standingsDaFaseAnterior(g,t,{},ind,index),'grid'+(index+1),
         {agoraIso:'2000-01-01T00:00:00Z',rnd:()=>0.37});
       if (!next.ok) throw new Error('Confira os classificados da fase '+(index+1)+' ('+next.error+').');
@@ -674,7 +729,7 @@
       list.forEach(tile=>waves.set(tile.wave,(waves.get(tile.wave)||0)+1));
       var code=String(first.category || '').match(/(?:^|[\s(\[])([A-Za-z])(?:[)\]]|$)$/);
       var group={phaseIndex:first.phaseIndex,category:first.category,groupNumber:first.groupNumber,
-        label:(code ? code[1].toUpperCase() : (first.category || 'Grupo')+' ')+first.groupNumber,
+        label:groupCode(first.category,first.groupNumber),
         demand:Math.min(courts,Math.max(...waves.values()))};
       if (!phases.has(first.phaseIndex)) phases.set(first.phaseIndex,[]);
       phases.get(first.phaseIndex).push(group);
@@ -858,6 +913,8 @@
       plan.inputSignature=signatureOf(t,projection,plan);
       var saved=t.scheduleWindow?.interleavedPlan;
       if (saved && Object.hasOwn(saved,'groupAssignments')) return applyAssignments(jobs,plan,days,saved.groupAssignments);
+      var defaults=suggestedAssignments(jobs,courts,t);
+      if(defaults.length) return applyAssignments(jobs,plan,days,defaults);
       var result=arrange(jobs,days,courts,false,true);
       return result.error ? result : {tiles:result.tiles,plan:toPlan(plan,result.tiles)};
     } catch(error) {return {error:error.message};}
@@ -892,6 +949,7 @@
         p.teamCompetition?.schedule,p.teamCompetition?.teamCount]),
       t.scoring?.setsToWin || 0,t.gameDuration || 30,t.callTime || 0,t.warmupTime || 0,t.setupScope || t.superEightSetupScope || '',
       projected.jobs.map(j=>[positionKey(j),j.wave,j.games,j.optional || false,j.requiredDay || '']).sort()];
+    if(projected.phases.some(p=>p.groupCrossSeeding)) values.push(['groupCrossSeeding',projected.phases.map(p=>p.groupCrossSeeding===true)]);
     var raw=JSON.stringify(values,function (_,v) {
       if (!v || typeof v!=='object' || Array.isArray(v)) return v;
       return Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]]));
@@ -929,7 +987,7 @@
   }
   var api = {displayDays:displayDays, suggestedAssignments:suggestedAssignments,applyAssignments:applyAssignments,bindAssignments:bindAssignments,precedes:precedes,v2Duration:v2Duration,canInterleave:canInterleave,assertPlan:assertPlan,project:project,technicalPositions:technicalPositions,positionKey:positionKey,suggestProjected:suggestProjected, minutes:minutes, clock:clock, duration:duration, expand:expand, validate:validate,
     move:move, toPlan:toPlan, preset:preset, stageKey:stageKey, groupLabel:groupLabel, numbered:numbered,
-    gameStarts:gameStarts, eliminationLabels:eliminationLabels, suggest:suggest,
+    gameStarts:gameStarts, eliminationLabels:eliminationLabels,describeProjectedTiles:describeProjectedTiles,matchupLabel:matchupLabel, suggest:suggest,
     expectedSignatures:expectedSignatures, signatures:signatures,
     outsideWindow:outsideWindow, overlapIds:overlapIds, daysOf:daysOf, dayOf:dayOf };
   root.ScoreplacePhaseGridPlan = api;

@@ -843,7 +843,7 @@
     if (['performance', 'equilibrio', 'sorteio'].indexOf(e.formacao) === -1) e.formacao = 'performance';
     // Configurações anteriores não tinham esta decisão: preservar exatamente a
     // semeadura que o compilador derivava de formacao antes da separação.
-    if (e.semeadura !== 'performance' && e.semeadura !== 'equilibrio' && e.semeadura !== 'sorteio') {
+    if (e.semeadura !== 'performance' && e.semeadura !== 'equilibrio' && e.semeadura !== 'sorteio' && e.semeadura !== 'grupos') {
       e.semeadura = e.formacao === 'equilibrio' ? 'equilibrio' : 'performance';
     }
     // 'sorteio' só faz sentido FORMANDO duplas (senão não há o que sortear — os confrontos
@@ -1124,6 +1124,8 @@
   // A cota pertence à classificatória de origem. A próxima fase consome o corte
   // a partir de cada grupo da categoria, inclusive quando ela é outra classificatória.
   function compileToPhases(cfg, opts) {
+    var crossError=groupCrossError(cfg);
+    if(crossError) throw new Error(crossError);
     var result = compileBasePhases(cfg, opts);
     var cuts = [cfg && cfg.qualificationCategoryRules, cfg && cfg.eliminatoria && cfg.eliminatoria.formationQualificationCategoryRules];
     result.phases.forEach(function (phase, index) {
@@ -1134,7 +1136,20 @@
         delete phase.officialGroupBracketOrder;
       }
     });
+    if(result.cfg.eliminatoria.semeadura==='grupos') result.phases[result.phases.length-1].groupCrossSeeding=true;
     return result;
+  }
+  function groupCrossError(cfg) {
+    if(cfg?.eliminatoria?.semeadura!=='grupos') return '';
+    var e=cfg.eliminatoria;
+    if(cfg.classifAtiva===false || cfg.disputa!=='dupla' || !['rotation_groups','rotation_groups_8'].includes(cfg.parceria) ||
+       cfg.classifScope!=='per_group' || e.ativa===false || e.dupla || Number(e.linhas || 1)!==1 || e.openReiRainha ||
+       e.qualifyAll || e.formacao!=='performance' || e.bestNextByGroup?.count || e.lineAssignment==='rank_ranges')
+      return 'Cruzar grupos exige classificatória em grupos com rodízio, avanço por grupo, duplas por colocação e uma chave de eliminação simples.';
+    var quotas=cfg.qualificationCategoryRules;
+    if((quotas?.length ? quotas.map(r=>r.perGroup) : [cfg.classificados]).some(n=>!Number.isInteger(n) || n<2 || n%2))
+      return 'Para cruzar grupos, classifique um número par de pessoas de cada grupo, sem deixar parceiro em outro grupo.';
+    return '';
   }
   function qualificationForCategory(phase, category) {
     var source = phase && phase.source;
@@ -1148,6 +1163,7 @@
     return Object.assign({},phase,{source:resolved,mapping:mapping,gruposClassified:rule.perGroup});
   }
   function qualificationError(cfg, categories, population, sport) {
+    var crossError=groupCrossError(cfg);if(crossError) return crossError;
     var lists=[cfg.qualificationCategoryRules,cfg.eliminatoria?.formationQualificationCategoryRules];
     if (!lists.some(list=>list!=null)) return '';
     var names=categories && categories.length ? categories : [''];
@@ -1675,6 +1691,7 @@
     compileToPhases: compileToPhases,
     qualificationForCategory:qualificationForCategory,
     qualificationError:qualificationError,
+    groupCrossError:groupCrossError,
     translateLegacyTournament: translateLegacyTournament,
     assessGroupSchedule: assessGroupSchedule,
     resolveTurnos: resolveTurnos,

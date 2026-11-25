@@ -68,9 +68,9 @@ const {scenario,D}=require('./universal-phase-grid.test');
       },{t,plan,D});
       await page.getByRole('button',{name:'Abrir grade em tela ampla'}).click();
       assert.equal(await overlay.locator('.phase-grid-tile').count(),plan.blocks.length);
-      if (plan.groupAssignments?.length) assert.equal(await overlay.locator('[aria-label*="B1 matinal"]').count(),10);
+      if (t.combinedCategories.length===2) assert.equal(await overlay.locator('[aria-label*="B1 matinal"]').count(),10);
       await overlay.getByRole('button',{name:'Voltar à edição'}).click();
-      if (plan.groupAssignments?.length) {
+      if (t.combinedCategories.length===2) {
         await page.evaluate(()=>{
           const saved=_phaseCallOrderState.tournament;
           window._findTournamentById=()=>saved;

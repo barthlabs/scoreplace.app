@@ -1297,7 +1297,7 @@
       ? String(t.combinedCategories[0]) : _groupCategory(groups[0]);
     var officialSingle = !!(phaseCfg && Array.isArray(phaseCfg.officialGroupBracketOrder) &&
       phaseCfg.officialGroupBracketOrder.indexOf(loneCategory) >= 0);
-    var multi = !!(t && Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) || officialSingle;
+    var multi = !!(t && Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) || officialSingle || phaseCfg?.groupCrossSeeding===true;
     if (!multi) {
       var one = buildPhaseBrackets(groups, categoryQualification(phaseCfg,loneCategory), computeStandings, idPrefix, det);
       var lone = t && Array.isArray(t.combinedCategories) && t.combinedCategories.length === 1
@@ -1317,6 +1317,22 @@
     _splitCategoryItems(groups, order, _groupCategory).forEach(function (bucket) {
       var cat = bucket.category, ci = bucket.index;
       var cfg = Object.assign({}, categoryQualification(phaseCfg,cat), { _surplusCategory: cat });
+      if (phaseCfg.groupCrossSeeding===true) {
+        if (cfg.elimination?.bracketType!=='single' || cfg.source?.scope!=='per_group' || cfg.pairingStrategy!=='top' || cfg.fixedPairs===false)
+          throw new Error('Cruzamento por grupos incompatível com a formação da eliminatória.');
+        var crossMapping=mappingDaTransicao(cfg);
+        if(crossMapping.length!==1 || crossMapping[0].dest!=='main') throw new Error('Cruzar grupos exige uma única chave.');
+        var crossEntrants=[];
+        bucket.items.slice().sort(function(a,b){return Number(a.groupIdx || 0)-Number(b.groupIdx || 0);}).forEach(function(group) {
+          var rows=computeStandings(group) || [], quota=Number(cfg.source?.qualifyTopN || cfg.gruposClassified);
+          if(!Number.isInteger(quota) || quota<2 || quota%2 || rows.length<quota)
+            throw new Error('Confira o número par de classificados e a população de cada grupo.');
+          var one=buildEntrantsByDest([group],crossMapping,true,function(){return rows;},'top',optsDaTransicao(cfg,null));
+          if(!one.main || one.main.length!==quota/2) throw new Error('O grupo não formou todas as duplas classificadas.');
+          crossEntrants.push.apply(crossEntrants,one.main);
+        });
+        cfg._entrantsByDest={main:crossEntrants};cfg.bracketSeeding='seed';
+      }
       if (Array.isArray(phaseCfg.officialGroupBracketOrder) &&
           phaseCfg.officialGroupBracketOrder.indexOf(cat) >= 0) {
         // Planilha oficial: cada posição da chave corresponde ao vencedor do
@@ -1354,7 +1370,7 @@
       }
       var part = _stampCategory(buildPhaseBrackets(bucket.items, cfg, computeStandings,
         idPrefix + '-c' + ci, det), cat);
-      if (cfg._entrantsByDest) part.matches.forEach(function (m) {
+      if (cfg._entrantsByDest && !phaseCfg.groupCrossSeeding) part.matches.forEach(function (m) {
         m.officialGroupBracket = true;
         if (Number(m.round) === 1 && !m.isThirdPlace) m.roundName = bucket.items.length === 16
           ? 'Oitavas de final' : bucket.items.length === 8 ? 'Quartas de final' : '';

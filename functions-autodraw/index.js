@@ -1538,6 +1538,7 @@ function _activateOfficialPhasePlanOnCall(t, calledMatch, nowIso) {
  * ⛔ E `participants`/`history` só saem do documento se estiverem NO MARCADOR — `dividir`
  * extrai os três por natureza, e gravar a config crua dele zeraria o elenco. */
 function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
+  if(tDepois?.fmt2?.eliminatoria) delete tDepois.fmt2.eliminatoria.groupCrossChangeConfirmed;
   if (_drawCheckpoint.locked(tAntes)) {
     throw new HttpsError('failed-precondition', 'A fotografia ou restauração do sorteio está em andamento; operação temporariamente bloqueada.');
   }

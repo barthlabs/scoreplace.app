@@ -23,7 +23,7 @@ const ENUMS = [
   ['classificationSchedule.mode', ['free', 'structured']],
   ['groupFormation.mode', ['count', 'size']],
   ['eliminatoria.formacao', ['performance', 'equilibrio', 'sorteio']],
-  ['eliminatoria.semeadura', ['performance', 'equilibrio', 'sorteio']],
+  ['eliminatoria.semeadura', ['performance', 'equilibrio', 'sorteio', 'grupos']],
   ['eliminatoria.lateEnrollment', ['inherit', 'closed', 'standby', 'expand']],
   ['eliminatoria.newMatchups', ['inherit', true, false]],
   ['eliminatoria.lineAssignment', ['strategy', 'rank_ranges']],
@@ -91,6 +91,11 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, ca
     throw new HttpsError('invalid-argument', 'Configuração de formato inválida.');
   }
   const prev = stored?.fmt2;
+  if(prev?.eliminatoria?.semeadura==='grupos' && fmt2.eliminatoria?.semeadura!=='grupos' &&
+      fmt2.eliminatoria?.groupCrossChangeConfirmed!==true)
+    throw new HttpsError('failed-precondition','Atualize o aplicativo e escolha explicitamente a semeadura para alterar o cruzamento por grupos.');
+  const crossError=require('./draw-core')._window.FORMAT2.groupCrossError(fmt2);
+  if(crossError) throw new HttpsError('invalid-argument',crossError);
   population = population || (category => stored ? require('./vendor/super-eight-core').categoryPopulation(stored, category) : 0);
   const storedRules = prev?.groupCategoryRules;
   if (prev?.classificationSliderMode && fmt2.parceria===prev.parceria && !Object.hasOwn(fmt2,'classificationSliderMode'))

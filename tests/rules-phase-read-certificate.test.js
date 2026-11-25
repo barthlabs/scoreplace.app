@@ -21,6 +21,11 @@ out.addOnCreate=(await req('PATCH','tournaments/t2',u,{fields:{creatorUid:S(u),n
 out.edit=(await req('PATCH',p+'?updateMask.fieldPaths=name',u,{fields:{name:S('Nome permitido')}})).status;
 out.forge=(await req('PATCH',p+'?updateMask.fieldPaths=_phaseReadCertificate',u,{fields:{_phaseReadCertificate:C('forged')}})).status;
 out.remove=(await req('PATCH',p+'?updateMask.fieldPaths=_phaseReadCertificate',u,{fields:{}})).status;
+const M=fields=>({mapValue:{fields}});
+const format=M({eliminatoria:M({semeadura:S('grupos')})});
+await req('PATCH','tournaments/cross','owner',{fields:{creatorUid:S(u),name:S('Cross'),fmt2:format,phases:{arrayValue:{values:[]}}}});
+out.crossScore=(await req('PATCH','tournaments/cross?updateMask.fieldPaths=scoreNote',u,{fields:{scoreNote:S('placar')}})).status;
+out.crossDowngrade=(await req('PATCH','tournaments/cross?updateMask.fieldPaths=fmt2',u,{fields:{fmt2:M({eliminatoria:M({semeadura:S('performance')})})}})).status;
 out.final=(await req('GET',p,'owner')).body.fields._phaseReadCertificate.mapValue.fields.digest.stringValue;
 console.log('__JSON__'+JSON.stringify(out));})().catch(e=>{console.error(e);process.exitCode=1});`;
 
@@ -42,6 +47,8 @@ try {
   assert.equal(result.edit, 200, 'edição comum preserva atestado do servidor');
   assert.equal(result.forge, 403, 'cliente não substitui atestado');
   assert.equal(result.remove, 403, 'cliente não remove atestado');
+  assert.equal(result.crossScore,200,'placar genérico preserva semeadura por grupos');
+  assert.equal(result.crossDowngrade,403,'cliente antigo não muda semeadura por escrita direta');
   assert.equal(result.final, 'original', 'atestado original permanece');
   console.log('rules-phase-read-certificate: criação, preservação, substituição e remoção OK');
 } finally {

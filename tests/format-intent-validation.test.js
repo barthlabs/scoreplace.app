@@ -6,6 +6,19 @@ const { validateNewFormatIntent, validateHistoricalSinglesIdentity, validateComp
 const { makeCreateTournament } = require('../functions-autodraw/tournament-create');
 class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } }
 
+{
+  const {scenario}=require('./universal-phase-grid.test');
+  const cross=scenario(['Categoria B','Categoria C'],[16,32],[8,8],[7,7],[4,2]);cross.fmt2.eliminatoria.semeadura='grupos';
+  assert.doesNotThrow(()=>validateNewFormatIntent(cross.fmt2,HttpsError,null,2,cross.combinedCategories,c=>cross.maxParticipantsByCategory[c]));
+  const stale=structuredClone(cross.fmt2);stale.eliminatoria.semeadura='performance';
+  assert.throws(()=>validateNewFormatIntent(stale,HttpsError,cross,2),{code:'failed-precondition'});
+  stale.eliminatoria.groupCrossChangeConfirmed=true;
+  assert.doesNotThrow(()=>validateNewFormatIntent(stale,HttpsError,cross,2));
+  for(const quota of [1,3]) {const bad=structuredClone(cross.fmt2);bad.qualificationCategoryRules[0].perGroup=quota;
+    assert.throws(()=>validateNewFormatIntent(bad,HttpsError,null,2,cross.combinedCategories,c=>cross.maxParticipantsByCategory[c]),{code:'invalid-argument'});}
+  const bad=structuredClone(cross.fmt2);bad.eliminatoria.dupla=true;
+  assert.throws(()=>validateNewFormatIntent(bad,HttpsError),{code:'invalid-argument'});
+}
 const valid = {
   disputa: 'dupla', parceria: 'fixa', formacaoDupla: 'manual',
   groupFormation: { mode: 'count', value: 4 },

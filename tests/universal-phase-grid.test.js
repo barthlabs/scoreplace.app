@@ -149,5 +149,49 @@ if (require.main===module) {
   assert.throws(()=>G.assertPlan(full,invalid,tiny,w),/horário/);
   const swapped=structuredClone(plan);swapped.blocks[1].courts=swapped.blocks[0].courts;
   assert.throws(()=>G.assertPlan(t,swapped,D,w),/quadra/);
+  // The configured group cross uses the real phase engine, independently of inter-group scores.
+  const cross=scenario(['Categoria B','Categoria C'],[16,32],[8,8],[7,7],[4,2]);
+  cross.fmt2.eliminatoria.semeadura='grupos';
+  const crossPlan=G.suggestProjected(cross,D,w);assert(!crossPlan.error,crossPlan.error);
+  G.assertPlan(cross,crossPlan.plan,D,w);assert.equal(crossPlan.plan.totalGames,92);
+  assert.deepEqual(crossPlan.plan.groupAssignments.map(r=>[r.label,r.entry,r.courts]),[
+    ['B1',1,[1,2]],['B2',2,[1,2]],['C1',1,[3,4]],['C2',1,[5,6]],['C3',2,[3,4]],['C4',2,[5,6]]]);
+  for(const row of crossPlan.plan.groupAssignments) {
+    const group=crossPlan.tiles.filter(tile=>tile.assignment?.label===row.label);
+    assert.equal(group.length,14);assert.equal(new Set(group.map(t=>t.round)).size,7);
+    assert(group.every(t=>row.courts.includes(t.court)));
+  }
+  const earlyCross=crossPlan.tiles.filter(t=>t.assignment?.entry===1),lateCross=crossPlan.tiles.filter(t=>t.assignment?.entry===2);
+  assert(Math.max(...earlyCross.map(t=>G.minutes(t.startTime)+t.duration))<=Math.min(...lateCross.map(t=>G.minutes(t.startTime))));
+  const crossSemis=crossPlan.tiles.filter(t=>t.kind==='elimination' && t.round===1);
+  assert.deepEqual(crossSemis.map(t=>G.matchupLabel(t,crossPlan.tiles)),[
+    '1º+2º · B1 × 3º+4º · B2','3º+4º · B1 × 1º+2º · B2',
+    '1º+2º · C1 × 1º+2º · C4','1º+2º · C2 × 1º+2º · C3']);
+  assert.equal(new Set(crossSemis.map(t=>t.startTime)).size,1,'four semis use the first free courts');
+  assert.deepEqual(crossSemis.map(t=>t.court),[1,2,3,4]);
+  const decisions=crossPlan.tiles.filter(t=>t.kind==='elimination' && t.round===2);
+  assert(decisions.every(t=>G.matchupLabel(t,crossPlan.tiles).includes('da Semifinal')));
+  assert.equal(new Set(decisions.map(t=>t.startTime)).size,1);
+  const serialized=JSON.stringify(crossPlan.plan);
+  assert(!serialized.includes('display') && !serialized.includes('qualificationOrigin'));
+  const reopened=G.describeProjectedTiles(cross,G.expand(crossPlan.plan,cross),w);
+  assert.deepEqual(G.toPlan(crossPlan.plan,reopened),crossPlan.plan);
+  assert.equal(reopened.filter(t=>t.kind==='elimination' && t.round===1).map(t=>G.matchupLabel(t,reopened)).join('|'),crossSemis.map(t=>G.matchupLabel(t,crossPlan.tiles)).join('|'));
+  const unordered=G.suggestProjected({...cross,scheduleWindow:{interleavedPlan:{groupAssignments:[]}}},D,w);
+  assert(!unordered.error,unordered.error);assert.deepEqual(unordered.plan.groupAssignments,[]);
+  const compiledCross=F.compileToPhases(cross.fmt2,{sport:cross.sport,categories:cross.combinedCategories});
+  const sourceGroups=cross.combinedCategories.flatMap((category,ci)=>Array.from({length:ci?4:2},(_,gi)=>({category,groupIdx:gi,name:'Grupo '+(gi+1),rows:Array.from({length:8},(_,ri)=>({uid:category+gi+ri,name:category+' G'+(gi+1)+' #'+(ri+1),wins:100*(gi+1)-ri,points:100*(gi+1)-ri,played:7,gamesWon:200-ri,gamesLost:ri}))})));
+  const builtCross=w._phasesEngine.buildCategorizedPhaseBrackets(cross,sourceGroups,compiledCross.phases[1],g=>g.rows,'cross',{rnd:()=>.37});
+  const pairs=builtCross.matches.filter(m=>m.round===1).map(m=>[m.team1Obj.participants.map(p=>p.name).join('/'),m.team2Obj.participants.map(p=>p.name).join('/')]);
+  assert.deepEqual(pairs,[
+    ['Categoria B G1 #1/Categoria B G1 #2','Categoria B G2 #3/Categoria B G2 #4'],
+    ['Categoria B G1 #3/Categoria B G1 #4','Categoria B G2 #1/Categoria B G2 #2'],
+    ['Categoria C G1 #1/Categoria C G1 #2','Categoria C G4 #1/Categoria C G4 #2'],
+    ['Categoria C G2 #1/Categoria C G2 #2','Categoria C G3 #1/Categoria C G3 #2']]);
+  assert(!JSON.stringify(builtCross).includes('qualificationOrigin'));
+  for(const quota of [1,3,9]) {
+    const invalidCross=structuredClone(cross);invalidCross.fmt2.qualificationCategoryRules[0].perGroup=quota;
+    assert(F.groupCrossError(invalidCross.fmt2) || F.qualificationError(invalidCross.fmt2,invalidCross.combinedCategories,c=>invalidCross.maxParticipantsByCategory[c],invalidCross.sport));
+  }
   console.log('✓ Grade baseada nas partidas reais, ordem, duas quadras, cortes distintos, partidas consecutivas, grade obsoleta e 119 partidas.');
 }

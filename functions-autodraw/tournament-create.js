@@ -159,6 +159,7 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         const out = compile(config.fmt2, { sport: t.sport, categories: config.combinedCategories || [], resultEntry: t.resultEntry || ['organizer'], lateEnrollment: t.lateEnrollment, newMatchups: t.newMatchups });
         Object.assign(t, out.topLevel);
         t.phases = out.phases; t.fmt2 = out.cfg;
+        if(t.fmt2.eliminatoria) delete t.fmt2.eliminatoria.groupCrossChangeConfirmed;
         // Só torneios criados depois deste contrato recebem títulos derivados
         // no encerramento. Documentos históricos não são migrados nem regravados.
         t.rulesContractVersion = 2;
