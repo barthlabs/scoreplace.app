@@ -704,8 +704,8 @@
       "mode": "only"
     },
     "tournamentSummaryLegacyGroup": {
-      "backendCommit": "f533ac8f76730b4ac254defe81f1afd5f0cd5c1f",
-      "deployedAt": "2026-11-25T03:03:50.664Z",
+      "backendCommit": "c079a91c2ba72a379dd09ceb440d8192a7a79f79",
+      "deployedAt": "2026-11-25T04:40:27.491Z",
       "result": "success",
       "mode": "only"
     }
