@@ -1070,7 +1070,7 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
   assert.equal((groupHtml.match(/data-tv-court=/g)||[]).length,6,'sponsors still target six physical courts');
   assert.match(groupHtml,/Areia A e Areia B · Grupo B1/);
   assert.match(groupHtml,/7 rodadas · 14 jogos/);
-  assert.equal((groupHtml.match(/data-tv-autoscroll="super8:/g)||[]).length,6,'each physical court has an independent loop');
+  assert.equal((groupHtml.match(/data-tv-autoscroll="super8:/g)||[]).length,3,'each group has one shared scroll containing both courts');
   for(const card of groupSnapshot.courts.filter(c=>c.super8Group)) {
     const games=card.super8Group.games;
     assert.equal(games.filter(g=>g.lane===0).length,7);
@@ -1134,6 +1134,14 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
   assert(currentHeader.includes('data-tv-start="'+Date.parse('2026-10-22T21:03:00Z')+'"'),'new round updates its court header clock');
   const released=window._tvLiveBuildSnapshot({...namedOnly,matches:namedOnly.matches.map(game=>game.id==='B1-1-0'?{...game,court:'Areia A',courtCalledAt:'2026-10-22T21:00:00Z',courtReleasedAt:'2026-10-22T21:02:00Z'}:game)});
   assert.equal((window._tvLiveBodyHtml(released).match(/>Livre<\/p>/g)||[]).length,6);
+  assert.equal((calledHtml.match(/class="tv-super8-round tv-super8-round-called/g)||[]).length,3,'called pair is a native row in each group');
+  assert.doesNotMatch(oneCalledHtml,/class="tv-super8-round tv-super8-round-called/,'single called court never highlights a free neighbor');
+  assert.equal((window._tvLiveBodyHtml(groupSnapshot).match(/class="tv-super8-round tv-super8-round-called/g)||[]).length,2,'different active rounds do not get a joint border');
+  if(process.env.SP_TV_CAPTURE_SUPER8_IDLE)fs.writeFileSync(process.env.SP_TV_CAPTURE_SUPER8_IDLE,popupHtml.replace('<div id="tv-root"></div>','<div id="tv-root">'+window._tvLiveBodyHtml(namedOnlySnapshot)+'</div>'));
+  if(process.env.SP_TV_CAPTURE_SUPER8_SINGLE)fs.writeFileSync(process.env.SP_TV_CAPTURE_SUPER8_SINGLE,popupHtml.replace('<div id="tv-root"></div>','<div id="tv-root">'+oneCalledHtml+'</div>'));
+  const advanced=JSON.parse(JSON.stringify(calledNames));
+  advanced.courts.filter(c=>c.super8Group).forEach(c=>c.super8Group.games.forEach(g=>{g.status=g.round===3?'active':'waiting';}));
+  if(process.env.SP_TV_CAPTURE_SUPER8_ADVANCED)fs.writeFileSync(process.env.SP_TV_CAPTURE_SUPER8_ADVANCED,popupHtml.replace('<div id="tv-root"></div>','<div id="tv-root">'+window._tvLiveBodyHtml(advanced)+'</div>'));
   if(process.env.SP_TV_CAPTURE_SUPER8) fs.writeFileSync(process.env.SP_TV_CAPTURE_SUPER8,
     popupHtml.replace('<div id="tv-root"></div>','<div id="tv-root">'+calledHtml+'</div>'));
 }
