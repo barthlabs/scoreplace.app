@@ -2366,7 +2366,7 @@ window._applyResultToTournament = function (t, matchId, payload) {
   // ⛔ SAI ANTES de vencedor, avanço, standings, congelamento de grupo e auto check-in. A
   // partida ainda está sendo jogada: nada disso pode acontecer. O que entra é só o que o
   // placar ao vivo também escreve — os sets, o espelho de sets ganhos e o `startedAt`.
-  var customSc=typeof window._effectiveScoring==='function'?window._effectiveScoring(t,m):t.scoring;
+  var customSc=window._phaseScoringForMatch(t,m);
   if(customSc && customSc.customRulesVersion===1 && payload && !payload.wo) {
     var customSets=Array.isArray(payload.sets)?payload.sets:payload.s1!=null?[{gamesP1:payload.s1,gamesP2:payload.s2,
       tiebreak:payload.isTiebreakEntry?window._tbPoints(payload.tbP1,payload.tbP2):null}]:[];

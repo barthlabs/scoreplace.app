@@ -8811,13 +8811,7 @@ window._effectiveResultEntry = function(t, match) {
 };
 // placar (GSM) EFETIVO de um match: lê o scoring da FASE do match (phases[i].scoring).
 window._effectiveScoring = function(t, match) {
-    if (!t || !Array.isArray(t.phases) || !t.phases.length) return (t && t.scoring) || null;
-    var ph = t.phases[(match && match.phaseIndex) || 0] || t.phases[0] || {};
-    // Fase com scoring PRÓPRIO (type) vence; senão cai pro scoring do TORNEIO. Antes retornava null
-    // → a fase virava "simples" e o card NÃO renderizava sets/tie-break mesmo o torneio sendo GSM
-    // (bug: 6-5 não abria o tie-break em torneio multi-fase). Ver [[project_live_scoring_canonical]].
-    if (ph.scoring && ph.scoring.type) return ph.scoring;
-    return (t && t.scoring) || null;
+    return window._phaseScoringForMatch(t, match);
 };
 // Pontos Avançados EFETIVO por fase: lê phases[i].advancedScoring ({enabled,categories,
 // applyLiveScoring}). A fase manda — inclusive quando desliga (enabled:false).

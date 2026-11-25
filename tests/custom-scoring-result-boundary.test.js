@@ -24,4 +24,18 @@ for(const setsToWin of [2,3]) {
  assert.equal(progress.matches[0].sets.length,1,'set parcial rejeitado não altera o confirmado');
 }
 assert.equal(W._validateNormalSetScore({...base,tieRule:'extend',tiebreakEnabled:true},'',5,4).ok,false,'UI respeita tieRule mesmo se espelho TB estiver inconsistente');
+// The real vendor must load every helper and honor the phase override, not the tournament default.
+for(const name of ['_phaseScoringForMatch','_tbLoserGames','_setTiebreak','_customSetOutcome'])assert.equal(typeof W[name],'function',name+' carregado no servidor');
+const phased=tour({...base,setTwoPointAdvantage:false});phased.phases=[{scoring:{...base,setTwoPointAdvantage:false}},{scoring:{...base,setTwoPointAdvantage:true}}];phased.matches[0].phaseIndex=1;
+assert.equal(W._phaseScoringForMatch(phased,phased.matches[0]).setTwoPointAdvantage,true);
+assert.throws(()=>W._applyResultToTournament(phased,'m',{s1:4,s2:3,useSets:true,isFixedSet:true}),/encerra/,'override da eliminatória é obrigatório no servidor');
+W._applyResultToTournament(phased,'m',{s1:5,s2:3,useSets:true,isFixedSet:true});assert.equal(phased.matches[0].winner,'A');
+// A valid set tie-break returns before the previous-game check; one-point TB margins are explicit.
+const tbSix={...base,fixedSet:false,gamesPerSet:6,tieRule:'tiebreak',tiebreakEnabled:true,tiebreakAt:'6'};
+assert.equal(W._validateCustomSetScore(tbSix,'',7,6,W._tbPoints(8,6)).ok,true);
+assert.equal(W._validateCustomSetScore({...tbSix,tiebreakTwoPointAdvantage:false},'',7,6,W._tbPoints(7,6)).ok,true);
+assert.equal(W._validateCustomSetScore({...base,fixedSet:false,gamesPerSet:7,tieRule:undefined,tiebreakEnabled:false,setTwoPointAdvantage:false},'',7,6).ok,true,'sem tieRule e TB false não inventa tie-break');
+const best3=tour({...base,setsToWin:2,superTiebreak:true});
+W._applyResultToTournament(best3,'m',{gsmFinal:true,isFixedSet:true,sets:[{gamesP1:5,gamesP2:3},{gamesP1:3,gamesP2:5},{gamesP1:11,gamesP2:9,superTiebreak:true}],setsWonP1:2,setsWonP2:1});
+assert.equal(best3.matches[0].sets[2].superTiebreak,true,'STB do payload multi-set é preservado');assert.equal(W._matchSetPlan(best3.scoring,best3.matches[0]).columns[2].kind,'stb','releitura continua STB');
 console.log('PASS: fronteira canônica do servidor valida resultado manual/live/súmula, TB/STB e legado sem mutar resultado inválido.');
