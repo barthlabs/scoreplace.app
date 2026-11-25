@@ -62,6 +62,7 @@ function render(tournaments, notifs) {
   };
   ctx.setTimeout = setTimeout; ctx.clearTimeout = clearTimeout;
   ctx.console = { log() {}, warn() {}, error() {} };
+  vm.runInContext(fs.readFileSync(path.join(ROOT,'js/ui.js'),'utf8').split('function setupUI()')[0],ctx);
   vm.runInContext(SRC, ctx);
   ctx.renderNotifications(container);
   return new Promise(r => setTimeout(() => r(listDiv.innerHTML), 20));
@@ -99,7 +100,7 @@ const TOUR = (matches) => [{ id: 't1', name: 'Confra', matches: matches }];
      '🔒 placar JÁ APROVADO não oferece mais Confirmar (era o print do dono)');
   ok(!/Contestar/.test(apr),
      '🔒 …nem Contestar — não há mais o que contestar depois de aprovado');
-  ok(/✏️ Editar/.test(apr),
+  ok(/>Editar\s+<svg class="sp-edit-pencil"/.test(apr),
      '🔒 …e o Editar FICA: corrigir resultado continua sendo possível');
   ok(/Resultado já confirmado/.test(apr),
      'o card diz por que os botões sumiram (senão vira um botão solto sem explicação)');
@@ -140,7 +141,7 @@ const TOUR = (matches) => [{ id: 't1', name: 'Confra', matches: matches }];
   ok((mista.match(/Confirmar/g) || []).length === 1,
      '🔒 numa lista com um resolvido e um pendente, só o PENDENTE mostra Confirmar · achado: ' +
      (mista.match(/Confirmar/g) || []).length);
-  ok((mista.match(/✏️ Editar/g) || []).length === 2, 'os dois cards mantêm o Editar');
+  ok((mista.match(/>Editar(?: \/ Contestar)?\s+<svg class="sp-edit-pencil"/g) || []).length === 2, 'os dois cards mantêm o Editar');
 
   // ── 6. varredura: a régua não foi reimplementada aqui ────────────────────
   const trecho = SRC.slice(SRC.indexOf('function _resultStillPending'),
