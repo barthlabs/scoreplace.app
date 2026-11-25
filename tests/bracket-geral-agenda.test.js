@@ -753,7 +753,7 @@ function trecho(inicio, fim) {
       sourceHidden:root._bracketTabsScope.querySelector('.bracket-scroll-container').hidden};
   },eight);
   ok(eightView.shown&&eightView.bundles===6&&eightView.sourceHidden&&eightView.tables.every(n=>n===8)&&eightView.games.every(n=>n===14),
-    'Geral Super8 usa renderer real: seis tabelas únicas de oito atletas e todos os14jogos de cada grupo: '+JSON.stringify(eightView));
+    'Geral Super8 usa renderer real: seis tabelas únicas de oito atletas e todos os 14 jogos de cada grupo: '+JSON.stringify(eightView));
 
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' bracket-geral-agenda: ' + pass + ' ok, ' + fail + ' falharam');

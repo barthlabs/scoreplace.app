@@ -174,7 +174,7 @@ const { chromium } = require('@playwright/test');
         });
         const geometry=await page.evaluate(()=>{
           const rect=n=>n.getBoundingClientRect().toJSON();
-          return {groups:[...document.querySelectorAll('.tv-super8-group')].map(rect),anchors:document.querySelectorAll('[data-tv-court]').length,
+          return {groups:[...document.querySelectorAll('.tv-super8-group')].map(rect),sponsorAreas:[...document.querySelectorAll('.tv-super8-group')].map(n=>({play:rect(n.querySelector('.tv-super8-play')),table:rect(n.querySelector('.tv-super8-standing')),areas:[...n.querySelectorAll('[data-tv-court]')].map(rect)})),anchors:document.querySelectorAll('[data-tv-court]').length,
             clocks:document.querySelectorAll('.tv-super8-lane-header strong').length,innerClocks:document.querySelectorAll('.tv-super8-games [data-tv-start]').length,
             cards:[...document.querySelectorAll('.tv-super8-games')].map(n=>n.querySelectorAll('.tv-series-game').length),
             rows:[...document.querySelectorAll('.tv-super8-standing tbody')].map(n=>n.children.length),
@@ -185,6 +185,7 @@ const { chromium } = require('@playwright/test');
             scrolls:[...document.querySelectorAll('.tv-super8-games')].map(n=>({height:n.clientHeight,scroll:n.scrollHeight,top:n.scrollTop}))};
         });
         assert.equal(geometry.groups.length,3);assert.equal(geometry.anchors,6);assert.equal(geometry.clocks,6);assert.equal(geometry.innerClocks,0);
+        assert(geometry.sponsorAreas.every(g=>g.areas.length===2&&g.areas.every(a=>a.left>=g.play.left-1&&a.right<=g.play.right+1&&a.right<g.table.left&&Math.abs(a.width-g.play.width/2)<1)),'court sponsor areas cover their games and never the standings');
         assert.deepEqual(geometry.cards,[4,4,4]);assert.deepEqual(geometry.rows,[8,8,8]);assert.equal(geometry.loops,0);
         assert(geometry.tables.every(t=>t.table.right<=t.box.right+1&&t.foot.bottom<=t.box.bottom+1&&t.play.right<t.box.left),'eight rows and footer fit beside their own group games');
         assert(geometry.scrolls.every(n=>n.scroll<=n.height+1&&n.top===0),'two slots fit without a scroll');
