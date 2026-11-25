@@ -76,7 +76,8 @@
     return {
       slots: Math.min(5, 2 * setsToWin - 1),
       gamesPerSet: Math.max(1, parseInt(scoring.gamesPerSet, 10) || 6),
-      type: text(scoring.type)
+      type: text(scoring.type),
+      ...(scoring.customRulesVersion===1?{customRulesVersion:1,fixedSet:!!scoring.fixedSet,fixedSetGames:Number(scoring.fixedSetGames||scoring.gamesPerSet)||6,setTwoPointAdvantage:scoring.setTwoPointAdvantage!==false,tiebreakEnabled:scoring.tiebreakEnabled!==false,tiebreakAt:text(scoring.tiebreakAt),superTiebreak:!!scoring.superTiebreak,superTiebreakPoints:Number(scoring.superTiebreakPoints)||10}: {})
     };
   }
   function collect(t, allMatches) {
@@ -361,6 +362,11 @@
     var slots = model.scoring && model.scoring.slots || 1;
     var gamesPerSet = model.scoring && model.scoring.gamesPerSet || 6;
     var gameLabel = slots === 1 ? '1 set de ' + gamesPerSet + ' games' : 'melhor de ' + slots + ' sets';
+    if(model.scoring && model.scoring.customRulesVersion===1){
+      var sc=model.scoring;
+      gameLabel=(sc.fixedSet?(sc.setTwoPointAdvantage?'Mín. ':'Total ')+sc.fixedSetGames+' games':gameLabel)+(sc.setTwoPointAdvantage?' · dif. 2 games':' · sem dif. 2 games');
+      if(sc.superTiebreak && slots===1)gameLabel='Super tie-break · '+sc.superTiebreakPoints+' pontos';
+    }
     var headerWidth = right - 68 - left;
     var categories = Array.from(new Set(matches.map(function (m) {
       return model.showCategories ? (m.category || 'Sem categoria') : '';

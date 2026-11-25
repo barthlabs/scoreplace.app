@@ -153,6 +153,7 @@ final class WatchMatchSession {
         cfg.setTwoPointAdvantage = sc.setTwoPointAdvantage
         cfg.tiebreakTwoPointAdvantage = sc.tiebreakTwoPointAdvantage
         cfg.tieRule = sc.tieRule
+        cfg.customRulesVersion = sc.customRulesVersion
         cfg.fixedSet = sc.fixedSet
         cfg.fixedSetGames = sc.fixedSetGames
         let p1 = (s.teams["1"]?.players ?? []).joined(separator: "/")

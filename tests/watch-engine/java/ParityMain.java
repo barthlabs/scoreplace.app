@@ -68,6 +68,7 @@ public final class ParityMain {
                         case "tiebreakTwoPointAdvantage": cfg.tiebreakTwoPointAdvantage = Boolean.parseBoolean(v); break;
                         case "tieRule": cfg.tieRule = v; break;
                         case "fixedSet": cfg.fixedSet = Boolean.parseBoolean(v); break;
+                        case "customRulesVersion": cfg.customRulesVersion = Integer.parseInt(v); break;
                         case "fixedSetGames": cfg.fixedSetGames = Integer.parseInt(v); break;
                         default: throw new IllegalArgumentException("CFG desconhecida: " + k);
                     }

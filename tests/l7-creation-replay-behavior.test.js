@@ -151,6 +151,23 @@ function creator(db,time=clock,helpers=()=>summaryCore.helpersDe(win)){return ma
   await assert.rejects(creator(db,clock+WINDOW_MS+60001)({auth,data:payload}),{code:'invalid-argument'});
   assert(!db.docs.has('tournaments/'+id));
  });
+ await test('Personalizado opt-in mantém controles na criação real e compilador vendorizado',async()=>{
+  const db=fakeDB(),cfg=win.FORMAT2.defaultConfig();
+  const scoring={type:'sets',customRulesVersion:1,setsToWin:1,gamesPerSet:7,fixedSet:true,fixedSetGames:7,
+   tieRule:'extend',tiebreakEnabled:false,tiebreakAt:'4',tiebreakPoints:7,tiebreakMargin:1,
+   setTwoPointAdvantage:false,tiebreakTwoPointAdvantage:false,superTiebreak:false,superTiebreakPoints:10};
+  cfg.eliminatoria.scoring={...scoring};
+  const out=await creator(db)({auth,data:{...payload,config:{name:'Synthetic custom',sport:'Tênis',fmt2:cfg,scoring}}});
+  assert.equal(out.tournament.scoring.customRulesVersion,1);
+  assert.equal(out.tournament.fmt2.eliminatoria.scoring.customRulesVersion,1);
+  assert.equal(out.tournament.fmt2.eliminatoria.scoring.tiebreakAt,'4');
+  assert.equal(out.tournament.fmt2.eliminatoria.scoring.setTwoPointAdvantage,false);
+  assert(out.tournament.phases.some(p=>p.scoring && p.scoring.customRulesVersion===1));
+  const sc=out.tournament.scoring;
+  assert.equal(win._validateCustomSetScore(sc,'Tênis',4,3).ok,true);
+  assert.equal(win._validateCustomSetScore({...sc,setTwoPointAdvantage:true},'Tênis',4,3).ok,false);
+  assert.equal(win._validateCustomSetScore({...sc,setTwoPointAdvantage:true},'Tênis',5,3).ok,true);
+ });
  await test('compilador real cria fases vazias a partir de Format2 declarativo',async()=>{
   const db=fakeDB();const cfg=win.FORMAT2.defaultConfig();
   const declarative={...payload.config,fmt2:cfg};delete declarative.format;

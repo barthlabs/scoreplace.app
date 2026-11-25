@@ -45,6 +45,7 @@ public final class ScoreEngine {
         public Boolean setTwoPointAdvantage = null;
         public Boolean tiebreakTwoPointAdvantage = null;
         public String tieRule = null;             // casual sem regra → 'ask'
+        public Integer customRulesVersion = null;
         public boolean fixedSet = false;
         public Integer fixedSetGames = null;
     }
@@ -94,7 +95,7 @@ public final class ScoreEngine {
     // config imutável
     final boolean useSets;
     final int setsToWin, gamesPerSet, tieAtGames, tiebreakMargin, superTiebreakPoints, fixedSetGames;
-    final boolean tiebreakEnabled, superTiebreak, deuceRule, twoPointAdvantage, isFixedSet;
+    final boolean tiebreakEnabled, superTiebreak, deuceRule, twoPointAdvantage, isFixedSet, customRules;
     final String countingType;
 
     final List<String> p1Players, p2Players;
@@ -134,6 +135,7 @@ public final class ScoreEngine {
         countingType = useSets ? cfg.countingType : "numeric";
         deuceRule = useSets && (cfg.deuceRule != null ? cfg.deuceRule : cfg.advantageRule);
         twoPointAdvantage = useSets && (cfg.setTwoPointAdvantage != null ? cfg.setTwoPointAdvantage : legacyTwoPoint);
+        customRules = cfg.customRulesVersion != null && cfg.customRulesVersion == 1;
         isFixedSet = useSets && cfg.fixedSet;
         fixedSetGames = isFixedSet ? (cfg.fixedSetGames != null ? cfg.fixedSetGames : cfg.gamesPerSet) : 0;
 
@@ -320,9 +322,19 @@ public final class ScoreEngine {
     }
 
     // 1/2 vencedor · 0 nada · -1 entrou em tiebreak · -2 pausado esperando decisão
+    private int customSetOutcome(int a, int b) {
+        if (a == b) return "tiebreak".equals(state.tieRule) && a >= tieAtGames ? -1 : 0;
+        boolean enough = isFixedSet ? a + b >= fixedSetGames : Math.max(a, b) >= gamesPerSet;
+        return enough && Math.abs(a - b) >= (twoPointAdvantage ? 2 : 1) ? (a > b ? 1 : 2) : 0;
+    }
     private int checkSetWon() {
         SetScore cs = state.sets.get(state.sets.size() - 1);
         int g = gamesPerSet;
+        if (customRules && !isFixedSet && !isDecidingSet()) {
+            int outcome = customSetOutcome(cs.gamesP1, cs.gamesP2);
+            if (outcome == -1) { state.isTiebreak = true; state.currentGameP1 = 0; state.currentGameP2 = 0; }
+            return outcome;
+        }
         if (isFixedSet) return 0;
         if (isDecidingSet()) return 0;
         if (g <= 1) {
@@ -403,7 +415,15 @@ public final class ScoreEngine {
 
         if (player == 1) state.currentGameP1++; else state.currentGameP2++;
 
-        if (!useSets || isFixedSet) {
+        if (customRules && isFixedSet && !state.isTiebreak && !isDecidingSet()) {
+            SetScore cs = state.sets.get(state.sets.size() - 1);
+            cs.gamesP1 = state.currentGameP1; cs.gamesP2 = state.currentGameP2;
+            int outcome = customSetOutcome(cs.gamesP1, cs.gamesP2);
+            if (outcome == -1) { state.isTiebreak = true; state.currentGameP1 = 0; state.currentGameP2 = 0; }
+            else if (outcome > 0) finishSet(outcome);
+            return;
+        }
+        if (!useSets || (isFixedSet && !customRules)) {
             if (isFixedSet) {
                 SetScore cs = state.sets.get(state.sets.size() - 1);
                 if (player == 1) cs.gamesP1 = state.currentGameP1;

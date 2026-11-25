@@ -1503,9 +1503,9 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     var setsToWin = parseInt(sc && sc.setsToWin, 10); if (!(setsToWin >= 1)) setsToWin = 1;
     var usesSets = (typeof window._scoringUsesSets === 'function')
       ? !!window._scoringUsesSets(sc) : !!(sc && (sc.type === 'sets' || sc.type === 'gsm'));
-    var multi = !!(usesSets && setsToWin > 1 && !(sc && sc.fixedSet));
+    var multi = !!(usesSets && setsToWin > 1 && (!(sc && sc.fixedSet) || sc.customRulesVersion===1));
     var bestOf = setsToWin * 2 - 1;
-    var stbOn = multi && !!(sc && sc.superTiebreak);
+    var stbOn = (multi || sc && sc.customRulesVersion===1) && !!(sc && sc.superTiebreak);
     var stbPts = parseInt(sc && sc.superTiebreakPoints, 10); if (!(stbPts >= 1)) stbPts = 10;
     // ⭐ A MARGEM DE 2 PONTOS SE ANUNCIA ANTES. Ordem do dono (23/ago/2026): _"quando for
     // tie-break ou STB que tenha diferença de 2 pontos para vencer, vamos indicar isso antes

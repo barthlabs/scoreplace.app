@@ -165,5 +165,20 @@ ok(ds9.canReplay == false,
    "canReplay vem do celular (lá é isCasual && !reiRainhaMode) — o motor sozinho diria true")
 ok(ds9.points == ["15", "0"], "…sem perder o placar LOCAL, que é o que o motor sabe melhor")
 
+// The transport fallback must also disarm an engine cached before the rule edit.
+for advanced in [false,true] {
+    let custom = WatchMatchSession()
+    custom.ingest(snap(epoch:"old-custom",seq:1))
+    ok(custom.engine != nil, "fixture armou motor legado antes da reconexão")
+    let fallback = snap(epoch:"",seq:2,games:advanced ? [4,3] : [0,0],points:advanced ? ["4","3"] : ["0","0"],withScoring:false,doubles:false,servePickOpen:false)
+    custom.ingest(fallback)
+    ok(custom.engine == nil,"snapshot sem scoring/época desarma motor em cache")
+    ok(!custom.localEvent(.point(team:1)),"sem motor: toque retorna ao intent unitário")
+    ok(custom.pendingEvlog(deviceId:"watch") == nil,"fallback não produz diário autônomo")
+    ok(custom.displayState.points == fallback.points,"tela preserva placar espelhado")
+    custom.ingest(fallback)
+    ok(custom.engine == nil,"reconectar novamente não rearma legado")
+}
+
 print("watch-session: \(pass) ok, \(fail) falhas")
 if fail > 0 { exit(1) }

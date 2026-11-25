@@ -39,6 +39,7 @@ public struct EngineConfig {
     public var setTwoPointAdvantage: Bool? = nil
     public var tiebreakTwoPointAdvantage: Bool? = nil
     public var tieRule: String? = nil          // casual sem regra → 'ask'
+    public var customRulesVersion: Int? = nil
     public var fixedSet = false
     public var fixedSetGames: Int? = nil
 
@@ -61,6 +62,7 @@ public struct EngineConfig {
         setTwoPointAdvantage = json["setTwoPointAdvantage"] as? Bool
         tiebreakTwoPointAdvantage = json["tiebreakTwoPointAdvantage"] as? Bool
         tieRule = json["tieRule"] as? String
+        customRulesVersion = json["customRulesVersion"] as? Int
         fixedSet = (json["fixedSet"] as? Bool) ?? false
         fixedSetGames = json["fixedSetGames"] as? Int
     }
@@ -108,6 +110,7 @@ public final class ScoreEngine {
     let countingType: String
     let deuceRule: Bool
     let twoPointAdvantage: Bool
+    let customRules: Bool
     let isFixedSet: Bool
     let fixedSetGames: Int
 
@@ -167,6 +170,7 @@ public final class ScoreEngine {
         self.countingType = useSets ? config.countingType : "numeric"
         self.deuceRule = useSets ? (config.deuceRule ?? config.advantageRule) : false
         self.twoPointAdvantage = useSets ? (config.setTwoPointAdvantage ?? legacyTwoPoint) : false
+        self.customRules = config.customRulesVersion == 1
         self.isFixedSet = useSets && config.fixedSet
         self.fixedSetGames = isFixedSet ? (config.fixedSetGames ?? config.gamesPerSet) : 0
 
@@ -355,9 +359,19 @@ public final class ScoreEngine {
 
     // ── _checkSetWon (bracket-ui.js:4384) ── retorna 1/2 vencedor · 0 nada ·
     // -1 entrou em tiebreak · -2 pausado esperando a decisão do empate
+    func customSetOutcome(_ a: Int, _ b: Int) -> Int {
+        if a == b { return state.tieRule == "tiebreak" && a >= tieAtGames ? -1 : 0 }
+        let enough = isFixedSet ? a + b >= fixedSetGames : max(a, b) >= gamesPerSet
+        return enough && abs(a - b) >= (twoPointAdvantage ? 2 : 1) ? (a > b ? 1 : 2) : 0
+    }
     func checkSetWon() -> Int {
         let cs = state.sets[state.sets.count - 1]
         let g = gamesPerSet
+        if customRules && !isFixedSet && !isDecidingSet() {
+            let outcome = customSetOutcome(cs.gamesP1, cs.gamesP2)
+            if outcome == -1 { state.isTiebreak = true; state.currentGameP1 = 0; state.currentGameP2 = 0 }
+            return outcome
+        }
         if isFixedSet { return 0 }
         if isDecidingSet() { return 0 }
         if g <= 1 {
@@ -439,7 +453,16 @@ public final class ScoreEngine {
 
         if player == 1 { state.currentGameP1 += 1 } else { state.currentGameP2 += 1 }
 
-        if !useSets || isFixedSet {
+        if customRules && isFixedSet && !state.isTiebreak && !isDecidingSet() {
+            let i = state.sets.count - 1
+            state.sets[i].gamesP1 = state.currentGameP1
+            state.sets[i].gamesP2 = state.currentGameP2
+            let outcome = customSetOutcome(state.currentGameP1, state.currentGameP2)
+            if outcome == -1 { state.isTiebreak = true; state.currentGameP1 = 0; state.currentGameP2 = 0 }
+            else if outcome > 0 { finishSet(outcome) }
+            return
+        }
+        if !useSets || (isFixedSet && !customRules) {
             if isFixedSet {
                 let i = state.sets.count - 1
                 if player == 1 { state.sets[i].gamesP1 = state.currentGameP1 }

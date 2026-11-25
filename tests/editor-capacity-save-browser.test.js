@@ -83,6 +83,7 @@ const root=path.resolve(__dirname,'..');
   assert.equal(result.saves[0].maxParticipants,48);
   assert.equal(result.saves[0].scoring.fixedSet,true);
   assert.equal(result.saves[0].scoring.fixedSetGames,7);
+  assert.equal(result.saves[0].scoring.customRulesVersion,1,'configuração explícita sobrevive ao salvamento real');
   await page.evaluate(()=>{
    const input=document.querySelector('#view-container input[data-category^="Alpha"]');
    window.capacitySlot=input.parentNode.parentNode;

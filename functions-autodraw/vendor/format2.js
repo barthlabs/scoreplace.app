@@ -633,7 +633,8 @@
       superTiebreak: s.superTiebreak === true, superTiebreakPoints: stbP,
       countingType: (s.countingType === 'numeric') ? 'numeric' : 'tennis',
       advantageRule: s.advantageRule === true,
-      fixedSet: s.fixedSet === true, fixedSetGames: fsg
+      fixedSet: s.fixedSet === true, fixedSetGames: fsg,
+      ...(s.customRulesVersion === 1 ? { customRulesVersion: 1 } : {})
     };
     if (s.tiebreakAt) out.tiebreakAt = String(s.tiebreakAt);
     // ⭐ 2.0.2: `tieRule` ('extend' = prorrogar · 'tiebreak') TEM que atravessar a normalização.

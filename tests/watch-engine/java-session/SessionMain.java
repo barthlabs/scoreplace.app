@@ -180,6 +180,20 @@ public final class SessionMain {
         ok(!d9.optBoolean("canReplay"), "canReplay vem do celular");
         ok("[\"15\",\"0\"]".equals(pts(d9)), "…sem perder o placar LOCAL · achado: " + pts(d9));
 
+        // New custom rules travel in mirror mode; an empty epoch must disarm even a cached engine.
+        for (boolean advanced : new boolean[]{false,true}) {
+            WearMatchSession custom = newSession(); custom.ingest(start("old-custom",1));
+            ok(custom.hasEngine(), "fixture armou motor legado antes da reconexão");
+            JSONObject fallback = snap("",2,new int[]{advanced?4:0,advanced?3:0},new int[]{0,0},
+                new String[]{advanced?"4":"0",advanced?"3":"0"},true,false,false,false,false,null);
+            custom.ingest(fallback);
+            ok(!custom.hasEngine(), "snapshot sem scoring/época desarma motor em cache");
+            ok(!custom.localEvent("point",1,-1,null), "sem motor: toque retorna ao intent unitário");
+            ok(custom.pendingEvlog("wear")==null, "fallback não produz diário autônomo");
+            ok(pts(custom.displayState()).equals(pts(fallback)), "tela preserva placar espelhado");
+            custom.ingest(fallback);ok(!custom.hasEngine(), "reconectar novamente não rearma legado");
+        }
+
         System.out.println("wear-session: " + pass + " ok, " + fail + " falhas");
         if (fail > 0) System.exit(1);
     }

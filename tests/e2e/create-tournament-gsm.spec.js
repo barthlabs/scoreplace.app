@@ -9,7 +9,7 @@
 // Cobertos: setsToWin, gamesPerSet, tiebreakEnabled, type. NÃO cobertos de propósito:
 //  • advantage → no Aplicar, `_gsmUpdateAdvantageUI` reseta `#gsm-advantageRule` pro default do
 //    esporte (controle vive no form principal `#gsm-advantage-toggle`, não no modal) → flaky por design.
-//  • super-tiebreak → a linha do modal fica oculta (condicional, ex.: setsToWin≥2) → não clicável aqui.
+//  • o teste dedicado custom-scoring-options-browser cobre todos os toggles, inclusive STB.
 // Toggle-switch esconde o <input> → clica no `.toggle-slider` irmão (dispara o onchange real).
 
 const { test, expect } = require('@playwright/test');
@@ -36,7 +36,8 @@ const aplicar = (page) => page.locator('#gsm-config-overlay button:has-text("Apl
 test.describe('Camada 2 — GSM config (clique→valor)', () => {
   test('sets + games + Aplicar → campos ocultos #gsm-* que o save lê', async ({ page }) => {
     await openGsm(page);
-    await page.locator('#gsm-cfg-setsToWin').selectOption('3');
+    await page.locator('#gsm-cfg-setsToWin').fill('3');
+    await page.locator('#gsm-cfg-setsToWin').dispatchEvent('change');
     await page.locator('#gsm-cfg-gamesPerSet').fill('4');
     await aplicar(page);
 

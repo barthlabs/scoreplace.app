@@ -96,12 +96,17 @@ function renderRules(container, tournamentId) {
     const rows = [
       [_t('rules.scoringType'), _t('rules.scoringTypeGsm')],
       [_t('rules.scoringSetsToWin'), String(setsToWin)],
-      [_t('rules.scoringGamesPerSet'), String(gamesPerSet)],
+      [sc.customRulesVersion===1 && sc.fixedSet ? (sc.setTwoPointAdvantage!==false?'Mínimo de games disputados':'Total de games disputados') : _t('rules.scoringGamesPerSet'), String(sc.fixedSet && sc.customRulesVersion===1?sc.fixedSetGames||gamesPerSet:gamesPerSet)],
       [_t('rules.scoringCounting'), counting],
       [_t('rules.scoringAdvantage'), adv],
       [_t('rules.scoringTiebreak'), tbEnabled ? _t('rules.scoringTbEnabled', { trigger: tbStart, points: tbPoints, margin: tbMargin })
         : tieRule === 'decider' ? _t('rules.scoringDecider', { trigger: tbStart }) : _t('rules.scoringExtend')],
     ];
+    if(sc.customRulesVersion===1){
+      rows.push(['Exigir dois games de diferença',sc.setTwoPointAdvantage!==false?'Sim':'Não']);
+      rows.push(['Exigir dois pontos no TB/STB',sc.tiebreakTwoPointAdvantage!==false?'Sim':'Não']);
+      if(superTb && Number(setsToWin)===1)rows.push(['Super tie-break','Substitui o único set por '+superTbPts+' pontos']);
+    }
     if (superTb) rows.push([_t('rules.scoringSuperTb'), _t('rules.scoringSuperTbEnabled', { points: superTbPts })]);
     const listHtml = rows.map(([label, value]) => `
       <li style="padding:0.6rem 0;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
@@ -131,6 +136,7 @@ function renderRules(container, tournamentId) {
       .filter(x => x.p.scoring && x.p.scoring.type && x.p.scoring.type !== 'simple');
     if (!proprias.length) return '';
     const desc = (sc) => {
+      if(sc.customRulesVersion===1 && window._gsmDescribeCustomRules)return window._gsmDescribeCustomRules(sc);
       if (typeof window._gsmBuildDescFromValues === 'function') {
         return window._gsmBuildDescFromValues(sc.setsToWin || 1, sc.gamesPerSet || 6, sc.tiebreakEnabled,
           sc.tiebreakPoints || 7, sc.superTiebreak, sc.superTiebreakPoints || 10, sc.tiebreakAt, sc.tieRule);

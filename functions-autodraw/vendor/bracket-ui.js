@@ -1543,12 +1543,45 @@ window._limitNormalSetGameInput = function (input, cap) {
     ? previous : '';
 };
 
+// Opt-in only: old fixed totals keep their historical interpretation.
+window._customSetOutcome=function(sc,a,b,sport){
+  if(!sc||sc.customRulesVersion!==1)return null;
+  var at=window._tbLoserGames(sc,sport),tb=sc.tieRule==='tiebreak'||(!sc.tieRule&&sc.tiebreakEnabled!==false);
+  if(a===b)return tb && a>=at ? -1 : 0;
+  var margin=sc.setTwoPointAdvantage!==false?2:1;
+  var enough=sc.fixedSet ? a+b>=Number(sc.fixedSetGames||sc.gamesPerSet||6) : Math.max(a,b)>=Number(sc.gamesPerSet||6);
+  return enough && Math.abs(a-b)>=margin ? (a>b?1:2) : 0;
+};
+window._validateCustomSetScore=function(sc,sport,a,b,tb,stb,allowPendingTb){
+  a=Number(a);b=Number(b);
+  function invalid(detail){return {ok:false,detail:detail||'O placar ainda não encerra o set com as regras configuradas.'};}
+  if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0||a===b)return invalid();
+  var high=Math.max(a,b),low=Math.min(a,b),margin=sc.tiebreakTwoPointAdvantage===false?1:2;
+  function pointsValid(x,y,target){var h=Math.max(x,y),l=Math.min(x,y);return Number.isInteger(x)&&Number.isInteger(y)&&l>=0&&h>=target&&h-l>=margin&&(h===target||h-l===margin);}
+  if(stb)return pointsValid(a,b,Number(sc.superTiebreakPoints)||10)?{ok:true}:invalid('Confira os pontos e a diferença exigida no super tie-break.');
+  var at=window._tbLoserGames(sc,sport),tbOn=sc.tieRule==='tiebreak'||(!sc.tieRule&&sc.tiebreakEnabled!==false);
+  if(tbOn && high===low+1 && low>=at){
+    if(!tb && allowPendingTb)return {ok:true,requiresTiebreak:true};
+    var t=window._setTiebreak?window._setTiebreak({tiebreak:tb}):null;
+    var x=t&&Number(t.p1),y=t&&Number(t.p2);
+    return t&&pointsValid(x,y,Number(sc.tiebreakPoints)||7)&&((a>b)===(x>y))?{ok:true}:invalid('Confira os pontos e a diferença exigida no tie-break.');
+  }
+  if(window._customSetOutcome(sc,a,b,sport)<=0)return invalid();
+  if(tbOn && low>=at && (!sc.fixedSet ? high>Number(sc.gamesPerSet||6) : a+b>Number(sc.fixedSetGames||sc.gamesPerSet||6)+(Number(sc.fixedSetGames||sc.gamesPerSet||6)%2)))return invalid();
+  // The last game must have been needed: reject scores beyond an already completed set.
+  var previous=window._customSetOutcome(sc,high-1,low,sport);
+  if(previous!==0)return invalid('O set deveria ter terminado antes desse placar, conforme as regras escolhidas.');
+  return {ok:true};
+};
 // Validação única de um set normal. Impede que valores impossíveis sejam gravados
 // e informa exatamente os números lidos, sem adivinhar como foram digitados.
 window._validateNormalSetScore = function (scoring, sport, a, b) {
   a = Number(a); b = Number(b);
   if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return { ok: false, detail: 'Preencha os dois placares do set com números válidos.' };
   if (a === b) return { ok: false, detail: 'Um set não pode terminar empatado.' };
+  if(scoring && scoring.customRulesVersion===1) {
+    return window._validateCustomSetScore(scoring,sport,a,b,null,false,true);
+  }
   var gp = parseInt(scoring && scoring.gamesPerSet, 10) || 6;
   var high = Math.max(a, b), low = Math.min(a, b);
   var rule = scoring && scoring.tieRule || ((!scoring || scoring.tiebreakEnabled !== false) ? 'tiebreak' : 'extend');
@@ -1743,7 +1776,7 @@ window._saveSetResult = function(tId, matchId) {
   let sets = [];
   let p1Sets = 0, p2Sets = 0;
 
-  if (isFixedSet) {
+  if (isFixedSet && sc.customRulesVersion!==1) {
     // Fixed Set mode: single set with games won by each player
     const el1 = document.getElementById('set-p1-0');
     const el2 = document.getElementById('set-p2-0');
@@ -2333,6 +2366,16 @@ window._applyResultToTournament = function (t, matchId, payload) {
   // ⛔ SAI ANTES de vencedor, avanço, standings, congelamento de grupo e auto check-in. A
   // partida ainda está sendo jogada: nada disso pode acontecer. O que entra é só o que o
   // placar ao vivo também escreve — os sets, o espelho de sets ganhos e o `startedAt`.
+  var customSc=typeof window._effectiveScoring==='function'?window._effectiveScoring(t,m):t.scoring;
+  if(customSc && customSc.customRulesVersion===1 && payload && !payload.wo) {
+    var customSets=Array.isArray(payload.sets)?payload.sets:payload.s1!=null?[{gamesP1:payload.s1,gamesP2:payload.s2,
+      tiebreak:payload.isTiebreakEntry?window._tbPoints(payload.tbP1,payload.tbP2):null}]:[];
+    customSets.forEach(function(set,index){
+      var stb=customSc.superTiebreak && index===Number(customSc.setsToWin||1)*2-2;
+      var result=window._validateCustomSetScore(customSc,t.sport,set.gamesP1,set.gamesP2,set.tiebreak,stb);
+      if(!result.ok)throw new Error(result.detail);
+    });
+  }
   if (payload && payload.setsInProgress) {
     // Corrida: o outro lado fechou o jogo inteiro entre o toque e a transação. Um jogo
     // com vencedor NÃO volta a ficar aberto por causa de um set que chegou atrasado.
@@ -2393,6 +2436,7 @@ window._applyResultToTournament = function (t, matchId, payload) {
   } else if (useSets) {
     var setData = { gamesP1: s1, gamesP2: s2 };
     if (isFixedSet) setData.fixedSet = true;
+    if(customSc && customSc.customRulesVersion===1 && customSc.superTiebreak && Number(customSc.setsToWin||1)===1)setData.superTiebreak=true;
     if (isTiebreakEntry) setData.tiebreak = window._tbPoints(tbP1, tbP2);  // escritor único
     m.sets = [setData];
     m.setsWonP1 = s1 > s2 ? 1 : 0;
@@ -2526,9 +2570,9 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   // A coluna viva do melhor de N pode ser o Super Tie-Break: seus pontos não
   // obedecem à regra de games do set normal (11–9 é válido, por exemplo).
   var _planSave = (typeof window._matchSetPlan === 'function') ? window._matchSetPlan(_isc, m) : null;
-  var _isStbEntry = !!(_planSave && _planSave.multi && _planSave.live && _planSave.live.kind === 'stb');
+  var _isStbEntry = !!(_planSave && (_planSave.multi || _isc.customRulesVersion===1) && _planSave.live && _planSave.live.kind === 'stb');
 
-  if (useSets && !isFixedSet && !_isStbEntry) {
+  if (useSets && (!isFixedSet || _isc.customRulesVersion===1) && !_isStbEntry) {
     var normalSetProblem = window._validateNormalSetScore(_isc, t.sport, s1, s2);
     if (!normalSetProblem.ok) { _showSetScoreProblem(normalSetProblem); return; }
   }
@@ -2567,7 +2611,7 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   // que é o que esta função acabou de ler. Quem decide se este set fecha o jogo é o plano
   // (window._matchSetPlan) — a MESMA régua que desenhou as colunas. Em 1 set (e em Beach
   // Tennis) `multi` é falso e nada abaixo muda. [[project_placar_por_sets_no_card]]
-  if (_planSave && _planSave.multi && _planSave.live) {
+  if (_planSave && (_planSave.multi || _isc.customRulesVersion===1) && _planSave.live) {
     return window._confirmSetFromCard(tId, matchId, {
       s1: s1, s2: s2, tbP1: tbP1, tbP2: tbP2, isTiebreakEntry: isTiebreakEntry,
       plan: _planSave, scoring: _isc, field: field
@@ -4786,6 +4830,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     twoPointAdvantage: useSets ? (sc.setTwoPointAdvantage !== undefined ? sc.setTwoPointAdvantage === true : (sc.twoPointAdvantage !== undefined ? sc.twoPointAdvantage === true : Number(sc.tiebreakMargin || 2) >= 2)) : false,
     setTwoPointAdvantage: useSets ? (sc.setTwoPointAdvantage !== undefined ? sc.setTwoPointAdvantage === true : (sc.twoPointAdvantage !== undefined ? sc.twoPointAdvantage === true : Number(sc.tiebreakMargin || 2) >= 2)) : false,
     tiebreakTwoPointAdvantage: useSets ? (sc.tiebreakTwoPointAdvantage !== undefined ? sc.tiebreakTwoPointAdvantage === true : (sc.twoPointAdvantage !== undefined ? sc.twoPointAdvantage === true : Number(sc.tiebreakMargin || 2) >= 2)) : true,
+    ...(sc.customRulesVersion===1?{customRulesVersion:1}:{}),
     isFixedSet: useSets && sc.fixedSet === true,
     fixedSetGames: useSets && sc.fixedSet ? (sc.fixedSetGames || sc.gamesPerSet || 6) : 0,
     // 'extend'|'tiebreak'|'ask'.
@@ -5019,6 +5064,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var cs = _currentSet();
     var g = state.gamesPerSet;
 
+    if(state.customRulesVersion===1 && !state.isFixedSet && !_isDecidingSet()) {
+      var outcome=window._customSetOutcome({customRulesVersion:1,gamesPerSet:g,
+        setTwoPointAdvantage:state.twoPointAdvantage,tiebreakAt:String(state.tieAtGames),
+        tieRule:state.tieRule,tiebreakEnabled:state.tiebreakEnabled},cs.gamesP1,cs.gamesP2,'');
+      if(outcome===-1){state.isTiebreak=true;state.currentGameP1=0;state.currentGameP2=0;}
+      return outcome;
+    }
     if (state.isFixedSet) return 0; // Handled in _checkGameWon
     if (_isDecidingSet()) return 0; // handled by tiebreak game
     if (g <= 1) {
@@ -5361,8 +5413,18 @@ window._openLiveScoring = function(tId, matchId, opts) {
       si: _setIdxNow      // índice do set em que o ponto foi disputado
     });
 
-    if (!useSets || state.isFixedSet) {
-      // Simple scoring or fixed set: each tap is 1 point
+    if(state.customRulesVersion===1 && state.isFixedSet && !state.isTiebreak && !_isDecidingSet()) {
+      var customSet=_currentSet();
+      customSet.gamesP1=state.currentGameP1;customSet.gamesP2=state.currentGameP2;
+      var outcome=window._customSetOutcome({customRulesVersion:1,fixedSet:true,fixedSetGames:state.fixedSetGames,
+        gamesPerSet:state.gamesPerSet,setTwoPointAdvantage:state.twoPointAdvantage,
+        tiebreakAt:String(state.tieAtGames),tieRule:state.tieRule,tiebreakEnabled:state.tiebreakEnabled},customSet.gamesP1,customSet.gamesP2,'');
+      if(outcome===-1){state.isTiebreak=true;state.currentGameP1=0;state.currentGameP2=0;}
+      else if(outcome>0)_finishSet(outcome);
+      _render();return;
+    }
+    if (!useSets || (state.isFixedSet && state.customRulesVersion!==1)) {
+      // Simple scoring or legacy fixed set: each tap is 1 point
       if (state.isFixedSet) {
         var cs = _currentSet();
         if (player === 1) cs.gamesP1 = state.currentGameP1;
@@ -5615,7 +5677,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
     // Build score summary string (e.g. "6-4 3-6 7-6")
     var scoreSummaryStr = '';
-    if (useSets && !state.isFixedSet) {
+    if (useSets && (!state.isFixedSet || state.customRulesVersion===1)) {
       for (var si2 = 0; si2 < state.sets.length; si2++) {
         var _ss = state.sets[si2];
         scoreSummaryStr += (typeof window._formatSetCombined === 'function')
@@ -5715,6 +5777,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           countingType: state.countingType,
           deuceRule: !!state.deuceRule, twoPointAdvantage: !!state.twoPointAdvantage,
           fixedSet: !!state.isFixedSet, fixedSetGames: state.fixedSetGames,
+          ...(state.customRulesVersion===1?{customRulesVersion:1}:{}),
           // ⚠️ Pode sair como `'ask'` — e sai mesmo: prorrogar NÃO fixa a regra, ela
           // volta a ser perguntada no 6-6, 7-7… Quem responde no replay não é uma
           // tela: é o próprio diário (o `tb` do ponto seguinte diz o que foi
@@ -6014,11 +6077,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var _liveSets = null, _liveSetsP1 = 0, _liveSetsP2 = 0;
     var _liveScoreP1, _liveScoreP2, _liveFixedSet = !!state.isFixedSet;
     if (useSets) {
-      _liveSets = state.sets.map(function(s) {
+      _liveSets = state.sets.map(function(s,index) {
         var setData = { gamesP1: s.gamesP1, gamesP2: s.gamesP2 };
         var tb = window._setTiebreak(s);
         if (tb) setData.tiebreak = window._tbPoints(tb.p1, tb.p2);
         if (_liveFixedSet) setData.fixedSet = true;
+        if(state.customRulesVersion===1 && state.superTiebreak && index===state.setsToWin*2-2 && tb) {
+          setData.gamesP1=tb.p1;setData.gamesP2=tb.p2;setData.superTiebreak=true;
+        }
         return setData;
       });
       _liveSets.forEach(function(s) {
@@ -6552,7 +6618,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
       // Build score summary
       var scoreSummary = '';
-      if (useSets && !state.isFixedSet) {
+      if (useSets && (!state.isFixedSet || state.customRulesVersion===1)) {
         // Sets summary: "6-4  3-6  7-6(5)"
         var setsP1 = 0, setsP2 = 0, totalGP1 = 0, totalGP2 = 0;
         for (var si = 0; si < state.sets.length; si++) {
@@ -7359,7 +7425,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Current game display — no "GAME" label, only special states
     var gameLabel = '';
     var p1Display, p2Display;
-    if (!useSets || state.isFixedSet) {
+    if (!useSets || (state.isFixedSet && !state.isTiebreak && !_isDecidingSet())) {
       gameLabel = '';
       p1Display = String(state.currentGameP1);
       p2Display = String(state.currentGameP2);
@@ -7380,7 +7446,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
     // Games in current set
     var gamesP1Str = '', gamesP2Str = '';
-    var showGamesBox = useSets && !state.isFixedSet && !state.isFinished;
+    var showGamesBox = useSets && (!state.isFixedSet || state.customRulesVersion===1 && (state.isTiebreak || _isDecidingSet())) && !state.isFinished;
     if (showGamesBox) {
       var cs = _currentSet();
       gamesP1Str = String(cs.gamesP1);
@@ -7709,7 +7775,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:none;cursor:pointer;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:#D5D5E5;box-sizing:border-box;padding:' + _UNDO_PAD + 'px 0 ' + _UNDO_BOT + 'px;font-size:' + Math.round(_UNDO_ICO * 0.78) + 'px;line-height:1;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
         '<svg viewBox="0 0 24 24" style="width:' + _UNDO_ICO + 'px;height:' + _UNDO_ICO + 'px;flex:0 0 auto;" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>Desfazer</button>'
       : '';
+    var _customWatchNote=state.customRulesVersion===1 && window.WatchBridge ? '<small style="display:block;text-align:center;color:var(--text-muted)">Relógio: mantenha a conexão com o celular para usar estas regras.</small>' : '';
     var _gameLabelRow = gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + window._spCor(labelClr, 'color') + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '';
+    _gameLabelRow+=_customWatchNote;
     var _portFinishRow = finishBtn; finishBtn = '';
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -9409,7 +9477,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
         tiebreakTwoPointAdvantage: state.tiebreakTwoPointAdvantage !== false,
         tieRule: state.tieRule || null,
         fixedSet: !!state.isFixedSet,
-        fixedSetGames: state.fixedSetGames || 0
+        fixedSetGames: state.fixedSetGames || 0,
+        ...(state.customRulesVersion===1?{customRulesVersion:1}:{})
       }
     };
   };

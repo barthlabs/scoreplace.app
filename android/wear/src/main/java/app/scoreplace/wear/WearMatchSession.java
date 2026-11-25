@@ -190,6 +190,7 @@ public final class WearMatchSession {
         cfg.tiebreakTwoPointAdvantage = sc.has("tiebreakTwoPointAdvantage") ? sc.optBoolean("tiebreakTwoPointAdvantage") : null;
         cfg.tieRule = sc.isNull("tieRule") ? null : sc.optString("tieRule", null);
         cfg.fixedSet = sc.optBoolean("fixedSet", false);
+        cfg.customRulesVersion = sc.has("customRulesVersion") ? sc.optInt("customRulesVersion") : null;
         cfg.fixedSetGames = sc.optInt("fixedSetGames", 0);
 
         String p1 = joinPlayers(s, "1"), p2 = joinPlayers(s, "2");

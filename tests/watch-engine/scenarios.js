@@ -205,3 +205,6 @@ module.exports = [
     )
   }
 ];
+
+// New opt-in rules have their own vectors; legacy vectors remain unchanged.
+module.exports.push(...require('./custom-scenarios.js'));

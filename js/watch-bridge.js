@@ -99,6 +99,11 @@
   // ignora o dedup (usado na resposta a "hello").
   function push(snapshot, force) {
     if (!snapshot) snapshot = currentState();
+    // Installed watches cannot interpret the new custom rules autonomously.
+    // Copy only at egress; replay and the web engine retain their complete config.
+    if(snapshot.scoring && snapshot.scoring.customRulesVersion===1) {
+      snapshot=Object.assign({},snapshot);delete snapshot.scoring;snapshot.matchEpoch='';
+    }
     // Carimbado ANTES do dedup pra fazer parte do corpo comparado.
     if (!snapshot.hrMax) snapshot.hrMax = hrMaxFromProfile();
     // DIAGNÓSTICO DO BATIMENTO (04/set/2026). O relato "o BPM aparece mais baixo do que a

@@ -165,5 +165,17 @@ ok(epochResets >= 5,
 ok(/_liveRecId = null;\s*\/\/[^\n]*\n\s*_newMatchEpoch\(\)/.test(UI),
    'a renovação da época anda JUNTO com o reset do registro de histórico (os mesmos momentos de "partida nova")');
 
+// Opt-in is sanitized only on egress; connected intents still drive the web engine.
+const custom=loadBridge();
+const original={active:true,matchEpoch:'original-web',scoring:{type:'sets',customRulesVersion:1,setTwoPointAdvantage:true}};
+custom.win._getLiveScoreState=()=>original;
+custom.win.WatchBridge.pushCurrent();
+ok(custom.sent.at(-1).scoring===undefined && custom.sent.at(-1).matchEpoch==='', 'custom transport disables old autonomous engines');
+ok(original.scoring.customRulesVersion===1 && original.matchEpoch==='original-web','transport copy preserves replay/web config and epoch');
+custom.win.WatchBridge.applyIntent({id:'mirror-1',type:'point',team:1,matchEpoch:''});
+custom.win.WatchBridge.applyIntent({id:'mirror-1',type:'point',team:1,matchEpoch:''});
+custom.win.WatchBridge.applyIntent({id:'mirror-2',type:'point',team:2,matchEpoch:''});
+ok(custom.calls.join('|')==='point:1|point:2','mirror intents with empty epoch work once per id across reconnect');
+
 console.log('watch-diario-de-eventos:', pass, 'ok,', fail, 'falhas');
 if (fail > 0) process.exit(1);

@@ -117,6 +117,7 @@ struct ScoreState: Decodable {
         var setTwoPointAdvantage: Bool? = nil
         var tiebreakTwoPointAdvantage: Bool? = nil
         var tieRule: String? = nil
+        var customRulesVersion: Int? = nil
         var fixedSet: Bool = false
         var fixedSetGames: Int = 0
     }
