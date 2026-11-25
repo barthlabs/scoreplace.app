@@ -30,18 +30,28 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  const uid='B'.repeat(28),target='A'.repeat(28);
  for(const [source,value,name,policy] of [
   ['', 'Novo nome','renameTournamentParticipant',''],
+  ['', 'Nova pessoa','editCanonicalTournamentSlot','inherit'],
+  ['', 'Outra pessoa','editCanonicalTournamentSlot','reset'],
   ['',target,'editCanonicalTournamentSlot','inherit'],
   [uid,'Outro nome','editCanonicalTournamentSlot','reset'],
   [uid,'uid:'+target,'editCanonicalTournamentSlot','inherit']]) {
   await open(source);await page.locator('#input-dialog-value').fill(value);
-  if(policy){await page.locator('#input-ok-btn').click();assert.match(await page.locator('#athlete-edit-error').innerText(),/pontuação/);
+  if(policy){if(source || /^(uid:|[A-Za-z0-9]{28}$)/.test(value)){await page.locator('#input-ok-btn').click();assert.match(await page.locator('#athlete-edit-error').innerText(),/pontuação/);}
    await page.locator('#athlete-points').selectOption(policy);}
   const count=await page.evaluate(()=>calls.length);
   await page.locator('#input-ok-btn').click();await page.waitForFunction(n=>calls.length===n+1,count);
   assert.equal((await page.evaluate(()=>calls.at(-1))).name,name);
+  if(name==='renameTournamentParticipant')assert.equal((await page.evaluate(()=>calls.at(-1))).data.pointsPolicy,undefined);
   if(policy)assert.equal((await page.evaluate(()=>calls.at(-1))).data.pointsPolicy,policy);
   await page.locator('#custom-input-dialog').waitFor({state:'detached'});
  }
+ await open();var untouched=await page.evaluate(()=>calls.length);await page.locator('#input-ok-btn').click();assert.equal(await page.evaluate(()=>calls.length),untouched,'texto igual não grava');
+ await open();await page.locator('#input-dialog-value').fill('Outra pessoa');await page.locator('#athlete-points').selectOption('reset');
+ await page.locator('#input-dialog-value').fill(target);assert.equal(await page.locator('#athlete-points').inputValue(),'','trocar tipo de destino exige nova política');
+ await page.locator('#input-ok-btn').click();assert.match(await page.locator('#athlete-edit-error').innerText(),/pontuação/);
+ await page.locator('#input-cancel-btn').click();
+ await open(uid);await page.locator('#input-dialog-value').fill(target);await page.locator('#athlete-points').selectOption('inherit');
+ await page.locator('#input-dialog-value').fill('Nome digitado');assert.equal(await page.locator('#athlete-points').inputValue(),'');await page.locator('#input-cancel-btn').click();
  await open();await page.locator('#input-dialog-value').fill('Carlos');await page.waitForTimeout(300);
  assert.equal(await page.locator('datalist option').getAttribute('value'),'uid:'+target);
  assert(!(await page.evaluate(()=>reads)).includes('Carlos'),'nome simples não busca UID');

@@ -1350,15 +1350,22 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     extra.innerHTML='<datalist id="athlete-account-options"></datalist><label id="athlete-points-label" hidden style="display:none;margin-top:12px">Pontuação da vaga<select id="athlete-points" class="form-control" style="display:block;margin-top:6px"><option value="">Escolha a pontuação</option><option value="inherit">Manter pontuação da vaga</option><option value="reset">Começar do zero</option></select></label><div id="athlete-edit-error" role="alert" style="margin-top:8px"></div>';
     input.after(extra);
     var list=extra.querySelector('datalist'), policy=extra.querySelector('select'), policyLabel=extra.querySelector('label');
-    var message=extra.querySelector('[role="alert"]'), busy=false, searchId=0, timer;
+    var message=extra.querySelector('[role="alert"]'), busy=false, searchId=0, timer, policyMode=null;
     function target(value) {
       var explicit=/^uid:/i.test(value);
       return explicit ? value.slice(4).trim() : /^[A-Za-z0-9]{28}$/.test(value) ? value : '';
     }
     function changed() {
       var value=input.value.trim(), uid=target(value);
-      var replacing=value!==row.name && (!!row.uid || !!uid);
-      policyLabel.hidden=!replacing; policyLabel.style.display=replacing?'block':'none';
+      var manual=!row.uid && !uid;
+      var mode=manual?'correction':uid?'account':'manual';
+      if(policyMode!==mode) {
+        policyMode=mode;
+        policyLabel.firstChild.textContent=manual?'Ao confirmar':'Pontuação da vaga';
+        policy.innerHTML=manual ? '<option value="rename">Corrigir nome da mesma pessoa</option><option value="inherit">Trocar atleta e manter pontuação</option><option value="reset">Trocar atleta e começar do zero</option>' : '<option value="">Escolha a pontuação</option><option value="inherit">Manter pontuação da vaga</option><option value="reset">Começar do zero</option>';
+      }
+      var changedName=value!==row.name;
+      policyLabel.hidden=!changedName; policyLabel.style.display=changedName?'block':'none';
       message.textContent='';
       clearTimeout(timer); var request=++searchId;
       if (value.length<2 || uid) { list.replaceChildren(); return; }
@@ -1396,7 +1403,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           if(!profile && !explicit) targetUid='';
           else if(!profile || profile.mergedInto || !profile.displayName) throw new Error('UID indisponível. Confira a conta.');
         }
-        var replacement=!!row.uid || !!targetUid;
+        var replacement=!!row.uid || !!targetUid || ['inherit','reset'].includes(policy.value);
         if(targetUid && targetUid===row.uid){dialog.remove();return;}
         if(replacement && !['inherit','reset'].includes(policy.value)) {
           policyLabel.hidden=false; policyLabel.style.display='block';
