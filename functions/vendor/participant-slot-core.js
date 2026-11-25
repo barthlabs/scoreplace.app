@@ -81,12 +81,17 @@
     var games=group.matches || group.rounds?.[0]?.matches || [];
     var phase=Number(games[0]?.phaseIndex || group.phaseIndex || 0),result=group;
     events.forEach(function(event){
-      if(event.pointsPolicy!=='inherit' || (group.phaseIndex!=null && event.phaseIndex!==phase) ||
+      if(!['inherit','reset'].includes(event.pointsPolicy) || (group.phaseIndex!=null && event.phaseIndex!==phase) ||
           ((category || group.category || group.categoryId) && String(event.category || '')!==String(category || group.category || '') && String(event.categoryId)!==String(category || group.categoryId || ''))) return;
-      result=patchTree(result,event,{includeCompleted:true,allowPlaying:true});
+      // A campanha retirada conserva a identidade na cópia de cálculo. O rótulo
+      // temporário separa homônimos nos agregadores que ainda indexam duplas por nome.
+      // Nenhum desses rótulos é escrito no torneio ou exibido como classificado.
+      var projection=event.pointsPolicy==='reset' ? Object.assign({},event,{to:event.from,newName:retiredLabel(event)}) : event;
+      result=patchTree(result,projection,{includeCompleted:true,allowPlaying:true});
     });
     return result;
   }
+  function retiredLabel(event){return event.oldName+' · inscrição anterior ('+key(event.from)+')';}
   function eligibleRows(rows,t,category){
     var events=t?.participantSlotReplacements?.events || [];
     return rows.filter(function(row){return !events.some(function(event){
@@ -95,7 +100,7 @@
       if(row.uid) return event.from.uid===row.uid;
       var members=[1,2,3,4].filter(i=>row['p'+i+'Uid'] || row['p'+i+'ManualId']);
       if(members.length) return members.some(i=>event.from.uid ? row['p'+i+'Uid']===event.from.uid : row['p'+i+'ManualId']===event.from.manualParticipantId);
-      return row.name===event.oldName || (String(row.name || '').includes(' / ') && String(row.name).split(' / ').includes(event.oldName));
+      return row.name===retiredLabel(event) || String(row.name || '').split(' / ').includes(retiredLabel(event));
     });});
   }
   function appendEvent(t,event){

@@ -179,5 +179,23 @@ const row = (s, p) => s.find(p);
     ok(rejected,'partial guard covers '+field);
   }
 }
+
+{
+ const engine=require('../js/views/phases-engine');
+ for(const from of [{uid:'old'},{manualParticipantId:'old-manual'}]) for(const policy of ['inherit','reset']) {
+  const event={from,to:{manualParticipantId:'new-manual'},oldName:'Pessoa',newName:'Pessoa',category:'Cat',categoryId:'cat',phaseIndex:0,pointsPolicy:policy};
+  const game={id:'same-name',category:'Cat',p1:'Pessoa',...(from.uid?{p1Uid:from.uid}:{p1ManualId:from.manualParticipantId}),p2:'Rival',p2Uid:'rival',winner:'Pessoa',scoreP1:7,scoreP2:2};
+  const tour={participants:[{manualParticipantId:'new-manual',name:'Pessoa',category:'Cat'},{uid:'rival',name:'Rival',category:'Cat'}],rounds:[{matches:[game]}],participantSlotReplacements:{events:[event]}};
+  const stats=W._computeStandings(tour,'Cat');
+  eq(stats.find(r=>r.name==='Pessoa')?.wins,policy==='inherit'?1:0,'same name UID/manual to manual '+policy);
+  eq(stats.length,2,'retired label never becomes eligible');
+  const oldTeam={p1Name:'Pessoa',...(from.uid?{p1Uid:from.uid}:{p1ManualId:from.manualParticipantId}),p2Name:'Parceira',p2Uid:'partner',displayName:'Pessoa / Parceira'};
+  const newTeam={p1Name:'Pessoa',p1ManualId:'new-manual',p2Name:'Parceira',p2Uid:'partner',displayName:'Pessoa / Parceira'};
+  const grp={category:'Cat',players:[newTeam,{uid:'rival',displayName:'Rival'}],matches:[{...game,p1Uid:null,p1ManualId:null,p1:oldTeam.displayName,team1Obj:oldTeam,winner:oldTeam.displayName}]};
+  const rows=engine.groupTeamStandings(grp,{tournament:tour});
+  eq(rows.find(r=>r.name==='Pessoa / Parceira')?.wins,policy==='inherit'?1:0,'same-name fixed pair '+policy);
+  eq(rows.length,2,'retired pair label never becomes eligible');
+ }
+}
 console.log((fail === 0 ? '✅' : '❌') + ' standings-uid-identity: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);
