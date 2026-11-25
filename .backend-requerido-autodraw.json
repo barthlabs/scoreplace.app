@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
-  "scopeNote": "Quatro sliders por categoria e fase, classificados por grupo transmitidos à próxima fase, grade universal e mapa pré-sorteio de grupos por entrada e quadras, com preservação operacional e séries restritas a quartetos Rei/Rainha.",
+  "backendCommit": "19f9c5a02f3f7b70b30bbd42e0d7e70b52a1264a",
+  "scopeNote": "Controles completos do Personalizado nos dois modos de games, com regras opt-in por fase, empate numérico, margens, tie-break e super tie-break; sem reinterpretar torneios legados.",
   "functions": [
     "createTournament",
     "updateTournamentConfiguration",

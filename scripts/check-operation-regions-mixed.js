@@ -27,7 +27,7 @@ function validateRows(rows, version, options) {
   // SHA fixado para este corte; no próximo release regional, atualizar junto com
   // sync-operation-regions-current.js e os manifestos, antes de abrir o Hosting.
   const releaseCommit = '470c6c972130c2d4225952f214755d622595e0a6';
-  const scoreRefreshCommit = 'a389c8807a6bf861beab4e4b1b14262767f667ae';
+  const scoreRefreshCommit = '19f9c5a02f3f7b70b30bbd42e0d7e70b52a1264a';
   // O manifesto registra a revisão efetivamente publicada para chamada e controle.
   // Mudanças em outros arquivos de functions-autodraw (por exemplo, um vendor usado
   // no sorteio) não alteram a imagem desses dois serviços na malha regional.
