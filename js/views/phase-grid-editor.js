@@ -116,7 +116,8 @@
     return selected;
   }
   function position(event, court) {
-    var state = window._phaseCallOrderState, lane = event.currentTarget;
+    var state = window._phaseCallOrderState;
+    var lane=gridRoot()?.querySelector('.phase-grid-lane[data-court="'+Number(court)+'"]') || event.currentTarget;
     var y = event.clientY - lane.getBoundingClientRect().top;
     var at = model.minutes(dayOf(state).startTime) + Math.max(0, Math.round(y / (pixelsPerMinute*5)) * 5);
     return { court:court, startTime:model.clock(at) };

@@ -37,6 +37,19 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  assert(elim.some(text=>/Perdedor do jogo \d+ × Perdedor do jogo \d+/.test(text)));
  assert.equal(await page.locator('.phase-grid-elim .phase-grid-game-number').count(),8);
  assert.match(await page.locator('#phase-call-order-editor').innerText(),/Proposta atualizada/);
+ // Soltar no cabeçalho do B2 usa a coordenada da coluna do dia, não o topo do painel.
+ const dropResult=await page.evaluate(()=>{
+  var state=_phaseCallOrderState, source=state.tiles.find(tile=>tile.assignment?.label==='B2' && tile.round===1 && tile.court===1);
+  var panel=Array.from(document.querySelectorAll('.phase-grid-super-group')).find(el=>el.querySelector('header').textContent.includes('Grupo B2'));
+  var original=ScoreplacePhaseGridPlan.move;
+  ScoreplacePhaseGridPlan.move=function(...args){window.dropAt=args[3];return original(...args)};
+  var data=new DataTransfer();data.setData('text/plain',source.id);
+  var expected=source.startTime, top=panel.getBoundingClientRect().top;
+  panel.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,clientY:top+1,dataTransfer:data}));
+  ScoreplacePhaseGridPlan.move=original;
+  return {expected,at:window.dropAt,saved:_phaseCallOrderState.tiles.find(tile=>tile.id===source.id).startTime};
+ });
+ assert.notEqual(dropResult.expected,'08:00');assert.equal(dropResult.at,dropResult.expected);assert.equal(dropResult.saved,dropResult.expected);
  const pure=await page.evaluate(()=>{
   var list=_phaseCallOrderState.tiles.filter(x=>x.kind==='groups' && x.assignment.label==='B1');
   var count=tiles=>_phaseGridVisualGroups(tiles).length;
