@@ -195,6 +195,7 @@ const { chromium } = require('@playwright/test');
           const r=frame.getBoundingClientRect(),a=cards[0].getBoundingClientRect(),b=cards[1].getBoundingClientRect();
           return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,a:{left:a.left,top:a.top,bottom:a.bottom},b:{right:b.right},border:getComputedStyle(frame).borderTopColor};
         });
+        assert.equal(await super8Page.locator('.tv-super8-group').first().locator('.tv-super8-in-frame').count(),2,'single frame joins both games without inner green borders');
         assert(frame.left<=frame.a.left && frame.right>=frame.b.right && frame.top<=frame.a.top && frame.bottom>=frame.a.bottom,'one green frame encloses both called matches');
         for(const theme of ['dark','light']) {
           const contrasts=await super8Page.evaluate(theme=>{
