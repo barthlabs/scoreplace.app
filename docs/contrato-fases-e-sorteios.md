@@ -103,3 +103,20 @@ Depois dessa checagem, cada torneio continua protegido por CAS e verificação
 individual. O backup fotografa o documento pai e lê as subcoleções em sequência;
 não é um snapshot atômico entre elas. A projeção de fases escreve apenas no
 documento pai, sem tocar nas subcoleções nem nos fatos de jogo.
+
+## Continuação do sorteio na preparação de gênero
+
+`_maybeShowGenderDrawDialog(tId, onProceed)` retorna `false` quando a decisão
+não se aplica e o chamador pode seguir. Retorna `true` quando assume a etapa
+assíncrona: primeiro hidrata perfis por UID e confere os participantes de cada
+categoria. Se nenhuma categoria tiver participantes conhecidos dos dois gêneros,
+continua uma vez sem abrir o diálogo. Se houver uma decisão pertinente, continua
+uma vez somente após confirmar e salvar a escolha no servidor.
+
+Cancelar ou falhar a preparação/salvamento não chama `onProceed` e não inicia o
+sorteio. Na falha, a tela apresenta o erro; uma nova tentativa pode reiniciar a
+etapa. O retorno `true` significa que a etapa assumiu o controle, sem garantir
+uma continuação quando ela foi cancelada ou falhou. Prosseguir após erro poderia
+sortear com uma escolha ainda não salva. A anotação local de gênero pode ser
+alterada explicitamente pela organização; a hidratação de perfil não pode
+sobrescrever uma anotação com `genderSource='organizador'`.
