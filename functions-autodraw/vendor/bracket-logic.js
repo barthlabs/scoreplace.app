@@ -186,7 +186,13 @@ window._computeMonarchStandings = function(group, t, category) {
     // Na pontuação simples configurada por saldo de games, o placar 6×4 é
     // diretamente a contagem de games quando o jogo não possui sets[] legado.
     if (!Array.isArray(m.sets) || !m.sets.length) {
-      if (t && t.rankingPrimary === 'games_diff') { gw1 = s1; gw2 = s2; }
+      var phase = t && (t.phases || [])[Number(m.phaseIndex || 0)];
+      var rule = (phase?.classification?.rotationCategoryRules || []).find(r => r.category === String(m.category || category || ''));
+      var eight = phase?.kind === 'classification' && phase.classification?.partnerRotation === 'groups' &&
+        rule?.groupFormation?.mode === 'size' && Number(rule.groupFormation.value) === 8;
+      if (t && (t.rankingPrimary === 'games_diff' || (eight && (t.tiebreakers || []).some(k => k === 'saldo_games' || k === 'games_vencidos')))) {
+        gw1 = s1; gw2 = s2;
+      }
     }
 
     var _u1m = Array.isArray(m.team1Uids) ? m.team1Uids : [];

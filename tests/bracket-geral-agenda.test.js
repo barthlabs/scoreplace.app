@@ -735,6 +735,26 @@ function trecho(inicio, fim) {
   ok(failedPaint.tabs === 1 && failedPaint.oldKey && failedPaint.noPartialProgress,
     'falha de pintura preserva as abas e a última chave completa');
 
+  const capture=path.join(require('os').tmpdir(),'sp-eight-bracket-'+process.pid+'.json');
+  let eight;
+  try {
+    require('child_process').execFileSync(process.execPath,[path.join(__dirname,'monarch-render.test.js')],{env:{...process.env,SP_CAPTURE_EIGHT_BRACKET:capture},stdio:'pipe'});
+    eight=JSON.parse(fs.readFileSync(capture,'utf8'));
+  } finally {try{fs.unlinkSync(capture);}catch(_){}}
+  const eightView=await page.evaluate(({t,html})=>{
+    document.body.innerHTML='<main id="view-container"><nav data-bracket-tabs-root="1" data-tournament-id="'+t.id+'"></nav><section id="inline-bracket-container">'+html+'</section></main>';
+    const root=document.querySelector('nav');root._bracketTabsScope=document.querySelector('#inline-bracket-container');root._bracketCardsScope=root._bracketTabsScope;
+    window._currentBracketTournament=t;window._collectAllMatches=t=>t.matches;
+    const shown=_bracketGeneralView(root,true,'fem',false,false,'');
+    const view=root._bracketGeneralView;
+    return {shown,bundles:view.querySelectorAll('.bracket-geral-quarteto').length,
+      tables:[...view.querySelectorAll('.bracket-geral-quarteto')].map(n=>n.querySelectorAll('tbody tr').length),
+      games:[...view.querySelectorAll('.bracket-geral-quarteto')].map(n=>n.querySelectorAll('.sp-match-card').length),
+      sourceHidden:root._bracketTabsScope.querySelector('.bracket-scroll-container').hidden};
+  },eight);
+  ok(eightView.shown&&eightView.bundles===6&&eightView.sourceHidden&&eightView.tables.every(n=>n===8)&&eightView.games.every(n=>n===14),
+    'Geral Super8 usa renderer real: seis tabelas únicas de oito atletas e todos os14jogos de cada grupo: '+JSON.stringify(eightView));
+
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' bracket-geral-agenda: ' + pass + ' ok, ' + fail + ' falharam');
   process.exitCode = fail ? 1 : 0;

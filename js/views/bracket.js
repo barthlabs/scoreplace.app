@@ -9434,13 +9434,17 @@ window._renderPhase0ReadOnly = function (t) {
 // Quantos entram na PRÓXIMA fase (por grupo) — fonte única: o mapping do empilhamento
 // de fases (mesma lógica do buildEntrantsByDest). Substitui o antigo campo legado.
 // Sem próxima fase → 0 (sem marcação CLASSIF).
-window._phaseClassifiedCount = function (t, groupSize) {
+window._phaseClassifiedCount = function (t, groupSize, category, phaseIndex) {
   groupSize = groupSize || 0;
   if (!t || !Array.isArray(t.phases) || t.phases.length < 2) return 0;
-  var cur = t.currentPhaseIndex || 0;
+  var cur = phaseIndex == null ? (t.currentPhaseIndex || 0) : Number(phaseIndex);
   var nextCfg = t.phases[cur + 1];
   if (!nextCfg) return 0;
+  if (category != null && window.FORMAT2?.qualificationForCategory)
+    nextCfg = window.FORMAT2.qualificationForCategory(nextCfg, category);
   var src = nextCfg.source || {};
+  if (category != null && !(src.mapping && src.mapping.length) && Number(src.qualifyTopN) > 0)
+    return Math.min(Number(src.qualifyTopN), groupSize);
   var mapping = (src.mapping && src.mapping.length) ? src.mapping : null;
   if (!mapping) return groupSize; // sem mapping explícito = todos avançam
   var maxRankTo = mapping.reduce(function (mx, mp) { return Math.max(mx, parseInt(mp.rankTo, 10) || 0); }, 0);
@@ -11603,6 +11607,48 @@ window._monGroupArrivedBtn = function (t, matches, groupDone) {
     : '<button class="btn btn-amber btn-micro" onclick="' + _onc + '" style="flex-shrink:0;font-size:0.72rem;" title="' + (_t('bracket.arrivedTip') || 'Marcar que você chegou no local (confirma pelo GPS)') + '">📍 ' + (_t('bracket.arrived') || 'Cheguei') + '</button>';
 };
 
+// Read-only sports groups: technical monarchGroup identifies a match, not the eight-player pool.
+window._super8StandingsGroups = function (t, sourceMatches) {
+  var matches = sourceMatches || (typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : t.matches) || [];
+  var groups = new Map(), seen = new Set();
+  matches.forEach(function (m) {
+    if (!m || !m.isMonarch || m.isBye || m.isSitOut || m.isTieBreak || m.groupIdx == null ||
+        !Number.isInteger(Number(m.groupIdx)) || Number(m.groupIdx) < 0) return;
+    var phaseIndex = Number(m.phaseIndex || 0), phase = (t.phases || [])[phaseIndex];
+    var category = String(m.category || '');
+    var rule = (phase?.classification?.rotationCategoryRules || []).find(r => r.category === category);
+    if (phase?.kind !== 'classification' || phase.classification?.partnerRotation !== 'groups' ||
+        rule?.groupFormation?.mode !== 'size' || Number(rule.groupFormation.value) !== 8) return;
+    var key = JSON.stringify([phaseIndex, category, Number(m.groupIdx)]);
+    var id = m.id == null ? m : String(m.id);
+    if (seen.has(id)) return;
+    seen.add(id);
+    if (!groups.has(key)) {
+      var assignment = (t.scheduleWindow?.interleavedPlan?.groupAssignments || []).find(r =>
+        Number(r.phaseIndex) === phaseIndex && r.category === category && Number(r.groupNumber) === Number(m.groupIdx) + 1);
+      var label = String(m.scheduledGroupLabel || assignment?.label || m.groupName || window._groupName(Number(m.groupIdx)));
+      groups.set(key, { superEightGroup:true, key:key, phaseIndex:phaseIndex, category:category, groupIdx:Number(m.groupIdx),
+        label:label, name:category + ' · ' + (/^Grupo /.test(label) ? label : 'Grupo ' + label),
+        players:[], playersUids:[], playersSlotIds:[], matches:[], seen:new Set() });
+    }
+    var g = groups.get(key);
+    g.matches.push(m);
+    [[m.team1,m.team1Uids,m.team1SlotIds],[m.team2,m.team2Uids,m.team2SlotIds]].forEach(function (side) {
+      var names=side[0] || [], uids=side[1] || [], slots=side[2] || [];
+      for (var i=0; i<Math.max(names.length,uids.length,slots.length); i++) {
+        var identity=uids[i] ? 'uid:'+uids[i] : slots[i] || (names[i] ? 'name:'+names[i] : '');
+        if (!identity || g.seen.has(identity)) continue;
+        g.seen.add(identity); g.players.push(names[i] || ''); g.playersUids.push(uids[i] || null); g.playersSlotIds.push(slots[i] || null);
+      }
+    });
+  });
+  return Array.from(groups.values()).map(function (g) {
+    delete g.seen;
+    g.matches.sort((a,b)=>Number(a.round || 1)-Number(b.round || 1) || Number(a._gameNum || a.scheduledGameNumber || 0)-Number(b._gameNum || b.scheduledGameNumber || 0));
+    return g;
+  });
+};
+
 // ── Rei/Rainha da Praia Rendering ────────────────────────────────────────────
 function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
   var _t = window._t || function(k) { return k; };
@@ -11624,6 +11670,14 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         var rawMatches = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
         return { name: g.name, players: g.players || [], matches: rawMatches };
       });
+
+  var visibleMatches = subgroups.flatMap(function (g) { return g.matches || []; });
+  var visibleIds = new Set(visibleMatches.map(m => String(m.id)));
+  var fullEightGroups = window._super8StandingsGroups(t).filter(g => g.matches.some(m => visibleIds.has(String(m.id))));
+  if (fullEightGroups.length) {
+    var coveredIds = new Set(fullEightGroups.flatMap(g => g.matches.map(m => String(m.id))));
+    subgroups = fullEightGroups.concat(subgroups.filter(g => !(g.matches || []).some(m => coveredIds.has(String(m.id)))));
+  }
 
   // O grupo do VISITANTE ATUAL vai pro TOPO (fora da ordem A/B/C) pra cada um achar o
   // seu jogo rápido. Relativo a quem está logado — cada usuário vê o próprio grupo em 1º.
@@ -11654,7 +11708,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     _monarchCategories.every(Boolean) &&
     _monarchCategories.some(function (category) { return category !== _monarchCategories[0]; });
   var _useSetsMonarch = !!(t.scoring && t.scoring.type === 'gsm');
-  var _isSuperEightMon = t.superEight === true || (t.phases || []).some(function(phase) { return phase && phase.superEight === true; });
+  var _isSuperEightMon = fullEightGroups.length > 0 || t.superEight === true || (t.phases || []).some(function(phase) { return phase && phase.superEight === true; });
   var _gamesPrimaryMonarch = t.rankingPrimary === 'games_diff';
   var _superEightTieBreakers = _isSuperEightMon && _gamesPrimaryMonarch && Array.isArray(t.tiebreakers)
     ? t.tiebreakers.filter(function (key) {
@@ -11722,6 +11776,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     }
   };
   subgroups.forEach(function(sg, gi) {
+    _isSuperEightMon = sg.superEightGroup === true || t.superEight === true || (t.phases || []).some(p => p && p.superEight === true);
     // A confirmação de um placar precisa apenas da classificação do seu
     // quarteto. Calcular e parsear as dezenas de tabelas do torneio inteiro
     // em cada lançamento pressiona o renderer justamente durante o save.
@@ -11778,7 +11833,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // ⭐ Como foi achado: a MESMA função, com o MESMO dado, devolvia a ordem certa em Node
     // (onde passei o grupo REAL) e a errada no navegador. A diferença não estava na função —
     // estava no que chegava nela. [[project_classificacao_publicada_congela]]
-    var _standingsMatches = _isSuperEightMon && t.superEightDrawMode === 'single' && Array.isArray(t.matches)
+    var _standingsMatches = !sg.superEightGroup && _isSuperEightMon && t.superEightDrawMode === 'single' && Array.isArray(t.matches)
       ? t.matches.filter(function(m) { return m && m.isMonarch && (m.phaseIndex == null || m.phaseIndex === 0); }) : sg.matches;
     var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({ players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), playersSlotIds: _stRoster.map(function (r) { return r.slotId || null; }), matches: _standingsMatches, classifCongelada: sg.classifCongelada }, t, sg.category || null) : [];
     // Cards: só os jogos de verdade (o marcador W.O. vira pílula no cabeçalho).
@@ -11786,7 +11841,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var groupDone = matches.length > 0 && matches.every(function(m) { return !!m.winner || m.isBye || m.isSitOut; });
 
     // Standings table — no crown; qualified rows still highlighted via CLASSIF badge
-    var classified = window._phaseClassifiedCount(t, standings.length);
+    var classified = window._phaseClassifiedCount(t, standings.length, sg.category, _pIdxM);
     // v1.8.65: PRESENÇA na classificação do grupo — mesma regra do outro render de
     // grupo Rei/Rainha (rota Liga, _renderGroup): quem marcou "Cheguei" ganha bolinha
     // verde + nome verde. checkedIn E não absent; por uid quando há conta.
@@ -11944,12 +11999,12 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var statusBadge = groupDone && !(opts && opts.showHistoricalFullStandings)
       ? '<span style="font-size:0.65rem;padding:2px 8px;border-radius:6px;background:rgba(16,185,129,0.15);color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + _t('bracket.complete') + '</span>' : '';
 
-    var _schGrpBtn2 = (typeof window._schGroupChip === 'function') ? window._schGroupChip(t, matches) : '';
+    var _schGrpBtn2 = !sg.superEightGroup && (typeof window._schGroupChip === 'function') ? window._schGroupChip(t, matches) : '';
     // Rei/Rainha: o grupo do WhatsApp é ÚNICO por GRUPO (3 jogos, mesmas 4 pessoas),
     // igual à enquete. Fica ao lado dela no cabeçalho.
-    var _waGrpBtn2 = (typeof window._waGrpGroupChip === 'function') ? window._waGrpGroupChip(t, matches) : '';
+    var _waGrpBtn2 = !sg.superEightGroup && (typeof window._waGrpGroupChip === 'function') ? window._waGrpGroupChip(t, matches) : '';
     // v4.1.39: controle de W.O. canônico do grupo (botão W.O. → folga/Jogador X, ou pílula + reverter).
-    var _woCtrlM = (typeof window._monWoControlHtml === 'function') ? window._monWoControlHtml(t.id, _pIdxM, sg.name, groupDone) : '';
+    var _woCtrlM = !sg.superEightGroup && (typeof window._monWoControlHtml === 'function') ? window._monWoControlHtml(t.id, _pIdxM, sg.name, groupDone) : '';
     // Controle de PRESENÇA do grupo (entre Combinar e W.O.) — helper ÚNICO compartilhado
     // com o render de grupo Rei/Rainha da rota Liga (t.rounds[].monarchGroups).
     var _grpArrived = window._monGroupArrivedBtn(t, matches, groupDone);
@@ -11961,7 +12016,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var _mineBadgeMon = _isMineMon && !_isSuperEightMon
       ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>'
       : '';
-    var _groupCodeMatch = String(window._bracketMonarchGroupLabel(t, sg)).toUpperCase().match(/\bGRUPO\s+([A-Z]{1,3}\d*)\b/);
+    var _groupCodeMatch = String(sg.superEightGroup ? 'Grupo '+sg.label : window._bracketMonarchGroupLabel(t, sg)).toUpperCase().match(/\bGRUPO\s+([A-Z]{1,3}\d*)\b/);
     var _eightLettersHtml = _isSuperEightMon && Array.isArray(sg.superEightLetters)
       ? '<div aria-label="Sorteio das letras do grupo" style="display:flex;flex-wrap:wrap;gap:5px;margin:5px 0 8px;">' +
         sg.superEightLetters.map(function (entry) {
@@ -11980,6 +12035,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       _eightLettersHtml +
       // v4.3.12 (pedido do dono): a tabela de classificação do grupo fica SEMPRE ACIMA das
       // chaves (mesmo padrão de renderGroupStage). Antes vinha depois dos cards de jogo.
+      (sg.superEightGroup ? '<h3 style="margin:0 0 .5rem">' + window._safeHtml(sg.label) + '</h3><p style="font-size:.75rem;margin:.25rem 0">Classificação parcial · faixa de avanço: ' + classified + '</p>' : '') +
       '<div class="standings-scroll">' + standingsTable + '</div>' +
       '<div style="display:grid;grid-template-columns:' + (_isSuperEightMon ? 'repeat(auto-fit,minmax(min(100%,320px),1fr))' : 'minmax(0,1fr)') + ';gap:12px;margin-top:1rem;align-items:start;">' + matchCards + '</div>' +
     '</div>';
@@ -11991,7 +12047,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
   // Fase-0→eliminatória embutido aqui (t.groups + _advanceMonarchToElimination) foi APAGADO na
   // campanha kill-monarch-format — o `groupDone` por grupo segue só como badge/borda do grupo.
 
-  return html;
+  return fullEightGroups.length ? '<div class="bracket-scroll-container" style="width:100%;min-width:0">' + html + '</div>' : html;
 }
 window._refreshMonarchStandingsInPlace = function (t, matchId) {
   var card = document.getElementById('card-' + String(matchId));
@@ -12413,6 +12469,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // v3.1.21: canônico — lista de espera logo APÓS os jogos/chaves e ANTES da classificação geral.
   var _sb = (opts && opts.standbyHtml) || '';
   var _t = window._t || function(k) { return k; };
+  if (window._super8StandingsGroups(t).some(g => g.phaseIndex === Number(t.currentPhaseIndex || 0)))
+    return (readyBannerHtml || '') + (progressBarHtml || '') + _renderMonarchStage(t,isOrg,canEnterResult,opts) + _sb;
   // Source swiss/liga/monarch round columns from the unified adapter. Each
   // column is flattened back into the legacy {matches, status, format,
   // monarchGroups, round} shape so the downstream renderer (previous rounds,

@@ -291,5 +291,68 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
   assert(headings(render()).includes('Pts'));
 })();
 
+// Sports groups span all seven rounds, irrespective of technical monarchGroup IDs.
+(function () {
+  const assert = require('node:assert/strict');
+  const categories=['Categoria B','Categoria C'];
+  const t={id:'eight-standings',format:'Liga',ligaRoundFormat:'rei_rainha',currentPhaseIndex:0,
+    rankingPrimary:'wins',tiebreakers:['saldo_games','confronto_direto','sorteio'],scoring:{type:'simple'},
+    phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:categories.map(category=>({category,groupFormation:{mode:'size',value:8}}))}},
+      {kind:'elimination',source:{scope:'per_group',qualifyTopN:2,mapping:[{dest:'main',rankFrom:1,rankTo:2}],qualificationCategoryRules:categories.map((category,i)=>({category,perGroup:i?2:4}))}}],matches:[]};
+  ['A','B','C','D','E','F'].forEach((label,g)=>{
+    const category=categories[g<2?0:1], groupIdx=g<2?g:g-2;
+    for(let round=1;round<=7;round++)for(let lane=0;lane<2;lane++) {
+      const slots=Array.from({length:4},(_,i)=>(lane*4+i+round-1)%8);
+      const names=slots.map(i=>label+' atleta '+i), ids=slots.map(i=>'manual:'+label+'-'+i);
+      t.matches.push({id:label+'-'+round+'-'+lane,phaseIndex:0,isMonarch:true,bracket:'monarch',round,groupIdx,monarchGroup:t.matches.length,
+        category,scheduledAt:'2026-11-29T'+String(7+round).padStart(2,'0')+':00:00-03:00',scheduledGroupLabel:label,_gameNum:t.matches.length+1,team1:names.slice(0,2),team2:names.slice(2),
+        p1:names.slice(0,2).join(' / '),p2:names.slice(2).join(' / '),team1Uids:[null,null],team2Uids:[null,null],team1SlotIds:ids.slice(0,2),team2SlotIds:ids.slice(2)});
+    }
+  });
+  t.scheduleWindow={days:[{day:'2026-11-29',startTime:'08:00',endTime:'18:00'}]};
+  const stored=W.AppStore.tournaments,active=W._currentBracketTournament;W.AppStore.tournaments=[t];W._currentBracketTournament=t;
+  const baseline=JSON.stringify(t), groups=W._super8StandingsGroups(t);
+  assert.equal(groups.length,6);assert(groups.every(g=>g.players.length===8&&g.matches.length===14));
+  assert.equal(JSON.stringify(t),baseline,'projection does not rewrite draw or identifiers');
+  const game=t.matches[0];game.winner='p1';game.scoreP1=7;game.scoreP2=0;
+  const rows=()=>W._computeMonarchStandings(W._super8StandingsGroups(t)[0],t,categories[0]);
+  let r=rows();assert.equal(r.length,8);assert.equal(r.filter(s=>s.wins===1&&s.gamesWon-s.gamesLost===7&&s.played===1).length,2);
+  assert.equal(r.filter(s=>s.losses===1&&s.gamesWon-s.gamesLost===-7).length,2);assert.equal(r.filter(s=>s.played===0).length,4);
+  assert.equal(r[0].wins,1);assert.equal(r[1].wins,1);
+  const later=t.matches[2];later.winner='p2';later.scoreP1=3;later.scoreP2=7;
+  r=rows();assert.equal(r.reduce((n,s)=>n+s.wins,0),4);assert.equal(r.reduce((n,s)=>n+s.losses,0),4);
+  assert.equal(r.reduce((n,s)=>n+s.gamesWon-s.gamesLost,0),0);
+  assert(r.some(s=>s.played===2&&s.wins===1&&s.losses===1),'mixed results accumulate for the same athlete');
+  assert(W._computeMonarchStandings(groups[1],t,categories[0]).every(s=>s.played===0),'other group untouched');
+  game.scoreP1=6;game.scoreP2=4;r=rows();assert.equal(r.find(s=>s.manualParticipantId==='A-0').gamesWon,6,'score correction recomputes instead of adding');
+  assert.equal(W._phaseClassifiedCount(t,8,categories[0],0),4);assert.equal(W._phaseClassifiedCount(t,8,categories[1],0),2);
+  const fallback=JSON.parse(JSON.stringify(t));fallback.phases[1].source.qualificationCategoryRules.pop();assert.equal(W._phaseClassifiedCount(fallback,8,categories[1],0),2);
+  delete fallback.phases[1].source.qualificationCategoryRules;assert.equal(W._phaseClassifiedCount(fallback,8,categories[0],0),2);
+  const html=W._renderMonarchStage(t,false,false);
+  for(const route of [W.renderStandings(t,false,false,'',''),W._renderPhaseBracket(t,false,'',0)]) {
+    assert.equal((route.match(/sp-monarch-standings-name/g)||[]).length,48,'both production routes render every athlete once');
+    assert.equal((route.match(/id="card-/g)||[]).length,84);
+  }
+  if(process.env.SP_CAPTURE_EIGHT_BRACKET)require('node:fs').writeFileSync(process.env.SP_CAPTURE_EIGHT_BRACKET,JSON.stringify({t,html}));
+  assert.equal((html.match(/data-group-box="1"/g)||[]).length,6,'one block for each eight-player group');
+  assert.equal((html.match(/id="card-/g)||[]).length,84,'all fourteen games per group remain available');
+  assert.equal((html.match(/<tbody>/g)||[]).length,6);assert.equal((html.match(/sp-monarch-standings-name/g)||[]).length,48);
+  assert(!/>Pts<|>PA</.test(html));assert(html.includes('faixa de avanço: 4')&&html.includes('faixa de avanço: 2'));
+  const phase1=JSON.parse(JSON.stringify(t));phase1.currentPhaseIndex=1;phase1.phases.unshift({kind:'classification'});phase1.matches.forEach(m=>m.phaseIndex=1);
+  assert.equal((W._renderPhaseBracket(phase1,false,'',1).match(/sp-monarch-standings-name/g)||[]).length,48,'later phases retain eight-player groups');
+  assert.equal((W.renderStandings(phase1,false,false,'','').match(/sp-monarch-standings-name/g)||[]).length,48,'later-phase standings route also retains eight-player groups');
+  const fragment=W._renderMonarchStage(t,false,false,{standingsOnly:true,targetGroupLabel:W._grpKey(groups[0].name)});
+  assert.equal((fragment.match(/sp-monarch-standings-name/g)||[]).length,8,'in-place update covers all eight athletes');
+  const homo=JSON.parse(JSON.stringify(t));homo.matches.forEach(m=>{if(m.scheduledGroupLabel==='A'){m.team1=m.team1.map(()=> 'Mesmo nome');m.team2=m.team2.map(()=> 'Mesmo nome');}});
+  assert.equal(W._super8StandingsGroups(homo)[0].players.length,8,'manual slot identity separates homonyms');
+  const other=JSON.parse(JSON.stringify(t));other.phases[0].classification.rotationCategoryRules.forEach(r=>r.groupFormation.value=4);
+  assert.equal(W._super8StandingsGroups(other).length,0,'size four does not activate eight-player projection');
+  assert(W._computeMonarchStandings(groups[0],other,categories[0]).every(s=>s.gamesWon===0&&s.gamesLost===0),'other formats retain simple scoring behavior');
+  const server=require('../functions-autodraw/draw-core')._window;
+  assert.deepEqual(JSON.parse(JSON.stringify(server._computeMonarchStandings(groups[0],t,categories[0]))),JSON.parse(JSON.stringify(rows())),'fresh server vendor and client standings agree');
+  W.AppStore.tournaments=stored;W._currentBracketTournament=active;
+  ok(true,'Super8: six groups, eight manual athletes, accumulated scores, category cutoff and server parity');
+})();
+
 console.log(pass + ' ok, ' + fail + ' falharam');
 if (fail > 0) process.exit(1);
