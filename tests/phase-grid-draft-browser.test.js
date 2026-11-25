@@ -8,7 +8,7 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  await page.setContent('<style>:root{--bg-card:#18527a;--text-main:white;--text-muted:#ddd;--border-color:#99bbee}body{margin:0}</style>'+['tourn-court-count','tourn-game-duration','tourn-call-time','tourn-warmup-time','tourn-max-by-category','tourn-max-participants','select-sport'].map(id=>'<input id="'+id+'">').join('')+'<input type="checkbox" checked id="setup-first-round-only"><input type="checkbox" checked id="tourn-custom-category-capacity"><section id="phase-call-order-editor"></section>');
  const scripts=['domain/standings','domain/team-competition','domain/phase-grid-plan','views/sport-rules','views/standings-core','views/super-eight-core','views/format2','views/tournaments-categories','views/bracket-model','views/bracket-logic','views/bracket-policy','views/chaves','views/chaves-adapter','views/phases-engine','views/tournaments-utils','views/tournaments-draw','views/schedule-poll','views/phase-grid-editor'];
  for(const file of scripts)await page.addScriptTag({path:root+'/js/'+file+'.js'});
- await page.addStyleTag({path:root+'/css/phase-grid-editor.css'});
+ for(const css of ['style','components','layout','responsive','phase-grid-editor'])await page.addStyleTag({path:root+'/css/'+css+'.css'});
  const t=scenario(['Retinol · Categoria B','Colágeno · Categoria C'],[16,32],[8,8],[7,7],[4,2]);t.gameDuration=30;t.callTime=5;t.warmupTime=5;
  await page.evaluate(({t,D})=>{
   for(const [id,value] of Object.entries({'tourn-court-count':6,'tourn-game-duration':30,'tourn-call-time':5,'tourn-warmup-time':5,'tourn-max-by-category':JSON.stringify(t.maxParticipantsByCategory),'tourn-max-participants':48,'select-sport':t.sport}))document.getElementById(id).value=value;
@@ -23,14 +23,35 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  assert.notEqual(plan.inputSignature,old.inputSignature);G.assertPlan({...t,gameDuration:25},plan,D,w);
  assert.equal(await page.locator('.phase-grid-super-group').count(),6);
  assert.equal(await page.locator('[data-tile-id]').count(),plan.blocks.length);
- assert.equal(await page.locator('.phase-grid-group-game').count(),42);
+ assert.equal(await page.locator('.phase-grid-group-game').count(),84);
  for(const panel of await page.locator('.phase-grid-super-group').all()) {
   assert.equal(await panel.locator('header strong').count(),1);
-  assert.equal(await panel.locator('.phase-grid-group-game').count(),7);
+  assert.equal(await panel.locator('.phase-grid-group-game').count(),14);
+  assert(!/Quadra|\d{2}:\d{2}/.test(await panel.locator('header').innerText()),'categoria/grupo sem repetir quadras ou horas');
   assert(!/Fase 1|Entrada|Rodada/.test(await panel.innerText()));
   for(const el of await panel.locator('[data-tile-id]').all())assert(await el.evaluate(e=>e.scrollHeight<=e.clientHeight+1),'tile agrupado sem corte');
  }
+ const games=await page.evaluate(()=>{
+  var state=_phaseCallOrderState,numbers=ScoreplacePhaseGridPlan.numbered(state.tiles,state.plan);
+  return state.tiles.filter(t=>t.kind==='groups').map(t=>{
+   var el=Array.from(document.querySelectorAll('[data-tile-id]')).find(el=>el.dataset.tileId===t.id);
+   return {id:t.id,court:t.court,at:t.startTime,group:t.assignment.label,games:t.games,expected:numbers[t.id],text:el.innerText.trim(),aria:el.getAttribute('aria-label')};
+  }).sort((a,b)=>a.at.localeCompare(b.at)||a.court-b.court);
+ });
+ assert(games.every(g=>g.games===1),'cada reserva é uma partida individual');
+ assert.deepEqual(games.slice(0,6).map(g=>[g.court,g.group,g.text]),[
+  [1,'B1','Jogo 1'],[2,'B1','Jogo 2'],[3,'C1','Jogo 3'],[4,'C1','Jogo 4'],[5,'C2','Jogo 5'],[6,'C2','Jogo 6']
+ ]);
+ assert.deepEqual(games.slice(6,12).map(g=>g.text),['Jogo 7','Jogo 8','Jogo 9','Jogo 10','Jogo 11','Jogo 12']);
+ assert.equal(new Set(games.map(g=>g.text)).size,84,'uma numeração única por partida nas duas entradas');
+ assert(games.every(g=>g.text==='Jogo '+g.expected),'rótulo usa a numeração canônica, não a rodada');
+ assert(games.every(g=>g.aria.includes('quadra '+g.court) && g.aria.includes(g.at)),'metadados continuam acessíveis');
+ assert.match(await page.locator('.phase-grid-head').innerText(),/Quadra 1/);
+ assert.match(await page.locator('.phase-grid-head').innerText(),/Quadra 6/);
+ assert.match(await page.locator('.phase-grid-times').innerText(),/08:00/);
+ assert.match(await page.locator('.phase-grid-times').innerText(),/08:35/);
  const elim=await page.locator('.phase-grid-elim').allTextContents();
+ assert(elim.every(text=>!/[0-9]{2}:[0-9]{2}/.test(text)),'horários aparecem apenas na coluna à esquerda');
  assert(elim.some(text=>/Vencedor do grupo C1 × Vencedor do grupo C4/.test(text)));
  assert(elim.some(text=>/Vencedor do grupo C2 × Vencedor do grupo C3/.test(text)));
  assert(elim.some(text=>/Vencedor do jogo \d+ × Vencedor do jogo \d+/.test(text)));
@@ -56,11 +77,18 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
   var cases=[list.filter((_,i)=>i!==0),list.map((x,i)=>({...x,day:i?'2026-12-02':x.day})),list.map(x=>({...x,games:3})),list.map(x=>({...x,court:x.court===2?3:x.court})),list.map((x,i)=>({...x,startTime:i===0?'08:01':x.startTime})),list.map(x=>({...x,duration:10})),list.filter(x=>x.round===1).map(x=>({...x,startTime:'23:55',duration:25}))];
   return [count(list),...cases.map(count)];
  });assert.deepEqual(pure,[1,0,0,0,0,0,0,0]);
- await page.screenshot({path:'/tmp/sp-2765-group-grid.png'});
+ await page.screenshot({path:'/tmp/sp-2766-group-grid.png'});
  await page.evaluate(()=>{window._phaseCallOrderState.locked=true;document.getElementById('tourn-game-duration').value=10;window._phaseGridRefreshDraft()});
  assert.deepEqual(await page.evaluate(()=>_phaseCallOrderState.plan),plan,'locked intacto');
  await page.evaluate(()=>{_phaseCallOrderState.locked=false;window._phaseGridRefreshDraft()});
  assert.equal(await page.locator('.phase-grid-super-group').count(),0,'10 minutos usa compacto');
+ const compact=await page.evaluate(()=>{
+  var s=_phaseCallOrderState,n=ScoreplacePhaseGridPlan.numbered(s.tiles,s.plan);
+  return s.tiles.filter(t=>t.kind==='groups').every(t=>{
+   var el=Array.from(document.querySelectorAll('[data-tile-id]')).find(el=>el.dataset.tileId===t.id);
+   return el.querySelector('.phase-grid-single').textContent==='JOGO '+n[t.id] && !/[0-9]{2}:[0-9]{2}/.test(el.innerText);
+  });
+ });assert(compact,'fallback também usa número de partida e não repete horário');
  await page.evaluate(()=>{document.getElementById('tourn-game-duration').value=25;_phaseGridRefreshDraft();
   window.dragEvent={dataTransfer:{setData(){},getData(){return 'missing'}},preventDefault(){},stopPropagation(){}};
   _phaseGridDragStart(dragEvent,_phaseCallOrderState.tiles[0].id);document.getElementById('tourn-game-duration').value=20;_phaseGridRefreshDraft();});
@@ -95,5 +123,5 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  },frozen);
  assert.deepEqual(untouched,{auto:null,refresh:null,touchedAuto:null,organizer:null,untouched:true,unchanged:true},'modo automático não bloqueia salvar, e grade v1 não tocada permanece intacta');
  assert.deepEqual(errors,[]);
- console.log('✓ grade real: grupos, sete jogos, fontes das finais, 30→25, assinatura válida, órfãos, locked e drag');
+ console.log('✓ grade real: 84 partidas únicas, Q1–Q6/Jogos1–6 e7–12, cabeçalhos sem repetição, fallback, finais, 30→25, locked e drag');
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

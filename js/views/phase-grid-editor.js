@@ -156,7 +156,7 @@
       var panel=document.createElement('section'); panel.className='phase-grid-super-group';
       panel.style.cssText='top:'+((model.minutes(first.startTime)-start)*pixelsPerMinute)+'px;height:'+((finish-model.minutes(first.startTime))*pixelsPerMinute-3)+'px;left:calc(66px + (100% - 66px) * '+(group.courts[0]-1)+' / '+columns+');width:calc((100% - 66px) * 2 / '+columns+');';
       var heading=document.createElement('header');
-      heading.innerHTML='<strong>'+esc(label(first))+'</strong><span>Grupo '+esc(first.assignment?.label || model.groupLabel(first))+'</span><small>'+group.courts.map(c=>esc(state.tournament.courtNames?.[c-1] || 'Quadra '+c)).join(' e ')+'</small>';
+      heading.innerHTML='<strong>'+esc(label(first))+'</strong><span>Grupo '+esc(first.assignment?.label || model.groupLabel(first))+'</span>';
       panel.appendChild(heading);
       if(!state.locked) {
         panel.addEventListener('dragover',function(event){event.preventDefault();});
@@ -170,9 +170,7 @@
         el.style.top=((model.minutes(tile.startTime)-model.minutes(first.startTime))*pixelsPerMinute+(firstRound?96:0))+'px';
         el.style.height=(tile.duration*pixelsPerMinute-(firstRound?96:0)-3)+'px';
         el.style.left=left?'3px':'calc(50% + 3px)';el.style.right=left?'calc(50% + 3px)':'3px';
-        el.innerHTML=(left?'<b class="phase-grid-group-game">Jogo '+tile.round+'</b>':'')+
-          '<small>'+esc(state.tournament.courtNames?.[tile.court-1] || 'Quadra '+tile.court)+'</small>'+
-          '<small>'+esc(tile.startTime)+'–'+esc(model.clock((model.minutes(tile.startTime)+tile.duration)%1440))+'</small>'+
+        el.innerHTML='<b class="phase-grid-group-game">Jogo '+numbers[tile.id]+'</b>'+
           '<span class="phase-grid-single" hidden>JOGO '+numbers[tile.id]+'</span>';
         panel.appendChild(el);
       });
@@ -288,7 +286,6 @@
             var series = tile.kind === 'groups' && (state.plan.schema === 1 || tile.games === 3);
             var short = tile.kind==='groups' ? 'Grupo '+(tile.assignment?.label || groupName)+(series?' · 3 jogos':'') : '';
 
-            var gameTimes = model.gameStarts(tile, state.tournament);
             var accent = 'phase-grid-cat-' + (categories.indexOf(tile.category) % 6);
             var overflow = carry || model.outsideWindow(tile, day), collision = overlapping.has(tile.id);
             return '<div class="phase-grid-tile ' + (tile.kind === 'groups' ? 'phase-grid-group' : 'phase-grid-elim') + ' ' + accent +
@@ -301,10 +298,9 @@
               '<strong>' + esc(title) + '</strong>'+(short?'<small>'+esc(short)+'</small>':'') +
               (matchup?'<small class="phase-grid-matchup">'+esc(matchup)+'</small>':'')+
               (series ? '<div class="phase-grid-series">' + [0,1,2].map(function (offset) {
-                return '<span>JOGO ' + (numbers[tile.id] + offset) + ' <small>(' + (offset + 1) + '/3) · ' + model.clock(gameTimes[offset]) + '</small></span>';
-              }).join('') + '</div>' : '<span class="phase-grid-single"'+(tile.kind==='groups'?'':' hidden')+'>JOGO ' + (tile.kind==='groups' && state.plan.schema===2?tile.round:numbers[tile.id]) + '</span>') +
-              '<small>' + esc(tile.startTime) + '–' + esc(model.clock((model.minutes(tile.startTime) + tile.duration)%1440)) +
-              (overflow ? ' · Excede o horário' : '') + (collision ? ' · Sobreposição' : '') + '</small></div>';
+                return '<span>JOGO ' + (numbers[tile.id] + offset) + ' <small>(' + (offset + 1) + '/3)</small></span>';
+              }).join('') + '</div>' : '<span class="phase-grid-single"'+(tile.kind==='groups'?'':' hidden')+'>JOGO ' + numbers[tile.id] + '</span>') +
+              (overflow || collision ? '<small>' + (overflow ? 'Excede o horário' : '') + (overflow && collision ? ' · ' : '') + (collision ? 'Sobreposição' : '') + '</small>' : '') + '</div>';
           }).join('') + '</div>';
       }).join('') + '</div></div></section>';
     renderGroupPanels(root,state,visible,start,columns,numbers);
