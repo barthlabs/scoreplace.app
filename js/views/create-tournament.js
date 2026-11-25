@@ -928,7 +928,8 @@ function setupCreateTournamentModal() {
                   <span style="font-size: 0.72rem; color: var(--sp-c-f59e0b,#f59e0b); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">⏱ Estimativa de tempo da fase</span>
                   <span id="duration-estimate-inline" style="font-size: 0.8rem; font-weight: 700; color: var(--text-bright); white-space: nowrap;">—</span>
                 </div>
-                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-items:end;">
+                <div class="sp-phase-timing">
+                  <div id="setup-scope-wrap" class="sp-phase-setup">
                   <label style="display:flex; flex-direction:column; gap:2px; margin:0; min-width:0;" title="${_t('create.callTimeDesc')}">
                     <span style="font-size:0.7rem; color:var(--text-muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_t('create.callTimeLabel')}</span>
                     <div style="display:flex; align-items:center; gap:4px; background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:6px; padding:2px 6px;">
@@ -943,20 +944,17 @@ function setupCreateTournamentModal() {
                       <span style="font-size:0.7rem; color:var(--text-muted);">min</span>
                     </div>
                   </label>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--text-muted);cursor:pointer;">
+                    <span class="toggle-switch"><input type="checkbox" id="setup-first-round-only" checked onchange="window._recalcDuration()"><span class="toggle-slider"></span></span>
+                    <span>Só na primeira rodada</span>
+                  </label>
+                  </div>
                   <label style="display:flex; flex-direction:column; gap:2px; margin:0; min-width:0;" title="${_t('create.gameDurDesc')}">
                     <span style="font-size:0.7rem; color:var(--text-muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_t('create.gameDurLabel')}</span>
                     <div style="display:flex; align-items:center; gap:4px; background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:6px; padding:2px 6px;">
                       <input type="number" id="tourn-game-duration" min="5" max="300" value="30" oninput="window._recalcDuration()" style="flex:1; min-width:0; width:100%; background:transparent; border:none; color:var(--text-bright); font-size:0.9rem; font-weight:600; padding:4px 0; outline:none;">
                       <span style="font-size:0.7rem; color:var(--text-muted);">min</span>
                     </div>
-                  </label>
-                </div>
-
-                <!-- Escada de estimativa: 2 pot. de 2 abaixo + real + 2 acima -->
-                <div id="setup-scope-wrap" style="margin-top:8px;padding:8px 10px;border:1px solid rgba(245,158,11,.25);border-radius:8px;background:rgba(245,158,11,.04);">
-                  <label style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--text-muted);cursor:pointer;">
-                    <span class="toggle-switch"><input type="checkbox" id="setup-first-round-only" checked onchange="window._recalcDuration()"><span class="toggle-slider"></span></span>
-                    <span>Só na primeira rodada</span>
                   </label>
                 </div>
                 <div id="phase-estimate-ladder" hidden></div>
@@ -4274,11 +4272,11 @@ function setupCreateTournamentModal() {
     }
     mapInput.value = JSON.stringify(effective);
     grid.style.display = allCategories.length > 0 && custom.checked ? 'grid' : 'none';
-    if (custom.checked && allCategories.length > 0) {
+    if (allCategories.length > 0) {
       var escape = function(s) { return String(s).replace(/[&<>"']/g, function(ch) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]; }); };
       grid.innerHTML = allCategories.map(function(category) {
         return '<label style="display:block;padding:8px;border:1px solid rgba(16,185,129,.28);border-radius:8px;font-size:.76rem;color:var(--text-main);">' + escape(category) +
-          '<input type="number" min="0" inputmode="numeric" data-category="' + encodeURIComponent(category) + '" value="' + (excludedSet.has(String(category).trim().normalize('NFKC').toLocaleLowerCase('pt-BR')) ? '0' : (effective[category] || '')) + '" oninput="window._setCategoryCapacityValue(this)" aria-label="Máximo de participantes em ' + escape(category) + '" style="display:block;width:5ch;max-width:100%;margin-top:5px;padding:7px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);box-sizing:content-box;"></label>';
+          '<input type="number" min="0" inputmode="numeric" data-category="' + encodeURIComponent(category) + '" value="' + (excludedSet.has(String(category).trim().normalize('NFKC').toLocaleLowerCase('pt-BR')) ? '0' : (custom.checked ? effective[category] || '' : validGeneral ? per : '')) + '" oninput="window._setCategoryCapacityValue(this)" aria-label="Máximo de participantes em ' + escape(category) + '" style="display:block;width:5ch;max-width:100%;margin-top:5px;padding:7px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);box-sizing:content-box;"></label>';
       }).join('');
     } else grid.innerHTML = '';
     if (guard && !custom.checked && validGeneral && guard.total > 0 && guard.total !== per * count) {
@@ -4333,6 +4331,18 @@ function setupCreateTournamentModal() {
     var category = decodeURIComponent(input.getAttribute('data-category') || '');
     if (input.value === '') return;
     var value = Number(input.value);
+    if (!Number.isSafeInteger(value) || value < 0) return;
+    var custom = read('tourn-custom-category-capacity');
+    if (custom && !custom.checked) {
+      var general = Number((read('tourn-max-per-category') || {}).value);
+      var seed = Number.isSafeInteger(general) && general > 0 ? general : 0;
+      if (value === seed) return;
+      var active = (window._getCreateFormCategoryData(editorRoot) || {}).combinedCategories || [];
+      map = Object.fromEntries(active.map(function(name) { return [name,seed]; }));
+      custom.checked = true;
+      hidden.value = JSON.stringify(map);
+      window._categoryCapacityLoadGuard = null;
+    }
     var excludedInput = read('tourn-excluded-categories');
     var excluded = [];
     try { excluded = JSON.parse((excludedInput || {}).value || '[]') || []; } catch (e) {}
@@ -5130,7 +5140,7 @@ function setupCreateTournamentModal() {
     var f2cfg = null;
     try { f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) {}
     var setupScopeWrap = document.getElementById('setup-scope-wrap');
-    if (setupScopeWrap) setupScopeWrap.style.display = 'block';
+    if (setupScopeWrap) setupScopeWrap.style.display = '';
     if(f2cfg && typeof window._f2ProjectCurrentPhases==='function' && window.ScoreplacePhaseGridPlan) {
       var capacities;
       var custom=read('tourn-custom-category-capacity');

@@ -1091,11 +1091,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _restoreSliderCapacities() {
     var grid=_capacityField('category-capacity-grid');
+    var section=_capacityField('category-capacity-section');
+    if(section) section.classList.remove('sp-capacity-integrated');
     if (!grid || !S?.mountEl?.querySelectorAll) return;
-    S.mountEl.querySelectorAll('[data-slider-capacity] > label').forEach(function(label) {
+    S.mountEl.querySelectorAll('[data-slider-capacity] > label, [data-capacity-excluded] > label').forEach(function(label) {
       var input=label.querySelector('input[data-category]');
       var caption=Array.from(label.childNodes).find(node=>node.nodeType===3);
       if(input && caption) caption.nodeValue=decodeURIComponent(input.dataset.category);
+      label.classList.remove('sp-capacity-cell');
       grid.appendChild(label);
     });
   }
@@ -1103,14 +1106,26 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _placeSliderCapacities() {
     var grid=_capacityField('category-capacity-grid');
     if (!grid || !grid.querySelectorAll || !S?.mountEl?.querySelector) return;
-    var names=_sliderCategories();
+    // The scalar model also needs its real category inputs on the first mount.
+    // Refresh through the existing capacity renderer, never by cloning inputs.
+    if (!grid.querySelector('input[data-category]') && !S.mountEl.querySelector('input[data-category]') &&
+        !S.preparingCapacity && typeof window._syncCategoryCapacity==='function') {
+      S.preparingCapacity=true;
+      try { window._syncCategoryCapacity({skipPreviewUpdate:true}); }
+      finally { S.preparingCapacity=false; }
+    }
+    var names=_sliderCategories(), common=_sliderMode(0,_sliderRules(0)).common;
+    var section=_capacityField('category-capacity-section');
+    if(section) section.classList.toggle('sp-capacity-integrated',!!S.mountEl.querySelector('[data-rotation-phase="0"] [data-slider-capacity]'));
     grid.querySelectorAll('input[data-category]').forEach(function (input) {
       var index=names.indexOf(decodeURIComponent(input.dataset.category));
-      var slot=S.mountEl.querySelector('[data-rotation-phase="0"] [data-slider-category="'+index+'"] [data-slider-capacity]');
+      var slot=S.mountEl.querySelector(common?'[data-rotation-phase="0"] [data-slider-capacity]':'[data-rotation-phase="0"] [data-slider-category="'+index+'"] [data-slider-capacity]');
+      if(!slot && section?.classList.contains('sp-capacity-integrated')) slot=S.mountEl.querySelector('[data-capacity-excluded]');
       if (slot) {
         var label=input.closest('label');if(!label) return;
         var caption=Array.from(label.childNodes).find(node=>node.nodeType===3);
-        if(caption) caption.nodeValue=_sliderMode(0,_sliderRules(0)).common ? decodeURIComponent(input.dataset.category) : 'Vagas';
+        if(caption) caption.nodeValue=common || index<0 ? decodeURIComponent(input.dataset.category) : 'Vagas';
+        label.classList.add('sp-capacity-cell');
         slot.appendChild(label);
       }
     });
@@ -1246,19 +1261,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var maxQual=Math.max(1,rule.perGroup,data.qualifierLimit);
       html += '<fieldset style="min-width:0;box-sizing:border-box;margin:8px 0;padding:10px;border:1px solid var(--sp-b-255-255-255-02);border-radius:10px"><legend style="font-size:.85rem;color:var(--text-main)">'+
         _safe(mode.common?'Mesma configuração para todas':rule.category || 'Classificação geral')+'</legend>'+
-        (!phase && !mode.common ? '<div data-slider-category="'+index+'"><div data-slider-capacity></div></div>' : '')+
-        '<div data-slider-layout style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;max-width:820px">'+
+        '<div data-slider-category="'+index+'" data-slider-layout class="sp-category-controls">'+
+        (!phase ? '<div data-slider-capacity>'+(mode.common?'<span style="font-size:.82rem">Vagas</span>':'')+'</div>' : '<div style="font-size:.82rem">Vagas<br><strong>'+data.people+'</strong></div>')+
         slider('groups','Número de grupos',data.num || 1,data.num || 'A definir',1,Math.max(1,data.num,Math.min(128,data.people ? Math.floor(data.people/data.minimum) : 128)))+
         slider('size','Pessoas por grupo',Math.max(data.minimum,data.size),data.sizeText,data.minimum,Math.max(data.minimum,data.size,Math.min(128*data.unit,data.people || 128*data.unit)),data.unit)+
         slider('games','Jogos por jogador',rule.rounds,rule.rounds,1,data.maxGames)+
-        slider('qualifiers',sport==='pairs'?'Duplas classificadas por grupo':'Classificados por grupo',rule.perGroup,rule.perGroup,1,maxQual,1,!eligible)+'</div>'+
-        (!eligible?'<div style="font-size:.75rem;color:var(--text-muted);margin-top:8px">Sem próxima fase para esta categoria.</div>':'')+
+        slider('qualifiers',sport==='pairs'?'Duplas classificadas por grupo':'Classificados por grupo',rule.perGroup,rule.perGroup,1,maxQual,1,!eligible)+
         (sport==='team' ? '<div style="font-size:.75rem">Cada jogador mantém sua dupla. A grade por times usa adversários distintos.</div>' :
         _sliderToggle(_sliderId('partners',phase,index),sport==='rotation'?'Não repetir parceiro':'Não repetir adversário',!rule.allowRepeatPartners,
-          'window._f2RotationSlider('+phase+','+index+',\'partners\',!this.checked);window._f2RotationSliderDone()',!!disabled))+
+          'window._f2RotationSlider('+phase+','+index+',\'partners\',!this.checked);window._f2RotationSliderDone()',!!disabled))+'</div>'+
+        (!eligible?'<div style="font-size:.75rem;color:var(--text-muted);margin-top:8px">Sem próxima fase para esta categoria.</div>':'')+
         (mode.common?'':preview(rule,index,data))+'</fieldset>';
     });
-    if(mode.common) rules.forEach((rule,index)=>{html+=(phase?'':'<div data-slider-category="'+index+'"><div data-slider-capacity></div></div>')+preview(rule,index,_sliderData(rule,phase));});
+    if(mode.common) rules.forEach((rule,index)=>{html+=preview(rule,index,_sliderData(rule,phase));});
+    if(!phase) html+='<div data-capacity-excluded data-slider-capacity class="sp-capacity-excluded"></div>';
     var quotas=phase?S.cfg.eliminatoria.formationQualificationCategoryRules:S.cfg.qualificationCategoryRules;
     if(!quotas && S.cfg.eliminatoria.ativa && (S.cfg.eliminatoria.qualifyAll || S.cfg.classifScope==='overall'))
       html+='<div style="font-size:.75rem;color:var(--text-muted)">Ao ajustar classificados, o avanço passa a ser definido por grupo. O corte salvo permanece até esse ajuste.</div>';
@@ -1591,8 +1607,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           _pill(cfg.manualPairingPolicy === 'open', "window._f2PairAuthority('open')", 'Organização e atletas'));
       }
       if (!montadas && !cfg.teamCompetition.enabled) fBtns += _sec('Parceria nos jogos do grupo',
-        _pill(_sliderSport(0)==='pairs', "window._f2SliderPartnership(false)", 'Manter a dupla fixa') +
-        _pill(_sliderSport(0)==='rotation', "window._f2SliderPartnership(true)", 'Trocar de parceiro'));
+        _binaryChoice('Manter a dupla fixa','Trocar de parceiro',_sliderSport(0)==='rotation',
+          'window._f2SliderPartnership(this.checked)','Parceria nos jogos do grupo'));
       formationControls += fBtns;
     }
     if (isDupla && !cfg.classifAtiva) {
@@ -2854,6 +2870,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (cfg.classifAtiva && cfg.eliminatoria && last && last.formatCode && String(last.formatCode).indexOf('elim_') === 0) {
       if (!Array.isArray(cfg.eliminatoria.roundBounds) || !cfg.eliminatoria.roundBounds.length) cfg.eliminatoria.roundBounds = Array.isArray(last.roundBounds) ? last.roundBounds.slice() : [];
     }
+    if (container && S?.mountEl===container) _stashExt();
     S = { mode: 'form', mountEl: container, sport: sport, cfg: cfg, t: tournament || null };
     _syncTeamSize();
     if (container) { container.innerHTML = _bodyControls(); _placeExt(); _mountElimRoundBounds(); _renderTieResolution(); }

@@ -3784,3 +3784,20 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
   .sp-tournament-identity-row:has(.sp-tournament-identity-date) { gap:10px !important; }
   .sp-tournament-identity-date :is(.sp-date-card--one-day, .sp-date-card--start-only) { min-width:clamp(112px,38vw,150px); padding:10px; }
 }
+
+/* Canonical tournament controls: capacity/group/size, games/qualifiers/partners. */
+.sp-category-controls { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 18px; align-items:center; }
+.sp-category-controls > * { min-width:0; }
+.sp-capacity-integrated { display:none !important; }
+.sp-capacity-cell { padding:0 !important; border:0 !important; margin:0; }
+.sp-capacity-excluded { display:flex; flex-wrap:wrap; gap:12px; }
+.sp-capacity-excluded:empty { display:none; }
+.sp-phase-timing { display:grid; grid-template-columns:minmax(0,3fr) minmax(0,1fr); gap:10px; align-items:center; }
+.sp-phase-setup { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)) auto; gap:12px; align-items:center; padding:8px 10px; border:1px solid var(--sp-b-255-255-255-02); border-radius:8px; background:var(--sp-g-255-255-255-005); }
+@media (max-width:700px) {
+  .sp-category-controls { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .sp-phase-timing { grid-template-columns:minmax(0,1fr); }
+  .sp-phase-setup { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .sp-phase-setup > label:last-child { grid-column:1 / -1; }
+}
+@media (max-width:420px) { .sp-category-controls { grid-template-columns:minmax(0,1fr); } }
