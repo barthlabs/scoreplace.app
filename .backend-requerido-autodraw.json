@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "c079a91c2ba72a379dd09ceb440d8192a7a79f79",
-  "scopeNote": "Grade universal completa com tempo excedente sinalizado, salvamento e sorteio permitidos quando todas as reservas são válidas; distribuição visual por categoria e vagas no topo.",
+  "backendCommit": "9f71c8c6269ce0442e890f43e5f923e2d3dedde3",
+  "scopeNote": "Entradas de grupos completas, cruzamentos explícitos e classificação por identidade com política de pontuação nas substituições; sem migração de dados.",
   "functions": [
     "createTournament",
     "updateTournamentConfiguration",
