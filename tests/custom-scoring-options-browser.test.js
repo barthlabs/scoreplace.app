@@ -49,10 +49,12 @@ const {chromium}=require('@playwright/test');
   await page.locator('#f2elim-tieat-box').getByRole('checkbox',{name:'Ativar tie-break no empate',exact:true}).check();
   assert.deepEqual(await page.evaluate(()=>_gsmReadHidden()),saved,'regra da fase seguinte é independente');
   assert.equal(await page.evaluate(()=>_f2GetElimScoring().customRulesVersion),1,'normalização preserva opt-in');
+  const beforeFrozenNext=await page.evaluate(()=>_f2GetElimScoring());
   await page.evaluate(()=>{window._scoringPhaseHasResult=()=>true;_gsmRenderTieAt();_openGSMConfig();});
   for(const label of toggles)assert(await modal.getByRole('checkbox',{name:label,exact:true}).isDisabled(),'congela regra e marcador com resultado');
-  await page.evaluate(()=>{_gsmCfgSetTwo(true);_gsmSetSetTwoPointInline(true);});
+  await page.evaluate(()=>{_gsmCfgSetTwo(true);_gsmSetSetTwoPointInline(true);_gsmSelectPreset('fixedGames');_f2ElimScoringPreset('fixedGames');});
   assert.deepEqual(await page.evaluate(()=>_gsmReadHidden()),saved,'guardas impedem chamada direta após resultado');
+  assert.deepEqual(await page.evaluate(()=>_f2GetElimScoring()),beforeFrozenNext,'preset não reverte contrato da fase com resultado');
   console.log('PASS: controles completos nos dois modos/fases/modal; escolha de gatilho, cancelamento, persistência, isolamento e congelamento.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

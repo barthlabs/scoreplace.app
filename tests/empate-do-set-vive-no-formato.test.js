@@ -14,10 +14,12 @@ function ok(value, message) {
   if (value) pass++;
   else { fail++; console.error('  ✗ ' + message); }
 }
+const ast=require('acorn').parse(ct,{ecmaVersion:'latest'});
 function fn(name) {
-  const start = ct.indexOf('window.' + name + ' = function');
-  if (start < 0) throw new Error('Função ausente: ' + name);
-  return ct.slice(start, ct.indexOf('\n};', start) + 3);
+  const statement=ast.body.find(n=>n.type==='ExpressionStatement' && n.expression.type==='AssignmentExpression' &&
+    n.expression.left.type==='MemberExpression' && n.expression.left.object.name==='window' && n.expression.left.property.name===name);
+  if(!statement)throw new Error('Função ausente: '+name);
+  return ct.slice(statement.start,statement.end);
 }
 
 console.log('──── formato de games por fase ────');
@@ -39,6 +41,7 @@ const nodes = {
   'gsm-countingType': { value: 'tennis' },
   'gsm-tiebreakAt': { value: 'g-1' },
   'gsm-tieRule': { value: 'tiebreak' },
+  'gsm-customRulesVersion': {value:''},
   'gsm-tieat-inline': { innerHTML: '' }
 };
 const win = {
@@ -53,6 +56,7 @@ const win = {
 win.window = win;
 vm.createContext(win);
 vm.runInContext([
+  fn('_gsmControlsScoring'), fn('_gsmReadHidden'), fn('_gsmCustomRulesLocked'), fn('_gsmMarkCustomRules'), fn('_gsmApplyCustomRule'),
   fn('_tieAtToggleHtml'), fn('_gsmTieAtAtual'), fn('_gsmRenderTieAt'),
   fn('_gsmSetGamesInline'), fn('_gsmSetTieRuleInline'), fn('_gsmSelectPreset'), fn('_gsmDetectPreset')
 ].join('\n'), win);
@@ -65,7 +69,7 @@ win._gsmPresets = {
 
 win._gsmRenderTieAt();
 ok(/Games ganhos para vencer o set/.test(nodes['gsm-tieat-inline'].innerHTML), 'campo de games aparece na fase inicial');
-ok(/5-5/.test(nodes['gsm-tieat-inline'].innerHTML), '6 games dispara decisão em 5-5');
+ok(/5–5/.test(nodes['gsm-tieat-inline'].innerHTML), '6 games dispara decisão em 5-5');
 nodes['gsm-type'].value = 'simple';
 nodes['gsm-tiebreakEnabled'].value = 'false';
 win._gsmRenderTieAt();
@@ -75,7 +79,7 @@ win._gsmSetTieRuleInline('extend');
 ok(nodes['gsm-type'].value === 'sets', 'editar a regra ativa o placar por sets');
 win._gsmSetTieRuleInline('tiebreak');
 win._gsmSetGamesInline('4');
-ok(nodes['gsm-gamesPerSet'].value === '4' && /3-3/.test(nodes['gsm-tieat-inline'].innerHTML),
+ok(nodes['gsm-gamesPerSet'].value === '4' && /3–3/.test(nodes['gsm-tieat-inline'].innerHTML),
   '4 games atualiza o campo salvo e o empate exibido');
 win._gsmSetTieRuleInline('decider');
 ok(nodes['gsm-tieRule'].value === 'tiebreak' && nodes['gsm-tiebreakEnabled'].value === 'true',
@@ -87,10 +91,10 @@ ok(nodes['gsm-gamesPerSet'].value === '4', 'fração inválida não altera a met
 
 nodes['gsm-tiebreakAt'].value = '6';
 win._gsmRenderTieAt();
-ok(!/6-6|5-5/.test(nodes['gsm-tieat-inline'].innerHTML), 'não exibe uma segunda escolha de placar de empate');
-ok(nodes['gsm-tiebreakAt'].value === 'g-1', 'configuração antiga é normalizada para o empate derivado');
+ok(/Empate que ativa o tie-break/.test(nodes['gsm-tieat-inline'].innerHTML), 'exibe controle próprio para o empate escolhido');
+ok(nodes['gsm-tiebreakAt'].value === '6', 'renderizar preserva o empate numérico escolhido');
 win._gsmSetTieRuleInline('tiebreak');
-ok(nodes['gsm-tiebreakAt'].value === 'g-1', 'mudar a regra mantém o empate derivado');
+ok(nodes['gsm-tiebreakAt'].value === '6', 'mudar a regra mantém o empate numérico escolhido');
 win._gsmSetTieRuleInline('extend');
 win._gsmSelectPreset('best3');
 ok(nodes['gsm-tieRule'].value === 'extend' && nodes['gsm-tiebreakEnabled'].value === 'false',
@@ -99,7 +103,7 @@ ok(win._gsmDetectPreset() === 'best3', 'o preset continua reconhecido com regra 
 
 ok(/_tieAtToggleHtml\(/.test(f2) && /_f2ElimSetGames/.test(f2) && /_f2ElimSetRule/.test(f2),
   'a fase eliminatória usa o mesmo controle e tem gravadores próprios');
-ok(/_mesmoFormato\(sc, ini\) \? null : sc/.test(f2),
+ok(/_mesmoFormato\(sc,\s*ini\)\s*\?\s*null\s*:\s*sc/.test(f2),
   'a eliminatória volta a herdar quando a regra coincide com a fase inicial');
 ok(/s\.setTwoPointAdvantage/.test(format) && /s\.tiebreakTwoPointAdvantage/.test(format),
   'normalização da fase preserva margens independentes para set e tie-break');

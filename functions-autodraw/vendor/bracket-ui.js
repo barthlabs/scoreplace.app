@@ -2570,6 +2570,7 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   // A coluna viva do melhor de N pode ser o Super Tie-Break: seus pontos não
   // obedecem à regra de games do set normal (11–9 é válido, por exemplo).
   var _planSave = (typeof window._matchSetPlan === 'function') ? window._matchSetPlan(_isc, m) : null;
+  // Placar simples pode não ter configuração GSM; ele continua no caminho simples.
   var _isStbEntry = !!(_planSave && (_planSave.multi || (_isc && _isc.customRulesVersion===1)) && _planSave.live && _planSave.live.kind === 'stb');
 
   if (useSets && (!isFixedSet || _isc.customRulesVersion===1) && !_isStbEntry) {

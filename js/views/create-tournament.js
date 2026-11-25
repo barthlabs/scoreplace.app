@@ -8384,6 +8384,7 @@ window._gsmSelectPreset = function(key) {
   var presets = window._gsmPresets;
   var p = presets[key];
   if (!p) return;
+  if(key!=='custom' && (document.getElementById('gsm-customRulesVersion')||{}).value==='1' && window._gsmCustomRulesLocked(0))return;
   var currentGames = parseInt((document.getElementById('gsm-gamesPerSet') || {}).value, 10) || 6;
   var fixedGames = parseInt((document.getElementById('gsm-fixedSetGames') || {}).value, 10) || currentGames;
   var targetGames = key === 'fixedGames' ? fixedGames : p.gamesPerSet;
@@ -8536,7 +8537,6 @@ window._gsmUpdateMainSummary = function() {
 
 // Detect which preset matches current hidden field values
 window._gsmDetectPreset = function() {
-  if((document.getElementById('gsm-customRulesVersion')||{}).value==='1')return 'custom';
   // If user explicitly saved from Personalizado, keep it as custom
   if (window._gsmForcedCustom) return 'custom';
   var s = parseInt(document.getElementById('gsm-setsToWin').value) || 1;
@@ -8577,7 +8577,7 @@ window._openGSMConfig = function(targetPhase) {
   var overlay=document.createElement('div');overlay.id='gsm-config-overlay';
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:100000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px';
   overlay._scoringDraft=base;
-  overlay.innerHTML='<div style="background:var(--bg-card,#1e293b);width:94%;max-width:650px;border-radius:20px;margin:auto 0;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border-color)">'+
+  overlay.innerHTML='<div style="background:var(--bg-card,#1e293b);width:94%;max-width:650px;border-radius:20px;margin:auto 0;max-height:90%;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border-color)">'+
     '<div style="padding:16px;display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 style="margin:0">⚙️ Personalizado</h3><div style="display:flex;gap:8px"><button type="button" class="btn btn-sm" onclick="window._gsmCloseConfig()">Cancelar</button><button type="button" class="btn btn-primary btn-sm" onclick="window._gsmSaveConfig()">Aplicar</button></div></div>'+
     '<div style="padding:0 16px 16px;overflow-y:auto"><div id="gsm-cfg-rules"></div><div id="gsm-summary-text" role="status" style="font-size:.82rem;margin-top:12px"></div></div></div>';
   document.body.appendChild(overlay);window._gsmRenderConfigRules();
@@ -8773,6 +8773,7 @@ window._gsmMarkCustomRules=function() {
 };
 window._gsmApplyCustomRule=function(patch,mark) {
   if(window._gsmCustomRulesLocked(0)) {window._gsmRenderTieAt();return;}
+  patch=Object.assign({type:'sets'},patch);
   if(mark!==false){
     var base=window._gsmControlsScoring(window._gsmReadHidden());
     if(base.fixedSet && base.customRulesVersion!==1)patch=Object.assign({setTwoPointAdvantage:base.setTwoPointAdvantage,twoPointAdvantage:base.twoPointAdvantage,superTiebreak:base.superTiebreak,tiebreakEnabled:base.tiebreakEnabled,tieRule:base.tieRule,tiebreakAt:base.tiebreakAt},patch);
@@ -8859,7 +8860,8 @@ window._gsmCloseConfig = function () {
 // Lê o modal "Personalizado" → objeto scoring (mesmo shape de _gsmReadHidden).
 window._gsmReadConfigOverlay = function () {
   var ov=document.getElementById('gsm-config-overlay');
-  return ov ? JSON.parse(JSON.stringify(ov._scoringDraft)) : window._gsmReadHidden();
+  if(!ov)return window._gsmReadHidden();
+  return Object.assign(JSON.parse(JSON.stringify(ov._scoringDraft)),{type:'sets',countingType:'tennis'});
 };
 
 window._gsmSaveConfig = function() {

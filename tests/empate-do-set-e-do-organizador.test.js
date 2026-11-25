@@ -46,15 +46,14 @@ ok(/tieRule: sc\.tieRule/.test(ui) && /setTwoPointAdvantage/.test(ui) && /tiebre
 // ── 4. E agora ALGUÉM ESCREVE o tieRule ─────────────────────────────────────
 ok(/out\.tieRule = /.test(ct), 'o "Personalizado" grava tieRule (antes o motor lia um campo que ninguém escrevia)');
 ok(/window\._gsmSetTieRule = function/.test(ct), 'existe o controle prorrogar × tie-break');
-ok(/'tiebreakAt','tieRule'\]/.test(ct), 'os dois viajam junto com o formato entre as fases');
+ok(/'tiebreakAt','tieRule'(?:,'customRulesVersion')?\]/.test(ct), 'os dois viajam junto com o formato entre as fases');
 ok(/id="gsm-tieRule"/.test(ct), 'e têm campo próprio no formulário (senão não salva no torneio)');
-// O alvo de empate é derivado do total de games: com 6, ativa em 5-5; com 4, em 3-3.
-// O organizador só escolhe ligar/desligar o tie-break, sem um segundo campo redundante.
+// O organizador voltou a escolher explicitamente o empate; editar N não pode sobrescrevê-lo.
 ok(/window\._tieAtToggleHtml = function/.test(ct), 'a regra do set usa um controle comum às fases');
-ok(/Games ganhos para vencer o set/.test(ct) && /var at = Math\.max\(1, g - 1\)/.test(ct)
-   && /Tie-break no empate/.test(ct) && !/tieat-games/.test(ct) && /Exigir 2 games de diferença no set/.test(ct)
-   && /Exigir 2 pontos de diferença no tie-break/.test(ct),
-  'o tie-break usa um game abaixo do alvo; a sequência expõe margens distintas sem campo redundante');
+ok(/Games ganhos para vencer o set/.test(ct) && /Empate que ativa o tie-break/.test(ct)
+   && /onTieAt/.test(ct) && /Exigir dois games de diferença no set/.test(ct)
+   && /Exigir dois pontos de diferença no tie-break/.test(ct),
+  'o formato oferece empate numérico independente e margens distintas');
 ok(/'g\+1'/.test(ui), 'o motor continua entendendo o 7-7 já gravado (não some do lançamento)');
 ok(!/gsm-tbat-seg/.test(ct), '⛔ o segmento antigo não sobrou em lugar nenhum do formulário');
 
@@ -85,10 +84,10 @@ ok(!/gsm-tbat-seg/.test(ct), '⛔ o segmento antigo não sobrou em lugar nenhum 
 })();
 
 // ── 5. O RESUMO conta as duas saídas, com a conta certa ─────────────────────
-ok(/gsmExtendDetail/.test(ct) || /Desativado; o set segue até cumprir/.test(ct),
+ok(/O total é o mínimo de games: continua até abrir 2 games de diferença/.test(ct) && /continua até desempatar/.test(ct),
   'o resumo explica que o set segue quando tie-break fica desligado');
-ok(/tbPts - tbMargin \+ 1/.test(ct),
-  'e a conta do "segue até abrir N" é pts-margem+1 — em 5-5 o tie-break de 7 AINDA fecha (7-5)');
+ok(/state\.tiebreakTwoPointAdvantage \? 2 : 1/.test(ui),
+  'a margem do motor usa a escolha separada de pontos do tie-break');
 ok(!/var _tbDraw = tbPts - tbMargin;/.test(ct), 'o off-by-one antigo não voltou');
 // A conta, provada contra a regra de vitória do tie-break
 (function () {

@@ -2570,7 +2570,8 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   // A coluna viva do melhor de N pode ser o Super Tie-Break: seus pontos não
   // obedecem à regra de games do set normal (11–9 é válido, por exemplo).
   var _planSave = (typeof window._matchSetPlan === 'function') ? window._matchSetPlan(_isc, m) : null;
-  var _isStbEntry = !!(_planSave && (_planSave.multi || _isc.customRulesVersion===1) && _planSave.live && _planSave.live.kind === 'stb');
+  // Placar simples pode não ter configuração GSM; ele continua no caminho simples.
+  var _isStbEntry = !!(_planSave && (_planSave.multi || (_isc && _isc.customRulesVersion===1)) && _planSave.live && _planSave.live.kind === 'stb');
 
   if (useSets && (!isFixedSet || _isc.customRulesVersion===1) && !_isStbEntry) {
     var normalSetProblem = window._validateNormalSetScore(_isc, t.sport, s1, s2);
@@ -2611,7 +2612,7 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   // que é o que esta função acabou de ler. Quem decide se este set fecha o jogo é o plano
   // (window._matchSetPlan) — a MESMA régua que desenhou as colunas. Em 1 set (e em Beach
   // Tennis) `multi` é falso e nada abaixo muda. [[project_placar_por_sets_no_card]]
-  if (_planSave && (_planSave.multi || _isc.customRulesVersion===1) && _planSave.live) {
+  if (_planSave && (_planSave.multi || (_isc && _isc.customRulesVersion===1)) && _planSave.live) {
     return window._confirmSetFromCard(tId, matchId, {
       s1: s1, s2: s2, tbP1: tbP1, tbP2: tbP2, isTiebreakEntry: isTiebreakEntry,
       plan: _planSave, scoring: _isc, field: field

@@ -18,7 +18,8 @@ const must = (v, m) => { assert.ok(v, m); ok++; };
 
 // ── ① a bifurcação do Confirmar, rodando de verdade ──────────────────────────
 {
-  const ini = BUI.indexOf('  if (_planSave && _planSave.multi && _planSave.live)');
+  const branch = BUI.match(/  if \(_planSave && [^\n]*_planSave\.live\) \{/);
+  const ini = branch ? branch.index : -1;
   const fim = BUI.indexOf('\n  if (s1 === s2', ini);
   assert.ok(ini > 0 && fim > ini, 'âncoras da bifurcação');
   const trecho = BUI.slice(ini, fim);

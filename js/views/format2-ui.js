@@ -2716,6 +2716,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var sc = Object.assign({ type: 'sets' }, p);
     delete sc.label; delete sc.icon;
     var current = _elimEffScoring(S.cfg.eliminatoria) || {};
+    if(current.customRulesVersion===1 && window._gsmCustomRulesLocked && window._gsmCustomRulesLocked(1))return;
     if (key === 'fixedGames') {
       sc.gamesPerSet = Number(current.fixedSetGames || current.gamesPerSet) || 6;
       sc.fixedSetGames = sc.gamesPerSet;
