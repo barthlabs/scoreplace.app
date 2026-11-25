@@ -263,5 +263,33 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
   W.AppStore.currentUser = prev;
 })();
 
+(function configuredColumns() {
+  const assert=require('node:assert/strict'), crypto=require('node:crypto');
+  const t=hydrateMonarchGroups(buildViaDraw('Liga',8,{ligaRoundFormat:'rei_rainha',drawMode:'rei_rainha',drawManual:true}));
+  t.superEight=true;t.rankingPrimary='games_diff';t.tiebreakers=['saldo_games','vitorias','confronto_direto'];
+  const render=()=>W._renderMonarchStage(t,false,false,{standingsOnly:true});
+  // Baseline captured before changing bracket.js, from the same deterministic fixture.
+  assert.equal(crypto.createHash('sha256').update(render()).digest('hex'),'bf42195cbeff08bc3fd1f9ba6ecdbff89775b6364872565226cc454f7f646203');
+  t.rankingPrimary='wins';t.tiebreakers=['saldo_games','confronto_direto','sorteio'];
+  const headings=html=>Array.from(html.matchAll(/<th\b[^>]*>(.*?)<\/th>/g),m=>m[1].replace(/<[^>]+>/g,''));
+  assert.deepEqual(headings(render()).slice(0,6),['#','Jogador','V','D','Saldo','%']);
+  t.scoring={type:'gsm'};t.advancedScoring={enabled:true};
+  assert.deepEqual(headings(render()).slice(0,6),['#','Jogador','V','D','Saldo','%']);
+  const html=render();
+  for(const table of html.match(/<table\b[\s\S]*?<\/table>/g)||[]) {
+    const count=headings(table).length;
+    for(const row of table.match(/<tr\b[\s\S]*?<\/tr>/g)||[])
+      if(row.includes('<td'))assert.equal((row.match(/<td\b/g)||[]).length,count);
+  }
+  delete t.tiebreakers;assert.deepEqual(headings(render()).slice(0,5),['#','Jogador','V','D','%']);
+  t.tiebreakers=['pontos_avancados','saldo_sets'];
+  assert.deepEqual(headings(render()).slice(0,7),['#','Jogador','V','D','💯 PA','Saldo','%']);
+  t._phaseMaterialized=1;
+  assert.deepEqual(headings(render()).slice(0,4),['#','Jogador','V','Saldo']);
+  assert.deepEqual(headings(W._renderMonarchStage(t,false,false,{standingsOnly:true,showHistoricalFullStandings:true})).slice(0,7),['#','Jogador','V','D','💯 PA','Saldo','%']);
+  delete t._phaseMaterialized;t.rankingPrimary='points';delete t.advancedScoring;
+  assert(headings(render()).includes('Pts'));
+})();
+
 console.log(pass + ' ok, ' + fail + ' falharam');
 if (fail > 0) process.exit(1);

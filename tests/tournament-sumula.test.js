@@ -589,3 +589,38 @@ assert.strictEqual(unknownCategory.future.categories.length, 0,
   'jogo real sem categoria não deixa projetar nenhuma chave em torneio multicategoria');
 assert(unknownCategory.pending.some(s => s.includes('sem categoria')));
 console.log('✅ Súmula por quadra e lista de chamada');
+
+// Only a court change in the immediately following Super8 round earns a hint.
+{
+  const tournament={name:'Oito',courtNames:['Quadra 1','Quadra 2'],phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:[{category:'C',groupFormation:{mode:'size',value:8}}]}}],scheduleWindow:{interleavedPlan:{groupAssignments:[{phaseIndex:0,category:'C',groupNumber:1,label:'C1',courts:[1,2]}]}}};
+  const game=(id,round,court,a,b)=>({id,round,court,phaseIndex:0,category:'C',groupIdx:0,scheduledGroupLabel:'C1',scheduledAt:at('2026-11-21','09:00'),p1:a.join(' / '),p2:b.join(' / '),team1SlotIds:a.map(n=>'manual:'+n),team2SlotIds:b.map(n=>'manual:'+n),team1Uids:[null,null],team2Uids:[null,null]});
+  const games=[game('a',1,'Quadra 1',['Ana','Bia'],['Clara','Dora']),game('b',1,'Quadra 2',['Eva','Fabi'],['Gabi','Helo']),game('c',2,'Quadra 1',['Ana','Eva'],['Clara','Gabi']),game('d',2,'Quadra 2',['Bia','Fabi'],['Dora','Helo'])];
+  const model=core.collect(tournament,games),first=model.matches.find(m=>m.id==='a');
+  assert.deepStrictEqual(first.nextCourts1,['','Q2']);assert.deepStrictEqual(first.nextCourts2,['','Q2']);
+  assert.deepStrictEqual(model.matches.find(m=>m.id==='d').nextCourts1,['','']);
+  for(const orientation of ['landscape','portrait']) {
+    const pages=core.makePages(model,{orientation});
+    const commands=pages.flatMap(p=>p.commands).join('\n');
+    assert(commands.includes('Bia \\(Q2\\)'),'left label follows name');
+    assert(commands.includes('\\(Q2\\) Dora'),'right label precedes name');
+    if(process.env.SP_SUMULA_NEXT_COURT_SAMPLE)fs.writeFileSync(process.env.SP_SUMULA_NEXT_COURT_SAMPLE+'-'+orientation+'.pdf',core.encodePdf(pages));
+  }
+  const missing=core.collect(tournament,[games[0],{...games[3],round:3}]);
+  assert.deepStrictEqual(missing.matches[0].nextCourts1,['',''],'never skip a missing round');
+  const duplicate=core.collect(tournament,games.concat({...games[3],id:'ambiguous'}));
+  assert.equal(duplicate.matches[0].nextCourts1[1],'','ambiguous next match is omitted');
+  const noStructure=core.collect({...tournament,phases:[]},games);
+  assert.equal(noStructure.matches[0].nextCourts1,undefined);
+  const sameCourt=core.collect(tournament,games.map(m=>({...m,court:'Quadra 1'})));
+  assert(sameCourt.matches.every(m=>!m.nextCourts1?.some(Boolean)&&!m.nextCourts2?.some(Boolean)));
+}
+
+{
+ const cfg={courtNames:['Quadra 1','Quadra 2'],phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:[{category:'C',groupFormation:{mode:'size',value:8}}]}}],scheduleWindow:{interleavedPlan:{groupAssignments:[{phaseIndex:0,category:'C',label:'C1',groupNumber:1,courts:[1,2]}]}}};
+ const a={id:'uid-a',phaseIndex:0,category:'C',scheduledGroupLabel:'C1',round:1,court:'Quadra 1',p1:'Ana / Bia',p2:'Clara / Dora',team1Uids:['a','b'],team2Uids:['c','d']};
+ const b={...a,id:'uid-b',round:2,court:'Quadra 2',p1:'Clara / Ana',p2:'Dora / Bia',team1Uids:['c','a'],team2Uids:['d','b']};
+ const model=core.collect(cfg,[a,b]);
+ assert.deepStrictEqual(model.undated.find(m=>m.id==='uid-a').nextCourts1,['Q2','Q2'],'linked accounts also resolve across side/partner changes');
+ const noId=core.collect(cfg,[{...a,team1Uids:[null,null],team2Uids:[null,null]},{...b,team1Uids:[null,null],team2Uids:[null,null]}]);
+ assert(noId.undated.every(m=>!m.nextCourts1?.some(Boolean)),'unresolved names do not guess next courts');
+}

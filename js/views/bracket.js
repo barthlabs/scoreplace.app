@@ -11823,6 +11823,30 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     }
     var _compacta = !(opts && opts.showHistoricalFullStandings) &&
       (((t._phaseMaterialized || 0) > _idxFaseMon) || ((t.currentPhaseIndex || 0) > _idxFaseMon));
+    // Explicit wins ranking displays only configured quantitative criteria.
+    // The descriptor drives both headings and cells; direct confrontations stay below.
+    var _configuredColumns = null;
+    if (t.rankingPrimary === 'wins') {
+      var configuredKeys = Array.isArray(t.tiebreakers) ? t.tiebreakers : [];
+      var metricKeys = configuredKeys.filter(function(key, i) {
+        return configuredKeys.indexOf(key) === i && _superEightTbLabels[key] &&
+          ['vitorias','aproveitamento','confronto_direto','sorteio','antiguidade','juventude'].indexOf(key) < 0 &&
+          (key !== 'pontos_avancados' || !!t.advancedScoring?.enabled) &&
+          (!_compacta || ['saldo_games','saldo_pontos','saldo_sets'].indexOf(key) >= 0);
+      });
+      _configuredColumns = [{ key:'wins', label:'V', title:'Vitórias', value:s=>s.wins || 0 }];
+      if (!_compacta) _configuredColumns.push({key:'losses',label:'D',title:'Derrotas',value:s=>s.losses || 0});
+      metricKeys.forEach(function(key) {
+        var oneSaldo = /^saldo_/.test(key) && metricKeys.filter(k=>/^saldo_/.test(k)).length === 1;
+        _configuredColumns.push({key:key,label:oneSaldo?'Saldo':(_superEightTbHeaderLines[key] || window._safeHtml(_superEightTbLabels[key])),
+          title:_superEightTbExplanations[key] || _superEightTbLabels[key],value:function(s) {
+            var value=_superEightTbValue(key,s);
+            return /^saldo_/.test(key) && Number(value)>=0?'+'+value:value;
+          }});
+      });
+      if (!_compacta) _configuredColumns.push({key:'rate',label:'%',title:'Aproveitamento informativo: vitórias ÷ partidas disputadas',
+        value:s=>(s.played>0?Math.round(s.wins/s.played*100):0)+'%'});
+    }
     var standingsRows = standings.map(function(s, i) {
       var diff = _gamesPrimaryMonarch ? s.gamesWon - s.gamesLost : s.pointsFor - s.pointsAgainst;
       var setDiff = s.setsWon - s.setsLost;
@@ -11843,6 +11867,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + window._spCor(bg, 'background') + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + window._spCor(clr, 'color') + ';text-align:center;">' + (i + 1) + 'º</td>' +
         '<td class="sp-monarch-standings-name" style="padding:6px 10px;font-weight:600;color:' + window._spCor((_presM ? '#4ade80' : 'var(--text-bright)'), 'color') + ';"><div class="sp-monarch-standings-box" data-sp-card-name-box data-sp-one-line-h="2.3rem" data-sp-two-line-h="2.3rem"><span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.34" data-two-line-maxrem="0.85">' + _presDotM + _nameCellHtml + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</span></div></td>' +
+        (_configuredColumns ? _configuredColumns.map(function(column) { return '<td style="padding:6px 10px;text-align:center;" title="'+window._safeHtml(column.title)+'">'+window._safeHtml(column.value(s))+'</td>'; }).join('') : (
         (_isSuperEightMon && _gamesPrimaryMonarch ? '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;" title="Critério principal: saldo de games">' + (gameDiff >= 0 ? '+' : '') + gameDiff + '</td>' : '') +
       '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + s.wins + '</td>' +
         ((_compacta && !_isSuperEightMon) ? '' : '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + s.losses + '</td>') +
@@ -11853,15 +11878,15 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         (_compacta || _gamesPrimaryMonarch ? '' : (s.points != null
           ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, s.category || '') : '') + ' style="padding:6px 10px;text-align:center;color:var(--text-bright);font-weight:800;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + s.points + '</td>'
           : '<td style="padding:6px 10px;text-align:center;color:var(--text-bright);font-weight:800;" title="Pontos pró (somados em todos os jogos)">' + s.pointsFor + '</td>')) +
-        ((_isSuperEightMon && _gamesPrimaryMonarch) ? '' : '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((diff >= 0 ? '#4ade80' : '#f87171'), 'color') + ';" title="' + (_gamesPrimaryMonarch ? 'Saldo de games' : 'Saldo (pró − contra)') + '">' + (diff >= 0 ? '+' : '') + diff + '</td>');
-      if (_useSetsMonarch && !_compacta && !(_isSuperEightMon && _gamesPrimaryMonarch)) {
+        ((_isSuperEightMon && _gamesPrimaryMonarch) ? '' : '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((diff >= 0 ? '#4ade80' : '#f87171'), 'color') + ';" title="' + (_gamesPrimaryMonarch ? 'Saldo de games' : 'Saldo (pró − contra)') + '">' + (diff >= 0 ? '+' : '') + diff + '</td>')));
+      if (!_configuredColumns && _useSetsMonarch && !_compacta && !(_isSuperEightMon && _gamesPrimaryMonarch)) {
         row += '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-06b6d4,#06b6d4);" title="Sets V-D">' + s.setsWon + '-' + s.setsLost + '</td>' +
           '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((setDiff >= 0 ? '#06b6d4' : '#f87171'), 'color') + ';" title="Saldo de sets">' + (setDiff >= 0 ? '+' : '') + setDiff + '</td>' +
           '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-8b5cf6,#8b5cf6);" title="Games V-D">' + s.gamesWon + '-' + s.gamesLost + '</td>' +
           '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((gameDiff >= 0 ? '#8b5cf6' : '#f87171'), 'color') + ';" title="Saldo de games">' + (gameDiff >= 0 ? '+' : '') + gameDiff + '</td>' +
           '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f59e0b,#f59e0b);" title="Tie-breaks V-D">' + s.tiebreaksWon + '-' + s.tiebreaksLost + '</td>';
       }
-      row += ((_compacta && !_isSuperEightMon) ? '' : '<td style="padding:6px 10px;text-align:center;color:var(--text-muted);font-weight:600;" title="Aproveitamento (V/J)">' + winRatePct + '%</td>') +
+      row += ((_configuredColumns || (_compacta && !_isSuperEightMon)) ? '' : '<td style="padding:6px 10px;text-align:center;color:var(--text-muted);font-weight:600;" title="Aproveitamento (V/J)">' + winRatePct + '%</td>') +
       '</tr>';
       return row;
     }).join('');
@@ -11884,6 +11909,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       // colunas numéricas (estreitas e de largura fixa pelo conteúdo) se servem. É assim que
       // o nome ganha o espaço que D/Pts/% liberaram, em vez de a tabela só encolher.
       '<th style="padding:6px 10px;color:var(--text-muted);font-size:0.7rem;' + (_compacta ? 'width:100%;' : '') + '">Jogador</th>' +
+      (_configuredColumns ? _configuredColumns.map(function(column) { return '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="'+window._safeHtml(column.title)+'">'+column.label+'</th>'; }).join('') : (
       (_isSuperEightMon && _gamesPrimaryMonarch ? '<th tabindex="0" data-explain-title="Saldo de games" data-explain="Games vencidos menos games perdidos. É o critério principal desta classificação." style="width:62px;max-width:72px;padding:4px 5px;text-align:center;vertical-align:bottom;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.66rem;line-height:1.08;white-space:normal;" title="Critério principal: saldo de games (games vencidos − perdidos)">Saldo<br>games</th>' : '') +
       '<th tabindex="0" data-explain-title="V — Vitórias" data-explain="Número de partidas vencidas." style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Número de vitórias">V</th>' +
       ((_compacta && !_isSuperEightMon) ? '' : '<th tabindex="0" data-explain-title="D — Derrotas" data-explain="Número de partidas perdidas." style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Número de derrotas">D</th>') +
@@ -11892,7 +11918,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Pontos pró (cada ponto conta)">Pts</th>')) +
       ((_isSuperEightMon && _gamesPrimaryMonarch) ? '' : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="' + (_gamesPrimaryMonarch ? 'Saldo de games' : 'Saldo de pontos (pró − contra)') + '">' + (_gamesPrimaryMonarch ? 'Saldo games' : 'Saldo') + '</th>') +
       extraHeaders +
-      ((_compacta && !_isSuperEightMon) ? '' : '<th tabindex="0" data-explain-title="% — Aproveitamento" data-explain="Percentual de vitórias: vitórias divididas pelo total de partidas disputadas. É informativo, não critério de desempate." style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Aproveitamento informativo: vitórias ÷ partidas disputadas">%</th>') +
+      ((_compacta && !_isSuperEightMon) ? '' : '<th tabindex="0" data-explain-title="% — Aproveitamento" data-explain="Percentual de vitórias: vitórias divididas pelo total de partidas disputadas. É informativo, não critério de desempate." style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Aproveitamento informativo: vitórias ÷ partidas disputadas">%</th>'))) +
       '</tr></thead><tbody>' + standingsRows + '</tbody></table>';
 
     // Recibo de placar: refaz só a tabela derivada do grupo em um fragmento

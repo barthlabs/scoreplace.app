@@ -826,12 +826,15 @@ smoothDocument.visibilityState = 'visible';
 scrollListeners.visibilitychange();
 frameNow += 16; frames.shift()();
 assert(smoothList.scrollTop < 1, 'retorno de aba oculta não avança pelo tempo em segundo plano');
+for (let i = 0; i < 300; i++) { frameNow += 16; frames.shift()(); }
+const positionBeforeNew=smoothList.scrollTop;
 smoothWindow.__tvReplaceMarkup(resultMarkup('2026-10-24', 4, 'fresh-score', frameNow));
+assert(Math.abs(smoothList.scrollTop-positionBeforeNew)<1,'new result preserves cycle position');
 assert(smoothList.nodes[0].classList.contains('tv-result-pinned'), 'placar novo fica fixo no topo da seção');
-for (let i = 0; i < 1900; i++) { frameNow += 16; frames.shift()(); }
-assert(smoothList.nodes[0].classList.contains('tv-result-pinned'), 'não solta o resultado antes do retorno ao topo após 30 segundos');
-for (let i = 0; i < 450; i++) { frameNow += 16; frames.shift()(); }
-assert(!smoothList.nodes[0].classList.contains('tv-result-pinned'), 'após 30 segundos e retorno ao topo, jogo rola normalmente');
+for (let i = 0; i < 100; i++) { frameNow += 16; frames.shift()(); }
+assert(smoothList.nodes[0].classList.contains('tv-result-pinned'), 'mantém fixo até o ciclo alcançar o topo');
+for (let i = 0; i < 1100; i++) { frameNow += 16; frames.shift()(); }
+assert(!smoothList.nodes[0].classList.contains('tv-result-pinned'), 'ao retornar ao topo, jogo segue na posição normal sem mínimo arbitrário de tempo');
 assert.equal(liveButton.attributes['aria-pressed'], 'true', 'heartbeat da página liga o botão');
 assert.equal(window._tvLiveWindow, fakePopup, 'só página confirmada aparece como NO AR');
 fakePopup.document.visibilityState = 'hidden';
@@ -1038,7 +1041,8 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
   const namedOnlySnapshot=window._tvLiveBuildSnapshot(namedOnly);
   assert.deepEqual(groupLabels(namedOnlySnapshot),['B1','C1','C2'],'configured Super8 recognizes name-only players with null UID placeholders');
   assert.equal(namedOnlySnapshot.tvLayout.sections.rankings.visible,false,'name-only groups use the Super8 board');
-  assert.equal((window._tvLiveBodyHtml(namedOnlySnapshot).match(/data-tv-autoscroll="super8:/g)||[]).length,6,'name-only players get seven games in each of six court lanes');
+  assert.equal((window._tvLiveBodyHtml(namedOnlySnapshot).match(/>Livre<\/p>/g)||[]).length,6,'no call means six free courts, even with a complete planned grade');
+  assert.doesNotMatch(window._tvLiveBodyHtml(namedOnlySnapshot),/class="tv-series-game /,'planned athletes are not court occupants');
   const unconfiguredNames=window._tvLiveBuildSnapshot({...namedOnly,phases:[{kind:'classification',classification:{partnerRotation:'groups'}}]});
   assert.equal(unconfiguredNames.tvLayout,null,'without an explicit size-eight rule, missing identities do not invent a Super8 group');
   const fourPlayers={...noDraw,phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:
@@ -1087,7 +1091,7 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
   const eightUidsFourStructure=window._tvLiveBuildSnapshot({...idle,phases:fourPlayers.phases});
   assert.equal(eightUidsFourStructure.tvLayout,null,'eight account IDs never override a size-four structure');
 
-  assert.equal((groupHtml.match(/class="tv-series-game tv-series-active"/g)||[]).length,6);
+  assert.equal((groupHtml.match(/class="tv-series-game tv-series-active(?: tv-series-latest-update)?"/g)||[]).length,6);
   const first=super8.matches.find(m=>m.id==='B1-1-0');first.winner=first.p1;first.scoreP1=4;first.scoreP2=3;
   const next=super8.matches.find(m=>m.id==='B1-2-0');next.court='Areia A';next.courtCalledAt='2026-10-22T21:03:00Z';
   groupSnapshot=window._tvLiveBuildSnapshot(super8,Date.parse('2026-10-22T21:04:00Z'));
@@ -1097,7 +1101,16 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
   assert(!mixed.courts.some(c=>c.super8Group?.label==='B1'),'do not merge an elimination with an active group');
   const customSuper8=window._tvLiveBuildSnapshot({...super8,tvLayout:window.ScoreplaceTvLayout.defaults()},Date.parse('2026-10-22T21:04:00Z'));
   assert.match(window._tvLiveBodyHtml(customSuper8),/data-super8-group=/,'custom layout uses same shared group renderer');
+  const calledNames=window._tvLiveBuildSnapshot({...namedOnly,matches:namedOnly.matches.map(game=>({...game,...(game.round===1 && assignments.some(row=>row.entry===1 && row.label===game.scheduledGroupLabel)?{court:namedOnly.courtNames[assignments.find(row=>row.entry===1 && row.label===game.scheduledGroupLabel).courts[Number(game.id.split('-').pop())]-1],courtCalledAt:'2026-10-22T21:00:00Z'}:{})}))});
+  const calledHtml=window._tvLiveBodyHtml(calledNames);
+  assert.match(calledHtml,/<small>\(1\/7\)<\/small>/);assert.match(calledHtml,/<small>\(7\/7\)<\/small>/);
+  assert.equal((calledHtml.match(/tv-series-side tv-series-right/g)||[]).length,42);
+  assert.match(calledHtml,/tv-series-latest-update/);
+  const oneCalled=window._tvLiveBuildSnapshot({...namedOnly,matches:namedOnly.matches.map(game=>game.id==='B1-1-0'?{...game,court:'Areia A',courtCalledAt:'2026-10-22T21:00:00Z'}:game)});
+  assert.equal((window._tvLiveBodyHtml(oneCalled).match(/>Livre<\/p>/g)||[]).length,5);
+  const released=window._tvLiveBuildSnapshot({...namedOnly,matches:namedOnly.matches.map(game=>game.id==='B1-1-0'?{...game,court:'Areia A',courtCalledAt:'2026-10-22T21:00:00Z',courtReleasedAt:'2026-10-22T21:02:00Z'}:game)});
+  assert.equal((window._tvLiveBodyHtml(released).match(/>Livre<\/p>/g)||[]).length,6);
   if(process.env.SP_TV_CAPTURE_SUPER8) fs.writeFileSync(process.env.SP_TV_CAPTURE_SUPER8,
-    popupHtml.replace('<div id="tv-root"></div>','<div id="tv-root">'+window._tvLiveBodyHtml(namedOnlySnapshot)+'</div>'));
+    popupHtml.replace('<div id="tv-root"></div>','<div id="tv-root">'+calledHtml+'</div>'));
 }
 console.log('✓ TV: 6 quadras chamadas, relógio, placar ao vivo, 3 resultados e saldo geral por time');

@@ -47,12 +47,15 @@ const { chromium } = require('@playwright/test');
               .every(el => inside(el, el.closest('.tv-side'))),
             players: [...document.querySelectorAll('.tv-upcoming .tv-result-players')]
               .every(el => inside(el, el.closest('.tv-result-side'))),
+            nextBorder:getComputedStyle(document.querySelector('.tv-upcoming-first')).borderTopColor,
+            nextWidth:getComputedStyle(document.querySelector('.tv-upcoming-first')).borderTopWidth,
             upcomingFont: parseFloat(getComputedStyle(document.querySelector('.tv-upcoming .tv-result-players span')).fontSize)
           };
         });
         assert.equal(measurement.labels.length, 0, `etiquetas dos times ficam nos boxes em ${viewport.width}px: ${JSON.stringify(measurement.labels)}`);
         assert(measurement.scores, `placares ficam nos boxes em ${viewport.width}px`);
         assert(measurement.players, `atletas do próximo jogo ficam nos boxes em ${viewport.width}px`);
+        assert.equal(measurement.nextBorder,'rgb(251, 191, 36)');assert.equal(measurement.nextWidth,'2px');
         assert(measurement.upcomingFont >= 10, 'nomes do próximo jogo seguem legíveis');
         if (viewport.width === 2048) {
           const pinned = await page.evaluate(() => {
@@ -171,6 +174,47 @@ const { chromium } = require('@playwright/test');
         assert(geometry.groups.every(g=>g.right<=geometry.results.left+2),'groups left of results');
         assert(geometry.results.bottom<=geometry.upcoming.top+2,'latest results above upcoming');
         assert(geometry.groups[0].bottom<=geometry.groups[1].top+1 && geometry.groups[1].bottom<=geometry.groups[2].top+1,'groups stacked vertically');
+        const mirror=await super8Page.evaluate(()=>{
+          const rect=el=>el.getBoundingClientRect();
+          const side=document.querySelector('.tv-super8-games .tv-series-right');
+          const score=side.querySelector('strong'),name=side.querySelector('.tv-series-player-name'),icon=side.querySelector('.tv-player-photo');
+          const next=document.querySelector('.tv-upcoming-first');
+          const updated=document.querySelector('.tv-series-latest-update');
+          return {score:rect(score).right,name:rect(name).left,icon:rect(icon).left,nameRight:rect(name).right,
+
+            updatedBorder:getComputedStyle(updated).borderTopColor};
+        });
+        assert(mirror.score<=mirror.name+1 && mirror.nameRight<=mirror.icon+1,'right side mirrors score → names → avatars');
+        assert.equal(mirror.updatedBorder,'rgb(251, 191, 36)');
+        await super8Page.emulateMedia({reducedMotion:'reduce'});
+        await super8Page.evaluate(()=>document.querySelectorAll('.tv-super8-games').forEach(n=>n.scrollTop=0));
+        await super8Page.waitForTimeout(150);
+        const frame=await super8Page.evaluate(()=>{
+          const group=document.querySelector('.tv-super8-group'),frame=group.querySelector('.tv-super8-active-frame');
+          const cards=[...group.querySelectorAll('.tv-series-active')].filter(n=>!n.closest('[data-tv-loop-repeat]'));
+          const r=frame.getBoundingClientRect(),a=cards[0].getBoundingClientRect(),b=cards[1].getBoundingClientRect();
+          return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,a:{left:a.left,top:a.top,bottom:a.bottom},b:{right:b.right},border:getComputedStyle(frame).borderTopColor};
+        });
+        assert(frame.left<=frame.a.left && frame.right>=frame.b.right && frame.top<=frame.a.top && frame.bottom>=frame.a.bottom,'one green frame encloses both called matches');
+        for(const theme of ['dark','light']) {
+          const contrasts=await super8Page.evaluate(theme=>{
+            document.documentElement.setAttribute('data-theme',theme);
+            const card=document.querySelector('.tv-super8-games .tv-series-active'),frame=document.querySelector('.tv-super8-active-frame');
+            const ctx=document.createElement('canvas').getContext('2d');
+            const lum=color=>{ctx.fillStyle=color;ctx.fillRect(0,0,1,1);return [...ctx.getImageData(0,0,1,1).data].slice(0,3).map(c=>{c/=255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;}).reduce((a,c,i)=>a+c*[.2126,.7152,.0722][i],0);};
+            const background=lum(getComputedStyle(card).backgroundColor);
+            return [getComputedStyle(frame).borderTopColor,getComputedStyle(document.querySelector('.tv-series-latest-update')).borderTopColor].map(c=>{const l=lum(c);return (Math.max(l,background)+.05)/(Math.min(l,background)+.05);});
+          },theme);
+          assert(contrasts.every(r=>r>=3),'green and gold contrast against adjacent background in '+theme+': '+contrasts);
+        }
+        await super8Page.evaluate(()=>{document.querySelectorAll('.tv-super8-games')[1].scrollTop=45;});
+        await super8Page.waitForTimeout(150);
+        assert.equal(await super8Page.locator('.tv-super8-group').first().locator('.tv-super8-active-frame').count(),0,'independent scrolling never frames unrelated games');
+        await super8Page.evaluate(()=>{document.querySelectorAll('.tv-super8-games').forEach(n=>n.scrollTop=0);document.querySelectorAll('.tv-super8-games')[1].querySelectorAll('.tv-series-active').forEach(n=>n.classList.remove('tv-series-active'));});
+        await super8Page.waitForTimeout(150);
+        assert.equal(await super8Page.locator('.tv-super8-group').first().locator('.tv-super8-active-frame').count(),0,'releasing one lane removes the paired frame');
+        await super8Page.evaluate(()=>document.querySelectorAll('.tv-super8-games')[1].querySelectorAll('[data-super8-round="1"]').forEach(n=>n.classList.add('tv-series-active')));
+        await super8Page.emulateMedia({reducedMotion:'no-preference'});
         const lanes=super8Page.locator('.tv-super8-games');
         assert.equal(await lanes.count(),6,'six independent court columns');
         const scrolling=await super8Page.evaluate(()=>[...document.querySelectorAll('.tv-super8-games')].map(node=>({

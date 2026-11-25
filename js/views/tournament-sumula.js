@@ -80,6 +80,62 @@
       ...(scoring.customRulesVersion===1?{customRulesVersion:1,fixedSet:!!scoring.fixedSet,fixedSetGames:Number(scoring.fixedSetGames||scoring.gamesPerSet)||6,setTwoPointAdvantage:scoring.setTwoPointAdvantage!==false,tiebreakEnabled:scoring.tiebreakEnabled!==false,tiebreakAt:text(scoring.tiebreakAt),superTiebreak:!!scoring.superTiebreak,superTiebreakPoints:Number(scoring.superTiebreakPoints)||10}: {})
     };
   }
+  // A court hint is schedule data, never an account-link requirement.
+  function nextCourtHints(t, real, originals) {
+    var rows=t.scheduleWindow?.interleavedPlan?.groupAssignments || [];
+    var roster=new Map();
+    var identitySlots=root._identitySlotsForEntry || root.ScoreplaceParticipantIdentity?.participantSlots;
+    if(typeof identitySlots==='function')
+      ['participants','standby','waitlist'].forEach(function(pool) { (t[pool] || []).forEach(function(entry) {
+        identitySlots(entry).forEach(function(slot) {
+          var key=slot.uid?'uid:'+slot.uid:slot.manualParticipantId?'manual:'+slot.manualParticipantId:'';
+          if(!key || !slot.name)return;
+          if(!roster.has(slot.name))roster.set(slot.name,new Set());
+          roster.get(slot.name).add(key);
+        });
+      }); });
+    function keys(m,n) {
+      return members(m['p'+n]).map(function(name,i) {
+        var source=originals.get(m.id) || {}, slot=(source['team'+n+'SlotIds'] || [])[i];
+        if(typeof slot==='string' && /^(manual|uid):.+/.test(slot))return slot;
+        var uid=(source['team'+n+'Uids'] || [])[i] || (i===0?source['p'+n+'Uid']:'');
+        if(uid)return 'uid:'+uid;
+        var candidates=roster.get(name);return candidates?.size===1?Array.from(candidates)[0]:'';
+      });
+    }
+    function assignment(m) {
+      var source=originals.get(m.id) || {};
+      var eligible=rows.filter(function(row) {
+        var phase=t.phases?.[row.phaseIndex],rule=(phase?.classification?.rotationCategoryRules || []).find(r=>r.category===row.category);
+        return Number(row.phaseIndex)===m.phaseIndex && row.category===m.category &&
+          (source.groupIdx!=null?Number(source.groupIdx)+1===row.groupNumber:m.groupLabel===row.label) &&
+          phase?.kind==='classification' && phase.classification?.partnerRotation==='groups' &&
+          rule?.groupFormation?.mode==='size' && Number(rule.groupFormation.value)===8 &&
+          row.courts?.length===2 && row.courts.every(c=>Number.isInteger(c)&&c>0) && row.courts[0]!==row.courts[1] && !m.elimination;
+      });
+      return eligible.length===1?eligible[0]:null;
+    }
+    function courtNumber(name) {
+      var match=/^(?:Quadra\s*|Q)?(\d+)$/i.exec(name);
+      if(match)return Number(match[1]);
+      var courts=t.courtNames || [];
+      return courts.indexOf(name)===courts.lastIndexOf(name)?courts.indexOf(name)+1:0;
+    }
+    var entries=real.map(function(m) {return {m:m,row:assignment(m),keys:[keys(m,1),keys(m,2)]};});
+    entries.forEach(function(entry) {
+      var m=entry.m,row=entry.row,current=courtNumber(m.court);
+      if(!row || !current || !row.courts.includes(current) || !Number.isInteger(Number(m.round)) || Number(m.round)<1)return;
+      [1,2].forEach(function(n) {
+        m['nextCourts'+n]=entry.keys[n-1].map(function(key) {
+          if(!key)return '';
+          var next=entries.filter(e=>e.row===row && Number(e.m.round)===Number(m.round)+1 && e.keys.flat().includes(key));
+          if(next.length!==1 || next[0].keys.flat().filter(k=>k===key).length!==1)return '';
+          var destination=courtNumber(next[0].m.court);
+          return destination && row.courts.includes(destination) && destination!==current?'Q'+destination:'';
+        });
+      });
+    });
+  }
   function collect(t, allMatches) {
     var seen = new Set();
     var plannedCourts = {}, plannedNumbers = {};
@@ -117,6 +173,7 @@
         uids1: m.team1Uids || (m.p1Uid ? [m.p1Uid] : []), uids2: m.team2Uids || (m.p2Uid ? [m.p2Uid] : [])
       };
     });
+    nextCourtHints(t,real,new Map((allMatches || []).filter(Boolean).map(m=>[text(m.id),m])));
     var matches = real.filter(function (m) { return !!m.day; }).sort(function (a, b) {
       return a.at - b.at || a.court.localeCompare(b.court, 'pt-BR', { numeric:true }) || (a.number || 0) - (b.number || 0) || a.id.localeCompare(b.id);
     });
@@ -320,7 +377,7 @@
     var position = right ? x + width - 3 - labelWidth(fitted, size, bold) : x + 3;
     p.write(fitted, position, y, size, bold, null, rgb);
   }
-  function writeSide(p, team, names, x, top, width, portrait, right, dense) {
+  function writeSide(p, team, names, x, top, width, portrait, right, dense, nextCourts) {
     var people = members(names);
     if (!people.length) people = [names];
     var playerSize = portrait ? 8.5 : 9.3;
@@ -330,9 +387,14 @@
     sideWrite(p, team || '', x, top + (compact ? 7 : 8), width,
       portrait ? 7 : compact ? 6.4 : 7.2, false, right, '0.32 0.40 0.48');
     people.slice(0, 2).forEach(function (name, i) {
+      var marker=nextCourts && nextCourts[i]?'('+nextCourts[i]+')':'';
+      var plainName=name;
+      if(marker) name=right?marker+' '+name:name+' '+marker;
       var size = compact ? 7.8 : playerSize, lines;
       while (size >= 6.8 && !(lines = sideLines(name, width - 6, size, true))) size -= 0.2;
-      if (!lines) { size = 6.8; lines = [fitLabel(name, width - 6, size, true)]; }
+      if (!lines) { size = 6.8;
+        var clipped=fitLabel(plainName,width-6-(marker?labelWidth(marker+' ',size,true):0),size,true);
+        lines=[marker?(right?marker+' '+clipped:clipped+' '+marker):clipped]; }
       var y = top + (dense ? 18 + 17*i : portrait ? 21 + 19*i : compact ? 15 + 14*i : 17 + 13*i);
       sideWrite(p, lines[0], x, y, width, size, true, right);
       if (lines[1]) sideWrite(p, lines[1], x, y + (portrait ? 8 : 7), width,
@@ -408,8 +470,8 @@
       if (categoryLines[0]) p.write(categoryLines[0], courtX+3, y+10, 5.5);
       if (categoryLines[1]) p.write(categoryLines[1], courtX+3, y+17, 5.5);
       p.line(courtX+7, y+rowHeight-10, namesX-10, y+rowHeight-10, 0.55);
-      writeSide(p, m.team1, m.p1, namesX, y, sideWidth, portrait, false, dense);
-      writeSide(p, m.team2, m.p2, secondX, y, sideWidth, portrait, true, dense);
+      writeSide(p, m.team1, m.p1, namesX, y, sideWidth, portrait, false, dense, m.nextCourts1);
+      writeSide(p, m.team2, m.p2, secondX, y, sideWidth, portrait, true, dense, m.nextCourts2);
       var cellWidth = scoreWidth / slots;
       for (var s=0;s<slots;s++) {
         var sx = scoreX + s*cellWidth, bw = slots === 1 ? 22 : Math.max(7, Math.floor((cellWidth-12)/2));
