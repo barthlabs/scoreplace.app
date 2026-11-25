@@ -1,3 +1,4 @@
+// 2.7.73 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.72 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.71 — A estrutura configurada do torneio define a tela do Super 8, independentemente de nomes digitados, UIDs vazios ou contas vinculadas. Grupos ainda carregando mantêm a apresentação correta. As seis listas por quadra preservam a rolagem após atualização, redimensionamento ou carregamento de recursos.
 // 2.7.70 — A TV do Super 8 usa a base de Rei/Rainha com três grupos em pares de quadras, sem painel de classificação. Cada quadra mostra seus sete jogos em uma lista com rolagem independente; últimos resultados ficam acima dos próximos jogos à direita. A TV abre em janela separada e permite escolher o monitor em tela cheia, preservando a tela de controle e as apresentações dos demais formatos.
