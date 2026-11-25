@@ -9792,17 +9792,20 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
     // chegou — o span leva `data-uid-name` e é preenchido pela hidratação (nunca por
     // nome gravado). O resto da função continua trabalhando com `name` como antes.
     const _sideObj = m && m[slot === 'p2' ? 'team2Obj' : 'team1Obj'];
-    const _slotManualId = _sideObj && _sideObj.fixedPairId
-      ? String(_sideObj[memberIndex === 0 ? 'p1ManualId' : 'p2ManualId'] || '') : '';
+    const _positionIds=m && m[slot==='p2'?'team2SlotIds':'team1SlotIds'];
+    const _positionId=Array.isArray(_positionIds)?String(_positionIds[memberIndex] || ''):'';
+    let _slotManualId=String(_sideObj?.[memberIndex===0?'p1ManualId':'p2ManualId'] || (_positionId.startsWith('manual:')?_positionId.slice(7):String(_mb?.uid || '').startsWith('manual:')?String(_mb.uid).slice(7):''));
     const _slotUid = _slotManualId ? '' : (_mb && _mb.uid ? String(_mb.uid) : '');
     const name = (_mb && _mb.nome) ? String(_mb.nome) : '';
-    const _canSwap = !!(t && t.id && m && _sideObj && _sideObj.fixedPairId &&
-      (t.canonicalRegistrationMigration || {}).fingerprint && t.status !== 'finished' &&
-      typeof window._souOrganizador === 'function' && window._souOrganizador(t) &&
-      !m.winner && m.status !== 'finished' && (_slotUid || _slotManualId));
-    const _swapAttrs = _canSwap
-      ? ` role="button" tabindex="0" data-tournament-swap="1" data-swap-tid="${window._safeHtml(String(t.id))}" data-swap-uid="${window._safeHtml(_slotUid)}" data-swap-manual-id="${window._safeHtml(_slotManualId)}" data-swap-category="${window._safeHtml(String(_sideObj.categoryId || m.categoryId || m.category || ''))}" title="Trocar participante"`
-      : '';
+    if(!_slotUid && !_slotManualId && name) {
+      const manual=(t?.participants || []).filter(p=>p && !p.uid && p.manualParticipantId && String(p.displayName || p.name || '').trim()===name);
+      if(manual.length===1) _slotManualId=String(manual[0].manualParticipantId);
+    }
+    const _canEditAthlete=!!(t?.id && typeof window._souOrganizador==='function' && window._souOrganizador(t));
+    const _swapAttrs='';
+    const _editAthleteButton=_canEditAthlete ? '<button type="button" class="sp-athlete-edit" aria-label="Editar atleta '+window._safeHtml(name || 'da vaga')+'" '+
+      'onclick="event.preventDefault();event.stopPropagation();window._openTournamentAthleteEditor('+[t.id,_slotUid,_slotManualId,_sideObj?.categoryId || m?.categoryId || m?.category || '',name].map(value=>window._safeHtml(JSON.stringify(String(value || '')))).join(',')+')">'+
+      (window._editPencilHtml?window._editPencilHtml():'<span class="sp-edit-pencil">✏️</span>')+'</button>' : '';
     // v2.4.65: durante W.O. pendente, o slot do ausente exibe o substituto
     // convidado em amarelo + tag "aguardando resposta" (avatar do convidado).
     const _isPendingSlot = !!(pendingSub && pendingSub.absent && name === pendingSub.absent && pendingSub.invitee);
@@ -9897,8 +9900,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
           window._isOrgName(name, window._currentBracketTournament)) ? (' ' + (window._CROWN_MINI || '')) : '')
       : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament
           ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name));
-    const _nameActionContents = !_slotUid && typeof window._camisManualNameLinkHtml === 'function'
-      ? window._camisManualNameLinkHtml(t,name,_nameContents,_slotManualId) : _nameContents;
+    const _nameActionContents = _nameContents;
     html += `<div class="sp-mc-side">` +
       _presenceDot +
       _presenceAvatar +
@@ -9937,7 +9939,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
       (typeof window._contactPersonIconHtml === 'function' &&
         !(window._isConcentratedTournament && window._isConcentratedTournament(t))
         ? window._contactPersonIconHtml(t, _slotUid, name, { sameGroup: _souDoJogo, dentroDaCaixa: true }) : '') +
-      `</span></div>` +
+      _editAthleteButton + `</span></div>` +
     `</div>`;
   });
   if (members.length > 1) html += '</div>';
@@ -10968,7 +10970,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     : (!isByeMatch && canEnterResult && !m.wo && !compactDone && (isDecided || _hasPartialSets)
     ? `<button class="btn btn-warning btn-micro" onclick="${isDecided
         ? (_plan.multi ? `window._editSetsInline('${_esc(tId)}','${_esc(m.id)}')` : `window._editResultInline('${_esc(tId)}','${_esc(m.id)}')`)
-        : `window._editSetsInline('${_esc(tId)}','${_esc(m.id)}')`}" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.editResult')}">✏️ ${_t('bracket.editResult')}</button>`
+        : `window._editSetsInline('${_esc(tId)}','${_esc(m.id)}')`}" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.editResult')}">${_t('bracket.editResult')} ${(window._editPencilHtml?.() || '<span class="sp-edit-pencil-fallback" aria-hidden="true">✏️</span>')}</button>`
     : '');
 
   var _seriesSuffix = '';
@@ -11049,7 +11051,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     // v2.7.58: botões de disputa no PADRÃO do app (.btn + cor + .btn-sm, com volume),
     // mantendo flex:1 pra dividirem a largura do card. Vermelho à esquerda, verde à direita.
     var _pbBtn = 'flex:1 1 auto;font-size:0.78rem;';
-    var _btnEdit = `<button class="btn btn-indigo btn-sm" onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')" style="${_pbBtn}">✏️ Editar</button>`;
+    var _btnEdit = `<button class="btn btn-indigo btn-sm" onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')" style="${_pbBtn}">Editar ${(window._editPencilHtml?.() || '<span class="sp-edit-pencil-fallback" aria-hidden="true">✏️</span>')}</button>`;
     var _btnConfirm = `<button class="btn btn-success btn-sm" onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')" style="${_pbBtn}">✅ Confirmar</button>`;
     var _btnContest = `<button class="btn btn-danger btn-sm" onclick="window._contestResult('${_esc(tId)}','${_esc(m.id)}')" style="${_pbBtn}">❌ Contestar</button>`;
     // fora da chave o clique NÃO chama a função direto: sai por `data-pending-action`,
@@ -11226,7 +11228,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         // finaliza o placar atual direto (via _approveResult). "Editar" abre os
         // campos pra lançar outro placar (e finaliza). "Refazer (0×0)" reabre.
         var _btnOrgConfirm = `<button class="btn btn-success btn-sm" onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')" style="font-size:0.78rem;">✅ Confirmar placar (${_scoreDisp})</button>`;
-        var _btnOrgEdit = `<button class="btn btn-indigo btn-sm" onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')" style="font-size:0.78rem;">✏️ Editar placar</button>`;
+        var _btnOrgEdit = `<button class="btn btn-indigo btn-sm" onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')" style="font-size:0.78rem;">Editar placar ${(window._editPencilHtml?.() || '<span class="sp-edit-pencil-fallback" aria-hidden="true">✏️</span>')}</button>`;
         var _btnOrgRedo = `<button class="btn btn-warning btn-sm" onclick="window._organizerResetMatch('${_esc(tId)}','${_esc(m.id)}')" style="font-size:0.78rem;">🔄 Refazer (0×0)</button>`;
         _orgResolvePanel = `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(239,68,68,0.35);">
           <div style="font-size:0.68rem;color:var(--sp-c-fca5a5,#fca5a5);font-weight:700;margin-bottom:6px;">🛠️ Você está atuando como <b>ORGANIZADOR</b> — decida o resultado definitivo:</div>
@@ -11376,7 +11378,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     if (_souAutoridadeCard || (_isMyMatch && _jogadoresLancam)) {
       _dashEditBtn = '<button class="btn btn-warning btn-micro" data-pending-action="goedit"' +
         ' data-tid="' + _esc(tId) + '" data-mid="' + _esc(m.id) + '"' +
-        ' style="flex-shrink:0;font-size:0.72rem;" title="Editar no torneio">✏️ Editar</button>';
+        ' style="flex-shrink:0;font-size:0.72rem;" title="Editar no torneio">Editar ' + (window._editPencilHtml?.() || '<span class="sp-edit-pencil-fallback" aria-hidden="true">✏️</span>') + '</button>';
     }
   }
   var _headerActions = (_readOnly ? _dashEditBtn : `${_cancelCourtChip}${_endHeaderChip}${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}`) + _replayBtn;

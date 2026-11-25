@@ -76,3 +76,37 @@ assert.throws(() => published.plan(edit, participants,
   [{ ...matches[0], data: { ...matches[0].data, jogo: { ...game, p1: undefined } } }]), /ausente/);
 assert.throws(() => published.plan(edit, participants.concat({ ref: ref(output.participant.newId), data: {} }), matches), /espelho/);
 console.log('published-slot-edit-core: ok');
+
+// Individual/rotation identities share the same planner and immutable historical games.
+{
+ const slots=require('./vendor/participant-slot-core');
+ const cat='solo',tid='solo-test';
+ function reg(key,name){const uid=key.startsWith('uid:')?key.slice(4):null,manual=uid?null:key.slice(7);
+  return {registrationId:registrationId(key,cat),participantKey:key,tournamentId:tid,categoryId:cat,participantKind:uid?'account':'manual',
+   participantUid:uid,manualParticipantId:manual,...(manual?{manualDisplayName:name}:{}),fixedPairId:null,status:'confirmed'};}
+ for(const fromKey of ['uid:old','manual:old']) for(const targetUid of ['new','']) for(const policy of ['inherit','reset']) {
+  const origin=reg(fromKey,'Antiga'),identity=fromKey.startsWith('uid:')?{uid:'old'}:{manualParticipantId:'old'};
+  const edit=editCore.plan(tid,[origin],identity,cat,'Antiga','Nova','next-manual',targetUid,policy);
+  assert.equal(edit.solo,true);assert.equal(edit.partner,null);assert.equal(edit.changes.updates[0].status,'withdrawn');
+  const from=slots.sourceOf(edit),change={...edit,from,to:edit.newIdentity,oldName:'Antiga',categoryId:cat,category:cat,allowManualNameFallback:true};
+  const future={id:'future',category:cat,p1:'Antiga / Outra',p2:'Rival / Rival2',team1:['Antiga','Outra'],team2:['Rival','Rival2'],
+    team1Uids:[identity.uid || null,'partner'],team1SlotIds:[fromKey,'uid:partner'],team2Uids:['r1','r2'],
+    scheduledAt:'2026-11-29T10:00:00Z',court:'Q1',scoreP1:0,scoreP2:0};
+  const before=JSON.stringify(future),next=slots.patchTree(future,change);
+  assert.equal(JSON.stringify(future),before);assert.equal(next.p1,'Nova / Outra');
+  assert.equal(next.team1Uids[0],targetUid || null);assert.equal(next.team1SlotIds[0],slots.key(edit.newIdentity));
+  assert.equal(next.scheduledAt,future.scheduledAt);assert.equal(next.court,'Q1');
+  const historical={...future,winner:'p1',scoreP1:4,scoreP2:3};
+  assert.equal(JSON.stringify(slots.patchTree(historical,change)),JSON.stringify(historical));
+  assert.throws(()=>slots.patchTree({...future,scoreP1:1},change),/placar parcial/);
+  assert.equal(JSON.stringify(slots.patchTree({...future,category:'other'},change)),JSON.stringify({...future,category:'other'}));
+ }
+ const reset=editCore.plan(id,[source,partner],{manualParticipantId:'manual-old'},categoryId,'Laura','Marilia',null,'new-uid','reset');
+ assert.notEqual(reset.newPairId,oldPairId);assert(reset.changes.updates.some(r=>r.registrationId===partnerId && r.fixedPairId===reset.newPairId));
+ assert.throws(()=>slots.assertBudget(451,[]),/transação/);slots.assertBudget(450,[{name:'ok'}]);
+ const a={uid:'a'},b={uid:'b'},c={manualParticipantId:'c'};
+ const event=(from,to,pointsPolicy)=>({from,to,pointsPolicy,phaseIndex:0,categoryId:'cat',category:'Cat',newName:slots.key(to),oldName:slots.key(from)});
+ let t={participantSlotReplacements:slots.appendEvent({},event(a,b,'inherit'))};
+ t.participantSlotReplacements=slots.appendEvent(t,event(b,c,'reset'));
+ assert.throws(()=>slots.appendEvent(t,event(c,a,'inherit')),/ciclo/);
+}

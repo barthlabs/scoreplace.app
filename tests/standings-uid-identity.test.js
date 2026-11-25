@@ -123,5 +123,61 @@ const row = (s, p) => s.find(p);
   if (j2) eq(j2.wins, 1, '[homônimo] João(uJ2) com 1 vitória (não 2 num só)');
 })();
 
+{
+  W.ScoreplaceParticipantSlots=require('../js/domain/participant-slot-core');
+  const slots=W.ScoreplaceParticipantSlots;
+  const event=(from,to,policy)=>({from,to,pointsPolicy:policy,phaseIndex:0,category:'Cat',categoryId:'cat',oldName:'Vivian',newName:'Nova'});
+  const nextGroup={...group,category:'Cat',players:['Nova','Marjorie','Rodrigo','Vanessa'],playersUids:['new',uM,uR,uV]};
+  const inherit={...t,rankingPrimary:'games_diff',participantSlotReplacements:{schema:1,events:[event({uid:uA},{uid:'new'},'inherit')]}};
+  const before=JSON.stringify(nextGroup.matches);
+  const inherited=W._computeMonarchStandings(nextGroup,inherit,'Cat').find(r=>r.uid==='new');
+  eq(inherited.wins,3,'replacement can inherit three wins');eq(inherited.gamesWon,18,'replacement inherits games in standings only');
+  eq(JSON.stringify(nextGroup.matches),before,'historical games remain byte-identical');
+  const reset={...inherit,participantSlotReplacements:{schema:1,events:[event({uid:uA},{uid:'new'},'reset')]}};
+  const fresh=W._computeMonarchStandings(nextGroup,reset,'Cat');
+  eq(fresh.find(r=>r.uid==='new').wins,0,'organizer can reset the new athlete');
+  ok(!fresh.some(r=>r.uid===uA),'withdrawn athlete does not become an eligible ghost');
+  const chained={...inherit,participantSlotReplacements:{schema:1,events:[event({uid:uA},{uid:'mid'},'inherit'),event({uid:'mid'},{uid:'new'},'inherit')]}};
+  eq(W._computeMonarchStandings(nextGroup,chained,'Cat').find(r=>r.uid==='new').wins,3,'inheritance chain preserves campaign');
+  chained.participantSlotReplacements.events[1].pointsPolicy='reset';
+  eq(W._computeMonarchStandings(nextGroup,chained,'Cat').find(r=>r.uid==='new').wins,0,'reset interrupts inheritance chain');
+  eq(W._computeMonarchStandings(nextGroup,inherit,'Other').find(r=>r.uid==='new').wins,0,'other category does not inherit');
+}
+
+{
+  const slots=W.ScoreplaceParticipantSlots;
+  const event={from:{uid:'old'},to:{uid:'new'},oldName:'Antiga',newName:'Nova',phaseIndex:0,category:'Cat',categoryId:'cat',pointsPolicy:'inherit'};
+  const historical={id:'done',category:'Cat',p1:'Antiga',p1Uid:'old',p2:'Rival',p2Uid:'rival',winner:'Antiga',scoreP1:7,scoreP2:2};
+  const roster=[{uid:'new',displayName:'Nova',category:'Cat'},{uid:'rival',displayName:'Rival',category:'Cat'}];
+  const league={participants:roster,rounds:[{matches:[historical]}],participantSlotReplacements:{events:[event]}};
+  const before=JSON.stringify(league);
+  eq(W._computeStandings(league,'Cat').find(r=>r.uid==='new').wins,1,'Liga inherits winning side and UID');
+  eq(W._computeStandings(league).find(r=>r.uid==='new').wins,1,'unfiltered Liga inherits category-scoped campaign');
+  eq(JSON.stringify(league),before,'Liga projection never changes storage objects');
+  league.participantSlotReplacements.events=[{...event,pointsPolicy:'reset'}];
+  const fresh=W._computeStandings(league,'Cat');
+  eq(fresh.find(r=>r.uid==='new').wins,0,'Liga reset starts at zero');
+  ok(!fresh.some(r=>r.uid==='old'),'Liga retired athlete cannot qualify');
+  const engine=require('../js/views/phases-engine');
+  global.window=global.window || W;
+  global.window.ScoreplaceParticipantSlots=slots;
+  const oldTeam={p1Name:'Antiga',p1Uid:'old',p2Name:'Parceira',p2Uid:'partner',displayName:'Antiga / Parceira'};
+  const newTeam={...oldTeam,p1Name:'Nova',p1Uid:'new',displayName:'Nova / Parceira'};
+  const pairGame={...historical,p1:oldTeam.displayName,team1Obj:oldTeam,p1Uid:null,winner:oldTeam.displayName};
+  const grp={category:'Cat',players:[newTeam,{uid:'rival',displayName:'Rival'}],matches:[pairGame]};
+  const tour={participantSlotReplacements:{events:[event]}};
+  const inherited=engine.groupTeamStandings(grp,{tournament:tour});
+  eq(inherited.find(r=>r.name==='Nova / Parceira').wins,1,'fixed pair group inherits winning campaign');
+  tour.participantSlotReplacements.events=[{...event,pointsPolicy:'reset'}];
+  const reset=engine.groupTeamStandings(grp,{tournament:tour});
+  eq(reset.find(r=>r.name==='Nova / Parceira').wins,0,'fixed pair reset starts at zero');
+  ok(!reset.some(r=>r.name==='Antiga / Parceira'),'retired pair cannot qualify');
+  for(const field of ['liveScored','setsProgressAt','score','setsWonP1']) {
+    const game={id:'partial',p1:'Antiga',p1Uid:'old',p2:'Rival',[field]:field==='score'?'1–0':1};
+    if(field==='liveScored') game[field]=true;
+    let rejected=false;try{slots.patchTree(game,event);}catch(e){rejected=/parcial/.test(e.message);}
+    ok(rejected,'partial guard covers '+field);
+  }
+}
 console.log((fail === 0 ? '✅' : '❌') + ' standings-uid-identity: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);

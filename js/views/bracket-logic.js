@@ -37,6 +37,10 @@ window._groupDisplayName = window._groupDisplayName || function (grp, i) {
 // (ordena por vitórias). O `points` avançado, quando existe, é a métrica PRIMÁRIA de
 // classificação — e a MESMA usada pela transição/pareamento por performance.
 window._computeMonarchStandings = function(group, t, category) {
+  if(t?.participantSlotReplacements) {
+    if(!window.ScoreplaceParticipantSlots) throw new Error('Recarregue o aplicativo para ler a pontuação das substituições.');
+    group=window.ScoreplaceParticipantSlots.projectStandings(group,t,category);
+  }
   var stats = {};
   // Jogador X (ghost/convidado de W.O.) NÃO entra na classificação (pedido do dono):
   // ele só existe pra completar os jogos (chaves). O uid real — inclusive quem levou
@@ -921,6 +925,10 @@ function _publishTitlesIfReady(t) {
 window._publishTitlesIfReady = _publishTitlesIfReady;
 
 function _computeStandings(t, category) {
+  if(t?.participantSlotReplacements) {
+    if(!window.ScoreplaceParticipantSlots) throw new Error('Recarregue o aplicativo para ler a pontuação das substituições.');
+    t=window.ScoreplaceParticipantSlots.projectStandings(t,t,category);
+  }
   const scoreMap = {};
   // O Super 8 de sorteio único guarda as sete rodadas em matches; rounds é vazio.
   // A classificação deve ler os mesmos confrontos que a tela e o placar editam.
@@ -1336,7 +1344,7 @@ function _computeStandings(t, category) {
     if (typeof console !== 'undefined' && console.warn) console.warn('[standings] comparador ausente — ordem preservada');
   }
 
-  return standings;
+  return t.participantSlotReplacements ? window.ScoreplaceParticipantSlots.eligibleRows(standings,t,category) : standings;
 }
 
 // ─── Get champion (only from actual final with real participants) ──────────────

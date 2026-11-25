@@ -2649,6 +2649,12 @@
   function _groupTeamStandings(group, opts) {
     opts = opts || {};
     if (!group) return [];
+    if(opts.tournament?.participantSlotReplacements) {
+      if(!window.ScoreplaceParticipantSlots) throw new Error('Recarregue o aplicativo para ler a pontuação das substituições.');
+      group=window.ScoreplaceParticipantSlots.projectStandings(group,opts.tournament,group.category || group.categoryId);
+    }
+    function eligible(rows){return opts.tournament?.participantSlotReplacements
+      ? window.ScoreplaceParticipantSlots.eligibleRows(rows,opts.tournament,group.category || group.categoryId) : rows;}
     var matches = (group.matches || []).slice();
     (group.rounds || []).forEach(function (r) { if (Array.isArray(r.matches)) matches = matches.concat(r.matches); });
     // O mesmo jogo pode estar no grupo e na rodada. Contá-lo duas vezes muda a
@@ -2801,7 +2807,7 @@
       // Sem o comparador canônico não se inventa uma segunda regra (foi o defeito que este
       // trabalho matou): mantém a ordem de chegada e avisa.
       if (typeof console !== 'undefined' && console.warn) console.warn('[phases] _standingsCompareConfig ausente — grupo sem desempate aplicado');
-      return Object.keys(smap).map(function (k) { return smap[k]; });
+      return eligible(Object.keys(smap).map(function (k) { return smap[k]; }));
     }
     var _ordemChave = null;
     var _buildOrd = (typeof window !== 'undefined' && typeof window._standingsOrdemChave === 'function')
@@ -2821,7 +2827,7 @@
     var _opts = { tiebreakers: tb, h2h: _h2hUid, birth: _birth, ordem: _ordemChave,
       primaryField: ['games_diff', 'wins'].indexOf(opts.rankingPrimary) >= 0 ? opts.rankingPrimary : 'points' };
     function cmp(a, b) { return _cmpCfg(a, b, _opts); }
-    return Object.keys(smap).map(function (k) { return smap[k]; }).sort(cmp);
+    return eligible(Object.keys(smap).map(function (k) { return smap[k]; }).sort(cmp));
   }
 
   // ── Integração com o torneio ──────────────────────────────────────────────

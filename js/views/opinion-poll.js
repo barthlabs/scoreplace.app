@@ -517,7 +517,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // (visão de resultados, se já votou algo) → abre o wizard por TODAS as perguntas.
       var _showAlterAll = (si === 0) && !_wizSec && canVote && secs.some(function (s) { return _opHasVotedSection(poll, s.id, uid); });
       var _alterAllBtn = _showAlterAll
-        ? '<button type="button" onclick="window._opEditAll(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="flex:0 0 auto;background:rgba(139,92,246,0.12);color:var(--sp-c-a78bfa,#a78bfa);border:1px solid rgba(139,92,246,0.4);font-weight:700;border-radius:10px;padding:6px 12px;font-size:0.8rem;">✏️ Alterar</button>'
+        ? '<button type="button" onclick="window._opEditAll(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="flex:0 0 auto;background:rgba(139,92,246,0.12);color:var(--sp-c-a78bfa,#a78bfa);border:1px solid rgba(139,92,246,0.4);font-weight:700;border-radius:10px;padding:6px 12px;font-size:0.8rem;">Alterar ' + (window._editPencilHtml?.() || '<span class="sp-edit-pencil-fallback" aria-hidden="true">✏️</span>') + '</button>'
         : '';
       body += '<div id="op-vsec-' + _esc(sec.id) + '" style="margin-bottom:18px;scroll-margin-top:170px;' + (si > 0 ? 'padding-top:16px;border-top:1px solid var(--border-color);' : '') + '">' +
         '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:3px;">' +
@@ -598,7 +598,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (isOrg && !_wizSec) {
       var _cellStyle = 'border-radius:10px;padding:10px;font-size:0.82rem;font-weight:700;';
       var _cells =
-        '<button type="button" onclick="window._opOpenEditor(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(99,102,241,0.16);color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.45);">✏️ Editar</button>' +
+        '<button type="button" onclick="window._opOpenEditor(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(99,102,241,0.16);color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.45);">Editar ' + (window._editPencilHtml?.() || '<span class="sp-edit-pencil-fallback" aria-hidden="true">✏️</span>') + '</button>' +
         '<button type="button" onclick="window._opOpenTally(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(16,185,129,0.14);color:var(--sp-c-34d399,#34d399);border:1px solid rgba(16,185,129,0.45);">👁️ Ver votos</button>';
       if (!poll.closed) {
         // Re-notificar: cinza "Notificados" durante as 24h de cooldown (lê republishedAt).

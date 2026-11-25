@@ -8,7 +8,7 @@ const { normalizeName } = require('./manual-name-unique-core');
 const text = (value) => typeof value === 'string' ? value.trim() : '';
 const active = (item) => item && item.status === 'confirmed';
 
-function plan(tournamentId, registrations, identity, categoryId, expectedName, newName, manualId, targetUid) {
+function planFixedPair(tournamentId, registrations, identity, categoryId, expectedName, newName, manualId, targetUid) {
   const name = text(newName).replace(/\s+/g, ' ');
   if (name.length < 2 || name.length > 120 || /[<>\x00-\x1f]/.test(name)) throw new Error('nome inválido');
   const target = text(targetUid);
@@ -84,6 +84,46 @@ function plan(tournamentId, registrations, identity, categoryId, expectedName, n
   return { source: current, partner, newName: name, newIdentity: { manualParticipantId: generated }, newPairId,
     changes: { updates: [Object.assign({}, current, { status: 'withdrawn', fixedPairId: null, withdrawnReason: 'organizer_replaced' }),
       Object.assign({}, partner, { fixedPairId: newPairId })], creates: [replacement] } };
+}
+
+function planSolo(tournamentId,all,current,identity,categoryId,expectedName,newName,manualId,targetUid) {
+  const name=text(newName).replace(/\s+/g,' '), target=text(targetUid);
+  if(name.length<2 || name.length>120 || /[<>\x00-\x1f]/.test(name)) throw new Error('nome inválido');
+  if(current.participantKind==='manual' && normalizeName(current.manualDisplayName)!==normalizeName(expectedName)) throw new Error('nome da vaga mudou; atualize a chave');
+  if(target && target===current.participantUid) throw new Error('a conta já ocupa esta vaga');
+  if(!target && all.some(item=>active(item) && item.registrationId!==current.registrationId && item.participantKind==='manual' && normalizeName(item.manualDisplayName)===normalizeName(name))) throw new Error('já existe inscrito com este nome');
+  const nextManual=target?'':text(manualId) || 'org-'+crypto.randomUUID();
+  const participantKey=target?'uid:'+target:'manual:'+nextManual;
+  const id=registrationId(participantKey,categoryId),existing=all.find(item=>item.registrationId===id);
+  if(existing && (existing.status!=='withdrawn' || !['','left','organizer_replaced'].includes(text(existing.withdrawnReason)))) throw new Error('a identidade de destino já está inscrita ou não pode ser reativada');
+  if(!target && all.some(item=>item.manualParticipantId===nextManual)) throw new Error('identidade manual já existe');
+  const next=Object.assign({},current,existing || {},{registrationId:id,tournamentId,categoryId,originCategoryId:categoryId,
+    participantKey,participantKind:target?'account':'manual',participantUid:target || null,manualParticipantId:nextManual || null,
+    status:'confirmed',validationState:'approved',fixedPairId:null});
+  delete next.withdrawnReason;
+  if(target) delete next.manualDisplayName;else next.manualDisplayName=name;
+  return {solo:true,source:current,partner:null,newPairId:null,newName:name,
+    newIdentity:target?{uid:target}:{manualParticipantId:nextManual},changes:{
+      updates:[Object.assign({},current,{status:'withdrawn',fixedPairId:null,withdrawnReason:'organizer_replaced'})].concat(existing?[next]:[]),creates:existing?[]:[next]}};
+}
+function plan(tournamentId,registrations,identity,categoryId,expectedName,newName,manualId,targetUid,pointsPolicy) {
+  const all=Array.from(indexRegistrations(tournamentId,registrations).values());
+  const source=all.filter(item=>active(item) && item.categoryId===categoryId && (identity.uid?item.participantUid===identity.uid:item.manualParticipantId===identity.manualParticipantId));
+  if(source.length!==1) throw new Error('inscrição ativa ausente ou ambígua');
+  const solo=!source[0].fixedPairId;
+  if((solo || pointsPolicy!=null) && !['inherit','reset'].includes(pointsPolicy)) throw new Error('escolha se a nova pessoa mantém a pontuação ou começa do zero');
+  const edit=solo?planSolo(tournamentId,all,source[0],identity,categoryId,expectedName,newName,manualId,targetUid):
+    planFixedPair(tournamentId,registrations,identity,categoryId,expectedName,newName,manualId,targetUid);
+  edit.pointsPolicy=pointsPolicy || 'inherit';edit.oldName=text(expectedName);
+  if(!solo && pointsPolicy==='reset') {
+    const targetReg=edit.changes.creates[0] || edit.changes.updates.find(item=>item.status==='confirmed' && item.registrationId!==edit.partner.registrationId);
+    if(!targetReg) throw new Error('inscrição de destino ausente');
+    const newPair=require('./registration-mutations-core').canonicalPairId(tournamentId,categoryId,[targetReg.registrationId,edit.partner.registrationId]);
+    edit.newPairId=newPair;targetReg.fixedPairId=newPair;
+    const partnerUpdate=edit.changes.updates.find(item=>item.registrationId===edit.partner.registrationId);
+    if(partnerUpdate) partnerUpdate.fixedPairId=newPair;else edit.changes.updates.push(Object.assign({},edit.partner,{fixedPairId:newPair}));
+  }
+  return edit;
 }
 
 function legacyItem(document) {
@@ -181,7 +221,8 @@ function mirrorWritePatch(document, edit, deleteFieldValue, oldSlot) {
 }
 
 function hasIdentity(value, identity) {
-  if (typeof value === 'string') return value === identity.uid || value === identity.manualParticipantId;
+  if (typeof value === 'string') return value === identity.uid || value === identity.manualParticipantId ||
+    (!!identity.uid && value==='uid:'+identity.uid) || (!!identity.manualParticipantId && value==='manual:'+identity.manualParticipantId);
   if (!value || typeof value !== 'object') return false;
   return Object.keys(value).some((key) => {
     const part = value[key];

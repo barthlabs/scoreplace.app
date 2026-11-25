@@ -1,3 +1,13 @@
+// One edit glyph: the writing tip is lower-left, the eraser upper-right.
+window._editPencilHtml = function() {
+  return '<svg class="sp-edit-pencil" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 15 15 4l5 5L9 20l-6 1 1-6Z"/><path d="m13 6 5 5M4 15l5 5M16 3l1-1a2 2 0 0 1 3 0l2 2a2 2 0 0 1 0 3l-1 1"/></svg>';
+};
+window._athleteEditButtonHtml=function(t,uid,manualId,name,categoryId,canEdit) {
+  if(!t?.id || !canEdit) return '';
+  var args=[t.id,uid,manualId,categoryId,name].map(value=>window._safeHtml(JSON.stringify(String(value || '')))).join(',');
+  return '<button type="button" class="sp-athlete-edit" aria-label="Editar atleta '+window._safeHtml(name || 'da vaga')+'" '+
+    'onclick="event.preventDefault();event.stopPropagation();window._openTournamentAthleteEditor('+args+')">'+window._editPencilHtml()+'</button>';
+};
 function setupUI() {
   // Configuração global de Modais, Botões, etc.
   

@@ -26,6 +26,7 @@ const format=M({eliminatoria:M({semeadura:S('grupos')})});
 await req('PATCH','tournaments/cross','owner',{fields:{creatorUid:S(u),name:S('Cross'),fmt2:format,phases:{arrayValue:{values:[]}}}});
 out.crossScore=(await req('PATCH','tournaments/cross?updateMask.fieldPaths=scoreNote',u,{fields:{scoreNote:S('placar')}})).status;
 out.crossDowngrade=(await req('PATCH','tournaments/cross?updateMask.fieldPaths=fmt2',u,{fields:{fmt2:M({eliminatoria:M({semeadura:S('performance')})})}})).status;
+out.forgeBook=(await req('PATCH',p+'?updateMask.fieldPaths=participantSlotReplacements',u,{fields:{participantSlotReplacements:M({schema:{integerValue:'1'}})}})).status;
 out.final=(await req('GET',p,'owner')).body.fields._phaseReadCertificate.mapValue.fields.digest.stringValue;
 console.log('__JSON__'+JSON.stringify(out));})().catch(e=>{console.error(e);process.exitCode=1});`;
 
@@ -49,6 +50,7 @@ try {
   assert.equal(result.remove, 403, 'cliente não remove atestado');
   assert.equal(result.crossScore,200,'placar genérico preserva semeadura por grupos');
   assert.equal(result.crossDowngrade,403,'cliente antigo não muda semeadura por escrita direta');
+  assert.equal(result.forgeBook,403,'cliente não forja herança de pontuação');
   assert.equal(result.final, 'original', 'atestado original permanece');
   console.log('rules-phase-read-certificate: criação, preservação, substituição e remoção OK');
 } finally {

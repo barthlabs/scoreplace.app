@@ -4755,6 +4755,86 @@ function _slotPublishedExtras(tournament) {
 /* Edição de uma vaga da dupla, inclusive na chave publicada. O UID é identidade,
  * não um nome editável: substituí-lo cria uma vaga manual e preserva a inscrição
  * anterior como histórico retirado. Sandbox e produção usam esta mesma porta. */
+async function _applyUniversalParticipantSlot(tx,ref,raw,state,checked,edit,participantDocs,context) {
+  const slots=require('./vendor/participant-slot-core');
+  if(!['inherit','reset'].includes(context.pointsPolicy)) throw new HttpsError('invalid-argument','Escolha se a nova pessoa mantém a pontuação ou começa do zero.');
+  const from=slots.sourceOf(edit),to=edit.newIdentity;
+  const mirrors=participantDocs.filter(doc=>{
+    const item=_editCanonicalSlot.legacyItem(doc.data);
+    return (!item.categoryId || item.categoryId===context.categoryId) && (edit.solo
+      ? (from.uid?item.uid===from.uid:item.manualParticipantId===from.manualParticipantId)
+      : item.fixedPairId===edit.source.fixedPairId && _slotHasIdentity(item,from));
+  });
+  if(mirrors.length!==1) throw new HttpsError('failed-precondition','Espelho da inscrição ausente ou ambíguo; atualize a chave.');
+  const mirror=mirrors[0],mirrorItem=_editCanonicalSlot.legacyItem(mirror.data);
+  const definition=(raw.categoryDefinitions || []).find(item=>item.id===context.categoryId);
+  const category=String(definition?.label || mirrorItem.category || context.categoryId);
+  const change={...edit,from,to,categoryId:context.categoryId,category,oldName:context.expectedName,allowManualNameFallback:!from.uid};
+  const [matchesSnap,groupsSnap,claimsSnap]=await Promise.all([
+    tx.get(ref.collection(_tSplitFn.colecaoDaParte('matches')).limit(401)),
+    tx.get(ref.collection(_tSplitFn.colecaoDaParte('grupos')).limit(401)),
+    tx.get(ref.collection(_tSplitFn.colecaoDaParte('woClaims')).limit(401))]);
+  if(matchesSnap.size>400 || groupsSnap.size>400 || participantDocs.length>400 || claimsSnap.size>400)
+    throw new HttpsError('resource-exhausted','A troca excede o volume seguro de uma transação; nenhuma alteração foi gravada.');
+  if(claimsSnap.docs.some(doc=>_slotHasIdentity(doc.data(),from) || _slotHasIdentity(doc.data(),to)))
+    throw new HttpsError('failed-precondition','Há um W.O. pendente envolvendo a vaga.');
+  const writes=new Map(),historicalMatchIds=[],liveMatchIds=[];
+  const futureIds=new Set();
+  function changedFuture(before,after) {
+    if(!before || typeof before!=='object') return;
+    if(before.id!=null && ('p1' in before || 'team1' in before) && ('p2' in before || 'team2' in before)) {
+      if(!slots.finished(before) && JSON.stringify(before)!==JSON.stringify(after)) futureIds.add(String(before.id));
+      return;
+    }
+    Object.keys(before).forEach(key=>changedFuture(before[key],after?.[key]));
+  }
+  function planDocument(doc,isMatch) {
+    const value=doc.data(),game=value.jogo || value;
+    if(isMatch && slots.finished(game)) {if(_slotHasIdentity(game,from)) historicalMatchIds.push(doc.id);return;}
+    const patched=slots.patchTree(value,change);
+    if(JSON.stringify(patched)===JSON.stringify(value)) return;
+    if(isMatch){
+      futureIds.add(String(game.id || doc.id));
+      if(game.courtCalledAt || game.startedAt) liveMatchIds.push(doc.id);
+      const nextGame=patched.jogo || patched;
+      patched.playerUids=Array.from(new Set([...(nextGame.team1Uids || []),...(nextGame.team2Uids || []),nextGame.p1Uid,nextGame.p2Uid].filter(Boolean)));
+    }
+    writes.set(doc.ref.path,{ref:doc.ref,data:patched});
+  }
+  let rootPatch={},book;
+  try {
+    matchesSnap.docs.forEach(doc=>planDocument(doc,true));groupsSnap.docs.forEach(doc=>planDocument(doc,false));
+    for(const field of ['matches','groups','rounds','phaseRounds','rodadas','thirdPlaceMatch','participants']) {
+      if(!raw[field]) continue;
+      const patched=slots.patchTree(raw[field],change);
+      if(JSON.stringify(patched)!==JSON.stringify(raw[field])) {
+        rootPatch[field]=patched;
+        if(['matches','rounds','phaseRounds','rodadas','thirdPlaceMatch'].includes(field)) changedFuture(raw[field],patched);
+      }
+    }
+    if(state.hasPublishedDraw && !futureIds.size) throw new Error('Não há jogo atual ou futuro para esta substituição.');
+    const patchedItem=slots.patchTree(mirrorItem,change);
+    const newId=_tSplitFn.chaveDoInscrito(patchedItem);
+    if(!newId || (newId!==mirror.ref.id && participantDocs.some(doc=>doc.ref.id===newId))) throw new Error('A identidade de destino já possui espelho no torneio.');
+    const mirrorData=mirror.data.item?{...mirror.data,_k:newId,item:patchedItem}:patchedItem;
+    const event={from,to,categoryId:context.categoryId,category,phaseIndex:Number(raw.currentPhaseIndex || 0),
+      pointsPolicy:context.pointsPolicy,newName:edit.newName,oldName:context.expectedName,editedByUid:context.callerUid,editedAt:new Date().toISOString()};
+    book=slots.appendEvent(raw,event);
+    rootPatch.participantSlotReplacements=book;
+    slots.assertBudget(writes.size+edit.changes.updates.length+edit.changes.creates.length+7,[...Array.from(writes.values(),row=>row.data),{...raw,...rootPatch},mirrorData]);
+    // Every read/plan above completes before the first write. Firestore retries on conflicts.
+    const next=_writeCanonicalRosterChanges(tx,ref,state.tournament,checked.registrations,edit.changes,rootPatch,context.sandbox?context.logicalId:'');
+    writes.forEach(row=>tx.set(row.ref,row.data));
+    if(newId===mirror.ref.id) tx.set(mirror.ref,mirrorData);
+    else {tx.create(mirror.ref.parent.doc(newId),mirrorData);tx.delete(mirror.ref);}
+    tx.update(ref,{_phaseReadCertificate:_FV.delete()});
+    tx.create(ref.collection('slotEditAudits').doc(),{sourceRegistrationId:edit.source.registrationId,targetIdentity:to,
+      categoryId:context.categoryId,pointsPolicy:context.pointsPolicy,matchIds:Array.from(writes.values()).filter(row=>(row.data.jogo || row.data).id).map(row=>(row.data.jogo || row.data).id),
+      historicalMatchIds,liveMatchIds,presencePreserved:true,editedByUid:context.callerUid,editedAt:_FV.serverTimestamp()});
+    return {ok:true,participantsCount:next.participants.length,liveMatchIds,pointsPolicy:context.pointsPolicy};
+  }catch(error){if(error instanceof HttpsError) throw error;throw new HttpsError('failed-precondition',error.message);}
+}
+
 exports.editCanonicalTournamentSlot = onCall(
   { region: 'us-central1', memory: '512MiB', timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
@@ -4790,10 +4870,10 @@ exports.editCanonicalTournamentSlot = onCall(
       } else if (raw.isSandbox === true || !_isTournamentOrgCaller(raw, callerUid)) {
         throw new HttpsError('permission-denied', 'somente a organização pode editar vagas');
       }
+      const slotRoot=snap.data() || {};
       const state = await _manualClaimReadState(tx, ref, raw);
       if (state.hasPublishedDraw) {
-        if (state.tournament.pendingDraw || state.privateDraw || state.hasPublishedGroups ||
-            (Array.isArray(state.tournament.groups) && state.tournament.groups.length)) {
+        if (state.tournament.pendingDraw || state.privateDraw) {
           throw new HttpsError('failed-precondition', 'sorteio em transição ou grupos publicados');
         }
       } else _manualClaimGuard(state, true);
@@ -4813,9 +4893,11 @@ exports.editCanonicalTournamentSlot = onCall(
         destinationName = String(profile.displayName).trim();
       }
       let edit;
-      try { edit = _editCanonicalSlot.plan(logicalId, checked.registrations, identity, categoryId, expectedName, destinationName, null, targetUid); }
+      try { edit = _editCanonicalSlot.plan(logicalId, checked.registrations, identity, categoryId, expectedName, destinationName, null, targetUid, data.pointsPolicy); }
       catch (error) { throw new HttpsError('failed-precondition', error.message); }
-      if (['classification', 'classificationEntries', 'standings'].some((key) =>
+      const universalSlot=edit.solo || state.hasPublishedGroups ||
+        ['groups','rounds','phaseRounds','rodadas'].some(key=>_slotHasIdentity(state.tournament[key],identity) || _slotHasIdentity(slotRoot[key],identity));
+      if (!universalSlot && ['classification', 'classificationEntries', 'standings'].some((key) =>
         _slotHasIdentity(state.tournament[key], identity) ||
         _slotHasDisplayedName(state.tournament[key], expectedName))) {
         throw new HttpsError('failed-precondition', 'classificação contém identidade individual; revisão necessária');
@@ -4840,6 +4922,8 @@ exports.editCanonicalTournamentSlot = onCall(
       const mirrorCol = ref.collection(_tSplitFn.colecaoDaParte('participants'));
       const mirrorSnap = await tx.get(mirrorCol);
       const mirrorDocuments = mirrorSnap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() || {} }));
+      if(universalSlot) return _applyUniversalParticipantSlot(tx,ref,slotRoot,state,checked,edit,mirrorDocuments,
+        {callerUid,logicalId,sandbox,categoryId,expectedName,pointsPolicy:data.pointsPolicy});
       let match;
       try { match = _editCanonicalSlot.findLegacyMirror(mirrorDocuments, edit); }
       catch (error) { throw new HttpsError('failed-precondition', error.message); }

@@ -1941,21 +1941,10 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
        * ⭐ O lápis FICA para quem o organizador digitou À MÃO: sem conta, o nome escrito é a
        * única identidade que existe, e corrigi-lo é legítimo. */
       var _mCamisAction = isOrg && String(t.id) === 'tour_1793804848447_94bfe2282535789667cb35f1080024ee' && !_mUid && _mManualId;
-      var _mEditBtn = (isOrg && !_mUid && _mManualId && !_mCamisAction)
-        ? '<button type="button" title="Editar ' + _nmH + '" aria-label="Editar ' + _nmH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\',\'' + _mManualId + '\',this)">✏️</button>'
-        : '';
+      var _mEditBtn = window._athleteEditButtonHtml?.(t,_mUid,_mManualId,_nm,_mPart?.categoryId || p.categoryId || '',isOrg) || '';
       var _mSwap = isOrg && t.status !== 'finished' && (t.canonicalRegistrationMigration || {}).fingerprint &&
         _mPart && _mPart.fixedPairId && (_mUid || _mManualId);
-      var _mNameAction = _mCamisAction
-        ? '<span class="sp-person-name-link" role="button" tabindex="0" data-camis-manual-name="1" data-camis-tid="' + window._safeHtml(String(t.id)) +
-          '" data-camis-old-name="' + _nmH + '" data-camis-manual-id="' + window._safeHtml(String(_mManualId)) +
-          '" title="Editar ou substituir ' + _nmH + '">' + _mNameHtml + '</span>'
-        : _mSwap
-        ? '<span role="button" tabindex="0" data-tournament-swap="1" data-swap-tid="' + window._safeHtml(String(t.id)) +
-          '" data-swap-uid="' + window._safeHtml(String(_mUid)) + '" data-swap-manual-id="' +
-          window._safeHtml(String(_mManualId)) + '" data-swap-category="' +
-          window._safeHtml(String(_mPart.categoryId || p.categoryId || '')) + '" title="Trocar participante">' + _mNameHtml + '</span>'
-        : _mNameHtml;
+      var _mNameAction = _mNameHtml;
       // ⭐ ponto único: o nome já hidratava (_mUidAttr), o ÍCONE não — e era ele que
       // nascia mudo quando o perfil ainda não tinha chegado.
       /* ⛔ `data-edit-name-scope` é do DIV, nunca do span do nome: o helper do nome só leva
@@ -2006,12 +1995,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     /* ⛔ Mesmo motivo do bloco acima: conta se renomeia no perfil dela. O lápis fica só
      * para inscrito digitado à mão. */
     var _pCamisAction = isOrg && String(t.id) === 'tour_1793804848447_94bfe2282535789667cb35f1080024ee' && !_pUid && _pManualId;
-    if (_pCamisAction) _pNameLinkHtml = '<span class="sp-person-name-link" role="button" tabindex="0" data-camis-manual-name="1" data-camis-tid="' +
-      window._safeHtml(String(t.id)) + '" data-camis-old-name="' + _pNameH + '" data-camis-manual-id="' +
-      window._safeHtml(String(_pManualId)) + '" title="Editar ou substituir ' + _pNameH + '">' + _pNameLinkHtml + '</span>';
-    var _pEditBtn = (isOrg && !_pUid && _pManualId && !_pCamisAction)
-      ? '<button type="button" title="Editar ' + _pNameH + '" aria-label="Editar ' + _pNameH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\',\'' + _pManualId + '\',this)">✏️</button>'
-      : '';
+    var _pEditBtn = window._athleteEditButtonHtml?.(t,_pUid,_pManualId,pName,p.categoryId || '',isOrg) || '';
     pNameHtml = '<div data-edit-name-scope data-edit-key="' + window._safeHtml(String(t.id) + '|' + String(_pUid || _pManualId || pName)) + '" style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
       window._personAvatarHtml(_pUid, pName, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + _pNameLinkHtml + _pContact + _pEditBtn + _orgStar + '</div>';
   }
@@ -3057,11 +3041,7 @@ function renderParticipants(container, tournamentId) {
       const _niSwap = isOrg && t.status !== 'finished' && (t.canonicalRegistrationMigration || {}).fingerprint &&
         (_niPair && _niPair.fixedPairId || ind.fixedPairId) && (_niUid || _niManualId);
       const _niCamisAction = isOrg && String(tId) === 'tour_1793804848447_94bfe2282535789667cb35f1080024ee' && !_niUid && _niManualId;
-      const _niNameAction = _niCamisAction
-        ? `<span class="sp-person-name-link" role="button" tabindex="0" data-camis-manual-name="1" data-camis-tid="${window._safeHtml(String(tId))}" data-camis-old-name="${_safeName}" data-camis-manual-id="${window._safeHtml(String(_niManualId))}" title="Editar ou substituir ${_safeName}">${_niNomeHtml}</span>`
-        : _niSwap
-        ? `<span role="button" tabindex="0" data-tournament-swap="1" data-swap-tid="${window._safeHtml(String(tId))}" data-swap-uid="${window._safeHtml(String(_niUid))}" data-swap-manual-id="${window._safeHtml(String(_niManualId))}" data-swap-category="${window._safeHtml(String(_niPair && _niPair.categoryId || ind.categoryId || ''))}" title="Trocar participante">${_niNomeHtml}</span>`
-        : _niNomeHtml;
+      const _niNameAction = _niNomeHtml;
       const _niContato = (typeof window._contactPersonIconHtml === 'function')
         ? window._contactPersonIconHtml(t, _niUid, ind.name, { sameGroup: true }) : '';
       /* ⛔⛔ O ORGANIZADOR TEM DE CONSEGUIR CONFERIR O QUE ELE MUDOU (24/set/2026).
@@ -3077,9 +3057,7 @@ function renderParticipants(container, tournamentId) {
         ? `<div style="font-size:0.63rem;color:var(--text-muted);opacity:0.75;line-height:1.2;margin-top:1px;">neste torneio: ${window._safeHtml(String(ind.name).trim())}</div>`
         : '';
       /* ⛔ Mesmo motivo: conta se renomeia no perfil dela. Lápis só para digitado à mão. */
-      const _niEditBtn = (isOrg && !_niUid && _niManualId && !_niCamisAction)
-        ? `<button type="button" title="Editar ${_safeName}" aria-label="Editar ${_safeName}" style="border:0;background:transparent;color:var(--text-muted);font-size:0.82rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}','${_niManualId}',this)">\u270f\ufe0f</button>`
-        : '';
+      const _niEditBtn = window._athleteEditButtonHtml?.(t,_niUid,_niManualId,ind.name,_niPair?.categoryId || ind.categoryId || '',isOrg) || '';
       const _nameRow = `<div data-edit-name-scope data-edit-key="${window._safeHtml(String(tId) + '|' + String(_niUid || _niManualId || ind.name || ''))}" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;">${_niNameAction}${_niContato}${_niEditBtn}${_orgStarC}${isStandby ? presenceDot : ''}</div>${_niRotuloTorneio}`;
       const _jogoTop = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${window._spCor(_jogoColor, 'color')};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;">${matchLabel}</span>` : '';
       // Faixa do jogo FULL-WIDTH abaixo do header (libera largura pros nomes dos times).

@@ -75,7 +75,8 @@ function plan(tournament, registrations, input, accountNames, physicalDocuments)
   }
   const rootPatch = {};
   for (const key of ['participants', 'classification', 'classificationEntries', 'checkedIn', 'absent', 'vips',
-    'standings', 'waitlist', 'standbyParticipants', 'sorteioRealizado', 'monarchWaitlist']) {
+    'standings', 'waitlist', 'standbyParticipants', 'sorteioRealizado', 'monarchWaitlist',
+    'matches', 'groups', 'rounds', 'phaseRounds', 'rodadas', 'thirdPlaceMatch', 'participantSlotReplacements']) {
     if (!Object.prototype.hasOwnProperty.call(tournament, key)) continue;
     const before = tournament[key];
     if (!hasOldLabel(before, oldName)) continue;

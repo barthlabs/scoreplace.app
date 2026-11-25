@@ -2482,7 +2482,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       // ── ícones gerenciar (lápis / X) ──
       var manage = canManage ? (
         '<span style="display:inline-flex;gap:4px;flex-shrink:0;">' +
-          '<button type="button" title="Editar" onclick="window._schEditOption(' + oa + ')" class="btn" style="background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--sp-c-cbd5e1,#cbd5e1);border:1px solid var(--border-color);border-radius:7px;padding:3px 7px;font-size:0.82rem;line-height:1;">✏️</button>' +
+          '<button type="button" title="Editar" onclick="window._schEditOption(' + oa + ')" class="btn" style="background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--sp-c-cbd5e1,#cbd5e1);border:1px solid var(--border-color);border-radius:7px;padding:3px 7px;font-size:0.82rem;line-height:1;">' + (window._editPencilHtml?.() || '<span class="sp-edit-pencil-fallback" aria-hidden="true">✏️</span>') + '</button>' +
           '<button type="button" title="Apagar" onclick="window._schDeleteOption(' + oa + ')" class="cancel-x-btn" style="--cx-size:20px;">✕</button>' +
         '</span>') : '';
 

@@ -67,21 +67,20 @@ ok(/\$\{_niNameAction\}/.test(_nameRowAdmin) && /_niNameAction[\s\S]{0,700}_niNo
   'a lista administrativa mantém o nome canônico e permite a troca direta ao organizador');
 ok(/\$\{_niContato\}/.test(_nameRowAdmin), 'a lista administrativa mostra o balão de contato ao lado do nome');
 ok(/\$\{_niEditBtn\}/.test(_nameRowAdmin), 'a edição da lista administrativa é um botão próprio, não o nome');
-/* ⛔ E o botão só existe para quem foi digitado À MÃO (25/set/2026). Pergunta do dono: "onde
- * renomeia conta que não no perfil do usuário?" — em lugar nenhum. */
-ok(/const _niEditBtn = \(isOrg && !_niUid && _niManualId && !_niCamisAction\)/.test(participants),
-  '⛔ o lápis não aparece para quem tem conta nem no CAMIS, onde o nome abre as ações');
-ok(/var _pEditBtn = \(isOrg && !_pUid && _pManualId && !_pCamisAction\)/.test(participants) &&
-   /var _mEditBtn = \(isOrg && !_mUid && _mManualId && !_mCamisAction\)/.test(participants),
-  'o mesmo vale no card do inscrito e no membro de dupla');
-ok(/data-camis-manual-name/.test(participants) && /_openCamisManualNameActions/.test(participants),
-  'no CAMIS, tocar no nome manual abre corrigir ou substituir sem lápis');
+// The organizer edits the tournament slot through a separate pencil for every identity.
+ok(/const _niEditBtn = window\._athleteEditButtonHtml\?\.\(t,_niUid,_niManualId/.test(participants),
+  'a lista administrativa oferece o lápis para conta ou nome manual');
+ok(/var _pEditBtn = window\._athleteEditButtonHtml\?\.\(t,_pUid,_pManualId/.test(participants) &&
+   /var _mEditBtn = window\._athleteEditButtonHtml\?\.\(t,_mUid,_mManualId/.test(participants),
+  'o card e o integrante da dupla usam a mesma porta de edição');
+ok(/_openCamisManualNameActions/.test(participants),
+  'ações do ensaio CAMIS permanecem disponíveis pelo editor canônico');
 ok(/if \(!manualParticipantId\) \{[\s\S]{0,260}O nome é da pessoa/.test(participants),
   '⛔ e a própria porta RECUSA conta, como segunda linha — caminho futuro não reabre isso');
 ok(!/onclick=/.test(_nameRowAdmin), 'nenhum onclick sobrou dentro da linha do nome');
 ok(/_personNameHtml\(_niUid, _niShown/.test(participants), 'o nome entregue ao helper é o vivo e CRU, não o já escapado');
-ok(/_editParticipantName\('\$\{tId\}','\$\{safeName\}'/.test(participants),
-  'o botão leva o nome GRAVADO como oldName — é por ele que a Function acha a pessoa');
+ok(/_athleteEditButtonHtml\?\.\(t,_niUid,_niManualId,ind.name/.test(participants),
+  'o botão conserva a identidade estrutural e o nome apresentado na vaga');
 
 /* ── A VARREDURA: onclick dentro de um span de nome desliga a ficha em silêncio ──
  * Este é o padrão exato que produziu o defeito de 24/set/2026. Sem exceções. */
@@ -152,10 +151,8 @@ ok(/neste torneio: /.test(participants) && /!== String\(_niShown\)\.trim\(\)/.te
 ok(/wrapper\.setAttribute\('data-player-profile-disabled'/.test(_corpoEdit) &&
    /wrapper\.removeAttribute\('data-player-profile-disabled'/.test(_corpoEdit),
   'a trava da ficha entra e sai também no wrapper, não só no marcador interno');
-const _chamadasEdit = participants.match(/_editParticipantName\([^)]*\)/g) || [];
-const _emHtml = _chamadasEdit.filter(c => /tId|t\.id/.test(c) && !/= function/.test(c));
-ok(_emHtml.length >= 3 && _emHtml.every(c => /,\s*this\)$/.test(c)),
-  'todo botão de edição passa a si mesmo como alvo (' + _emHtml.length + ' pontos)');
+const _sharedEditCalls=participants.match(/_athleteEditButtonHtml\?\./g) || [];
+ok(_sharedEditCalls.length===3,'os três renders administrativos usam o mesmo botão de edição');
 const _resolvedor = _corpoDaFuncao(participants, 'window._resolveEditNameTarget = function');
 ok(!/querySelector\('\[data-edit-key="' *\+/.test(_resolvedor) && /getAttribute\('data-edit-key'\) === chave/.test(_resolvedor),
   'a chave do escopo é comparada por igualdade — nome bruto nunca entra num seletor CSS');
@@ -165,7 +162,7 @@ ok(/\[data-edit-name-target\]/.test(_resolvedor),
 // A hidratação não pode escrever por cima de quem está digitando.
 ok(/contenteditable'\) === 'true'\) return;/.test(store.slice(store.indexOf('window._hydrateUidNames'), store.indexOf('window._hydrateUidNames') + 3000)),
   'o hidratador pula o campo que está em edição');
-ok((participants.match(/aria-label="Editar /g) || []).length >= 2,
+ok(_sharedEditCalls.length === 3 && /aria-label="Editar /.test(read('js/ui.js')),
   'o organizador mantém um controle de edição explícito para pessoa e dupla');
 ok(/_contactPersonByUid[\s\S]{0,1200}c\.useWhatsApp[\s\S]{0,1000}mailto:/.test(read('js/views/tournaments-organizer.js')),
   'o balão mantém WhatsApp como prioridade e e-mail como fallback');

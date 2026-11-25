@@ -229,6 +229,7 @@ g.window.ScoreplaceRealtimeFreshness = require('./vendor/realtime-freshness.js')
 g.window._isRemoteFirestoreSnapshot = g.window.ScoreplaceRealtimeFreshness.isRemoteSnapshot;
 require('./vendor/identity-core.js');
 require('./vendor/phase-grid-plan.js');
+require('./vendor/participant-slot-core.js');
 require('./vendor/schedule-poll.js');      // grade estimada: só o núcleo puro é chamado pela CF
 require('./vendor/team-formation.js');     // convite de dupla: máquina pura compartilhada
 require('./vendor/waitlist-core.js');            // cânone da LISTA DE ESPERA (3 storages) —

@@ -2883,7 +2883,7 @@ function renderDashboard(container) {
           btns += '<button data-pending-action="contest" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="' + _btnStyle(239,68,68) + '">❌ Contestar</button>';
           btns += '<button data-pending-action="approve" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="' + _btnStyle(16,185,129) + '">✅ Confirmar</button>';
         } else {
-          btns += '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="' + _btnStyle(99,102,241) + '">✏️ Editar</button>';
+          btns += '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="' + _btnStyle(99,102,241) + '">Editar ' + (window._editPencilHtml?.() || '<span class="sp-edit-pencil-fallback" aria-hidden="true">✏️</span>') + '</button>';
           btns += '<button data-pending-action="approve" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="' + _btnStyle(16,185,129) + '">✅ Confirmar</button>';
         }
         html += '<div data-mr-card="1"' + _spCard() + ' style="min-width:0;">' + _miniBracketCard(item, false, {
@@ -2909,7 +2909,7 @@ function renderDashboard(container) {
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
         var mid = String(item.m.id || '');
         var btns = _pendTag2 +
-          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:var(--sp-c-a78bfa,#a78bfa);border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
+          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:var(--sp-c-a78bfa,#a78bfa);border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">Editar ' + (window._editPencilHtml?.() || '<span class="sp-edit-pencil-fallback" aria-hidden="true">✏️</span>') + '</button>';
         html += '<div data-mr-card="1"' + _spCard() + ' style="min-width:0;">' + _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,

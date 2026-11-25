@@ -36,4 +36,8 @@ const withRootMirror = core.plan({ ...tournament, participants: [{ manualPartici
 assert.equal(withRootMirror.rootPatch.participants[0].displayName, 'Kelly Barth');
 assert.equal(core.replaceLabel('  Outra   /   Pessoa  ', 'Kelly Cristina', 'Kelly Barth'),
   '  Outra   /   Pessoa  ');
+const embedded=core.plan({...tournament,rounds:[{matches:[game]}],participantSlotReplacements:{schema:1,events:[{to:{manualParticipantId:'m1'},newName:'Kelly Cristina',pointsPolicy:'inherit'}]}},roster,input,[],[]);
+assert.equal(embedded.rootPatch.rounds[0].matches[0].p1,'Kelly Barth / Ana');
+assert.equal(embedded.rootPatch.participantSlotReplacements.events[0].newName,'Kelly Barth');
+assert.equal(embedded.rootPatch.participantSlotReplacements.events[0].pointsPolicy,'inherit');
 console.log('✓ rename-canonical-participant');

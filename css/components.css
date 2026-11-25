@@ -3801,3 +3801,7 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
   .sp-phase-setup > label:last-child { grid-column:1 / -1; }
 }
 @media (max-width:420px) { .sp-category-controls { grid-template-columns:minmax(0,1fr); } }
+
+.sp-edit-pencil{width:1em;height:1em;display:inline-block;vertical-align:-.12em;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;margin-inline-start:.3em}.sp-athlete-edit{border:0;background:transparent;color:var(--text-main);padding:3px;cursor:pointer;flex:none;line-height:1}.sp-athlete-edit .sp-edit-pencil{margin:0}
+
+.sp-edit-pencil-fallback{display:inline-block;transform:scaleX(-1);margin-inline-start:.3em}

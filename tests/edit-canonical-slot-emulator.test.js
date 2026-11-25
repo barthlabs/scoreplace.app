@@ -113,7 +113,7 @@ async function driver() {
         await tournamentRef.update({ [field]: value });
         await assert.rejects(call({ tournamentId: tid, sandbox: false, manualParticipantId: 'typed-a',
           categoryId: cat, expectedName: 'Pessoa antiga', newName: 'Pessoa nova' }),
-        /failed-precondition|referenciada|referência|classificação|rodada|histórico|W\.O\./i, field);
+        /failed-precondition|referenciada|referência|classificação|rodada|histórico|pontuação|W\.O\./i, field);
         await tournamentRef.update({ [field]: admin.firestore.FieldValue.delete() });
       }
     }
@@ -148,6 +148,53 @@ async function driver() {
       note: 'registro anterior' }], kind);
     assert.equal((await db.doc('tournaments/' + tid + '/registrations/' + idA).get()).data().status,
       'withdrawn', kind);
+  }
+  // Individual entries in published rotating groups, with explicit points policy.
+  for(const sourceUid of [true,false]) for(const targetUid of [true,false]) for(const policy of ['inherit','reset']) {
+    const tid='tour-solo-'+sourceUid+'-'+targetUid+'-'+policy,cat='fem-light',base='tournaments/'+tid;
+    const sourceKey=sourceUid?'uid:old-edit':'manual:solo-old';
+    const entries=[sourceKey,'manual:partner','manual:rival1','manual:rival2'].map((key,i)=>({registrationId:registrationId(key,cat),tournamentId:tid,
+      categoryId:cat,originCategoryId:cat,participantKey:key,participantKind:key.startsWith('uid:')?'account':'manual',participantUid:key.startsWith('uid:')?key.slice(4):null,
+      manualParticipantId:key.startsWith('manual:')?key.slice(7):null,...(key.startsWith('manual:')?{manualDisplayName:i?'Jogadora '+i:'Antiga'}:{}),
+      status:'confirmed',validationState:'approved',fixedPairId:null}));
+    await db.doc(base).set({creatorUid:'org-edit',name:'Grupo solo',status:'active',categoryDefinitions:[{id:cat,label:'Fem Light'}],
+      canonicalRegistrationMigration:{fingerprint:'solo-fixture',registrationCount:4},checkedInConfirmed:{'old-edit':true},currentPhaseIndex:0,matches:[],rounds:[],groups:[]});
+    for(const [i,r] of entries.entries()) {
+      await db.doc(base+'/registrations/'+r.registrationId).set(r);
+      const item={categoryId:cat,category:'Fem Light',...(r.participantUid?{uid:r.participantUid}:{manualParticipantId:r.manualParticipantId,name:r.manualDisplayName,displayName:r.manualDisplayName})};
+      const split=require('../functions/vendor/tournament-split-core');
+      await db.doc(base+'/inscritos/'+split.chaveDoInscrito(item)).set({_idx:i,item});
+    }
+    const names=[sourceUid?'Conta antiga':'Antiga','Jogadora 1','Jogadora 2','Jogadora 3'];
+    const game={id:'solo-future',phaseIndex:0,category:'Fem Light',categoryId:cat,isMonarch:true,groupIdx:0,p1:names.slice(0,2).join(' / '),p2:names.slice(2).join(' / '),
+      team1:names.slice(0,2),team2:names.slice(2),team1Uids:[sourceUid?'old-edit':null,null],team2Uids:[null,null],team1SlotIds:[sourceKey,'manual:partner'],team2SlotIds:['manual:rival1','manual:rival2'],
+      round:2,scheduledAt:'2026-11-29T10:00:00Z',court:'Q1',scoreP1:0,scoreP2:0,winner:null};
+    const history={...game,id:'solo-history',round:1,scoreP1:4,scoreP2:3,winner:'p1'};
+    await db.doc(base+'/matches/solo-future').set({jogo:game,_chave:'solo-future',_loc:{tipo:'matches',mi:0}});
+    await db.doc(base+'/matches/solo-history').set({jogo:history,_chave:'solo-history',_loc:{tipo:'matches',mi:1}});
+    await db.doc(base+'/grupos/g0').set({category:'Fem Light',categoryId:cat,groupIdx:0,players:names,playersUids:[sourceUid?'old-edit':null,null,null,null],playersSlotIds:entries.map(r=>r.participantKey)});
+    await db.doc(base).update({rounds:[{round:2,matches:[game]}]});
+    if(sourceUid && targetUid && policy==='inherit') {
+      const payload={tournamentId:tid,uid:'old-edit',categoryId:cat,expectedName:names[0],targetUid:'new-edit',pointsPolicy:policy};
+      await db.doc(base+'/matches/solo-future').update({'jogo.liveScored':true});
+      const rootBefore=(await db.doc(base).get()).data();
+      await assert.rejects(call(payload),/parcial/);
+      assert.deepEqual((await db.doc(base).get()).data(),rootBefore,'partial refusal writes nothing to root');
+      assert.equal((await db.doc(base+'/registrations/'+entries[0].registrationId).get()).data().status,'confirmed');
+      await db.doc(base+'/matches/solo-future').update({'jogo.liveScored':admin.firestore.FieldValue.delete()});
+    }
+    const result=await call({tournamentId:tid,uid:sourceUid?'old-edit':'',manualParticipantId:sourceUid?'':'solo-old',categoryId:cat,
+      expectedName:names[0],newName:targetUid?'':'Nova manual',targetUid:targetUid?'new-edit':'',pointsPolicy:policy});
+    assert.equal(result.ok,true);
+    assert.deepEqual((await db.doc(base+'/matches/solo-history').get()).data().jogo,history);
+    const nextGame=(await db.doc(base+'/matches/solo-future').get()).data().jogo;
+    assert.equal(nextGame.team1Uids[0],targetUid?'new-edit':null);assert.equal(nextGame.scheduledAt,game.scheduledAt);assert.equal(nextGame.court,game.court);
+    const nextRoot=(await db.doc(base).get()).data();assert.equal(nextRoot.rounds[0].matches[0].team1Uids[0],targetUid?'new-edit':null);
+    assert.equal(nextRoot.participantSlotReplacements.events[0].pointsPolicy,policy);
+    assert.equal(nextRoot.checkedInConfirmed['old-edit'],true);assert(!nextRoot.checkedInConfirmed['new-edit']);
+    const regs=(await db.collection(base+'/registrations').get()).docs.map(d=>d.data());
+    assert.equal(regs.find(r=>r.registrationId===entries[0].registrationId).status,'withdrawn');
+    assert(regs.some(r=>r.status==='confirmed' && (targetUid?r.participantUid==='new-edit':r.manualDisplayName==='Nova manual')));
   }
   console.log('✓ EMULATOR_SLOT_EDIT_OK: quatro transições e produção preservada');
   process.exit(0);
