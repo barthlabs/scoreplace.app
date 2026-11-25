@@ -1,0 +1,16 @@
+'use strict';
+const assert=require('node:assert/strict'),{G,w}=require('./universal-phase-grid.test'),frozen=require('./fixtures/phase-grid-timing-v1.json');
+const t=structuredClone(frozen.t),D=frozen.days;
+G.assertPlan(t,frozen.plan,D,w);
+const oldTiles=G.expand(frozen.plan,t),oldFinal=oldTiles.find(tile=>tile.kind==='elimination' && tile.round===2);
+assert.equal(oldFinal.duration,25,'plano antigo mantém preparação conforme contrato congelado');
+const proposed=G.suggestProjected(t,D,w);assert(!proposed.error,proposed.error);assert.equal(proposed.plan.timingVersion,2);
+G.assertPlan(t,proposed.plan,D,w);assert(proposed.tiles.filter(tile=>tile.kind==='elimination').every(tile=>tile.duration===35));
+const before=JSON.stringify(t),start=performance.now(),estimate=G.estimateOperation(t,w),elapsed=performance.now()-start;
+assert.equal(estimate.matches,92);assert.equal(estimate.minutes,440);assert.equal(estimate.realCount,48);assert.equal(estimate.pairCount,0);
+assert.equal(G.estimateOperation(t,w),estimate,'segundo acesso do snapshot reutiliza cálculo');assert.equal(JSON.stringify(t),before,'estimativa sem datas nunca grava/muda torneio');
+const published={...t,sorteioDrawId:'published',scheduleWindow:{days:D,interleavedPlan:frozen.plan}};
+assert.equal(G.estimateOperation(published,w).minutes,430,'publicado preserva horários v1');assert.equal(published.scheduleWindow.interleavedPlan.timingVersion,undefined);
+const draft={...t,scheduleWindow:{days:D,interleavedPlan:frozen.plan}};assert.equal(G.estimateOperation(draft,w).minutes,440,'proposta não sorteada adota política nova');
+const broken=structuredClone(t);broken.maxParticipantsByCategory['Categoria B']=3;assert(G.estimateOperation(broken,w).error,'não inventa47jogos se configuração inválida');
+console.log('✓ estimativa: 92 jogos, 7h20, preparo35/35, legado congelado7h10, memoização e zero mutações ('+elapsed.toFixed(1)+'ms inicial)');

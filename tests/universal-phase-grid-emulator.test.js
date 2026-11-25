@@ -39,15 +39,16 @@ async function run() {
   const invoke=(name,data,uid=owner)=>api[name].run({auth:{uid,token:{uid}},data,rawRequest:{headers:{}}});
   const id='tour_'+Date.now()+'_'+randomBytes(16).toString('hex');
   const {scenario,G,w}=require('./universal-phase-grid.test');
-  const D=[{day:'2026-12-01',startTime:'23:50',endTime:'23:51'}];
-  const categories=['Quadro B','Quadro C'];
-  const t=scenario(categories,[16,32],[8,8],[5,5],[4,2]);
+  const frozen=process.env.SP_GRID_TIMING_V1==='1'?require('./fixtures/phase-grid-timing-v1.json'):null;
+  const D=frozen?frozen.days:[{day:'2026-12-01',startTime:'23:50',endTime:'23:51'}];
+  const categories=frozen?frozen.t.combinedCategories:['Quadro B','Quadro C'];
+  const t=frozen?structuredClone(frozen.t):scenario(categories,[16,32],[8,8],[5,5],[4,2]);
   t.fmt2.tieResolution='draw_order';
   t.scoring={type:'sets',setsToWin:1,gamesPerSet:7,fixedSet:true,fixedSetGames:7,tiebreakEnabled:false};
   const compiled=format.compileToPhases(t.fmt2,{sport:t.sport,categories});
-  const original=G.suggestProjected(t,D,w);
+  const original=frozen?{plan:frozen.plan,tiles:G.expand(frozen.plan,t)}:G.suggestProjected(t,D,w);
   const rows=G.suggestedAssignments(original.tiles,6,t);
-  const proposed=G.applyAssignments(original.tiles,original.plan,D,rows);
+  const proposed=frozen?original:G.applyAssignments(original.tiles,original.plan,D,rows);
   assert(!proposed.error,proposed.error);
   const window={mode:'organizer',days:D,interleavedPlan:proposed.plan};
   const config={...compiled.topLevel,...t,maxParticipants:48,name:'Grade sintética',startDate:D[0].day,endDate:D[0].day,
@@ -58,6 +59,7 @@ async function run() {
   let stored=await fresh();
   assert.deepEqual(stored.scheduleWindow.interleavedPlan,proposed.plan);
   const fingerprint=stored.canonicalRegistrationMigration.fingerprint;
+  if(!frozen) {
   const updatePlan=plan=>invoke('updateTournamentConfiguration',{tournamentId:id,patch:{scheduleWindow:{...window,interleavedPlan:plan}}});
   const outdated=structuredClone(original.plan);delete outdated.groupAssignments;
   await assert.rejects(updatePlan(outdated),e=>e.code==='failed-precondition' && /Atualize o aplicativo/.test(e.message));
@@ -82,6 +84,7 @@ async function run() {
   }
   const invalid=structuredClone(t.fmt2);invalid.qualificationCategoryRules[0].perGroup=9;
   await assert.rejects(invoke('updateTournamentConfiguration',{tournamentId:id,patch:{fmt2:invalid}}),{code:'invalid-argument'});
+  }
   const sbId='sb_'+id+'_grid',sb=db.collection('sandboxes').doc(sbId),batch=db.batch();
   batch.set(sb,{...stored,id:sbId,isSandbox:true,sbState:'ready',sandboxOf:id,testModeEnabled:true,
     sandboxOwnerUid:owner,status:'closed',notificationsMuted:true,resultEntry:['organizer'],participants:[],matches:[],groups:[],rounds:[],
@@ -108,11 +111,11 @@ async function run() {
   await assert.rejects(call('drawRound'),{code:'failed-precondition'});
   await assert.rejects(call('updateTournamentConfiguration',{patch:{scheduleWindow:{...window,interleavedPlan:{...original.plan,groupAssignments:[]}}}}),{code:'failed-precondition'});
   const read=async()=> (await sb.collection('matches').get()).docs.map(s=>s.data().jogo);
-  let games=await read();assert.equal(games.length,60);
+  let games=await read();assert.equal(games.length,proposed.plan.blocks.filter(b=>b.phaseIndex===0).reduce((n,b)=>n+b.games,0));
   assert(games.every(m=>m.scheduledAt && Number(m.scheduledGameNumber || m._gameNum)>0),JSON.stringify(games[0]));
   for (const row of rows) {
     const group=games.filter(m=>m.scheduledGroupLabel===row.label);
-    assert.equal(group.length,10);
+    assert.equal(group.length,frozen?14:10);
     assert(group.every(m=>m.category===row.category && m.groupIdx+1===row.groupNumber && m.scheduledGroupEntry===row.entry));
     assert.deepEqual([...new Set(group.map(m=>m.court))].sort(),row.courts.map(c=>'Quadra '+c));
     assert.equal(group.filter(m=>m.round===1).length,2);
@@ -190,6 +193,7 @@ async function run() {
       }
     }
   }
+  if(!frozen) require('node:child_process').execFileSync(process.execPath,[__filename],{cwd:path.resolve(__dirname,'..'),env:{...process.env,SP_GRID_TIMING_V1:'1'},stdio:'inherit',timeout:150000});
   console.log('universal grid physical: OK');
 }
 run().then(()=>console.log('✓ Firestore demo: criação, edição, grade oficial, sorteio físico e avanço de duas categorias com cortes distintos.'))

@@ -6873,6 +6873,9 @@ function setupCreateTournamentModal() {
     var _tgl = document.getElementById('liga-balanced-toggle');
     var _modo = (_tgl ? _tgl.checked : (!t || t.equilibrado !== false)) ? 'equilibrado' : 'livre';
     var _abrir = function (rows) {
+      var currentCfg=window._f2GetConfig?.();
+      var basis=Object.assign({},t || {},currentCfg?{fmt2:currentCfg}:{});
+      if(window._genderDrawPools && !window._genderDrawPools(basis).length){_seguir(_modo==='equilibrado');return;}
       window._showDrawBalanceOverlay({
         rows: rows, mode: _modo,
         ratio: (t && typeof window._ratioStored === 'function' && window._ratioStored(t)) ||

@@ -382,7 +382,7 @@
       tournament.scheduleWindow=Object.assign({},tournament.scheduleWindow || {},staged || {},{days:days});
       if (staged?.days?.length) {days=staged.days;tournament.scheduleWindow.days=days;}
       var activePlan=window._phaseCallOrderState?.plan;
-      if(options.onlyIfStale && activePlan) {
+      if(options.onlyIfStale && activePlan?.timingVersion===2) {
         try {model.assertPlan(tournament,model.toPlan(activePlan,prior.tiles),days,window);return null;} catch(error) {}
       }
       if (activePlan?.groupAssignments) {

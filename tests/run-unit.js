@@ -151,6 +151,7 @@ const SUITES = [
   'tests/editor-capacity-save-browser.test.js',
   'tests/category-rotation-sliders-browser.test.js',
   'tests/universal-phase-grid-emulator.test.js',
+  'tests/canonical-draw-balance-emulator.test.js',
   'tests/category-rotation-sliders-emulator.test.js',
   'tests/group-category-rules.test.js',
   'tests/group-category-config-browser.test.js',
@@ -385,6 +386,8 @@ const SUITES = [
   'tests/direct-athlete-editor-browser.test.js',
   'tests/tiebreaker-scroll-browser.test.js',
   'tests/phase-grid-draft-browser.test.js',
+  'tests/gender-draw-canonical-browser.test.js',
+  'tests/phase-grid-operation-estimate.test.js',
   'tests/participant-swap-routing.test.js',
   'tests/edit-canonical-slot-emulator.test.js',
   'tests/l7-liga-availability-cf.test.js',
@@ -2548,6 +2551,7 @@ const MEXEM_NO_REPO = [
 const PRENDEM_PORTA = [
   // A porta dinâmica do Firestore não isola o hub/logging compartilhado do CLI.
   'tests/universal-phase-grid-emulator.test.js',
+  'tests/canonical-draw-balance-emulator.test.js',
   'tests/category-rotation-sliders-emulator.test.js',
   'tests/group-category-config-emulator.test.js',
   'tests/end-court-remaining-emulator.test.js',

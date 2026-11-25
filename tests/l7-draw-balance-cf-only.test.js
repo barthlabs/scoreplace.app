@@ -8,7 +8,7 @@ const choice = block(client, 'window._applyDrawBalanceChoice = function', '\n// 
 ok(/_callFn\('setDrawBalanceChoice'/.test(choice), 'cliente envia somente a intenção de equilíbrio');
 ok(!/AppStore\.mutate|commitTournamentTx|saveTournament|httpsCallable\('setParticipantsGender'/.test(choice), 'cliente não grava torneio nem perfil de gênero');
 const confirm = block(client, 'onConfirm: function (mode, assigned, ratioOpts)', '\n      }\n    });');
-ok(/\.then\(function \(\) \{ if \(typeof onProceed/.test(confirm), 'o sorteio só começa após a resposta da Function');
+ok(/\.then\(function \(\) \{ proceed\(\);/.test(confirm), 'o sorteio só começa após a resposta da Function');
 const server = fs.readFileSync(path.join(root, 'functions-autodraw/index.js'), 'utf8');
 const cf = block(server, 'exports.setDrawBalanceChoice = onCall', '\n// ─── Metadados');
 ok(/request\.auth/.test(cf) && /_isTournamentAdmin/.test(cf), 'Function exige autenticação e organização');

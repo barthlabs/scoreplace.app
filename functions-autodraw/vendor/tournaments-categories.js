@@ -794,6 +794,11 @@ window._buildTimeEstimation = function(t, opts) {
   // A duração é propriedade do plano da primeira fase. Depois da projeção
   // canônica, `t.format` pode continuar apenas como rótulo histórico do
   // torneio e não pode esconder/forjar esta estimativa.
+  var canonicalEstimate=window.ScoreplacePhaseGridPlan?.estimateOperation?.(t,window);
+  if(canonicalEstimate) {
+    if(opts?.dataOnly) return canonicalEstimate;
+    return canonicalEstimate.error ? '' : (window._buildDurationForecast?.(t) || '');
+  }
   var phase0 = Array.isArray(t.phases) ? t.phases[0] : null;
   var hasCanonicalPhase = !!(phase0 && phase0.kind);
   var isLigaFmt = hasCanonicalPhase

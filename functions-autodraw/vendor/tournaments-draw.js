@@ -1955,13 +1955,14 @@ window._drawBalanceRows = function (t, done) {
   var _fim = function () {
     // o gênero AUTORITATIVO é o do PERFIL: enriquece o snapshot antes de decidir quem falta
     solos.forEach(function (p) {
-      if (typeof p !== 'object' || _tem(p)) return;
+      if (t?.canonicalRegistrationMigration?.fingerprint || typeof p !== 'object' || _tem(p)) return;
       var prof = window._partProfileByName && window._partProfileByName[String(_pName(p)).toLowerCase()];
       if (prof && prof.gender && String(prof.gender).trim()) p.gender = String(prof.gender).trim();
     });
     done(solos.filter(function (p) { return !_tem(p); })
-              .map(function (p) { return { name: _pName(p), uid: (typeof p === 'object' && p.uid) || '', gender: '' }; }));
+              .map(function (p) { return { name: _pName(p), uid: (typeof p === 'object' && p.uid) || '', manualParticipantId:p?.manualParticipantId || '', categoryId:p?.categoryId || '', gender: '' }; }));
   };
+  if(t?.canonicalRegistrationMigration?.fingerprint){_fim();return;}
   if (solos.length > 0 && typeof window._loadParticipantProfilesByName === 'function') {
     try { window._loadParticipantProfilesByName(solos).then(_fim).catch(_fim); } catch (e) { _fim(); }
   } else { _fim(); }
@@ -2087,7 +2088,7 @@ window._applyDrawBalanceChoice = function (t, mode, assigned, opts) {
   return window.FirestoreDB._callFn('setDrawBalanceChoice', {
     tournamentId: String(t.id || ''),
     mode: mode,
-    assignments: assigned.map(function (r) { return { uid: r.uid || '', name: r.name || '', gender: r.gender || '' }; }),
+    assignments: assigned.map(function (r) { return { uid: r.uid || '', manualParticipantId:r.manualParticipantId || '', categoryId:r.categoryId || '', name: r.name || '', gender: r.gender || '' }; }),
     ratio: opts.ratio || '',
     locked: opts.locked !== false,
     genderRatioDisabled: opts.enabled === false
@@ -2095,7 +2096,7 @@ window._applyDrawBalanceChoice = function (t, mode, assigned, opts) {
     if (typeof window._softRefreshView === 'function') window._softRefreshView();
     return result;
   }).catch(function (e) {
-    if (typeof showNotification === 'function') showNotification('Não foi possível salvar o equilíbrio', (e && e.message) || 'Tente novamente.', 'error');
+    if (typeof showNotification === 'function') showNotification('Não foi possível salvar o modo do sorteio', (e && e.message) || 'Tente novamente.', 'error');
     throw e;
   });
 };
@@ -2104,10 +2105,25 @@ window._applyDrawBalanceChoice = function (t, mode, assigned, opts) {
 // Mostra ANTES do sorteio quando: duplas (teamSize 2) formadas por pareamento de
 // indivíduos, SEM categoria masc/fem separada. Retorna true se exibiu (e chamará
 // onProceed no confirmar); false se não se aplica (o chamador segue direto).
+window._genderDrawPools=function(t) {
+  if(!t || !window._ratioAppliesTo?.(t)) return [];
+  var index=Number(t.currentPhaseIndex || 0),phase=t.phases?.[index];
+  if(phase?.classification?.partnerRotation==='groups' || phase?.superEight ||
+    (!index && ['rotation_groups','rotation_groups_8','super_eight'].includes(t.fmt2?.parceria))) return [];
+  var people=(t.participants || []).filter(p=>!window._entryTeamMembers?.(p));
+  var categories=t.combinedCategories?.length?t.combinedCategories:[''];
+  return categories.filter(function(category){
+    var pool=category?people.filter(p=>window._participantInCategory?.(p,category) || p.categoryId===category):people;
+    return window._ratioVisivel?.(t,category,pool.map(p=>window._pGender?window._pGender(p):p.gender || ''))===true;
+  });
+};
 window._maybeShowGenderDrawDialog = function(tId, onProceed) {
   var t = window.AppStore && window.AppStore.tournaments &&
           window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
   if (!t) return false;
+  var phaseIndex=Number(t.currentPhaseIndex || 0),phase=t.phases?.[phaseIndex];
+  if(phase?.classification?.partnerRotation==='groups' || phase?.superEight ||
+    (!phaseIndex && ['rotation_groups','rotation_groups_8','super_eight'].includes(t.fmt2?.parceria))) return false;
   // Liga/Pontos Corridos forma os pares DENTRO de cada rodada (Rei/Rainha =
   // grupos de 4 com parceiros ROTATIVOS; padrão = duplas aleatórias por rodada) — NÃO
   // existe dupla FIXA pra formar antes do sorteio. O diálogo "Sorteio de duplas"
@@ -2138,7 +2154,12 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
   });
   if (individuals.length < 2) return false; // nada pra formar dupla por sorteio
 
-  window._drawBalanceRows(t, function (rows) {
+  var proceedOnce=false;
+  function proceed(){if(!proceedOnce){proceedOnce=true;if(typeof onProceed==='function') onProceed();}}
+  Promise.resolve(window._hydrateParticipantGenders?.(t)).then(function(){
+    var applicable=window._genderDrawPools(t);
+    if(!applicable.length){proceed();return;}
+    window._drawBalanceRows(t, function (rows) {
     window._showDrawBalanceOverlay({
       rows: rows,
       title: '⚖️ Sorteio de duplas',   // aqui SÃO duplas (teamSize 2, formadas por sorteio)
@@ -2158,11 +2179,12 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
         window._applyDrawBalanceChoice(t, mode, assigned,
           { ratio: (ratioOpts && ratioOpts.ratio), locked: (ratioOpts && ratioOpts.locked),
             enabled: (ratioOpts && ratioOpts.enabled) })
-          .then(function () { if (typeof onProceed === 'function') onProceed(); })
+          .then(function () { proceed(); })
           .catch(function () {});
       }
     });
   });
+  }).catch(function(error){if(typeof showNotification==='function') showNotification('Sorteio indisponível',error.message || 'Tente novamente.','error');});
   return true;
 };
 

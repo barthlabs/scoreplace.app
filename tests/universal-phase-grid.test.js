@@ -106,7 +106,7 @@ if (require.main===module) {
   const delayed=G.suggestProjected(restricted,days,w);
   assert(!delayed.error,delayed.error);G.assertPlan(restricted,delayed.plan,days,w);
   assert(delayed.tiles.some(tile=>tile.category===names[0] && tile.day===days[0].day),'nova grade substitui os horários duplicados por categoria');
-  assert.equal(G.v2Duration({phaseIndex:0,round:2,games:1},{gameDuration:20,setupScope:'first_round',warmupTime:5,
+  assert.equal(G.v2Duration({kind:'groups',phaseIndex:0,round:2,games:1},{gameDuration:20,setupScope:'first_round',warmupTime:5,
     phases:[{scoring:{setsToWin:2}}]}),50);
   const de=scenario(['A'],[16],[8],[3],null,'single');
   de.fmt2.classifAtiva=false;Object.assign(de.fmt2.eliminatoria,{ativa:true,dupla:true,grandFinal:true,grandFinalReset:true});

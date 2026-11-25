@@ -86,6 +86,8 @@
   window._ratioAppliesTo = function (t, category) {
     if (!t) return false;
     if (_labelSeparaGenero(category)) return false;
+    var definitions=Array.isArray(t.categoryDefinitions)?t.categoryDefinitions:[];
+    if(definitions.some(function(def){return def.enabled!==false && (!category || def.id===category || def.label===category) && Array.isArray(def.criteria?.gender?.allowed) && def.criteria.gender.allowed.length;})) return false;
     var gc = Array.isArray(t.genderCategories) ? t.genderCategories : [];
     for (var i = 0; i < gc.length; i++) if (_labelSeparaGenero(gc[i])) return false;
     return true;

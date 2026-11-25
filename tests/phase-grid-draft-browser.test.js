@@ -72,6 +72,17 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  await page.evaluate(()=>{t.maxParticipantsByCategory['Colágeno · Categoria C']=16;document.getElementById('tourn-max-by-category').value=JSON.stringify(t.maxParticipantsByCategory);_phaseGridDragEnd();_phaseGridRefreshDraft()});
  const reduced=await page.evaluate(()=>_readPhaseGridPlan());assert(!reduced.error,reduced.error);assert.equal(reduced.groupAssignments.length,4);
  assert.match(await page.locator('#phase-call-order-editor').innerText(),/horários e quadras foram substituídos/);
+ const frozen=require('./fixtures/phase-grid-timing-v1.json');
+ const forecast=await page.evaluate(frozen=>{
+  window._spCor=value=>value;window._actualDurationMinutes=()=>null;
+  var draft=structuredClone(frozen.t);draft.teamSize=2;
+  var html=_buildDurationForecast(draft);
+  document.body.insertAdjacentHTML('beforeend','<div id="duration-proof">'+html+'</div>');
+  var oldPlan=structuredClone(frozen.plan);_phaseCallOrderState={tournament:frozen.t,plan:oldPlan,tiles:ScoreplacePhaseGridPlan.expand(oldPlan,frozen.t),locked:true};
+  _phaseGridRefreshDraft();return {text:document.getElementById('duration-proof').textContent,plan:_phaseCallOrderState.plan};
+ },frozen);
+ assert.match(forecast.text,/48 participantes · 92 jogos/);assert(!/duplas/.test(forecast.text));
+ assert.match(forecast.text,/HORAS07.*MIN20/i);assert.deepEqual(forecast.plan,frozen.plan,'abrir grade sorteada v1 não a converte');
  assert.deepEqual(errors,[]);
  console.log('✓ grade real: grupos, sete jogos, fontes das finais, 30→25, assinatura válida, órfãos, locked e drag');
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

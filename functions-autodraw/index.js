@@ -5858,17 +5858,19 @@ exports.setDrawBalanceChoice = onCall(async (request) => {
   const mode = String(data.mode || '').trim();
   const ratio = String(data.ratio || '').trim();
   const locked = data.locked !== false;
-  const raw = Array.isArray(data.assignments) ? data.assignments.slice(0, 100) : null;
+  const raw = mode==='livre' ? [] : (Array.isArray(data.assignments) && data.assignments.length<=100 ? data.assignments : null);
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId || !['livre', 'equilibrado'].includes(mode) || !raw) {
     throw new HttpsError('invalid-argument', 'Escolha de equilíbrio inválida.');
   }
   const assignments = raw.map(item => ({
     uid: String(item && item.uid || '').trim(),
+    manualParticipantId:String(item && item.manualParticipantId || '').trim(),
+    categoryId:String(item && item.categoryId || '').trim(),
     name: String(item && item.name || '').trim().slice(0, 120),
     gender: String(item && item.gender || '').trim()
   }));
-  if (assignments.some(item => (!item.uid && !item.name) || !['feminino', 'masculino'].includes(item.gender))) {
+  if (assignments.some(item => (!item.uid && !item.manualParticipantId && !item.name) || !['feminino', 'masculino'].includes(item.gender))) {
     throw new HttpsError('invalid-argument', 'Gênero ou participante inválido.');
   }
   const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
@@ -5876,6 +5878,39 @@ exports.setDrawBalanceChoice = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização define o equilíbrio do sorteio.', { tId, uid });
+    if(t.canonicalRegistrationMigration?.fingerprint) {
+      if(_drawCheckpoint.locked(t) || ['capturing','resetting'].includes(t.rehearsal?.state))
+        throw new HttpsError('failed-precondition','A fotografia do sorteio está em andamento. Tente novamente ao terminar.');
+      var phaseIndex=Number(t.currentPhaseIndex || 0),phase=t.phases?.[phaseIndex];
+      var rotation=phase?.classification?.partnerRotation==='groups' || phase?.superEight ||
+        (!phaseIndex && ['rotation_groups','rotation_groups_8','super_eight'].includes(t.fmt2?.parceria));
+      var effectiveMode=mode==='equilibrado' && !rotation && drawWindow._ratioAppliesTo(t) ? 'equilibrado' : 'livre';
+      var patch={_drawBalanceMode:effectiveMode,equilibrado:effectiveMode==='equilibrado',
+        genderRatioDisabled:effectiveMode==='livre' || data.genderRatioDisabled===true,
+        wlGroupBalance:effectiveMode==='livre' || !locked?'livre':'equilibrado',updatedAt:agoraIso};
+      var updates=[];
+      if(effectiveMode==='equilibrado' && assignments.length) {
+        var snapshot=await tx.get(ref.collection('registrations'));
+        if(snapshot.size!==Number(t.canonicalRegistrationMigration.registrationCount)) throw new HttpsError('failed-precondition','Inscrições divergentes; atualize o elenco.');
+        var docs=snapshot.docs.map(doc=>({ref:doc.ref,data:doc.data(),id:doc.id})),seen=new Set();
+        for(var item of assignments) {
+          if(!!item.uid===!!item.manualParticipantId) throw new HttpsError('invalid-argument','Informe UID ou identidade manual da inscrição.');
+          var found=docs.filter(doc=>doc.data.status==='confirmed' && (!item.categoryId || doc.data.categoryId===item.categoryId) &&
+            (item.uid?doc.data.participantUid===item.uid:doc.data.manualParticipantId===item.manualParticipantId));
+          if(found.length!==1 || found[0].data.registrationId!==found[0].id) throw new HttpsError('failed-precondition','Inscrição ausente ou ambígua; informe a categoria e atualize o elenco.');
+          if(seen.has(found[0].id)) throw new HttpsError('invalid-argument','Inscrição repetida na atribuição de gênero.');
+          seen.add(found[0].id);updates.push({ref:found[0].ref,gender:item.gender});
+        }
+      }
+      if(effectiveMode==='equilibrado' && !patch.genderRatioDisabled && drawWindow._GENDER_RATIOS?.[ratio]) {
+        var index=Number(t.currentPhaseIndex || 0);
+        if(Array.isArray(t.phases) && t.phases[index]) patch.phases=t.phases.map((phase,i)=>i===index?Object.assign({},phase,{genderRatio:ratio}):phase);
+        else patch.genderRatio=ratio;
+      }
+      updates.forEach(item=>tx.update(item.ref,{gender:item.gender,genderSource:'organizador',updatedAt:agoraIso}));
+      tx.update(ref,patch);
+      return {ok:true,changed:true,tournament:Object.assign({},t,patch)};
+    }
     _assertLegacyRosterMutationAllowed(t, 'equilíbrio legado do sorteio');
     const before = _antesDoMotor(t);
     const find = item => (t.participants || []).find(participant => {
@@ -6572,6 +6607,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           const effectiveTournament = Object.assign({}, t, patch,{scheduleWindow:validatedWindow});
           if (original?.groupAssignments?.length && !Object.hasOwn(proposed || {},'groupAssignments'))
             throw new HttpsError('failed-precondition','Atualize o aplicativo para editar a distribuição dos grupos nas quadras.');
+          if(original?.timingVersion===2 && proposed?.timingVersion!==2) throw new HttpsError('failed-precondition','Atualize o aplicativo para preservar os tempos de preparação da grade.');
           if (existingV2 && proposed?.schema!==2) throw new HttpsError('failed-precondition','A grade salva exige uma ficha atualizada.');
           if (proposed?.schema===2) {
             try { _phaseGridPlan.assertPlan(effectiveTournament,proposed,validatedWindow.days,drawWindow); }

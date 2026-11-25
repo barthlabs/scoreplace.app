@@ -43,7 +43,7 @@
   function expand(plan, tournament) {
     if (!plan || !Array.isArray(plan.blocks)) return [];
     if (plan.schema===2) return bindAssignments(plan.blocks.map(function (block,i) {
-      var tile=Object.assign({},block,{id:'p'+i,court:block.courts[0],duration:v2Duration(block,tournament || {})});
+      var tile=Object.assign({},block,{id:'p'+i,court:block.courts[0],duration:v2Duration(block,tournament || {},plan)});
       delete tile.courts;
       tile.windows=(plan.categoryPlacement==='grid' ? [] : tournament?.scheduleWindow?.categoryWindows || []).filter(row=>row.category===block.category);
       return tile;
@@ -702,9 +702,11 @@
     var sets=root._setsEsperadosDe?.(scoring?.setsToWin) || root._setsEsperadosDaFase?.(t,cfg) || 1;
     return Math.max(1,Math.round((Number(cfg?.gameDuration || t.gameDuration) || 30)*sets));
   }
-  function v2Duration(job,t) {
+  function v2Duration(job,t,plan) {
     var play=matchMinutes(t,job.phaseIndex),first=t.setupScope==='first_round' || t.superEightSetupScope==='first_round';
-    return play*job.games+(first && job.round>1 ? 0 : (Number(t.callTime)||0)+(Number(t.warmupTime)||0));
+    var timing=plan ? Number(plan.timingVersion || 1) : 2;
+    var prepared=first && job.round>1 && (timing<2 || job.kind==='groups');
+    return play*job.games+(prepared ? 0 : (Number(t.callTime)||0)+(Number(t.warmupTime)||0));
   }
   function canInterleave(t) {
     var phases=t.phases || [], next=phases[1];
@@ -913,7 +915,7 @@
       var jobs=projection.jobs.map((job,i)=>{var tile=Object.assign({},job,{id:'p'+i,duration:v2Duration(job,Object.assign({},t,{phases:projection.phases}))});delete tile.matchIds;return tile;});
       jobs.forEach(job=>{job.windows=[];});
       var total=jobs.reduce((n,j)=>n+j.games,0);
-      var plan={schema:2,editorVersion:2,allowOverflow:true,categoryPlacement:'grid',day:days[0].day,days:days.map(d=>({day:d.day,startTime:d.startTime,endTime:d.endTime})),courts:courts,totalGames:total,capacities:projection.capacities};
+      var plan={schema:2,editorVersion:2,timingVersion:2,allowOverflow:true,categoryPlacement:'grid',day:days[0].day,days:days.map(d=>({day:d.day,startTime:d.startTime,endTime:d.endTime})),courts:courts,totalGames:total,capacities:projection.capacities};
       plan.inputSignature=signatureOf(t,projection,plan);
       var saved=t.scheduleWindow?.interleavedPlan;
       if (saved && Object.hasOwn(saved,'groupAssignments')) return applyAssignments(jobs,plan,days,saved.groupAssignments);
@@ -953,6 +955,7 @@
         p.teamCompetition?.schedule,p.teamCompetition?.teamCount]),
       t.scoring?.setsToWin || 0,t.gameDuration || 30,t.callTime || 0,t.warmupTime || 0,t.setupScope || t.superEightSetupScope || '',
       projected.jobs.map(j=>[positionKey(j),j.wave,j.games,j.optional || false,j.requiredDay || '']).sort()];
+    if(plan?.timingVersion) values.push(['timingVersion',plan.timingVersion]);
     if(projected.phases.some(p=>p.groupCrossSeeding)) values.push(['groupCrossSeeding',projected.phases.map(p=>p.groupCrossSeeding===true)]);
     var raw=JSON.stringify(values,function (_,v) {
       if (!v || typeof v!=='object' || Array.isArray(v)) return v;
@@ -964,8 +967,8 @@
   function assertPlan(t,plan,days,ctx) {
     function reject(msg) {throw new Error(msg);}
     function closed(o,keys) {return o && typeof o==='object' && !Array.isArray(o) && Object.keys(o).every(k=>keys.includes(k));}
-    if (!closed(plan,['schema','editorVersion','day','days','courts','totalGames','capacities','inputSignature','blocks','groupAssignments','allowOverflow','categoryPlacement']) ||
-        plan.schema!==2 || plan.editorVersion!==2 || (Object.hasOwn(plan,'allowOverflow') && plan.allowOverflow!==true) || (Object.hasOwn(plan,'categoryPlacement') && plan.categoryPlacement!=='grid') || !Array.isArray(plan.blocks) || !plan.blocks.length || plan.blocks.length>400 ||
+    if (!closed(plan,['schema','editorVersion','timingVersion','day','days','courts','totalGames','capacities','inputSignature','blocks','groupAssignments','allowOverflow','categoryPlacement']) ||
+        plan.schema!==2 || plan.editorVersion!==2 || (Object.hasOwn(plan,'timingVersion') && plan.timingVersion!==2) || (Object.hasOwn(plan,'allowOverflow') && plan.allowOverflow!==true) || (Object.hasOwn(plan,'categoryPlacement') && plan.categoryPlacement!=='grid') || !Array.isArray(plan.blocks) || !plan.blocks.length || plan.blocks.length>400 ||
         !Number.isSafeInteger(plan.courts) || Number(t.courtCount)!==plan.courts || Number(plan.courts)<1 ||
         !Array.isArray(days) || !days.length || plan.day!==days[0].day || !Array.isArray(plan.days) || plan.days.length!==days.length ||
         !plan.days.every((d,i)=>closed(d,['day','startTime','endTime']) && ['day','startTime','endTime'].every(k=>d[k]===days[i][k])) ||
@@ -989,7 +992,43 @@
     var error=validate(expand(plan,Object.assign({},t,{phases:projected.phases})),plan,days);
     if(error) reject(error);
   }
-  var api = {displayDays:displayDays, suggestedAssignments:suggestedAssignments,applyAssignments:applyAssignments,bindAssignments:bindAssignments,precedes:precedes,v2Duration:v2Duration,canInterleave:canInterleave,assertPlan:assertPlan,project:project,technicalPositions:technicalPositions,positionKey:positionKey,suggestProjected:suggestProjected, minutes:minutes, clock:clock, duration:duration, expand:expand, validate:validate,
+  var operationEstimates=new WeakMap();
+  function estimateOperation(t,context) {
+    if(!t?.fmt2 || t.fmt2.teamCompetition?.enabled) return null;
+    var ctx=context || root, saved=t.scheduleWindow?.interleavedPlan;
+    var drawn=!!(t.sorteioDrawId || t.drawTimestamp || ctx._tournamentHasDraw?.(t));
+    var key=JSON.stringify([t.fmt2,t.phases,t.combinedCategories,t.maxParticipantsByCategory,t.maxParticipantsPerCategory,t.maxParticipants,
+      t.courtCount,t.gameDuration,t.callTime,t.warmupTime,t.setupScope,t.superEightSetupScope,t.scoring,t.scheduleWindow,drawn]);
+    var cached=operationEstimates.get(t);if(cached?.key===key) return cached.value;
+    var value;
+    try {
+      var projection=project(t,ctx), first=projection.phases[0];
+      if(first?.kind!=='classification' || first.classification?.structure!=='groups') return null;
+      var days=t.scheduleWindow?.days?.length ? t.scheduleWindow.days : [{day:'2000-01-01',startTime:'00:00',endTime:'23:59'}];
+      var effective=Object.assign({},t,{phases:projection.phases});
+      var tiles,plan;
+      if(saved?.schema===2 && (drawn || saved.timingVersion===2)) {
+        try {assertPlan(effective,saved,days,ctx);plan=saved;tiles=expand(saved,effective);}catch(error){if(drawn) throw error;}
+      }
+      if(!tiles) {var proposed=suggestProjected(effective,days,ctx,projection);if(proposed.error) throw new Error(proposed.error);plan=proposed.plan;tiles=proposed.tiles;}
+      var spans=new Map();
+      tiles.forEach(function(tile){
+        var at=absoluteDay(tile.day)+minutes(tile.startTime),end=at+tile.duration;
+        // A reservation spanning midnight contributes each visible segment to its civil day.
+        for(var day=Math.floor(at/1440)*1440;day<end;day+=1440) {
+          var lo=Math.max(day,at),hi=Math.min(day+1440,end),span=spans.get(day);
+          spans.set(day,{lo:span?Math.min(span.lo,lo):lo,hi:span?Math.max(span.hi,hi):hi});
+        }
+      });
+      var rotation=first.classification?.partnerRotation==='groups' || !!first.superEight;
+      var teamSize=rotation?1:Math.max(1,Number(t.teamSize)|| (t.fmt2.disputa==='dupla'?2:1));
+      value={realCount:projection.people,unitCount:Math.floor(projection.people/teamSize),pairCount:teamSize===2?Math.floor(projection.people/2):0,rotation:rotation,
+        matches:projection.jobs.reduce((n,job)=>n+job.games,0),minutes:Array.from(spans.values()).reduce((n,span)=>n+span.hi-span.lo,0),
+        categories:projection.capacities.length,format:'Fase de Grupos',timingVersion:plan.timingVersion || 1};
+    }catch(error){value={error:error.message};}
+    operationEstimates.set(t,{key:key,value:value});return value;
+  }
+  var api = {estimateOperation:estimateOperation,displayDays:displayDays, suggestedAssignments:suggestedAssignments,applyAssignments:applyAssignments,bindAssignments:bindAssignments,precedes:precedes,v2Duration:v2Duration,canInterleave:canInterleave,assertPlan:assertPlan,project:project,technicalPositions:technicalPositions,positionKey:positionKey,suggestProjected:suggestProjected, minutes:minutes, clock:clock, duration:duration, expand:expand, validate:validate,
     move:move, toPlan:toPlan, preset:preset, stageKey:stageKey, groupLabel:groupLabel, numbered:numbered,
     gameStarts:gameStarts, eliminationLabels:eliminationLabels,describeProjectedTiles:describeProjectedTiles,matchupLabel:matchupLabel, suggest:suggest,
     expectedSignatures:expectedSignatures, signatures:signatures,

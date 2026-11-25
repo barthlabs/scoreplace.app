@@ -1362,7 +1362,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if(policyMode!==mode) {
         policyMode=mode;
         policyLabel.firstChild.textContent=manual?'Ao confirmar':'Pontuação da vaga';
-        policy.innerHTML=manual ? '<option value="rename">Corrigir nome da mesma pessoa</option><option value="inherit">Trocar atleta e manter pontuação</option><option value="reset">Trocar atleta e começar do zero</option>' : '<option value="">Escolha a pontuação</option><option value="inherit">Manter pontuação da vaga</option><option value="reset">Começar do zero</option>';
+        policy.innerHTML=manual ? '<option value="">Escolha correção ou troca</option><option value="rename">Corrigir nome da mesma pessoa</option><option value="inherit">Trocar atleta e manter pontuação</option><option value="reset">Trocar atleta e começar do zero</option>' : '<option value="">Escolha a pontuação</option><option value="inherit">Manter pontuação da vaga</option><option value="reset">Começar do zero</option>';
       }
       var changedName=value!==row.name;
       policyLabel.hidden=!changedName; policyLabel.style.display=changedName?'block':'none';
@@ -1403,6 +1403,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           if(!profile && !explicit) targetUid='';
           else if(!profile || profile.mergedInto || !profile.displayName) throw new Error('UID indisponível. Confira a conta.');
         }
+        if(!row.uid && !targetUid && !['rename','inherit','reset'].includes(policy.value)) {policy.focus({preventScroll:true});throw new Error('Escolha corrigir o nome ou trocar a pessoa.');}
         var replacement=!!row.uid || !!targetUid || ['inherit','reset'].includes(policy.value);
         if(targetUid && targetUid===row.uid){dialog.remove();return;}
         if(replacement && !['inherit','reset'].includes(policy.value)) {
