@@ -1337,76 +1337,112 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     if (row && typeof window._lzAthleteDialog === 'function') window._lzAthleteDialog(row.uid || '', row.order);
   };
-  var _erReplacementChoice = '';
-  var _erReplacementPoints='';
-  window._erChooseReplacementPoints=function(value){_erReplacementPoints=value;var button=document.getElementById('confirm-ok-btn');if(button) button.disabled=!['inherit','reset'].includes(value);};
-  window._erChooseReplacement = function (uid) { _erReplacementChoice = String(uid || ''); };
   function _erShowReplacementDialog(t, row, after) {
-    if (!t || !row || !(row.uid || row.manualId) || !row.categoryId) return;
-    if (typeof showInputDialog !== 'function' || typeof window._callCF !== 'function') return;
-    showInputDialog('Trocar participante',
-      'Digite o nome de outra pessoa que ocupará a vaga de ' + _esc(row.name) + '. Esta ação é uma substituição, não uma correção de grafia. Depois escolha a conta existente, se houver, ou uma vaga digitada.',
-      function (value) {
-        var newName = String(value || '').trim();
-        if (newName.length < 2 || newName.length > 120) {
-          if (typeof showNotification === 'function') showNotification('Nome inválido', 'Digite um nome entre 2 e 120 caracteres.', 'warning');
-          return;
-        }
-        function submit(targetUid) {
-          if(!['inherit','reset'].includes(_erReplacementPoints)) {
-            if(typeof showNotification==='function') showNotification('Pontuação da vaga','Escolha se a nova pessoa mantém a pontuação ou começa do zero.','warning');
-            return;
-          }
-          var savedOnServer=false;
-          window._callCF('editCanonicalTournamentSlot', { operation: 'replace', tournamentId: String(t.id),
-            sandbox: t.isSandbox === true, uid: row.uid || '', manualParticipantId: row.manualId || '',
-            categoryId: (typeof window._canonicalCategoryIdForDisplay === 'function'
-              ? (window._canonicalCategoryIdForDisplay(t, row.categoryId) || row.categoryId)
-              : row.categoryId), expectedName: row.name, newName: targetUid ? '' : newName, targetUid: targetUid || '',pointsPolicy:_erReplacementPoints },
-          'Entre na sua conta para editar a vaga.').then(function (result) {
-            if((result?.data || result)?.ok!==true) throw new Error('O servidor não confirmou a troca.');
-            savedOnServer=true;
-            var tId = String(t.id);
-            delete _erCanonicalLoaded[tId];
-            delete _erCanonicalRosterById[tId];
-            return window._refreshTournamentAthleteEdit(tId).then(function(){
-              if(typeof after==='function') after(tId);
-              if(typeof showNotification==='function') showNotification('Vaga atualizada','A inscrição e os jogos futuros foram atualizados.','success');
+    if (!t || !row || !(row.uid || row.manualId) || !window._souOrganizador(t)) return;
+    showInputDialog('Editar atleta', 'Digite o nome ou UID do atleta.', function () {},
+      { defaultValue:_esc(row.name), placeholder:'Nome ou UID', okText:'Confirmar' });
+    var dialog=document.getElementById('custom-input-dialog');
+    if (!dialog) return;
+    var input=dialog.querySelector('#input-dialog-value'), ok=dialog.querySelector('#input-ok-btn');
+    input.setAttribute('aria-label','Nome ou UID do atleta');
+    input.setAttribute('list','athlete-account-options'); input.maxLength=128;
+    var extra=document.createElement('div');
+    extra.innerHTML='<datalist id="athlete-account-options"></datalist><label id="athlete-points-label" hidden style="display:none;margin-top:12px">Pontuação da vaga<select id="athlete-points" class="form-control" style="display:block;margin-top:6px"><option value="">Escolha a pontuação</option><option value="inherit">Manter pontuação da vaga</option><option value="reset">Começar do zero</option></select></label><div id="athlete-edit-error" role="alert" style="margin-top:8px"></div>';
+    input.after(extra);
+    var list=extra.querySelector('datalist'), policy=extra.querySelector('select'), policyLabel=extra.querySelector('label');
+    var message=extra.querySelector('[role="alert"]'), busy=false, searchId=0, timer;
+    function target(value) {
+      var explicit=/^uid:/i.test(value);
+      return explicit ? value.slice(4).trim() : /^[A-Za-z0-9]{28}$/.test(value) ? value : '';
+    }
+    function changed() {
+      var value=input.value.trim(), uid=target(value);
+      var replacing=value!==row.name && (!!row.uid || !!uid);
+      policyLabel.hidden=!replacing; policyLabel.style.display=replacing?'block':'none';
+      message.textContent='';
+      clearTimeout(timer); var request=++searchId;
+      if (value.length<2 || uid) { list.replaceChildren(); return; }
+      timer=setTimeout(function () {
+        var db=window.FirestoreDB?.db; if(!db || !dialog.isConnected) return;
+        // user-vivo:isento — lista de candidatas; servidor revalida a conta escolhida.
+        db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic')
+          .where('displayName_lower','>=',value.toLowerCase())
+          .where('displayName_lower','<',value.toLowerCase()+'\uf8ff').limit(20).get()
+          .then(function(snap) {
+            if(request!==searchId || !dialog.isConnected) return;
+            list.replaceChildren();
+            snap.forEach(function(doc) { var profile=doc.data() || {};
+              if(profile.mergedInto || !profile.displayName) return;
+              var option=document.createElement('option'); option.value='uid:'+doc.id; option.label=profile.displayName; list.appendChild(option);
             });
-          }).catch(function (error) {
-            if (typeof showNotification === 'function') showNotification(savedOnServer?'Vaga salva':'Não foi possível editar',savedOnServer?'A troca foi confirmada. Atualize a página para conferir o elenco.':String((error && error.message) || error),savedOnServer?'warning':'error');
-          });
+          }).catch(function(){ if(request===searchId && dialog.isConnected) list.replaceChildren(); });
+      },250);
+    }
+    async function confirm(event) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if(busy) return;
+      var value=input.value.trim();
+      if(value===row.name){dialog.remove();return;}
+      if(value.length<2 || value.length>128){message.textContent='Digite um nome ou UID válido.';return;}
+      busy=true; ok.disabled=true; input.disabled=true;
+      var saved=false;
+      try {
+        var targetUid=target(value), explicit=/^uid:/i.test(value);
+        if(targetUid) {
+          var db=window.FirestoreDB?.db;
+          if(!db) throw new Error('Não foi possível verificar o UID. Tente novamente.');
+          var snap=await db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').doc(targetUid).get();
+          var profile=snap.exists ? snap.data() || {} : null;
+          if(!profile && !explicit) targetUid='';
+          else if(!profile || profile.mergedInto || !profile.displayName) throw new Error('UID indisponível. Confira a conta.');
         }
-        if (typeof showConfirmDialog !== 'function') return;
-        var db = window.FirestoreDB && window.FirestoreDB.db;
-        function offerChoices(accounts) {
-          _erReplacementChoice = '';_erReplacementPoints='';
-          var choices = '<label style="display:block;margin:8px 0;"><input type="radio" name="er-replacement" checked onchange="window._erChooseReplacement(\'\')"> Nome digitado: <b>' + _esc(newName) + '</b></label>' +
-            accounts.map(function (account) { return '<label style="display:block;margin:8px 0;"><input type="radio" name="er-replacement" onchange="window._erChooseReplacement(\'' + _escAttr(account.uid) + '\')"> Conta: <b>' + _esc(account.name) + '</b></label>'; }).join('');
-          choices += '<fieldset style="margin-top:12px"><legend>Pontuação da vaga</legend><label style="display:block"><input type="radio" name="er-replacement-points" onchange="window._erChooseReplacementPoints(\'inherit\')"> Manter pontuação da vaga</label><label style="display:block"><input type="radio" name="er-replacement-points" onchange="window._erChooseReplacementPoints(\'reset\')"> Começar do zero</label></fieldset>';
-          showConfirmDialog('Confirmar troca da vaga', '<div style="text-align:left;">' + _esc(row.name) + ' sairá da vaga. Jogos concluídos preservam quem jogou; a pessoa nova entra nos jogos sem placar. Escolha a identidade e a pontuação:' + choices + '</div>',
-            function () { submit(_erReplacementChoice); }, function () {},
-            { type: 'warning', confirmText: 'Trocar participante', cancelText: 'Cancelar' });
-          var confirm=document.getElementById('confirm-ok-btn');if(confirm) confirm.disabled=true;
+        var replacement=!!row.uid || !!targetUid;
+        if(targetUid && targetUid===row.uid){dialog.remove();return;}
+        if(replacement && !['inherit','reset'].includes(policy.value)) {
+          policyLabel.hidden=false; policyLabel.style.display='block';
+          throw new Error('Escolha se a nova pessoa mantém a pontuação ou começa do zero.');
         }
-        if (!db) { offerChoices([]); return; }
-        // user-vivo:isento — esta é uma LISTA de contas candidatas; lápides são
-        // removidas abaixo e o servidor revalida mergedInto antes de vincular.
-        var query = db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic')
-          .where('displayName_lower', '>=', newName.toLowerCase())
-          .where('displayName_lower', '<', newName.toLowerCase() + '\uf8ff').limit(20).get();
-        Promise.resolve(query).then(function (snap) {
-          var accounts = [];
-          if (snap) snap.forEach(function (doc) {
-            var profile = doc.data() || {};
-            if (!profile.mergedInto && profile.displayName) accounts.push({ uid: doc.id, name: profile.displayName });
-          });
-          offerChoices(accounts);
-        }).catch(function (error) {
-          if (typeof showNotification === 'function') showNotification('Busca de contas indisponível', 'A troca por nome digitado continua disponível.', 'warning');
-          offerChoices([]);
+        if(!replacement && value.length>120) throw new Error('O nome deve ter até 120 caracteres.');
+        var rosterResult=await window.FirestoreDB.loadCanonicalTournamentRoster(String(t.id));
+        var roster=rosterResult?.data || rosterResult;
+        var matches=(roster?.participants || []).filter(function(entry) {
+          if(row.categoryId && String(entry.categoryId)!==String(row.categoryId)) return false;
+          return row.uid ? [entry.uid,entry.p1Uid,entry.p2Uid].includes(row.uid) :
+            [entry.manualParticipantId,entry.p1ManualId,entry.p2ManualId].includes(row.manualId);
         });
-      }, { placeholder: 'Nome completo', okText: 'Continuar' });
+        if(matches.length!==1) throw new Error('A vaga mudou. Atualize o elenco e abra a edição novamente.');
+        if(!dialog.isConnected) return;
+        var entry=matches[0], side=row.uid ? (entry.p1Uid===row.uid?'p1':'p2') : (entry.p1ManualId===row.manualId?'p1':'p2');
+        var freshName=String(entry.fixedPairId ? entry[side+'Name'] || entry[side+'DisplayName'] || '' : entry.displayName || entry.name || '').trim();
+        if(freshName && freshName!==row.name) throw new Error('O atleta mudou. Atualize o elenco e abra a edição novamente.');
+        var name, payload;
+        if(replacement) {
+          if(t.status==='finished') throw new Error('O torneio foi encerrado; não há jogos futuros para substituir.');
+          name='editCanonicalTournamentSlot'; payload={operation:'replace',tournamentId:String(t.id),sandbox:t.isSandbox===true,
+            uid:row.uid || '',manualParticipantId:row.manualId || '',categoryId:entry.categoryId,
+            expectedName:row.name,newName:targetUid?'':value,targetUid:targetUid,pointsPolicy:policy.value};
+        } else {
+          var camis=String(t.id)==='tour_1793804848447_94bfe2282535789667cb35f1080024ee';
+          name=camis?'editCamisManualParticipant':'renameTournamentParticipant';
+          payload={tournamentId:String(t.id),oldName:row.name,newName:value,manualParticipantId:row.manualId};
+          if(camis) payload.action='rename';
+        }
+        var result=await window._callCF(name,payload,'Salvando atleta…');
+        if((result?.data || result)?.ok!==true) throw new Error('O servidor não confirmou a edição.');
+        saved=true; dialog.remove(); clearTimeout(timer); ++searchId;
+        delete _erCanonicalLoaded[String(t.id)]; delete _erCanonicalRosterById[String(t.id)];
+        await window._refreshTournamentAthleteEdit(String(t.id));
+        if(typeof after==='function') after(String(t.id));
+        showNotification('Atleta atualizado','A alteração foi salva.','success');
+      } catch(error) {
+        if(saved) showNotification('Atleta salvo','Atualize a página para conferir o elenco.','warning');
+        else if(dialog.isConnected) message.textContent=error.message || 'Não foi possível salvar. Tente novamente.';
+      } finally {busy=false;ok.disabled=false;input.disabled=false;}
+    }
+    ok.addEventListener('click',confirm,true);
+    input.addEventListener('keypress',function(event){if(event.key==='Enter') confirm(event);},true);
+    input.addEventListener('input',changed);
+    dialog.addEventListener('keydown',function(event){if(event.key==='Escape' && !busy) dialog.remove();});
   }
   window._erEditPairMember = function (order) {
     if (!_liveState || !_liveState.isOrg || _liveState.t.status === 'finished' ||
@@ -1478,25 +1514,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if(!t || !window._souOrganizador(t)) return;
     if(uid){window._openTournamentParticipantReplacement(tId,uid,'',categoryId);return;}
     if(!manualId){showNotification('Identidade indisponível','Atualize o elenco para identificar esta inscrição manual.','warning');return;}
-    if(String(tId)==='tour_1793804848447_94bfe2282535789667cb35f1080024ee' && window._openCamisManualNameActions) {
-      window._openCamisManualNameActions(tId,oldName,manualId);return;
-    }
-    function rename(){
-      showInputDialog('Corrigir nome','A identidade e a pontuação da mesma pessoa serão preservadas.',function(value){
-        var name=String(value || '').trim();if(!name || name===oldName) return;
-        var savedOnServer=false;
-        window._callCF('renameTournamentParticipant',{tournamentId:String(tId),oldName:oldName,newName:name,manualParticipantId:manualId},'Salvando nome…')
-          .then(function(result){if((result?.data || result)?.ok!==true) throw new Error('O servidor não confirmou a correção.');savedOnServer=true;return window._refreshTournamentAthleteEdit(tId);})
-          .catch(function(error){showNotification(savedOnServer?'Nome salvo':'Correção não concluída',savedOnServer?'Atualize a página para conferir o nome.':error.message,savedOnServer?'warning':'error');});
-      },{defaultValue:oldName,okText:'Salvar'});
-    }
-    showConfirmDialog('Editar atleta', '<button type="button" class="btn btn-secondary" id="athlete-replace-action">Substituir por outra pessoa</button>',rename,null,
-      {confirmText:'Corrigir nome',cancelText:'Cancelar'});
-    var replace=document.getElementById('athlete-replace-action');
-    if(replace) replace.onclick=function(){
-      document.querySelector('#custom-confirm-dialog #confirm-cancel-btn')?.click();
-      setTimeout(function(){window._openTournamentParticipantReplacement(tId,'',manualId,categoryId);},230);
-    };
+    var category=window._canonicalCategoryIdForDisplay?.(t,categoryId) || categoryId;
+    _erShowReplacementDialog(t,{uid:'',manualId:manualId,categoryId:category,name:String(oldName || '')});
   };
   function _erFormedPairsPanel(rows, t) {
     // Duplas sem categoria ficam no bloco de duplas; depois do drop elas saem

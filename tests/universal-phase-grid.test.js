@@ -165,8 +165,8 @@ if (require.main===module) {
   assert(Math.max(...earlyCross.map(t=>G.minutes(t.startTime)+t.duration))<=Math.min(...lateCross.map(t=>G.minutes(t.startTime))));
   const crossSemis=crossPlan.tiles.filter(t=>t.kind==='elimination' && t.round===1);
   assert.deepEqual(crossSemis.map(t=>G.matchupLabel(t,crossPlan.tiles)),[
-    '1º+2º · B1 × 3º+4º · B2','3º+4º · B1 × 1º+2º · B2',
-    '1º+2º · C1 × 1º+2º · C4','1º+2º · C2 × 1º+2º · C3']);
+    'Vencedor do grupo B1 × 3º/4º do grupo B2','3º/4º do grupo B1 × Vencedor do grupo B2',
+    'Vencedor do grupo C1 × Vencedor do grupo C4','Vencedor do grupo C2 × Vencedor do grupo C3']);
   assert.equal(new Set(crossSemis.map(t=>t.startTime)).size,1,'four semis use the first free courts');
   assert.deepEqual(crossSemis.map(t=>t.court),[1,2,3,4]);
   const decisions=crossPlan.tiles.filter(t=>t.kind==='elimination' && t.round===2);
@@ -194,4 +194,14 @@ if (require.main===module) {
     assert(F.groupCrossError(invalidCross.fmt2) || F.qualificationError(invalidCross.fmt2,invalidCross.combinedCategories,c=>invalidCross.maxParticipantsByCategory[c],invalidCross.sport));
   }
   console.log('✓ Grade baseada nas partidas reais, ordem, duas quadras, cortes distintos, partidas consecutivas, grade obsoleta e 119 partidas.');
+}
+
+// Rótulos são derivados: não modificam contrato, assinatura nem precedência de duração explícita.
+if(require.main===module) {
+ const t=scenario(['Categoria B','Categoria C'],[16,32],[8,8],[7,7],[4,2]);t.gameDuration=25;
+ const result=G.suggestProjected(t,D,w);assert(!result.error,result.error);
+ const before=JSON.stringify(result.plan),signature=result.plan.inputSignature;
+ result.tiles.forEach(tile=>G.matchupLabel(tile,result.tiles,result.plan));
+ G.assertPlan(t,result.plan,D,w);assert.equal(JSON.stringify(result.plan),before);assert.equal(result.plan.inputSignature,signature);
+ assert.equal(G.v2Duration({kind:'elimination',phaseIndex:0,round:1,games:1},{gameDuration:25,phases:[{gameDuration:40}]}),40);
 }

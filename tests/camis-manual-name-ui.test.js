@@ -44,46 +44,12 @@ function clickName() {
     preventDefault() { prevented = true; },stopPropagation() {},stopImmediatePropagation() {} });
   assert(prevented,'nome manual abre a tela, sem depender do lápis');
 }
-(async()=>{
-  clickName();
-  assert(dialogs.at(-1).body.includes('Substituir atleta por outra pessoa'));
-  dialogs.at(-1).onConfirm();
-  assert(inputs.at(-1).title.includes('Corrigir nome'));
-  inputs.at(-1).onSubmit('Kelly B.');
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(calls[0].name,'editCamisManualParticipant');
-  assert.equal(calls[0].payload.action,'rename');
-  assert.equal(calls[0].payload.manualParticipantId,'manual-kelly');
-  assert.equal(Object.hasOwn(calls[0].payload,'uid'),false);
-
-  clickName();
-  replaceClick();
-  assert.equal(cancelClick,true);
-  assert(inputs.at(-1).title.includes('Substituir atleta'));
-  inputs.at(-1).onSubmit('Pessoa Nova');
-  dialogs.at(-1).onConfirm();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(calls[1].payload.action,'replace');
-  assert.equal(calls[1].payload.newName,'Pessoa Nova');
-  assert.equal(Object.hasOwn(calls[1].payload,'uid'),false);
-  window.FirestoreDB.loadTournamentById = async () => null;
-  clickName();
-  dialogs.at(-1).onConfirm();
-  inputs.at(-1).onSubmit('Kelly Corrigida');
-  await new Promise(resolve => setImmediate(resolve));
-  assert(notices.some(item => item.title === 'Atleta salva' && item.type === 'warning'),
-    'falha de leitura após commit pede atualização da tela');
-  assert(!notices.some(item => item.title === 'Edição não concluída'),
-    'leitura posterior falhou, mas a escrita já foi confirmada');
-  window.FirestoreDB.loadTournamentById = async () => t;
-  ctx._reRenderParticipantsStable = () => { throw new Error('falha de renderização'); };
-  const beforeRenderFailure = notices.length;
-  clickName();
-  dialogs.at(-1).onConfirm();
-  inputs.at(-1).onSubmit('Kelly Nova Grafia');
-  await new Promise(resolve => setImmediate(resolve));
-  assert(notices.slice(beforeRenderFailure).some(item => item.title === 'Atleta salva'),
-    'exceção na renderização após commit também pede atualização da tela');
-  assert(!notices.slice(beforeRenderFailure).some(item => item.title === 'Edição não concluída'));
-  console.log('✓ CAMIS: toque no nome oferece correção ou substituição manual, sem UID');
-})().catch(error => { console.error(error);process.exitCode=1; });
+const edits=[];
+window._openTournamentAthleteEditor=(...args)=>edits.push(args);
+clickName();
+assert.deepEqual(edits[0],[tournamentId,'','manual-kelly','','Kelly Barth']);
+assert.equal(dialogs.length,0,'nome do CAMIS usa o mesmo editor direto, sem menu intermediário');
+assert.equal(inputs.length,0,'a entrada especial não cria outro formulário');
+window._souOrganizador=()=>false;
+clickName();assert.equal(edits.length,1,'não organizador não abre editor');
+console.log('✓ CAMIS: nome e lápis encaminham ao mesmo editor direto com identidade manual');

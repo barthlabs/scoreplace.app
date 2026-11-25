@@ -398,7 +398,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // As duas podem ser diferentes — é o caso do dono (Rei/Rainha depois melhor de 3).
   function _minPartidaForm(gi, scoring) {
     var porSet = parseInt((document.getElementById('tourn-game-duration') || {}).value, 10)
-      || (gi && gi.t && gi.t.gameDuration) || 30;
+      || 25;
     return Math.round(porSet * (window._setsEsperadosDe(scoring && scoring.setsToWin) || 1));
   }
   function _scoringInicial() {
@@ -776,7 +776,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       combinedCategories:cats.filter(Boolean),maxParticipantsByCategory:limits,maxParticipantsPerCategory:0,
       maxParticipants:cats.reduce((n,cat)=>n+Number(limits[cat] || 0),0),
       courtCount:Math.max(1,val('tourn-court-count',S.t?.courtCount || 1)),
-      gameDuration:val('tourn-game-duration',S.t?.gameDuration || 30),callTime:val('tourn-call-time',S.t?.callTime),
+      gameDuration:val('tourn-game-duration',S.t?.gameDuration || 30) || 25,callTime:val('tourn-call-time',S.t?.callTime),
       warmupTime:val('tourn-warmup-time',S.t?.warmupTime),scoring:_scoringInicial() || S.t?.scoring});
     var setup=document.getElementById('setup-first-round-only');
     if(setup) t.setupScope=setup.checked?'first_round':'every_game';

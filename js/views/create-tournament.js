@@ -952,7 +952,7 @@ function setupCreateTournamentModal() {
                   <label style="display:flex; flex-direction:column; gap:2px; margin:0; min-width:0;" title="${_t('create.gameDurDesc')}">
                     <span style="font-size:0.7rem; color:var(--text-muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_t('create.gameDurLabel')}</span>
                     <div style="display:flex; align-items:center; gap:4px; background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:6px; padding:2px 6px;">
-                      <input type="number" id="tourn-game-duration" min="5" max="300" value="30" oninput="window._recalcDuration()" style="flex:1; min-width:0; width:100%; background:transparent; border:none; color:var(--text-bright); font-size:0.9rem; font-weight:600; padding:4px 0; outline:none;">
+                      <input type="number" id="tourn-game-duration" min="5" max="300" value="25" oninput="window._recalcDuration()" style="flex:1; min-width:0; width:100%; background:transparent; border:none; color:var(--text-bright); font-size:0.9rem; font-weight:600; padding:4px 0; outline:none;">
                       <span style="font-size:0.7rem; color:var(--text-muted);">min</span>
                     </div>
                   </label>
@@ -1731,6 +1731,12 @@ function setupCreateTournamentModal() {
         var active = document.getElementById('tiebreaker-list');
         var excluded = document.getElementById('tiebreaker-excluded-list');
         if (!active || !excluded) return;
+        if(document.activeElement===btn) {
+          var source=li.parentNode, neighbor=li.nextElementSibling || li.previousElementSibling;
+          var next=neighbor && neighbor.querySelector('[data-tb-move]');
+          if(!next){source.tabIndex=-1;next=source;}
+          next.focus({preventScroll:true});
+        }
         var inActive = li.parentNode === active;
         var key = li.dataset.tb;
         if (inActive) {
@@ -5248,7 +5254,7 @@ function setupCreateTournamentModal() {
     var _scIni = (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
     var _setsIni = window._setsEsperadosDe(_scIni && _scIni.setsToWin) || 1;
     var slot = gi('tourn-call-time', 5) + gi('tourn-warmup-time', 5)
-      + Math.round(gi('tourn-game-duration', 30) * _setsIni);
+      + Math.round(gi('tourn-game-duration', 25) * _setsIni);
     var courts = Math.max(gi('tourn-court-count', 1), 1);
     var teamSize = gi('tourn-team-size', 1);
     var comb = function (n) { return n * (n - 1) / 2; }; // round-robin: jogos = C(n,2)
@@ -5441,6 +5447,7 @@ function setupCreateTournamentModal() {
   };
 
   window._recalcDuration = function () {
+    window._phaseGridRefreshDraft?.();
     if (window._renderGruposSuggestions) { try { window._renderGruposSuggestions(); } catch (e) {} }
     if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
     /* mudou data ou hora da fase → a régua muda de tamanho; o arranjo do organizador é
@@ -7256,7 +7263,7 @@ window._saveTournamentClickHandler = async function(event) {
         const courtNamesVal = courtNamesRaw ? courtNamesRaw.split(',').map(c => c.trim()).filter(c => c) : [];
         const callTimeVal = parseInt(document.getElementById('tourn-call-time').value) || 0;
         const warmupTimeVal = parseInt(document.getElementById('tourn-warmup-time').value) || 0;
-        const gameDurationVal = parseInt(document.getElementById('tourn-game-duration').value) || 30;
+        const gameDurationVal = parseInt(document.getElementById('tourn-game-duration').value) || 25;
 
         // Validação de datas
         if (startDateRaw && endDateRaw) {
@@ -9347,9 +9354,21 @@ window._discardCreateTournament = function() {
     }
     return null; // null → usar window
   }
+  var pendingCriteriaFrame=null, restoreCriteriaScroll=null;
   function _onInteract(e) {
     var form = document.getElementById('form-create-tournament');
     if (!form || !e.target || !form.contains(e.target)) return;
+    if(e.target.closest?.('[data-tb-move]')) {
+      if(pendingCriteriaFrame!==null){cancelAnimationFrame(pendingCriteriaFrame);restoreCriteriaScroll();}
+      var positions=[];
+      for(var parent=e.target.parentElement;parent;parent=parent.parentElement) {
+        if(parent.scrollHeight>parent.clientHeight) positions.push([parent,parent.scrollTop,parent.scrollLeft]);
+      }
+      var x=window.scrollX,y=window.scrollY;
+      restoreCriteriaScroll=function(){positions.forEach(function(item){item[0].scrollTo({top:item[1],left:item[2],behavior:'instant'});});window.scrollTo({top:y,left:x,behavior:'instant'});};
+      pendingCriteriaFrame=requestAnimationFrame(function(){restoreCriteriaScroll();pendingCriteriaFrame=null;restoreCriteriaScroll=null;});
+      return;
+    }
     var anchor = (e.target.closest && e.target.closest('button, label, .form-group, .toggle-switch, input, select, .formato-btn, .draw-mode-btn')) || e.target;
     if (!anchor || !anchor.getBoundingClientRect) return;
     var cont = _scrollParent(anchor);

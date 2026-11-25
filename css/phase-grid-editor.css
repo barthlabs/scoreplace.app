@@ -76,3 +76,11 @@
 .phase-grid-assignment-rows input { max-width:10em; padding:5px; background:var(--bg-card); color:var(--text-main); border:1px solid var(--border-color); }
 .phase-grid-assignment-rows input[type=number] { width:4em; }
 .phase-grid-assignment-rows button[aria-pressed=true] { background:var(--primary-color); color:var(--bg-dark); font-weight:700; }
+
+/* Um grupo ocupa as duas quadras; suas reservas continuam editáveis individualmente. */
+.phase-grid-body { position:relative; }
+.phase-grid-super-group { position:absolute; z-index:2; box-sizing:border-box; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-card); }
+.phase-grid-super-group > header { height:96px; box-sizing:border-box; display:flex; flex-direction:column; gap:5px; padding:8px; color:var(--text-main); font-size:.78rem; overflow-wrap:anywhere; }
+.phase-grid-super-group .phase-grid-tile { gap:3px; }
+.phase-grid-group-game,.phase-grid-game-number { font-size:.78rem; }
+.phase-grid-refresh-notice { font-size:.8rem; color:var(--text-main); }

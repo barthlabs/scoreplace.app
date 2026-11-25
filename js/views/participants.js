@@ -1175,81 +1175,10 @@ window._camisManualNameLinkHtml = function(t, name, innerHtml, manualId) {
 };
 
 window._openCamisManualNameActions = function(tId, oldName, manualParticipantId) {
-  var t = window._findTournamentById && window._findTournamentById(tId);
-  if (!t || String(tId) !== 'tour_1793804848447_94bfe2282535789667cb35f1080024ee' ||
-      !window._souOrganizador(t) || !manualParticipantId ||
-      typeof showConfirmDialog !== 'function' || typeof showInputDialog !== 'function') return;
-  var escaped = window._safeHtml(String(oldName));
-  var submit = function(action, newName) {
-    newName = String(newName || '').trim();
-    if (newName.length < 2 || newName.length > 120 || newName === String(oldName).trim()) {
-      if (typeof showNotification === 'function') showNotification('Nome inválido', 'Digite um nome diferente, entre 2 e 120 caracteres.', 'error');
-      return;
-    }
-    if (typeof window._callCF !== 'function') return;
-    var savedOnServer = false;
-    window._callCF('editCamisManualParticipant', {
-      tournamentId:String(tId),action:action,oldName:String(oldName),newName:newName,
-      manualParticipantId:String(manualParticipantId)
-    }, 'Salvando atleta…').then(function(result) {
-      var receipt = result && (result.data || result);
-      if (!receipt || receipt.ok !== true) throw new Error('O servidor não confirmou a edição.');
-      savedOnServer = true;
-      if (typeof showNotification === 'function') showNotification(action === 'rename' ? 'Nome corrigido' : 'Atleta substituída',
-        action === 'rename' ? 'A mesma inscrição e os jogos agora mostram ' + newName + '.' :
-          'A vaga agora é de ' + newName + '; resultados concluídos continuam com a atleta anterior.', 'success');
-      if (window.FirestoreDB && typeof window.FirestoreDB.loadTournamentById === 'function') {
-        return window.FirestoreDB.loadTournamentById(String(tId)).then(function(fresh) {
-          if (!fresh) throw new Error('leitura posterior indisponível');
-          if (window.AppStore && Array.isArray(window.AppStore.tournaments)) {
-            var index = window.AppStore.tournaments.findIndex(function(item) { return String(item.id) === String(tId); });
-            if (index >= 0) window.AppStore.tournaments[index] = fresh;
-          }
-          if (typeof _reRenderParticipantsStable === 'function') _reRenderParticipantsStable();
-        }).catch(function() {
-          if (typeof showNotification === 'function') showNotification('Atleta salva',
-            'A alteração foi confirmada, mas a tela não recarregou. Atualize a página para ver o novo nome.', 'warning');
-        });
-      }
-    }).catch(function(error) {
-      if (typeof showNotification === 'function') showNotification(savedOnServer ? 'Atleta salva' : 'Edição não concluída',
-        savedOnServer ? 'A alteração foi confirmada. Atualize a página para ver o novo nome.' :
-          ((error && error.message) || 'Atualize a tela e tente novamente.'),
-        savedOnServer ? 'warning' : 'error');
-    });
-  };
-  var ask = function(action) {
-    showInputDialog(action === 'rename' ? 'Corrigir nome da mesma atleta' : 'Substituir atleta',
-      action === 'rename' ? 'A identidade, a vaga e os resultados continuam com esta pessoa.' :
-        'Digite o nome de outra pessoa. Resultados já concluídos ficam com quem jogou; jogos futuros passam para a nova atleta.',
-      function(value) {
-        if (action === 'rename') { submit(action,value); return; }
-        var next = String(value || '').trim();
-        if (next.length < 2 || next.length > 120 || next === String(oldName).trim()) {
-          if (typeof showNotification === 'function') showNotification('Nome inválido', 'Digite o nome da nova atleta.', 'error');
-          return;
-        }
-        showConfirmDialog('Confirmar substituição?', escaped + ' sairá da vaga e ' + window._safeHtml(next) +
-          ' entrará no grupo. Jogos concluídos permanecem com a formação original. O reset do ensaio voltará à nova lista sem placares.',
-          function() { submit('replace',next); }, null,
-          { type:'warning',confirmText:'Substituir atleta',cancelText:'Cancelar' });
-      }, { defaultValue:action === 'rename' ? window._safeHtml(String(oldName)) : '',
-        placeholder:'Nome completo',okText:'Continuar' });
-  };
-  showConfirmDialog('Atleta: ' + oldName,
-    '<div>Escolha o que mudou nesta vaga:</div><button type="button" id="camis-replace-name-action" ' +
-    'style="display:block;margin-top:14px;padding:10px 14px;min-height:44px;border-radius:9px;' +
-    'border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-main);cursor:pointer;' +
-    'font-weight:700;">Substituir atleta por outra pessoa</button>',
-    function() { ask('rename'); }, null,
-    { type:'info',confirmText:'Corrigir nome',cancelText:'Cancelar' });
-  var dialog = document.getElementById('custom-confirm-dialog');
-  var replace = dialog && dialog.querySelector('#camis-replace-name-action');
-  if (replace) replace.addEventListener('click', function() {
-    var cancel = dialog.querySelector('#confirm-cancel-btn');
-    if (cancel) cancel.click();
-    setTimeout(function() { ask('replace'); }, 230);
-  });
+  var t=window._findTournamentById?.(String(tId));
+  if(!t || String(tId)!=='tour_1793804848447_94bfe2282535789667cb35f1080024ee' ||
+      !window._souOrganizador(t) || !manualParticipantId) return;
+  window._openTournamentAthleteEditor?.(String(tId),'',String(manualParticipantId),'',String(oldName));
 };
 
 if (typeof document !== 'undefined' && document.addEventListener && !window._camisNameDelegationInstalled) {

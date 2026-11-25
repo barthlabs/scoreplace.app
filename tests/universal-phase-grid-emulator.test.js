@@ -71,6 +71,15 @@ async function run() {
   stored=await fresh();
   assert.deepEqual(stored.scheduleWindow.interleavedPlan,reordered);
   assert.equal(stored.canonicalRegistrationMigration.fingerprint,fingerprint);
+  // O servidor valida o tempo recebido no patch, inclusive com 30 salvo anteriormente.
+  for(const duration of [30,25]) {
+    const next={...stored,gameDuration:duration,scheduleWindow:{...stored.scheduleWindow,interleavedPlan:proposed.plan}};
+    const timed=G.suggestProjected(next,D,w);assert(!timed.error,timed.error);
+    await invoke('updateTournamentConfiguration',{tournamentId:id,patch:{gameDuration:duration,
+      scheduleWindow:{...window,interleavedPlan:timed.plan}}});
+    stored=await fresh();assert.equal(stored.gameDuration,duration);
+    G.assertPlan(stored,stored.scheduleWindow.interleavedPlan,D,w);
+  }
   const invalid=structuredClone(t.fmt2);invalid.qualificationCategoryRules[0].perGroup=9;
   await assert.rejects(invoke('updateTournamentConfiguration',{tournamentId:id,patch:{fmt2:invalid}}),{code:'invalid-argument'});
   const sbId='sb_'+id+'_grid',sb=db.collection('sandboxes').doc(sbId),batch=db.batch();

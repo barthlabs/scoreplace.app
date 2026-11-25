@@ -3,6 +3,7 @@
   'use strict';
   var model = window.ScoreplacePhaseGridPlan;
   var overlayOpen = false, previousBodyOverflow = '', previousFocus = null;
+  var pixelsPerMinute=6, dragging=false, refreshPending=false;
   var preDrawPreviousState = null;
   function datedOrganizer(t) {
     var schedule=t?.scheduleWindow;
@@ -117,9 +118,71 @@
   function position(event, court) {
     var state = window._phaseCallOrderState, lane = event.currentTarget;
     var y = event.clientY - lane.getBoundingClientRect().top;
-    var at = model.minutes(dayOf(state).startTime) + Math.max(0, Math.round(y / 15) * 5);
+    var at = model.minutes(dayOf(state).startTime) + Math.max(0, Math.round(y / (pixelsPerMinute*5)) * 5);
     return { court:court, startTime:model.clock(at) };
   }
+  // Agrupamento de apresentação: nunca cria, remove ou altera uma reserva.
+  function visualGroups(tiles) {
+    var buckets=new Map(), result=[];
+    tiles.filter(tile=>tile.kind==='groups' && tile.games===1).forEach(function(tile){
+      var key=JSON.stringify([tile.phaseIndex,tile.category,tile.groupNumber,tile.day]);
+      if(!buckets.has(key)) buckets.set(key,[]); buckets.get(key).push(tile);
+    });
+    buckets.forEach(function(items){
+      var courts=Array.from(new Set(items.map(tile=>tile.court))).sort((a,b)=>a-b);
+      if(courts.length!==2 || courts[1]!==courts[0]+1) return;
+      var rounds=Array.from(new Set(items.map(tile=>tile.round))).sort((a,b)=>a-b), end=null;
+      for(var i=0;i<rounds.length;i++) {
+        var pair=items.filter(tile=>tile.round===rounds[i]);
+        if(pair.length!==2 || new Set(pair.map(tile=>tile.court)).size!==2 ||
+          pair[0].startTime!==pair[1].startTime || pair[0].duration!==pair[1].duration ||
+          pair[0].duration*pixelsPerMinute<132 || (i && rounds[i]!==rounds[i-1]+1)) return;
+        var at=model.minutes(pair[0].startTime);
+        if(end!==null && end!==at) return; end=at+pair[0].duration;
+      }
+      result.push({tiles:items,courts:courts,rounds:rounds});
+    });
+    return result;
+  }
+  window._phaseGridVisualGroups=visualGroups;
+  function renderGroupPanels(root,state,visible,start,columns,numbers) {
+    if(state.plan.schema!==2) return;
+    var body=root.querySelector('.phase-grid-body');
+    visualGroups(visible).forEach(function(group){
+      var first=group.tiles.slice().sort((a,b)=>a.round-b.round || a.court-b.court)[0];
+      var finish=Math.max(...group.tiles.map(tile=>model.minutes(tile.startTime)+tile.duration));
+      var panel=document.createElement('section'); panel.className='phase-grid-super-group';
+      panel.style.cssText='top:'+((model.minutes(first.startTime)-start)*pixelsPerMinute)+'px;height:'+((finish-model.minutes(first.startTime))*pixelsPerMinute-3)+'px;left:calc(66px + (100% - 66px) * '+(group.courts[0]-1)+' / '+columns+');width:calc((100% - 66px) * 2 / '+columns+');';
+      var heading=document.createElement('header');
+      heading.innerHTML='<strong>'+esc(label(first))+'</strong><span>Grupo '+esc(first.assignment?.label || model.groupLabel(first))+'</span><small>'+group.courts.map(c=>esc(state.tournament.courtNames?.[c-1] || 'Quadra '+c)).join(' e ')+'</small>';
+      panel.appendChild(heading);
+      if(!state.locked) {
+        panel.addEventListener('dragover',function(event){event.preventDefault();});
+        panel.addEventListener('drop',function(event){var target=event.target.closest('[data-tile-id]');window._phaseGridDrop(event,Number(target?.dataset.court || group.courts[0]));});
+      }
+      group.tiles.forEach(function(tile){
+        var el=Array.from(root.querySelectorAll('[data-tile-id]')).find(el=>el.dataset.tileId===String(tile.id));
+        if(!el) return;
+        var firstRound=tile.round===group.rounds[0], left=tile.court===group.courts[0];
+        el.dataset.court=String(tile.court);
+        el.style.top=((model.minutes(tile.startTime)-model.minutes(first.startTime))*pixelsPerMinute+(firstRound?96:0))+'px';
+        el.style.height=(tile.duration*pixelsPerMinute-(firstRound?96:0)-3)+'px';
+        el.style.left=left?'3px':'calc(50% + 3px)';el.style.right=left?'calc(50% + 3px)':'3px';
+        el.innerHTML=(left?'<b class="phase-grid-group-game">Jogo '+tile.round+'</b>':'')+
+          '<small>'+esc(state.tournament.courtNames?.[tile.court-1] || 'Quadra '+tile.court)+'</small>'+
+          '<small>'+esc(tile.startTime)+'–'+esc(model.clock((model.minutes(tile.startTime)+tile.duration)%1440))+'</small>'+
+          '<span class="phase-grid-single" hidden>JOGO '+numbers[tile.id]+'</span>';
+        panel.appendChild(el);
+      });
+      body.appendChild(panel);
+    });
+  }
+  function assignmentsCompatible(rows,jobs,courts) {
+    var keys=new Set(jobs.filter(j=>j.kind==='groups').map(j=>JSON.stringify([j.phaseIndex,j.category,j.groupNumber])));
+    return rows.length===keys.size && rows.every(row=>keys.has(JSON.stringify([row.phaseIndex,row.category,row.groupNumber])) &&
+      row.courts?.length && row.courts.every(c=>Number.isInteger(c) && c>=1 && c<=courts));
+  }
+  window._phaseGridAssignmentsCompatible=assignmentsCompatible;
   function redraw(keepScroll) {
     var mount = section(), state = window._phaseCallOrderState;
     if (!mount) { if (overlayOpen) window._closePhaseGridEditor(); return; }
@@ -154,6 +217,7 @@
     mount.innerHTML = '<section class="phase-grid-editor phase-grid-launcher" aria-label="Grade de fases e quadras">' +
       '<div><h3>Grade de fases e quadras</h3><p>' + state.tiles.length + ' blocos em ' + displayDays(state).length +
       ' dia(s). ' + (state.touched ? 'Ajustes pendentes de salvar no torneio.' : 'Abra para conferir e ajustar a programação.') + '</p></div>' +
+      (state.refreshNotice?'<p class="phase-grid-refresh-notice" role="status">'+esc(state.refreshNotice)+'</p>':'') +
       (!state.locked && !state.preDrawId ? '<button type="button" class="btn btn-secondary" onclick="window._phaseGridSuggest()">Gerar nova proposta</button><p id="phase-grid-proposal-message" role="alert" hidden></p>' : '') +
       '<button type="button" class="btn btn-secondary" onclick="window._openPhaseGridEditor()">Abrir grade em tela ampla</button></section>';
     if (!overlayOpen) return;
@@ -168,7 +232,7 @@
       return at<dayOrigin+1440 && at+tile.duration>dayOrigin;
     });
     var last = visible.reduce(function (max, tile) { return Math.max(max, Math.min(1440,Date.parse(tile.day+'T00:00:00Z')/60000-dayOrigin+model.minutes(tile.startTime)+tile.duration)); }, end);
-    var height = (last - start) * 3, columns = Number(state.plan.courts);
+    var height = (last - start) * pixelsPerMinute, columns = Number(state.plan.courts);
     var numbers = model.numbered(state.tiles, state.plan);
     var descriptionKey=state.plan.inputSignature+'|'+JSON.stringify(state.plan.groupAssignments || []);
     if(!state.locked && state.descriptionKey!==descriptionKey && model.describeProjectedTiles && window.FORMAT2 && window._phasesEngine) {
@@ -181,11 +245,11 @@
     var marks = timeMarks(visible, state.tournament, start, last);
     var times = marks.map(function (time) {
       var firstHour = time === start, finalHour = time === last;
-      return '<span class="phase-grid-hour" style="top:' + (firstHour ? 8 : finalHour ? height - 5 : (time - start) * 3) +
+      return '<span class="phase-grid-hour" style="top:' + (firstHour ? 8 : finalHour ? height - 5 : (time - start) * pixelsPerMinute) +
         'px' + (firstHour ? ';transform:none' : '') + '">' + model.clock(time) + '</span>';
     });
     var lines = marks.map(function (time) {
-      return '<span class="phase-grid-time-line" style="top:' + (time - start) * 3 + 'px"></span>';
+      return '<span class="phase-grid-time-line" style="top:' + (time - start) * pixelsPerMinute + 'px"></span>';
     }).join('');
     root.innerHTML = '<section class="phase-grid-editor phase-grid-fullscreen" role="dialog" aria-modal="true" aria-label="Programação visual das fases">' +
       '<div class="phase-grid-toolbar"><div class="phase-grid-toolbar-main"><h2>' + (state.preDrawId ? 'Revisar a grade antes do sorteio' : 'Fases na grade de quadras e horários') + '</h2>' +
@@ -215,31 +279,33 @@
           visible.filter(function (tile) { return tile.court === court; }).map(function (tile) {
             var at=Date.parse(tile.day+'T00:00:00Z')/60000-dayOrigin+model.minutes(tile.startTime);
             var carry=at<0, segmentStart=Math.max(0,at), segmentEnd=Math.min(1440,at+tile.duration);
-            var top = (segmentStart - start) * 3, tileHeight = (segmentEnd-segmentStart) * 3 - 3;
+            var top = (segmentStart - start) * pixelsPerMinute, tileHeight = (segmentEnd-segmentStart) * pixelsPerMinute - 3;
             var id = esc(tile.id), groupName = model.groupLabel(tile);
             var title = tile.kind === 'groups' ? label(tile) : eliminationNames[tile.id]+' · '+tile.category;
-            var matchup=model.matchupLabel?.(tile,state.tiles) || '';
+            var matchup=model.matchupLabel?.(tile,state.tiles,state.plan) || '';
             var series = tile.kind === 'groups' && (state.plan.schema === 1 || tile.games === 3);
-            var short = state.plan.schema === 2 ? ('Fase ' + (tile.phaseIndex + 1) + (tile.kind === 'groups' ? ' · ' + (tile.assignment?.label || tr('group','Grupo')+' '+tile.groupNumber) + (tile.assignment ? ' · '+tr('entry','Entrada')+' '+tile.assignment.entry : '') : '') +
-              ' · Rodada ' + tile.round + (series ? ' · 3 jogos' : '') + (tile.optional ? ' · Se necessário' : '')) : tile.kind === 'groups' ? 'Grupo ' + groupName + ' · 3 jogos' : tile.category;
+            var short = tile.kind==='groups' ? 'Grupo '+(tile.assignment?.label || groupName) : '';
+
             var gameTimes = model.gameStarts(tile, state.tournament);
             var accent = 'phase-grid-cat-' + (categories.indexOf(tile.category) % 6);
             var overflow = carry || model.outsideWindow(tile, day), collision = overlapping.has(tile.id);
             return '<div class="phase-grid-tile ' + (tile.kind === 'groups' ? 'phase-grid-group' : 'phase-grid-elim') + ' ' + accent +
               (overflow || collision ? ' phase-grid-overflow' : '') +
               (state.selectedId === tile.id ? ' selected' : '') + '" style="top:' + top + 'px;height:' + tileHeight + 'px"' +
-              ' data-tile-id="' + id + '" tabindex="0" role="button" aria-label="' + esc(title + ', ' + short + ', quadra ' + court + ', ' + tile.startTime + (overflow ? ', ultrapassa o fim do dia' : '') + (collision ? ', sobreposto a outro bloco' : '')) + '"' +
+              ' data-tile-id="' + id + '" tabindex="0" role="button" aria-label="' + esc('Jogo '+numbers[tile.id]+', '+title + ', ' + short + ', quadra ' + court + ', ' + tile.startTime + (overflow ? ', ultrapassa o fim do dia' : '') + (collision ? ', sobreposto a outro bloco' : '')) + '"' +
               (state.locked || carry ? '' : ' draggable="' + (window.matchMedia && window.matchMedia('(pointer:fine)').matches ? 'true' : 'false') + '"' +
-                ' ondragstart="window._phaseGridDragStart(event,\'' + id + '\')" onkeydown="window._phaseGridKey(event,\'' + id + '\')"') + '>' +
-              '<strong>' + esc(title) + '</strong><small>' + esc(short) + '</small>' +
+                ' ondragend="window._phaseGridDragEnd()" ondragstart="window._phaseGridDragStart(event,\'' + id + '\')" onkeydown="window._phaseGridKey(event,\'' + id + '\')"') + '>' +
+              (tile.kind==='groups'?'':'<b class="phase-grid-game-number">JOGO '+numbers[tile.id]+'</b>') +
+              '<strong>' + esc(title) + '</strong>'+(short?'<small>'+esc(short)+'</small>':'') +
               (matchup?'<small class="phase-grid-matchup">'+esc(matchup)+'</small>':'')+
               (series ? '<div class="phase-grid-series">' + [0,1,2].map(function (offset) {
                 return '<span>JOGO ' + (numbers[tile.id] + offset) + ' <small>(' + (offset + 1) + '/3) · ' + model.clock(gameTimes[offset]) + '</small></span>';
-              }).join('') + '</div>' : '<span class="phase-grid-single">JOGO ' + numbers[tile.id] + '</span>') +
+              }).join('') + '</div>' : '<span class="phase-grid-single"'+(tile.kind==='groups'?'':' hidden')+'>JOGO ' + (tile.kind==='groups' && state.plan.schema===2?tile.round:numbers[tile.id]) + '</span>') +
               '<small>' + esc(tile.startTime) + '–' + esc(model.clock((model.minutes(tile.startTime) + tile.duration)%1440)) +
               (overflow ? ' · Excede o horário' : '') + (collision ? ' · Sobreposição' : '') + '</small></div>';
           }).join('') + '</div>';
       }).join('') + '</div></div></section>';
+    renderGroupPanels(root,state,visible,start,columns,numbers);
     var viewport = root.querySelector('.phase-grid-viewport');
     if (viewport) { viewport.scrollTop = scrollTop; viewport.scrollLeft = scrollLeft; }
     if (state.tiles.some(function (tile) {
@@ -248,6 +314,7 @@
     })) showError(state.plan.allowOverflow ? 'A grade usa tempo adicional. Os blocos em vermelho e cinza excedem o horário previsto e podem ser salvos.' : 'Blocos listrados ultrapassam o horário do dia. Gere uma nova proposta para usar tempo adicional.');
     else if (overlapping.size) showError('Blocos listrados ocupam a mesma quadra no mesmo horário. Ajuste-os antes de salvar.');
     else if (state.gridWarning) showError(state.gridWarning + ' Ajuste a sequência antes de salvar.');
+    else if(state.refreshNotice) showError(state.refreshNotice);
   }
   function applyMove(id, court, startTime, targetDay, targetId) {
     var state = window._phaseCallOrderState;
@@ -266,13 +333,15 @@
     window._setEstimatedScheduleMode('organizer');
     if (window._estimatedGameHoursState?.mode==='organizer') window._phaseGridSuggest();
   };
-  window._phaseGridSuggest = function () {
+  window._phaseGridSuggest = function (options) {
+    options=options || {};
+    var prior=window._phaseCallOrderState, failure=null;
     var message = document.getElementById('phase-grid-proposal-message');
-    function fail(value) { if (message) { message.hidden = false; message.textContent = value; } }
+    function fail(value) { failure={error:value}; if (message) { message.hidden = false; message.textContent = value; } return failure; }
     var schedule = window._estimatedGameHoursState;
-    if (!schedule || schedule.mode !== 'organizer') { fail('Selecione jogos determinados pelo organizador.'); return; }
+    if (!schedule || schedule.mode !== 'organizer') { return fail('Selecione jogos determinados pelo organizador.'); }
     var cfg = typeof window._f2GetConfig === 'function' ? window._f2GetConfig() : null;
-    if (!cfg) { fail('Defina o formato das fases.'); return; }
+    if (!cfg) { return fail('Defina o formato das fases.'); }
     var categoryNames = window._getCreateFormCategoryData && window._getCreateFormCategoryData().combinedCategories || [];
     var custom = !!(document.getElementById('tourn-custom-category-capacity') || {}).checked;
     var capacity = {};
@@ -294,12 +363,12 @@
       maxParticipants:Number((document.getElementById('tourn-max-participants') || {}).value),
       courtCount:Number((document.getElementById('tourn-court-count') || {}).value),
       setupScope:(document.getElementById('setup-first-round-only') || {}).checked === false ? 'every_game' : 'first_round',
-      gameDuration:Number((document.getElementById('tourn-game-duration') || {}).value),
+      gameDuration:Number((document.getElementById('tourn-game-duration') || {}).value) || 25,
       callTime:Number((document.getElementById('tourn-call-time') || {}).value),
       warmupTime:Number((document.getElementById('tourn-warmup-time') || {}).value),
       courtNames:((document.getElementById('tourn-court-names') || {}).value || '').split(',').map(function (s) { return s.trim(); })
     });
-    var result;
+    var result, notice=prior?.refreshNotice || '';
     try {
       var limits=Object.fromEntries((categoryNames.length?categoryNames:['']).map(function (name) {
         return [name, name ? (custom ? Number(capacity[name]) : general) : tournament.maxParticipants];
@@ -307,20 +376,38 @@
       var projection=typeof window._f2ProjectCurrentPhases==='function' ? window._f2ProjectCurrentPhases(limits) : null;
       if (projection) tournament=Object.assign({},tournament,projection.tournament,{phases:projection.phases});
       var staged=typeof window._readEstimatedGameHours==='function' ? window._readEstimatedGameHours() : null;
-      if (staged?.error) {fail(staged.error);return;}
+      if (staged?.error) {return fail(staged.error);}
       tournament.scheduleWindow=Object.assign({},tournament.scheduleWindow || {},staged || {},{days:days});
       if (staged?.days?.length) {days=staged.days;tournament.scheduleWindow.days=days;}
       var activePlan=window._phaseCallOrderState?.plan;
-      if (activePlan?.groupAssignments) tournament.scheduleWindow.interleavedPlan=activePlan;
+      if(options.onlyIfStale && activePlan) {
+        try {model.assertPlan(tournament,model.toPlan(activePlan,prior.tiles),days,window);return null;} catch(error) {}
+      }
+      if (activePlan?.groupAssignments) {
+        var jobs=projection?.jobs || model.project(tournament,window).jobs;
+        if(activePlan.groupAssignments.length && !assignmentsCompatible(activePlan.groupAssignments,jobs,tournament.courtCount)) {
+          delete tournament.scheduleWindow.interleavedPlan;
+          notice='A configuração dos grupos mudou; a proposta foi recalculada e os ajustes anteriores de horários e quadras foram substituídos.';
+        } else tournament.scheduleWindow.interleavedPlan=activePlan;
+      }
+      if(options.onlyIfStale && !notice) notice='Proposta atualizada; os ajustes anteriores de horários foram recalculados.';
       result=model.suggestProjected(tournament,days,window,projection);
-    } catch(error) {fail(error.message);return;}
-    if (result.error) { fail(result.error); return; }
+    } catch(error) {return fail(error.message);}
+    if (result.error) return fail(result.error);
     schedule.touched = true;
     window._phaseCallOrderState = { tournament:tournament, plan:result.plan, day:days[0], tiles:result.tiles,
-      activeDay:days[0].day, locked:false, touched:true };
-    redraw(false);
-    window._openPhaseGridEditor();
+      activeDay:days[0].day, locked:false, touched:true,refreshNotice:notice };
+    redraw(!!options.quiet);
+    if(!options.quiet) window._openPhaseGridEditor();
+    return result;
   };
+  window._phaseGridRefreshDraft=function(force) {
+    var state=window._phaseCallOrderState;
+    if(!state?.plan || state.locked || state.preDrawId || state.tournament?.sorteioDrawId || window._tournamentHasDraw?.(state.tournament)) return null;
+    if(dragging && !force){refreshPending=true;return null;}
+    return window._phaseGridSuggest({quiet:true,onlyIfStale:true});
+  };
+  window._phaseGridDragEnd=function(){dragging=false;if(refreshPending){refreshPending=false;window._phaseGridRefreshDraft();}};
   window._openPhaseGridEditor = function () {
     var state = window._phaseCallOrderState;
     if (!state || !state.plan || !state.tiles.length) return;
@@ -338,6 +425,7 @@
     if (close) close.focus({ preventScroll:true });
   };
   window._closePhaseGridEditor = function (resultReady) {
+    window._phaseGridDragEnd();
     if (window._phaseCallOrderState && window._phaseCallOrderState.saving) return;
     var root = overlay(); if (root) root.remove();
     overlayOpen = false;
@@ -483,25 +571,30 @@
   window._phaseGridDragStart = function (event, id) {
     var state = window._phaseCallOrderState;
     if (!state || state.locked || !state.tiles.some(function (tile) { return tile.id === id; })) { event.preventDefault(); return; }
+    dragging=true;
     event.dataTransfer.setData('text/plain', id); event.dataTransfer.effectAllowed = 'move';
   };
   window._phaseGridDrop = function (event, court) {
     event.preventDefault(); event.stopPropagation();
+    dragging=false;
     var state = window._phaseCallOrderState, id = event.dataTransfer.getData('text/plain');
-    if (!state || !state.tiles.some(function (tile) { return tile.id === id; })) return;
+    if (!state || !state.tiles.some(function (tile) { return tile.id === id; })) {window._phaseGridDragEnd();return;}
     var target = position(event, court);
     var hovered = event.target && event.target.closest && event.target.closest('[data-tile-id]');
     applyMove(id, target.court, target.startTime, null,
       hovered && hovered.getAttribute('data-tile-id') !== id ? hovered.getAttribute('data-tile-id') : null);
+    window._phaseGridDragEnd();
   };
   window._phaseGridDropDay = function (event, destination) {
     event.preventDefault(); event.stopPropagation();
+    dragging=false;
     var state = window._phaseCallOrderState, id = event.dataTransfer.getData('text/plain');
     var tile = state && state.tiles.find(function (candidate) { return candidate.id === id; });
     var day = state && displayDays(state).find(function (candidate) { return candidate.day === destination; });
-    if (!tile || !day || state.locked) return;
+    if (!tile || !day || state.locked) {window._phaseGridDragEnd();return;}
     var start = Math.max(model.minutes(tile.startTime), model.minutes(day.startTime));
     applyMove(id, tile.court, model.clock(start), destination);
+    window._phaseGridDragEnd();
   };
   window._phaseGridKey = function (event, id) {
     var state = window._phaseCallOrderState, tile = state && state.tiles.find(function (t) { return t.id === id; });
@@ -519,6 +612,8 @@
     state.tiles = result.tiles; state.touched = true; state.selectedId = null; state.gridWarning = null; redraw(true);
   };
   window._readPhaseGridPlan = function () {
+    var refreshed=window._phaseGridRefreshDraft(true);
+    if(refreshed?.error) return refreshed;
     var state = window._phaseCallOrderState;
     if (!state || !state.touched || state.locked || !state.plan) return null;
     var error = model.validate(state.tiles, state.plan, daysOf(state));

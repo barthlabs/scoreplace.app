@@ -135,17 +135,21 @@
     var descriptions=new Map(project(t,context).jobs.map(job=>[positionKey(job),job.display]));
     return tiles.map(tile=>Object.assign({},tile,{display:descriptions.get(positionKey(tile))}));
   }
-  function matchupLabel(tile,tiles) {
+  function matchupLabel(tile,tiles,plan) {
     if(!tile.display?.sources?.some(Boolean)) return '';
     var byPosition=new Map(tiles.map(other=>[positionKey(other),other]));
+    var numbers=plan ? numbered(tiles,plan) : {};
     function sourceLabel(source) {
       if(!source) return 'A definir';
       if(source.groupNumber) {
         var row=tiles.find(other=>other.kind==='groups' && other.phaseIndex===tile.phaseIndex-1 && other.category===tile.category && other.groupNumber===source.groupNumber);
         var code=row?.assignment?.label || groupCode(tile.category,source.groupNumber);
+        if(source.ranks.join(',')==='1,2') return 'Vencedor do grupo '+code;
+        if(source.ranks.join(',')==='3,4') return '3º/4º do grupo '+code;
         return source.ranks.map(rank=>rank+'º').join('+')+' · '+code;
       }
       var previous=byPosition.get(source.position);
+      if(previous && numbers[previous.id]) return (source.outcome==='winner'?'Vencedor':'Perdedor')+' do jogo '+numbers[previous.id];
       return (source.outcome==='winner'?'Vencedor':'Perdedor')+' da '+(previous?.display?.stage || 'partida')+' '+(previous?.sequence || '');
     }
     return tile.display.sources.map(sourceLabel).join(' × ');
