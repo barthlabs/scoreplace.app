@@ -135,13 +135,13 @@
     },
     "assignMatchCourt": {
       "backendCommit": "f533ac8f76730b4ac254defe81f1afd5f0cd5c1f",
-      "deployedAt": "2026-11-25T03:00:30.212Z",
+      "deployedAt": "2026-11-25T03:28:55.777Z",
       "result": "success",
       "mode": "only"
     },
     "applyMatchResult": {
       "backendCommit": "f533ac8f76730b4ac254defe81f1afd5f0cd5c1f",
-      "deployedAt": "2026-11-25T03:00:30.212Z",
+      "deployedAt": "2026-11-25T03:28:55.777Z",
       "result": "success",
       "mode": "only"
     },
@@ -165,13 +165,13 @@
     },
     "endMatchOnCourt": {
       "backendCommit": "f533ac8f76730b4ac254defe81f1afd5f0cd5c1f",
-      "deployedAt": "2026-11-25T03:05:28.884Z",
+      "deployedAt": "2026-11-25T03:28:55.777Z",
       "result": "success",
       "mode": "only"
     },
     "applyQueuedResult": {
       "backendCommit": "f533ac8f76730b4ac254defe81f1afd5f0cd5c1f",
-      "deployedAt": "2026-11-25T03:00:30.212Z",
+      "deployedAt": "2026-11-25T03:28:55.777Z",
       "result": "success",
       "mode": "only"
     },
@@ -182,8 +182,8 @@
       "mode": "only"
     },
     "setTournamentPresenceWithWOSubstitution": {
-      "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
-      "deployedAt": "2026-11-24T22:06:28.101Z",
+      "backendCommit": "f533ac8f76730b4ac254defe81f1afd5f0cd5c1f",
+      "deployedAt": "2026-11-25T03:28:55.777Z",
       "result": "success",
       "mode": "only"
     },
