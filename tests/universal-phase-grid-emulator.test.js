@@ -59,7 +59,8 @@ async function run() {
   assert.deepEqual(stored.scheduleWindow.interleavedPlan,proposed.plan);
   const fingerprint=stored.canonicalRegistrationMigration.fingerprint;
   const updatePlan=plan=>invoke('updateTournamentConfiguration',{tournamentId:id,patch:{scheduleWindow:{...window,interleavedPlan:plan}}});
-  await assert.rejects(updatePlan(original.plan),e=>e.code==='failed-precondition' && /Atualize o aplicativo/.test(e.message));
+  const outdated=structuredClone(original.plan);delete outdated.groupAssignments;
+  await assert.rejects(updatePlan(outdated),e=>e.code==='failed-precondition' && /Atualize o aplicativo/.test(e.message));
   await updatePlan({...original.plan,groupAssignments:[]});
   await updatePlan(proposed.plan);
   const corrupt=structuredClone(proposed.plan);corrupt.groupAssignments[0].courts=[5];

@@ -104,5 +104,5 @@ assert.match(form, /tvScreens: \(typeof window\._tvEditorReadScreens/);
 const tv = fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8');
 assert.match(tv, /function customBodyHtml/);
 assert.match(tv, /snapshot\.tvLayout/);
-assert.match(tv, /cardHtml\(card, layout\.card\)/);
+assert.match(tv, /courtsHtml\(snapshot\.courts,\s*layout\.card\)/);
 console.log('✓ layout TV: esquema fechado, limites, ordem canônica e integração de leitura/gravação');

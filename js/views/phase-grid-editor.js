@@ -171,7 +171,7 @@
     var height = (last - start) * 3, columns = Number(state.plan.courts);
     var numbers = model.numbered(state.tiles, state.plan);
     var descriptionKey=state.plan.inputSignature+'|'+JSON.stringify(state.plan.groupAssignments || []);
-    if(!state.locked && state.descriptionKey!==descriptionKey && model.describeProjectedTiles) {
+    if(!state.locked && state.descriptionKey!==descriptionKey && model.describeProjectedTiles && window.FORMAT2 && window._phasesEngine) {
       state.tiles=model.describeProjectedTiles(state.tournament,state.tiles,window);
       state.descriptionKey=descriptionKey;
     }

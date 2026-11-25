@@ -11,6 +11,7 @@ const { chromium } = require('playwright');
 const H = require('./render-harness');
 const W = H.window;
 const ROOT = path.join(__dirname, '..');
+require('node:vm').runInContext(fs.readFileSync(path.join(ROOT,'js/ui.js'),'utf8').split('function setupUI()')[0],W);
 const CSS = fs.readFileSync(path.join(ROOT, 'css/components.css'), 'utf8');
 const STORE = fs.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
 const i = STORE.indexOf('window._fitNameToBox = _fitOne;');
