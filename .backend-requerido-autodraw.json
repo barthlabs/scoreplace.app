@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "backendCommit": "9f71c8c6269ce0442e890f43e5f923e2d3dedde3",
+  "backendCommit": "32781266742195d1e912e70151dd1064cc4eb884",
   "scopeNote": "Entradas de grupos completas, cruzamentos explícitos e classificação por identidade com política de pontuação nas substituições; sem migração de dados.",
   "functions": [
     "createTournament",
