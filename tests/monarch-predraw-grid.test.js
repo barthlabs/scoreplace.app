@@ -54,7 +54,11 @@ async function run() {
     'atalho direto também abre a grade em vez de gerar os jogos');
   assert.match(elements.get('phase-grid-overlay').innerHTML, /Revisar a grade antes do sorteio/);
   assert.match(elements.get('phase-grid-overlay').innerHTML, /Grupo A1 · 3 jogos/);
-  assert.match(elements.get('phase-grid-overlay').innerHTML, /JOGO 1 <small>\(1\/3\) · 08:00/);
+  const html=elements.get('phase-grid-overlay').innerHTML;
+  assert.match(html, /JOGO 1 <small>\(1\/3\)<\/small>/);
+  for(const series of html.matchAll(/<div class="phase-grid-series">([\s\S]*?)<\/div>/g))
+    assert.doesNotMatch(series[1], /[0-9]{2}:[0-9]{2}/, 'horários das séries ficam na coluna à esquerda');
+  assert.match(html, /class="phase-grid-hour"[^>]*>08:00<\/span>/);
   assert.match(elements.get('phase-grid-overlay').innerHTML, /Quadra 8/);
   assert.match(elements.get('phase-grid-overlay').innerHTML, /Salvar grade e sortear/);
   assert.match(elements.get('phase-grid-overlay').innerHTML, /Concentrar antes/);
