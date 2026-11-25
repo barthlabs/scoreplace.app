@@ -83,6 +83,17 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  },frozen);
  assert.match(forecast.text,/48 participantes · 92 jogos/);assert(!/duplas/.test(forecast.text));
  assert.match(forecast.text,/HORAS07.*MIN20/i);assert.deepEqual(forecast.plan,frozen.plan,'abrir grade sorteada v1 não a converte');
+ const untouched=await page.evaluate(frozen=>{
+  var plan=structuredClone(frozen.plan),before=JSON.stringify(plan);
+  _phaseCallOrderState={tournament:frozen.t,plan,tiles:ScoreplacePhaseGridPlan.expand(plan,frozen.t),locked:false,touched:false};
+  _estimatedGameHoursState.mode='participants';
+  var auto=_readPhaseGridPlan(),refresh=_phaseGridRefreshDraft();
+  _phaseCallOrderState.touched=true;var touchedAuto=_readPhaseGridPlan();
+  _phaseCallOrderState.touched=false;_estimatedGameHoursState.mode='organizer';
+  var organizer=_readPhaseGridPlan();
+  return {auto,refresh,touchedAuto,organizer,untouched:!_phaseCallOrderState.touched,unchanged:before===JSON.stringify(_phaseCallOrderState.plan)};
+ },frozen);
+ assert.deepEqual(untouched,{auto:null,refresh:null,touchedAuto:null,organizer:null,untouched:true,unchanged:true},'modo automático não bloqueia salvar, e grade v1 não tocada permanece intacta');
  assert.deepEqual(errors,[]);
  console.log('✓ grade real: grupos, sete jogos, fontes das finais, 30→25, assinatura válida, órfãos, locked e drag');
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

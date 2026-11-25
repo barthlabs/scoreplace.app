@@ -51,6 +51,13 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  assert.equal(await page.evaluate(()=>calls.length),noChoiceCount);assert.match(await page.locator('#athlete-edit-error').innerText(),/corrigir/);
  assert.equal(await page.evaluate(()=>document.activeElement.id),'athlete-points');await page.locator('#input-cancel-btn').click();
  await open();var untouched=await page.evaluate(()=>calls.length);await page.locator('#input-ok-btn').click();assert.equal(await page.evaluate(()=>calls.length),untouched,'texto igual não grava');
+ const special="Ana & \"Bia\" <Teste> O'Neil";
+ async function openSpecial(){await page.evaluate(name=>{roster=[{manualParticipantId:'manual',name,categoryId:'cat'}];_openTournamentAthleteEditor('synthetic','','manual','cat',name);},special);await page.locator('#input-dialog-value').waitFor();}
+ await openSpecial();assert.equal(await page.locator('#input-dialog-value').inputValue(),special);
+ const specialCount=await page.evaluate(()=>calls.length);await page.locator('#input-ok-btn').click();assert.equal(await page.evaluate(()=>calls.length),specialCount,'símbolos preservados e confirmar sem editar não grava');
+ await openSpecial();await page.locator('#input-dialog-value').fill(special+' corrigido');await page.locator('#athlete-points').selectOption('rename');
+ await page.locator('#input-ok-btn').click();await page.waitForFunction(n=>calls.length===n+1,specialCount);
+ assert.equal((await page.evaluate(()=>calls.at(-1))).data.newName,special+' corrigido');
  await open();await page.locator('#input-dialog-value').fill('Outra pessoa');await page.locator('#athlete-points').selectOption('reset');
  await page.locator('#input-dialog-value').fill(target);assert.equal(await page.locator('#athlete-points').inputValue(),'','trocar tipo de destino exige nova política');
  await page.locator('#input-ok-btn').click();assert.match(await page.locator('#athlete-edit-error').innerText(),/pontuação/);

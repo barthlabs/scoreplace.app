@@ -405,6 +405,7 @@
   };
   window._phaseGridRefreshDraft=function(force) {
     var state=window._phaseCallOrderState;
+    if(window._estimatedGameHoursState?.mode!=='organizer') return null;
     if(!state?.plan || state.locked || state.preDrawId || state.tournament?.sorteioDrawId || window._tournamentHasDraw?.(state.tournament)) return null;
     if(dragging && !force){refreshPending=true;return null;}
     return window._phaseGridSuggest({quiet:true,onlyIfStale:true});
@@ -614,9 +615,11 @@
     state.tiles = result.tiles; state.touched = true; state.selectedId = null; state.gridWarning = null; redraw(true);
   };
   window._readPhaseGridPlan = function () {
+    var state = window._phaseCallOrderState;
+    if (!state || !state.touched || state.locked || !state.plan || window._estimatedGameHoursState?.mode!=='organizer') return null;
     var refreshed=window._phaseGridRefreshDraft(true);
     if(refreshed?.error) return refreshed;
-    var state = window._phaseCallOrderState;
+    state = window._phaseCallOrderState;
     if (!state || !state.touched || state.locked || !state.plan) return null;
     var error = model.validate(state.tiles, state.plan, daysOf(state));
     if (error) return { error:error };
