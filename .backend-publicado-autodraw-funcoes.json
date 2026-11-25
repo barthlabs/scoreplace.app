@@ -104,8 +104,8 @@
       "mode": "only"
     },
     "advanceTournamentPhase": {
-      "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
-      "deployedAt": "2026-11-24T21:27:14.514Z",
+      "backendCommit": "6ae8bb33ba359eba0b17194506304c17494bd769",
+      "deployedAt": "2026-11-25T02:46:54.855Z",
       "result": "success",
       "mode": "only"
     },
@@ -134,14 +134,14 @@
       "mode": "only"
     },
     "assignMatchCourt": {
-      "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
-      "deployedAt": "2026-11-24T22:06:28.101Z",
+      "backendCommit": "6ae8bb33ba359eba0b17194506304c17494bd769",
+      "deployedAt": "2026-11-25T02:46:54.855Z",
       "result": "success",
       "mode": "only"
     },
     "applyMatchResult": {
-      "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
-      "deployedAt": "2026-11-24T22:06:28.101Z",
+      "backendCommit": "6ae8bb33ba359eba0b17194506304c17494bd769",
+      "deployedAt": "2026-11-25T02:46:54.855Z",
       "result": "success",
       "mode": "only"
     },
@@ -152,8 +152,8 @@
       "mode": "only"
     },
     "applyTournamentWO": {
-      "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
-      "deployedAt": "2026-11-24T21:27:14.514Z",
+      "backendCommit": "6ae8bb33ba359eba0b17194506304c17494bd769",
+      "deployedAt": "2026-11-25T02:46:54.855Z",
       "result": "success",
       "mode": "only"
     },
@@ -170,14 +170,14 @@
       "mode": "only"
     },
     "applyQueuedResult": {
-      "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
-      "deployedAt": "2026-11-24T22:06:28.101Z",
+      "backendCommit": "6ae8bb33ba359eba0b17194506304c17494bd769",
+      "deployedAt": "2026-11-25T02:46:54.855Z",
       "result": "success",
       "mode": "only"
     },
     "closeRound": {
-      "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
-      "deployedAt": "2026-11-24T21:27:14.514Z",
+      "backendCommit": "6ae8bb33ba359eba0b17194506304c17494bd769",
+      "deployedAt": "2026-11-25T02:46:54.855Z",
       "result": "success",
       "mode": "only"
     },
@@ -398,8 +398,8 @@
       "mode": "only"
     },
     "finishTournament": {
-      "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
-      "deployedAt": "2026-11-24T21:27:14.514Z",
+      "backendCommit": "6ae8bb33ba359eba0b17194506304c17494bd769",
+      "deployedAt": "2026-11-25T02:46:54.855Z",
       "result": "success",
       "mode": "only"
     },
@@ -422,8 +422,8 @@
       "mode": "only"
     },
     "manageWOClaim": {
-      "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
-      "deployedAt": "2026-11-24T21:27:14.514Z",
+      "backendCommit": "6ae8bb33ba359eba0b17194506304c17494bd769",
+      "deployedAt": "2026-11-25T02:46:54.855Z",
       "result": "success",
       "mode": "only"
     },
@@ -452,8 +452,8 @@
       "mode": "only"
     },
     "reconcileBracket": {
-      "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
-      "deployedAt": "2026-11-24T21:27:14.514Z",
+      "backendCommit": "6ae8bb33ba359eba0b17194506304c17494bd769",
+      "deployedAt": "2026-11-25T02:46:54.855Z",
       "result": "success",
       "mode": "only"
     },
@@ -668,8 +668,8 @@
       "mode": "only"
     },
     "tournamentOperationControl": {
-      "backendCommit": "a389c8807a6bf861beab4e4b1b14262767f667ae",
-      "deployedAt": "2026-11-24T21:27:14.514Z",
+      "backendCommit": "6ae8bb33ba359eba0b17194506304c17494bd769",
+      "deployedAt": "2026-11-25T02:46:54.855Z",
       "result": "success",
       "mode": "only"
     },
