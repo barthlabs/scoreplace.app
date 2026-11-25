@@ -1415,19 +1415,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         var entry=matches[0], side=row.uid ? (entry.p1Uid===row.uid?'p1':'p2') : (entry.p1ManualId===row.manualId?'p1':'p2');
         var freshName=String(entry.fixedPairId ? entry[side+'Name'] || entry[side+'DisplayName'] || '' : entry.displayName || entry.name || '').trim();
         if(freshName && freshName!==row.name) throw new Error('O atleta mudou. Atualize o elenco e abra a edição novamente.');
-        var name, payload;
+        var payload;
         if(replacement) {
           if(t.status==='finished') throw new Error('O torneio foi encerrado; não há jogos futuros para substituir.');
-          name='editCanonicalTournamentSlot'; payload={operation:'replace',tournamentId:String(t.id),sandbox:t.isSandbox===true,
+          payload={operation:'replace',tournamentId:String(t.id),sandbox:t.isSandbox===true,
             uid:row.uid || '',manualParticipantId:row.manualId || '',categoryId:entry.categoryId,
             expectedName:row.name,newName:targetUid?'':value,targetUid:targetUid,pointsPolicy:policy.value};
         } else {
           var camis=String(t.id)==='tour_1793804848447_94bfe2282535789667cb35f1080024ee';
-          name=camis?'editCamisManualParticipant':'renameTournamentParticipant';
           payload={tournamentId:String(t.id),oldName:row.name,newName:value,manualParticipantId:row.manualId};
           if(camis) payload.action='rename';
         }
-        var result=await window._callCF(name,payload,'Salvando atleta…');
+        var result=replacement ? await window._callCF('editCanonicalTournamentSlot',payload,'Salvando atleta…') :
+          camis ? await window._callCF('editCamisManualParticipant',payload,'Salvando atleta…') :
+          await window._callCF('renameTournamentParticipant',payload,'Salvando atleta…');
         if((result?.data || result)?.ok!==true) throw new Error('O servidor não confirmou a edição.');
         saved=true; dialog.remove(); clearTimeout(timer); ++searchId;
         delete _erCanonicalLoaded[String(t.id)]; delete _erCanonicalRosterById[String(t.id)];
