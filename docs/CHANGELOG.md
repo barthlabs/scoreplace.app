@@ -1,3 +1,9 @@
+## 2.7.69 — 25/nov/2026 (regulamento CULT e PDF corrigido)
+
+- Regulamento único reconstruído das capturas, com fontes abertas locais e identidade visual marrom/creme/amarelo. PDF de quatro páginas gerado do mesmo HTML, com manifesto de hashes.
+- Corrigidas as quartas indevidas: B e C avançam oito atletas formando quatro duplas fixas para semifinais, final e terceiro lugar. Cortes B4/C2, cruzamentos conferidos no motor canônico, sem alterações no banco.
+- Auditoria das regras e testes de identidade, PDF, contraste, desktop/mobile e isolamento dos demais torneios.
+
 ## 2.7.60 — 24/nov/2026 (preservação e escopo das vagas no editor)
 
 - Corrigida a troca do configurador já montado: os campos de capacidade, pontuação e agenda são retirados antes da substituição do mount e recolocados depois. O teste de criação previamente montada → edição reproduziu a perda dos campos antes do ajuste.

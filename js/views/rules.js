@@ -1,3 +1,9 @@
+// Documento da organização: identidade histórica exata, inclusive em cópias de teste vinculadas.
+window._isCultTournament = function(t) {
+  const id = 'tour_1793227218863_f9a70f41fdf7250b0199ba263caa424a';
+  return !!t && (t.id === id || (t.isSandbox === true && t.sandboxOf === id &&
+    typeof t.id === 'string' && t.id.startsWith('sb_' + id + '_')));
+};
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 function renderRules(container, tournamentId) {
@@ -12,6 +18,18 @@ function renderRules(container, tournamentId) {
         <p class="text-muted">${_t('rules.selectTournament')}</p>
         <a href="#dashboard" class="btn btn-primary" style="margin-top:1rem; display:inline-block;">Dashboard</a>
       </div>`;
+    return;
+  }
+
+  if (window._isCultTournament(t)) {
+    const regulationUrl = '/assets/regulamento-cult-2026.html?v=2.7.69';
+    container.innerHTML = window._renderBackHeader({ href: '#tournaments/' + t.id, label: _t('rules.back') }) + `
+      <div class="d-flex justify-between align-center mb-4" style="flex-wrap:wrap;gap:1rem;">
+        <h2 style="margin:0;">Regulamento · CULT</h2>
+        <a class="btn btn-primary" href="${regulationUrl}" target="_blank" rel="noopener">Abrir regulamento para imprimir</a>
+        <a class="btn btn-secondary" href="/assets/regulamento-cult-2026.pdf?v=2.7.69" download="Regulamento_CULT_2026.pdf">Baixar PDF</a>
+      </div>
+      <iframe data-cult-regulation title="Chaves e regulamento CULT Sol &amp; Saque por Glyvée" src="${regulationUrl}" style="display:block;width:100%;height:80vh;min-height:550px;border:1px solid var(--border-color);border-radius:12px;"></iframe>`;
     return;
   }
 

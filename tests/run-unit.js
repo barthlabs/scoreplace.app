@@ -127,6 +127,7 @@ const SUITES = [
   'tests/end-court-readiness-core.test.js',
   'tests/end-court-refresh-contract.test.js',
   'tests/regulamento-neon.test.js',
+  'tests/regulamento-cult.test.js',
   'tests/neon-sequencia-fotos.test.js',
   'tests/tournament-import.test.js',
   'tests/discovery-cache-account-scope.test.js',
