@@ -1114,6 +1114,24 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
   assert.match(calledHtml,/tv-series-latest-update/);
   const oneCalled=window._tvLiveBuildSnapshot({...namedOnly,matches:namedOnly.matches.map(game=>game.id==='B1-1-0'?{...game,court:'Areia A',courtCalledAt:'2026-10-22T21:00:00Z'}:game)});
   assert.equal((window._tvLiveBodyHtml(oneCalled).match(/>Livre<\/p>/g)||[]).length,5);
+  const oneCalledHtml=window._tvLiveBodyHtml(oneCalled);
+  assert.equal((oneCalledHtml.match(/class="tv-super8-lane-header"/g)||[]).length,6);
+  assert.equal((oneCalledHtml.match(/data-tv-start=/g)||[]).length,1,'one called court has one header clock');
+  assert.equal((calledHtml.match(/data-tv-start=/g)||[]).length,6,'six called courts have six clocks');
+  assert.doesNotMatch(calledHtml,/<small data-tv-start=/,'no clocks inside scrolling cards');
+  assert.equal((window._tvLiveBodyHtml(namedOnlySnapshot).match(/data-tv-start=/g)||[]).length,0,'idle lanes do not invent a clock');
+  const timerOff=JSON.parse(JSON.stringify(calledNames));timerOff.tvLayout.card.timer=false;
+  assert.equal((window._tvLiveBodyHtml(timerOff).match(/data-tv-start=/g)||[]).length,0,'timer toggle still applies');
+  const savedNow=nowMs,calledAt=Date.parse('2026-10-22T21:00:00Z');
+  for(const [seconds,label] of [[30,'Chamado'],[90,'Aquecimento'],[150,'Tempo de jogo'],[200,'Atrasado']]) {
+    nowMs=calledAt+seconds*1000;
+    const preview=window._tvLivePreviewDocument({...oneCalled,timing:{call:1,warmup:1,game:1}});
+    const header=preview.match(/class="tv-super8-lane-header">[\s\S]*?<\/div>/)[0];
+    assert(header.includes(label+' 00:'),'header preview uses canonical phase '+label);
+  }
+  nowMs=savedNow;
+  const currentHeader=window._tvLiveBodyHtml(groupSnapshot).match(/class="tv-super8-lane-header">[\s\S]*?<\/div>/)[0];
+  assert(currentHeader.includes('data-tv-start="'+Date.parse('2026-10-22T21:03:00Z')+'"'),'new round updates its court header clock');
   const released=window._tvLiveBuildSnapshot({...namedOnly,matches:namedOnly.matches.map(game=>game.id==='B1-1-0'?{...game,court:'Areia A',courtCalledAt:'2026-10-22T21:00:00Z',courtReleasedAt:'2026-10-22T21:02:00Z'}:game)});
   assert.equal((window._tvLiveBodyHtml(released).match(/>Livre<\/p>/g)||[]).length,6);
   if(process.env.SP_TV_CAPTURE_SUPER8) fs.writeFileSync(process.env.SP_TV_CAPTURE_SUPER8,

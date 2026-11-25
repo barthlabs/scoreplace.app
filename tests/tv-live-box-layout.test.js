@@ -158,6 +158,38 @@ const { chromium } = require('@playwright/test');
         await super8Page.route('**/js/domain/match-timing.js*',route=>route.fulfill({path:path.join(__dirname,'../js/domain/match-timing.js'),contentType:'application/javascript'}));
         await super8Page.route('https://qr.example/**',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>'}));
         await super8Page.setContent(fs.readFileSync(super8Capture,'utf8'),{waitUntil:'domcontentloaded'});
+        await super8Page.emulateMedia({reducedMotion:'reduce'});
+        const headers=await super8Page.evaluate(()=>{
+          const rect=n=>n.getBoundingClientRect();
+          return [...document.querySelectorAll('.tv-super8-lane-header')].map(head=>{
+            const title=head.querySelector('h3'),timer=head.querySelector('strong');timer.textContent='Tempo de jogo 00:00:30';
+            const box=rect(head),a=rect(title),b=rect(timer);
+            return {noOverlap:a.right<=b.left+1,right:Math.abs(b.right-box.right),top:Math.abs(a.top-b.top),height:box.height};
+          });
+        });
+        assert.equal(headers.length,6);assert(headers.every(h=>h.noOverlap&&h.right<1&&h.top<8),'six clocks fit at the right of their fixed court headings');
+        assert.equal(await super8Page.locator('.tv-super8-games [data-tv-start]').count(),0,'no duplicated clock in cards or loop copies');
+        const ordinal=await super8Page.evaluate(()=>{
+          const b=document.querySelector('.tv-super8-games .tv-series-game>b'),small=b.querySelector('small'),range=document.createRange();range.selectNodeContents(small);
+          const a=b.getBoundingClientRect(),r=range.getBoundingClientRect();
+          return {title:parseFloat(getComputedStyle(b).fontSize),counter:parseFloat(getComputedStyle(small).fontSize),offset:Math.abs((a.left+a.right-r.left-r.right)/2)};
+        });
+        assert(ordinal.counter>ordinal.title&&ordinal.offset<1,'round counter is larger and centered under JOGO X');
+        // A late second call joins the current round, even after the first lane has scrolled.
+        await super8Page.evaluate(()=>{
+          const root=document.getElementById('tv-root'),draft=root.cloneNode(true);
+          draft.querySelectorAll('[data-tv-loop-repeat],[data-tv-repeat],.tv-super8-active-frame').forEach(n=>n.remove());
+          window.__testFullSuper8=draft.innerHTML;
+          const lane=draft.querySelector('.tv-super8-group').querySelectorAll('.tv-super8-lane')[1];
+          lane.querySelector('.tv-super8-games').remove();lane.querySelector('strong').remove();lane.classList.add('tv-super8-free');lane.insertAdjacentHTML('beforeend','<p>Livre</p>');
+          window.__tvReplaceMarkup(draft.innerHTML);
+          document.querySelector('.tv-super8-games').scrollTop=250;
+        });
+        await super8Page.waitForTimeout(80);
+        await super8Page.evaluate(()=>window.__tvReplaceMarkup(window.__testFullSuper8));
+        await super8Page.waitForTimeout(150);
+        const joined=await super8Page.evaluate(()=>[...document.querySelector('.tv-super8-group').querySelectorAll('.tv-super8-games')].map(n=>n.scrollTop));
+        assert(joined.every(y=>Math.abs(y)<1),'second court joins round one rather than a later round of its partner');
         const geometry=await super8Page.evaluate(()=>{
           const rect=el=>el.getBoundingClientRect().toJSON();
           const groups=[...document.querySelectorAll('.tv-super8-group')];
@@ -210,7 +242,7 @@ const { chromium } = require('@playwright/test');
         }
         await super8Page.evaluate(()=>{document.querySelectorAll('.tv-super8-games')[1].scrollTop=45;});
         await super8Page.waitForTimeout(150);
-        assert.equal(await super8Page.locator('.tv-super8-group').first().locator('.tv-super8-active-frame').count(),0,'independent scrolling never frames unrelated games');
+        assert.equal(await super8Page.locator('.tv-super8-group').first().locator('.tv-super8-active-frame').count(),0,'partially clipped called games have no misleading frame');
         await super8Page.evaluate(()=>{document.querySelectorAll('.tv-super8-games').forEach(n=>n.scrollTop=0);document.querySelectorAll('.tv-super8-games')[1].querySelectorAll('.tv-series-active').forEach(n=>n.classList.remove('tv-series-active'));});
         await super8Page.waitForTimeout(150);
         assert.equal(await super8Page.locator('.tv-super8-group').first().locator('.tv-super8-active-frame').count(),0,'releasing one lane removes the paired frame');
@@ -227,25 +259,81 @@ const { chromium } = require('@playwright/test');
         await super8Page.waitForTimeout(400);
         const moved=await lanes.first().evaluate(node=>node.scrollTop);
         assert(moved>0,'court scroll advances automatically');
+        const synchronized=await super8Page.evaluate(()=>[...document.querySelector('.tv-super8-group').querySelectorAll('.tv-super8-games')].map(n=>n.scrollTop));
+        assert(Math.abs(synchronized[0]-synchronized[1])<1,'automatic scrolling keeps both courts aligned');
         await super8Page.emulateMedia({reducedMotion:'reduce'});
+        const headingTop=await super8Page.locator('.tv-super8-lane-header').first().evaluate(n=>n.getBoundingClientRect().top);
         await lanes.first().evaluate(node=>{node.scrollTop=110;});
+        await super8Page.waitForTimeout(100);
+        assert.equal(await lanes.nth(1).evaluate(n=>n.scrollTop),110,'manual scrolling mirrors to the paired court');
         await lanes.nth(1).evaluate(node=>{node.scrollTop=45;});
         await super8Page.waitForTimeout(100);
-        assert.equal(await lanes.first().evaluate(n=>n.scrollTop),110,'reduced motion keeps manual scrolling');
-        assert.equal(await lanes.nth(1).evaluate(n=>n.scrollTop),45,'court scroll positions are independent');
+        assert.equal(await lanes.first().evaluate(n=>n.scrollTop),45,'the second court can also lead the shared scroll');
+        assert.equal(await lanes.nth(1).evaluate(n=>n.scrollTop),45);
+        assert.equal(await super8Page.locator('.tv-super8-lane-header').first().evaluate(n=>n.getBoundingClientRect().top),headingTop,'header clock remains fixed while games scroll');
+        await lanes.nth(2).evaluate(node=>{node.scrollTop=135;});
+        await super8Page.waitForTimeout(100);
+        assert.equal(await lanes.nth(3).evaluate(n=>n.scrollTop),135,'another group has its own shared position');
+        assert.equal(await lanes.first().evaluate(n=>n.scrollTop),45,'groups remain independent');
         await super8Page.evaluate(()=>window.dispatchEvent(new Event('resize')));
-        assert.equal(await lanes.first().evaluate(n=>n.scrollTop),110,'resize preserves manual court scrolling');
-        assert.equal(await lanes.nth(1).evaluate(n=>n.scrollTop),45,'resize preserves the other court position independently');
+        assert.equal(await lanes.first().evaluate(n=>n.scrollTop),45,'resize preserves the shared court position');
+        assert.equal(await lanes.nth(1).evaluate(n=>n.scrollTop),45);
         await super8Page.evaluate(()=>window.dispatchEvent(new Event('load')));
-        assert.equal(await lanes.first().evaluate(n=>n.scrollTop),110,'late asset load preserves manual court scrolling');
+        assert.equal(await lanes.first().evaluate(n=>n.scrollTop),45,'load preserves the shared position');
         await super8Page.evaluate(()=>{
           const root=document.getElementById('tv-root'),draft=root.cloneNode(true);
           draft.querySelectorAll('[data-tv-loop-repeat],[data-tv-repeat]').forEach(n=>n.remove());
           draft.querySelector('.tv-super8-games .tv-series-side strong').textContent='5';
           window.__tvReplaceMarkup(draft.innerHTML);
         });
-        assert(Math.abs(await lanes.first().evaluate(n=>n.scrollTop)-110)<2,'score update preserves the first court scroll');
+        assert(Math.abs(await lanes.first().evaluate(n=>n.scrollTop)-45)<2,'score update preserves the shared court scroll');
         assert(Math.abs(await lanes.nth(1).evaluate(n=>n.scrollTop)-45)<2,'score update preserves the second court scroll');
+        await super8Page.evaluate(()=>{
+          const root=document.getElementById('tv-root'),draft=root.cloneNode(true);
+          draft.querySelectorAll('[data-tv-loop-repeat],[data-tv-repeat],.tv-super8-active-frame').forEach(n=>n.remove());
+          window.__testPairedMarkup=draft.innerHTML;
+          const lane=draft.querySelector('.tv-super8-group').querySelectorAll('.tv-super8-lane')[1];
+          lane.querySelector('.tv-super8-games').remove();lane.querySelector('strong').remove();lane.classList.add('tv-super8-free');lane.insertAdjacentHTML('beforeend','<p>Livre</p>');
+          window.__tvReplaceMarkup(draft.innerHTML);
+        });
+        assert(Math.abs(await lanes.first().evaluate(n=>n.scrollTop)-45)<2,'releasing the partner preserves the remaining court position');
+        assert.equal(await super8Page.locator('.tv-super8-group').first().locator('[data-tv-start]').count(),1,'released court has no stale clock');
+        await super8Page.emulateMedia({reducedMotion:'no-preference'});
+        await super8Page.waitForTimeout(200);
+        assert(await lanes.first().evaluate(n=>n.scrollTop)>45,'single remaining court continues scrolling');
+        await super8Page.emulateMedia({reducedMotion:'reduce'});
+        await super8Page.evaluate(()=>window.__tvReplaceMarkup(window.__testPairedMarkup));
+        // Unequal round sequences cannot drift around different wrap cycles.
+        await super8Page.evaluate(()=>{
+          const draft=document.createElement('div');draft.innerHTML=window.__testPairedMarkup;
+          draft.querySelector('.tv-super8-group').querySelectorAll('.tv-super8-games')[1].lastElementChild.remove();
+          window.__tvReplaceMarkup(draft.innerHTML);
+        });
+        const paused=await lanes.first().evaluate(n=>n.scrollTop);
+        await super8Page.emulateMedia({reducedMotion:'no-preference'});
+        await super8Page.waitForTimeout(200);
+        const pausedState=await super8Page.evaluate(()=>[...document.querySelectorAll('.tv-super8-games')].map(n=>({top:n.scrollTop,originals:[...n.children].filter(c=>!c.hasAttribute('data-tv-loop-repeat')).map(c=>c.getAttribute('data-super8-round')),cycle:n.querySelector('[data-tv-loop-repeat]')?.offsetTop-n.firstElementChild.offsetTop})));
+        assert.equal(pausedState[0].top,paused,'inconsistent pair waits for a complete refresh: '+JSON.stringify(pausedState));
+        await super8Page.emulateMedia({reducedMotion:'reduce'});
+        await super8Page.evaluate(()=>window.__tvReplaceMarkup(window.__testPairedMarkup));
+        await lanes.first().evaluate(n=>{const copy=n.querySelector('[data-tv-loop-repeat]');n.scrollTop=copy.offsetTop-n.firstElementChild.offsetTop-2;});
+        await super8Page.waitForTimeout(100);
+        await super8Page.emulateMedia({reducedMotion:'no-preference'});
+        await super8Page.waitForTimeout(300);
+        const wrapped=await super8Page.evaluate(()=>[...document.querySelector('.tv-super8-group').querySelectorAll('.tv-super8-games')].map(n=>n.scrollTop));
+        assert(wrapped.every(y=>y<30)&&Math.abs(wrapped[0]-wrapped[1])<1,'both courts wrap together without drifting');
+        await super8Page.emulateMedia({reducedMotion:'reduce'});
+        await super8Page.evaluate(()=>{
+          const draft=document.createElement('div');draft.innerHTML=window.__testPairedMarkup;
+          draft.querySelector('.tv-super8-group').querySelectorAll('.tv-series-active').forEach(n=>n.classList.remove('tv-series-active'));
+          draft.querySelector('.tv-super8-group').querySelectorAll('[data-super8-round="2"]').forEach(n=>n.classList.add('tv-series-active'));
+          window.__tvReplaceMarkup(draft.innerHTML);
+        });
+        const activeRound=await super8Page.evaluate(()=>[...document.querySelector('.tv-super8-group').querySelectorAll('.tv-super8-games')].map(n=>{
+          const card=n.querySelector('[data-super8-round="2"]');return card.getBoundingClientRect().top-n.getBoundingClientRect().top;
+        }));
+        assert(activeRound.every(y=>Math.abs(y)<=5)&&Math.abs(activeRound[0]-activeRound[1])<1,'new active round anchors the same row in both courts');
+        await super8Page.evaluate(()=>window.__tvReplaceMarkup(window.__testPairedMarkup));
         await super8Page.evaluate(()=>{
           const root=document.getElementById('tv-root'),draft=root.cloneNode(true);
           draft.querySelectorAll('[data-tv-loop-repeat],[data-tv-repeat]').forEach(n=>n.remove());
