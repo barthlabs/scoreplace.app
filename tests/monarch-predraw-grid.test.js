@@ -67,7 +67,7 @@ async function run() {
   assert.equal(last.startTime, '20:20');
   window._phaseGridDrop({ preventDefault() {}, stopPropagation() {},
     dataTransfer:{ getData:() => last.id }, currentTarget:{ getBoundingClientRect:() => ({ top:0 }) },
-    clientY:2220 }, 3);
+    clientY:(grid.minutes(last.startTime)-grid.minutes('08:00'))*6 }, 3);
   assert.equal(window._phaseCallOrderState.tiles.find(tile => tile.id === last.id).court, 3);
   let draggedId;
   const transfer = {

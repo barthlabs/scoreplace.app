@@ -285,7 +285,7 @@
             var title = tile.kind === 'groups' ? label(tile) : eliminationNames[tile.id]+' · '+tile.category;
             var matchup=model.matchupLabel?.(tile,state.tiles,state.plan) || '';
             var series = tile.kind === 'groups' && (state.plan.schema === 1 || tile.games === 3);
-            var short = tile.kind==='groups' ? 'Grupo '+(tile.assignment?.label || groupName) : '';
+            var short = tile.kind==='groups' ? 'Grupo '+(tile.assignment?.label || groupName)+(series?' · 3 jogos':'') : '';
 
             var gameTimes = model.gameStarts(tile, state.tournament);
             var accent = 'phase-grid-cat-' + (categories.indexOf(tile.category) % 6);
