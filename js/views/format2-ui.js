@@ -1092,7 +1092,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _restoreSliderCapacities() {
     var grid=_capacityField('category-capacity-grid');
     if (!grid || !S?.mountEl?.querySelectorAll) return;
-    S.mountEl.querySelectorAll('[data-slider-capacity] > label').forEach(label=>grid.appendChild(label));
+    S.mountEl.querySelectorAll('[data-slider-capacity] > label').forEach(function(label) {
+      var input=label.querySelector('input[data-category]');
+      var caption=Array.from(label.childNodes).find(node=>node.nodeType===3);
+      if(input && caption) caption.nodeValue=decodeURIComponent(input.dataset.category);
+      grid.appendChild(label);
+    });
   }
   window._f2RestoreSliderCapacities=_restoreSliderCapacities;
   function _placeSliderCapacities() {
@@ -1102,7 +1107,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     grid.querySelectorAll('input[data-category]').forEach(function (input) {
       var index=names.indexOf(decodeURIComponent(input.dataset.category));
       var slot=S.mountEl.querySelector('[data-rotation-phase="0"] [data-slider-category="'+index+'"] [data-slider-capacity]');
-      if (slot) slot.appendChild(input.closest('label'));
+      if (slot) {
+        var label=input.closest('label');if(!label) return;
+        var caption=Array.from(label.childNodes).find(node=>node.nodeType===3);
+        if(caption) caption.nodeValue=_sliderMode(0,_sliderRules(0)).common ? decodeURIComponent(input.dataset.category) : 'Vagas';
+        slot.appendChild(label);
+      }
     });
   }
   function _sliderRules(phase) {
@@ -1215,9 +1225,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       });
     }
     function preview(rule,index,data) {
+      var grid=_capacityField('category-capacity-grid');
+      var namedCapacity=!phase && Array.from(grid?.querySelectorAll('input[data-category]') || []).some(input=>decodeURIComponent(input.dataset.category)===rule.category);
       return '<div data-slider-category="'+index+'" style="min-width:0;overflow-wrap:anywhere;color:var(--text-main)">'+
-        ''+
-        '<div data-slider-population style="font-size:.8rem">'+_safe(rule.category || 'Classificação geral')+' · '+
+        '<div data-slider-population style="font-size:.8rem">'+(mode.common && !namedCapacity?_safe(rule.category || 'Classificação geral')+' · ':'')+
         (data.people ? data.people+' pessoas' : 'Quantidade a definir')+'</div>'+
         '<div id="'+_sliderId('preview',phase,index)+'" role="status" style="font-size:.78rem;margin:6px 0">'+_safe(data.preview)+'</div></div>';
     }

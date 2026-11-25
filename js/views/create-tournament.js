@@ -182,7 +182,6 @@ window._setEstimatedScheduleMode = function (mode) {
 window._renderEstimatedGameHours = function (datesChanged) {
   var mount = document.getElementById('estimated-games-window-days');
   if (!mount) return;
-  var categoriesOpen = !!(mount.querySelector('details') && mount.querySelector('details').open);
   var state = window._estimatedGameHoursState || (window._estimatedGameHoursState = { saved:null, valuesByDay:{}, categoryByKey:{}, touched:false, locked:false, isNew:true });
   if (datesChanged && !state.locked) state.touched = true;
   var days = _estimatedGameDays();
@@ -203,26 +202,26 @@ window._renderEstimatedGameHours = function (datesChanged) {
     option.setAttribute('aria-pressed', active ? 'true' : 'false');
     option.disabled = !!(state.locked || state.saved && state.saved.interleavedPlan);
   });
+  var startDate = (document.getElementById('tourn-start-date') || {}).value || '';
+  var endDate = (document.getElementById('tourn-end-date') || {}).value || '';
+  var multipleDays = days.length>1 || endDate>startDate;
   var gameHoursSection = document.getElementById('estimated-games-window-section');
-  if (gameHoursSection) gameHoursSection.style.display = state.mode === 'organizer' ? '' : 'none';
+  if (gameHoursSection) gameHoursSection.style.display = state.mode === 'organizer' && multipleDays && days.length ? '' : 'none';
   if (state.mode === 'participants') {
     mount.innerHTML = '';
     if (typeof window._renderPhaseCallOrder === 'function') window._renderPhaseCallOrder();
     if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh();
     return;
   }
-  if (!days.length) {
+  if (!days.length || !multipleDays) {
     mount.innerHTML = '';
     if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh();
     return;
   }
-  var startDate = (document.getElementById('tourn-start-date') || {}).value || '';
-  var endDate = (document.getElementById('tourn-end-date') || {}).value || '';
-  var multipleDays = endDate > startDate;
   var saved = (state.saved && Array.isArray(state.saved.days)) ? state.saved.days : [];
   var defaultStart = (document.getElementById('tourn-start-time') || {}).value || '09:00';
   var defaultEnd = (document.getElementById('tourn-end-time') || {}).value || '22:00';
-  mount.innerHTML = '<p class="estimated-games-help">O primeiro jogo começa no início da fase. As demais partidas entram na sequência do sorteio, conforme as quadras e a duração estimada.</p>' + (multipleDays && !state.locked ? '<div class="estimated-games-add" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+  mount.innerHTML = (multipleDays && !state.locked ? '<div class="estimated-games-add" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
     + '<label>Dia com jogos <input id="estimated-games-add-day" type="date" class="form-control" min="' + startDate + '" max="' + endDate + '"></label>'
     + '<button type="button" class="btn btn-secondary" onclick="window._addEstimatedGameDay()">Adicionar dia</button></div>' : '') + days.map(function (day) {
     var existing = state.valuesByDay[day] || saved.find(function (item) { return item && item.day === day; }) || {};
@@ -866,9 +865,7 @@ function setupCreateTournamentModal() {
                     </div>
                   </div>
                 </div>
-                <div id="estimated-games-window-section" style="margin-top:12px;padding:12px;border:1px solid rgba(96,165,250,.3);border-radius:10px">
-                  <div style="font-weight:700">🕒 Horários dos jogos</div>
-                  <div style="color:var(--text-muted);font-size:.75rem;margin-top:4px">Em um único dia, valem o início e o fim da fase informados acima. Em vários dias, ajuste as janelas abaixo se necessário.</div>
+                <div id="estimated-games-window-section" style="margin-top:12px;display:none">
                   <div id="estimated-games-window-days" style="margin-top:8px"></div>
                 </div>
                 <div id="phase-call-order-editor" style="margin-top:12px"></div>
@@ -961,7 +958,7 @@ function setupCreateTournamentModal() {
                     <span>Só na primeira rodada</span>
                   </label>
                 </div>
-                <div id="phase-estimate-ladder" style="margin-top:8px;"></div>
+                <div id="phase-estimate-ladder" hidden></div>
 
                 <!-- Extra diagnostics (shown only when relevant) -->
                 <div id="duration-estimate-box" style="display:none; margin-top: 0.5rem;">
