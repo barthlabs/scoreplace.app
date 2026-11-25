@@ -12,6 +12,7 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
   window.showNotification=(...a)=>events.push(a);window._softRefreshView=()=>{};
   window.FirestoreDB={_callFn:(name,payload)=>{calls.push({name,payload});return new Promise(resolve=>window.commitChoice=resolve)}};
  });
+ await page.addScriptTag({path:root+'/js/domain/registration-roster.js'});
  await page.addScriptTag({path:root+'/js/views/gender-ratio-core.js'});await page.addScriptTag({path:root+'/js/views/tournaments-draw.js'});
  await page.evaluate(()=>{window._hydrateParticipantGenders=async()=>0;window._showDrawBalanceOverlay=opts=>dialogs.push(opts)});
  async function runCase(change,dialogExpected=false){
@@ -37,5 +38,21 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  await page.evaluate(()=>{window._hydrateParticipantGenders=async()=>0;_maybeShowGenderDrawDialog(base.id,()=>proceeded++);});
  await page.waitForFunction(()=>dialogs.length===1);assert.equal(await page.evaluate(()=>proceeded),0,'nova tentativa abre decisão normalmente');
  assert.equal(await page.evaluate(()=>nameLookups),0,'gênero/identidade nunca vêm de nome em canônico');
+ const categoryRows=await page.evaluate(()=>{
+  var registrations=['B','C'].flatMap((categoryId,i)=>[
+   {registrationId:'account-'+i,categoryId,participantKind:'account',participantUid:'same-uid',participantKey:'uid:same-uid',status:'confirmed',fixedPairId:null},
+   {registrationId:'manual-'+i,categoryId,participantKind:'manual',manualParticipantId:'same-manual',manualDisplayName:'Nome sintético',participantKey:'manual:same-manual',status:'confirmed',fixedPairId:null}
+  ]);
+  var roster=ScoreplaceRegistrationRoster.rosterFromRegistrations(registrations), rows;
+  _drawBalanceRows({...base,participants:roster},result=>rows=result);return rows;
+ });
+ assert.deepEqual(categoryRows.map(r=>[r.uid,r.manualParticipantId,r.categoryId].join('|')).sort(),[
+  'same-uid||B','|same-manual|B','same-uid||C','|same-manual|C'
+ ].sort(),'projeção real preserva categoria na pergunta e no payload mesmo com identidade em duas categorias');
+ await page.evaluate(rows=>{window.pendingCategoryChoice=_applyDrawBalanceChoice(base,'equilibrado',rows.map(r=>({...r,gender:'feminino'})),{ratio:'50/50',locked:true,enabled:true});},categoryRows);
+ const payload=await page.evaluate(()=>calls.at(-1).payload);
+ assert.equal(payload.mode,'equilibrado');assert.equal(payload.assignments.length,4);
+ assert.deepEqual(payload.assignments.map(r=>[r.uid,r.manualParticipantId,r.categoryId].join('|')).sort(),categoryRows.map(r=>[r.uid,r.manualParticipantId,r.categoryId].join('|')).sort());
+ await page.evaluate(()=>commitChoice({ok:true}));await page.evaluate(()=>pendingCategoryChoice);
  console.log('✓ sorteio: rotação, categorias separadas, critérios opacos, pool único/sem gênero, Livre e commit único');
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});
