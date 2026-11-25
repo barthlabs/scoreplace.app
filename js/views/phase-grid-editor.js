@@ -198,6 +198,8 @@
     var body=root.querySelector('.phase-grid-body');
     visualGroups(visible.filter(tile=>tile.day===dayOf(state).day)).forEach(function(group){
       var first=group.tiles.slice().sort((a,b)=>a.round-b.round || a.court-b.court)[0];
+      // O cabeçalho ocupa96px: sem espaço para número e confronto, usar o box compacto.
+      if(examples[first.id] && first.duration*pixelsPerMinute<150) return;
       var finish=Math.max(...group.tiles.map(tile=>model.minutes(tile.startTime)+tile.duration));
       var panel=document.createElement('section'); panel.className='phase-grid-super-group';
       panel.style.cssText='top:'+((model.minutes(first.startTime)-start)*pixelsPerMinute)+'px;height:'+((finish-model.minutes(first.startTime))*pixelsPerMinute-3)+'px;left:calc(66px + (100% - 66px) * '+(group.courts[0]-1)+' / '+columns+');width:calc((100% - 66px) * 2 / '+columns+');';

@@ -154,6 +154,15 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  await page.screenshot({path:'/tmp/sp-2768-group-grid-compact.png'});
  const cut=await page.locator('.phase-grid-group').evaluateAll(els=>els.filter(e=>e.scrollHeight>e.clientHeight+1).slice(0,3).map(e=>({text:e.innerText,height:e.clientHeight,scroll:e.scrollHeight,children:Array.from(e.children).map(c=>({text:c.innerText,height:c.clientHeight,font:getComputedStyle(c).fontSize}))})));
  assert.deepEqual(cut,[],'compacto sem corte');
+ for(const duration of [22,23,24,25]) {
+  await page.evaluate(duration=>{document.getElementById('tourn-game-duration').value=duration;document.getElementById('tourn-call-time').value=0;document.getElementById('tourn-warmup-time').value=0;_phaseGridRefreshDraft()},duration);
+  assert.equal(await page.locator('.phase-grid-example').count(),84);
+  assert.equal(await page.locator('.phase-grid-super-group').count(),duration<25?0:6,'cabeçalho apenas se houver espaço');
+  for(const el of await page.locator('.phase-grid-group').all())assert(await el.evaluate(e=>e.scrollHeight<=e.clientHeight+1),'sem corte em '+duration+'min sem preparação');
+  if(duration===22)await page.screenshot({path:'/tmp/sp-2768-group-grid-22min.png'});
+ }
+ await page.evaluate(()=>{document.getElementById('tourn-game-duration').value=10;document.getElementById('tourn-call-time').value=5;document.getElementById('tourn-warmup-time').value=5;_phaseGridRefreshDraft()});
+
  await page.setViewportSize({width:390,height:844});
  for(const el of await page.locator('.phase-grid-group').all())assert(await el.evaluate(e=>e.scrollHeight<=e.clientHeight+1),'compacto mobile sem corte');
  await page.setViewportSize({width:1366,height:900});
