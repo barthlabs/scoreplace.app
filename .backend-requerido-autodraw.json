@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "cfe6abc143cb9864f55a3d67c94961a616578ac5",
-  "scopeNote": "Sorteio e agenda canônicos por categoria; preserva todas as portas do corte anterior e sincroniza encerramento central e regional sem alterar torneios.",
+  "backendCommit": "a9ab77427a6dd91d5e187749573b54cf97392326",
+  "scopeNote": "Resultado do sorteio em PDF com horários ou só início; sincronização do arquivo compartilhado sem alterar sorteio ou torneios. Preserva as 34 portas declaradas e a proveniência central e regional.",
   "functions": [
     "createTournament",
     "updateTournamentConfiguration",

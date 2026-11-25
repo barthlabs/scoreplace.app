@@ -218,8 +218,8 @@
       "mode": "only"
     },
     "setDrawBalanceChoice": {
-      "backendCommit": "cfe6abc143cb9864f55a3d67c94961a616578ac5",
-      "deployedAt": "2026-11-25T11:48:01.102Z",
+      "backendCommit": "a9ab77427a6dd91d5e187749573b54cf97392326",
+      "deployedAt": "2026-11-25T14:22:25.561Z",
       "result": "success",
       "mode": "only"
     },
@@ -596,8 +596,8 @@
       "mode": "only"
     },
     "splitLatePair": {
-      "backendCommit": "cfe6abc143cb9864f55a3d67c94961a616578ac5",
-      "deployedAt": "2026-11-25T11:50:44.237Z",
+      "backendCommit": "a9ab77427a6dd91d5e187749573b54cf97392326",
+      "deployedAt": "2026-11-25T14:22:25.561Z",
       "result": "success",
       "mode": "only"
     },
@@ -698,14 +698,14 @@
       "mode": "only"
     },
     "tournamentSummaryRegistration": {
-      "backendCommit": "cfe6abc143cb9864f55a3d67c94961a616578ac5",
-      "deployedAt": "2026-11-25T11:57:45.747Z",
+      "backendCommit": "a9ab77427a6dd91d5e187749573b54cf97392326",
+      "deployedAt": "2026-11-25T14:22:25.561Z",
       "result": "success",
       "mode": "only"
     },
     "tournamentSummaryLegacyGroup": {
-      "backendCommit": "cfe6abc143cb9864f55a3d67c94961a616578ac5",
-      "deployedAt": "2026-11-25T11:57:45.747Z",
+      "backendCommit": "a9ab77427a6dd91d5e187749573b54cf97392326",
+      "deployedAt": "2026-11-25T14:22:25.561Z",
       "result": "success",
       "mode": "only"
     }
