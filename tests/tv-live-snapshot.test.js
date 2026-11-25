@@ -1043,6 +1043,12 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
   assert.equal(namedOnlySnapshot.tvLayout.sections.rankings.visible,false,'name-only groups use the Super8 board');
   assert.equal((window._tvLiveBodyHtml(namedOnlySnapshot).match(/>Livre<\/p>/g)||[]).length,6,'no call means six free courts, even with a complete planned grade');
   assert.doesNotMatch(window._tvLiveBodyHtml(namedOnlySnapshot),/class="tv-series-game /,'planned athletes are not court occupants');
+  const simpleLabels={B1:'A',B2:'B',C1:'C',C2:'D',C3:'E',C4:'F'};
+  const renamed={...namedOnly,scheduleWindow:{interleavedPlan:{schema:2,groupAssignments:assignments.map(r=>({...r,label:simpleLabels[r.label]}))}},
+    matches:namedOnly.matches.map(m=>({...m,scheduledGroupLabel:simpleLabels[m.scheduledGroupLabel]}))};
+  assert.deepEqual(groupLabels(window._tvLiveBuildSnapshot(renamed)),['A','C','D'],'saved A–F labels reach the on-air court pairs without UID requirements');
+  const renamedLater={...renamed,matches:renamed.matches.map(m=>['A','C','D'].includes(m.scheduledGroupLabel)?{...m,winner:m.p1,scoreP1:4,scoreP2:3,resultAt:'2026-10-22T21:00:00Z'}:m)};
+  assert.deepEqual(groupLabels(window._tvLiveBuildSnapshot(renamedLater)),['B','E','F'],'second entry keeps the same six canonical display labels');
   const unconfiguredNames=window._tvLiveBuildSnapshot({...namedOnly,phases:[{kind:'classification',classification:{partnerRotation:'groups'}}]});
   assert.equal(unconfiguredNames.tvLayout,null,'without an explicit size-eight rule, missing identities do not invent a Super8 group');
   const fourPlayers={...noDraw,phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:

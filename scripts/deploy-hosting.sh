@@ -83,7 +83,19 @@ printf '%s\n' "$$" > "$SP_LOCK/pid"
 _sp_state() { printf '%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "${2:-}" > "$SP_STATE"; }
 _sp_state 'iniciando' "pid=$$ log=$SP_LOG"
 exec > >(tee -a "$SP_LOG") 2>&1
-_sp_finish() { local rc=$?; if [[ -n "${AUDITORIA_TRANSICAO:-}" ]]; then rm -f "$AUDITORIA_TRANSICAO" || true; fi; if [[ "${SP_BACKUPS_PENDING:-0}" == 1 ]]; then _sp_state published-backups-pending "rc=$rc site confirmado; retome com --resume-backups"; rm -rf "$SP_LOCK"; exit "$rc"; fi; _sp_state "$([[ $rc -eq 0 ]] && echo concluído || echo falhou)" "rc=$rc"; rm -rf "$SP_LOCK"; exit "$rc"; }
+SP_DEPLOY_OWNED_COFRE=""
+_sp_finish() {
+  local rc=$?
+  if [[ -n "${AUDITORIA_TRANSICAO:-}" ]]; then rm -f "$AUDITORIA_TRANSICAO" || true; fi
+  if [[ -n "$SP_DEPLOY_OWNED_COFRE" ]]; then rm -rf "$SP_DEPLOY_OWNED_COFRE" || true; fi
+  if [[ "${SP_BACKUPS_PENDING:-0}" == 1 ]]; then
+    _sp_state published-backups-pending "rc=$rc site confirmado; retome com --resume-backups"
+  else
+    _sp_state "$([[ $rc -eq 0 ]] && echo concluído || echo falhou)" "rc=$rc"
+  fi
+  rm -rf "$SP_LOCK"
+  exit "$rc"
+}
 trap _sp_finish EXIT
 
 # ⛔⛔ A CONTA DE SERVIÇO TEM DE VENCER A SESSÃO DE USUÁRIO VELHA.
@@ -99,7 +111,14 @@ trap _sp_finish EXIT
 # resolveria, mas levaria junto cache do npm e tudo o mais.
 #
 source "$RAIZ/scripts/firebase-credencial-persistente.sh"
+SP_DEPLOY_PREVIOUS_COFRE="${SP_FIREBASE_COFRE:-}"
 sp_preparar_credencial_firebase "$RAIZ" "${PROJECT:-scoreplace-app}"
+# O helper instala seu próprio EXIT; este publicador precisa compor as duas limpezas.
+# Uma suíte filha que usa helper neutro não pode apagar o cofre herdado do publicador.
+if [[ -n "${SP_FIREBASE_COFRE:-}" && "$SP_FIREBASE_COFRE" != "$SP_DEPLOY_PREVIOUS_COFRE" ]]; then
+  SP_DEPLOY_OWNED_COFRE="$SP_FIREBASE_COFRE"
+fi
+trap _sp_finish EXIT
 
 
 # ── L6.R2.3 · UMA CÓPIA FIEL, MONTADA NUM LUGAR SÓ ───────────────────────────────────

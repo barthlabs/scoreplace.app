@@ -4,7 +4,7 @@ Fonte visual: sete capturas fornecidas pela organização, de 13:01:28 a 13:02:1
 
 ## Configuração conferida em leitura
 
-Leitura administrativa somente do documento CULT, com credencial persistente; nenhum campo, inscrição, jogo ou resultado foi alterado. Snapshot integral fica privado, fora do repositório. Projeção feita com `ScoreplacePhaseGridPlan.project(t,w)` carregado pelo motor `functions-autodraw/draw-core`. O estado lido não tinha sorteio publicado nem partidas. Valores genéricos abaixo não incluem dados pessoais.
+Conferência inicial: leitura administrativa somente do documento CULT, com credencial persistente; nenhum campo, inscrição, jogo ou resultado foi alterado. Snapshot integral fica privado, fora do repositório. Projeção feita com `ScoreplacePhaseGridPlan.project(t,w)` carregado pelo motor `functions-autodraw/draw-core`. O estado lido não tinha sorteio publicado nem partidas. Valores genéricos abaixo não incluem dados pessoais.
 
 | Regra | Categoria B · retinol | Categoria C · colágeno |
 | --- | --- | --- |
@@ -20,10 +20,10 @@ A organização confirmou expressamente que o desenho de quartas estava errado e
 
 ### Cruzamentos conferidos na projeção canônica
 
-Letras do documento são locais a cada categoria: A/B equivalem a B1/B2; A/B/C/D equivalem a C1/C2/C3/C4.
+Por determinação posterior da organização, a identificação é única no torneio: categoria B usa A/B (antes B1/B2); categoria C usa C/D/E/F (antes C1/C2/C3/C4). O PDF revisado usa essas letras também nas posições e nos cruzamentos. A operação administrativa altera somente os rótulos de apresentação, preservando os índices e vínculos técnicos das partidas.
 
-- C SF1: 1ª+2ª do grupo1 contra 1ª+2ª do grupo4. SF2: 1ª+2ª do grupo2 contra 1ª+2ª do grupo3.
-- B SF1: 1ª+2ª do grupo1 contra 3ª+4ª do grupo2. SF2: 1ª+2ª do grupo2 contra 3ª+4ª do grupo1.
+- C SF1: 1ª+2ª do grupo C contra 1ª+2ª do grupo F. SF2: 1ª+2ª do grupo D contra 1ª+2ª do grupo E.
+- B SF1: 1ª+2ª do grupo A contra 3ª+4ª do grupo B. SF2: 1ª+2ª do grupo B contra 3ª+4ª do grupo A.
 - Final: duplas vencedoras das semifinais. Terceiro lugar: duplas perdedoras.
 
 Cada origem e posição foi comparada com `jobs[].display.sources`, não inferida do desenho incorreto das capturas.

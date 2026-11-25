@@ -213,8 +213,28 @@ assert.deepStrictEqual(call[0].athletes[0].games.map(g => [g.number,g.partner,g.
   [9,'Cris Melo','Bia Costa / Dora Luz','Quadra 1','08:20'],
   [17,'Dora Luz','Bia Costa / Cris Melo','Quadra 1','08:40']
 ]);
+const firstCallPages=core.makeCallListPages(rotating);
+const firstCallCommands=firstCallPages.flatMap(p=>p.commands);
+for(const name of ['Ana Lima','Bia Costa','Cris Melo','Dora Luz'])
+ assert.equal(firstCallCommands.filter(c=>c.includes(' Tf 1 0 0 1 23 ')&&c.includes('('+name+')')).length,1,'one athlete row: '+name);
+assert(!firstCallCommands.some(c=>c.includes(' Tm (9) Tj')||c.includes(' Tm (17) Tj')),'later games do not repeat the athlete row');
 assert(core.makePages(rotating).at(-1).commands.join('\n').includes('(LISTA DE CHAMADA  |  Folha 1/1)'),
   'uma categoria única é omitida na lista de chamada');
+// Manual names with null account UIDs still produce one first-call row after seven rounds.
+const manualRounds=Array.from({length:7},(_,i)=>({id:'manual-'+i,round:i+1,phaseIndex:0,scheduledGameNumber:1+i*2,
+ court:'Quadra '+(i%2+1),category:'Categoria B',scheduledGroupLabel:'A',p1:'Ana Lima / Bia Costa',p2:'Cris Melo / Dora Luz',
+ team1SlotIds:['manual:a','manual:b'],team2SlotIds:['manual:c','manual:d'],team1Uids:[null,null],team2Uids:[null,null]})).reverse();
+const manualModel=core.collect(superEight,manualRounds),manualCalls=core.callList(manualModel);
+assert.equal(manualCalls[0].athletes.length,4);
+assert(manualCalls[0].athletes.every(a=>a.games.length===7 && a.games[0].number===1 && a.games[0].court==='Quadra 1'));
+const manualCommands=core.makeCallListPages(manualModel).flatMap(p=>p.commands);
+assert.equal(manualCommands.filter(c=>c.includes(' Tf 1 0 0 1 23 ')&&c.includes('(Ana Lima)')).length,1);
+for(const label of ['A','B','C','D','E','F']) {
+ const labeled=core.collect(superEight,superEightGames.map(m=>({...m,scheduledGroupLabel:label})));
+ assert(labeled.matches.every(m=>m.groupLabel===label),'PDF retains saved label '+label);
+ assert(core.makePages(labeled)[0].commands.join(' ').includes('('+label+')'));
+}
+if(process.env.SP_SUMULA_FIRST_CALL_SAMPLE)fs.writeFileSync(process.env.SP_SUMULA_FIRST_CALL_SAMPLE,core.encodePdf(core.makeCallListPages(manualModel)));
 const incomplete = core.collect(t, [{ id:'incompleto', scheduledGameNumber:33,
   scheduledAt:at('2026-11-13','09:00'), category:'Ouro', p1:'Ana Lima / A definir', p2:'Bia Costa / Cris Melo' }]);
 assert.deepStrictEqual(core.callList(incomplete)[0].skipped, [33],
@@ -234,8 +254,8 @@ const thirtySix = core.collect(t, Array.from({ length:36 }, (_, i) => ({
   court:'Quadra '+(i%6+4), category:'Fem Light',
   p1:'Ana Silva / Bia Costa', p2:'Clara Lima / Débora Reis'
 })));
-assert.strictEqual(core.makePages(thirtySix).length, 18,
-  '36 jogos distribuídos em seis quadras e dois dias ocupam doze folhas separadas e seis listas');
+assert.strictEqual(core.makePages(thirtySix).length, 13,
+  '36 jogos preservam doze folhas de quadra; os mesmos quatro atletas precisam só de uma lista de primeira chamada');
 const bestOfThree = core.collect({ ...t, scoring:{ type:'sets', setsToWin:2, gamesPerSet:6 } }, [matches[1]]);
 assert.strictEqual(bestOfThree.scoring.slots, 3);
 assert(core.makePages(bestOfThree)[0].commands.join('\n').includes('melhor de 3 sets'),
@@ -469,8 +489,25 @@ const realizedCommands = realizedBracket.commands.join('\n');
 for (const athlete of ['Tatiana Rossi DAmico','Fernanda Gomes','Joana Granato',
   'Bianca Vicintin Abud','Cris Spina','Luciana Campos',String.raw`Fl\341via Fabbrocini Sanches`,'Fabrizia Frank'])
   assert(realizedCommands.includes(athlete), 'cada nome das duplas cabe na chave: ' + athlete);
-assert(realizedCommands.includes('JOGO 37') && realizedCommands.includes('JOGO 39') &&
+assert(realizedCommands.includes('JOGO 37') && realizedCommands.includes('(FINAL)') &&
   realizedCommands.includes('CAMPE'), 'a chave liga o número real do jogo à final');
+for(const orientation of ['landscape','portrait']) {
+  const filled={...realized,undated:realized.undated.map(m=>m.id==='final'?{...m,p1:'Nome Finalista Um / Nome Finalista Dois',p2:'Nome Finalista Tres / Nome Finalista Quatro'}:m)};
+  const pages=core.makePages(filled,{orientation});
+  const sheet=pages.find(p=>p.commands.some(c=>c.includes('CHAVE ELIMINAT')));
+  assert(!sheet.commands.some(c=>c.includes('Nome Finalista')),'final always leaves names blank for handwriting');
+  const finalTitle=sheet.commands.findLastIndex(c=>c.includes(' Tm (FINAL) Tj'));
+  const fields=sheet.commands.slice(finalTitle+1,finalTitle+5);
+  assert.equal(fields.filter(c=>c.endsWith(' l S')).length,2,'two writing lines in final');
+  assert.equal(fields.filter(c=>/14 14 re S$/.test(c)).length,2,'one empty score square per side in final');
+  assert(!fields.some(c=>c.includes(' Tj ')),'no names, source labels or X in final fields');
+  const semiTitle=sheet.commands.findIndex(c=>c.includes(' Tm (JOGO 37) Tj'));
+  const semiFields=sheet.commands.slice(semiTitle+1,semiTitle+8);
+  assert.equal(semiFields.filter(c=>c.includes(' Tm (X) Tj')).length,1,'only one X per semifinal');
+  assert.equal(semiFields.filter(c=>/14 14 re S$/.test(c)).length,2);
+  assert(semiFields.some(c=>c.includes('Tatiana Rossi DAmico / Fernanda Gomes')),'two partners share one line');
+  if(process.env.SP_SUMULA_SIMPLE_FINAL_SAMPLE)fs.writeFileSync(process.env.SP_SUMULA_SIMPLE_FINAL_SAMPLE+'-'+orientation+'.pdf',core.encodePdf(pages));
+}
 const doubleBracket = {
   ...realized, future:null, pending:[], tiebreakGroups:[], groupStandings:[], days:[],
   matches:[
@@ -545,7 +582,7 @@ for (const count of [32,64]) {
     const byColumn = new Map();
     page.commands.map(command =>
       /^0\.3 G 0\.7 w ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re S$/.exec(command))
-      .filter(Boolean).forEach(parts => {
+      .filter(Boolean).filter(parts=>Number(parts[3])>40 && Number(parts[4])>40).forEach(parts => {
         const x = Number(parts[1]);
         const card = { top:page.height-Number(parts[2])-Number(parts[4]),
           bottom:page.height-Number(parts[2]), height:Number(parts[4]) };

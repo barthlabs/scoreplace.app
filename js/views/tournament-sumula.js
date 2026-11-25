@@ -561,14 +561,18 @@
           if (!entries.has(key)) entries.set(key, { name:name, category:category, games:[] });
           entries.get(key).games.push({ number:m.number || m.id || '-', day:m.day, time:m.time,
             court:m.court || 'A definir', partner:people.length === 2 ? people[1-i] : '-',
-            opponents:sides[1-sideIndex].join(' / '), at:m.at });
+            opponents:sides[1-sideIndex].join(' / '), at:m.at, phaseIndex:m.phaseIndex || 0, round:Number(m.round) || 0 });
         });
       });
     });
     var byCategory = new Map();
     entries.forEach(function (entry) {
       if (!byCategory.has(entry.category)) byCategory.set(entry.category, []);
-      entry.games.sort(function (a,b) { return (a.at || Infinity) - (b.at || Infinity) || Number(a.number)-Number(b.number); });
+      entry.games.sort(function (a,b) {
+        var bothDated=Number.isFinite(a.at) && Number.isFinite(b.at);
+        return (bothDated?a.at-b.at:0) || a.phaseIndex-b.phaseIndex || a.round-b.round ||
+          (Number(a.number)-Number(b.number) || String(a.number).localeCompare(String(b.number),'pt-BR',{numeric:true}));
+      });
       byCategory.get(entry.category).push(entry);
     });
     skipped.forEach(function (_, category) { if (!byCategory.has(category)) byCategory.set(category, []); });
@@ -601,7 +605,7 @@
       p.line(20, y+4, 822, y+4, 0.85);
     });
     if (note) p.write(fitLabel(note, 795, 7, true), 22, 562, 7, true);
-    p.write('scoreplace.app  |  Horários e quadras previstos podem mudar durante o evento.', 22, 581, 7);
+    p.write('Primeiro jogo de cada atleta. Horários e quadras previstos podem mudar durante o evento.', 22, 581, 7);
     return p;
   }
   function makeCallListPages(model) {
@@ -609,7 +613,8 @@
     callList(model).forEach(function (bucket) {
       var rows = [];
       bucket.athletes.forEach(function (athlete) {
-        athlete.games.forEach(function (game) { rows.push({ name:athlete.name, game:game }); });
+        var first=athlete.games[0];
+        if(first) rows.push({ name:athlete.name, game:first });
       });
       var chunks = balancedChunks(rows, 26), total = chunks.length;
       var note = bucket.skipped.length ? 'Jogos sem participantes definidos: ' + bucket.skipped.join(', ') : '';
@@ -733,7 +738,7 @@
       var firstCount = byRound[0].length;
       var firstHeight = Math.min(72,
         (yBottom-yTop-5*Math.max(0,firstCount-1))/Math.max(1,firstCount));
-      var laterHeight = Math.min(50, firstHeight * 0.86);
+      var laterHeight = firstHeight;
       byRound.forEach(function (group, col) {
         var x = left + col*(colWidth+gap);
         p.fillRect(x, sectionTop+labelHeight, colWidth, 18, '0.90 0.94 0.97');
@@ -774,8 +779,21 @@
         var y = pos.cy - h/2, x = pos.x;
         p.fillRect(x, y, colWidth, h, '0.97 0.98 0.99');
         p.box(x, y, colWidth, h);
-        p.write(fitLabel(row.ref, colWidth-8, 6.7, true), x+4, y+9, 6.7, true);
-        if (!col) {
+        p.write(fitLabel(row.final ? 'FINAL' : row.ref, colWidth-8, 6.7, true), x+4, y+9, 6.7, true);
+        if (row.final || group.length === 2) {
+          var boxSize=14, scoreX=x+colWidth-boxSize-5;
+          var baselines=[y+Math.max(23,h*.42),y+h-8];
+          [0,1].forEach(function(side) {
+            var yy=baselines[side];
+            if(!row.final) {
+              var names=members(side ? row.p2 : row.p1);
+              if(names.length) p.write(fitLabel(names.slice(0,2).join(' / '),colWidth-boxSize-18,6.5,true),x+4,yy-2,6.5,true);
+            }
+            p.line(x+4,yy,x+colWidth-boxSize-10,yy,0.65);
+            p.box(scoreX,yy-11,boxSize,boxSize);
+          });
+          if(!row.final) p.write('X',scoreX+4.4,(baselines[0]+baselines[1])/2-1,6,true);
+        } else if (!col) {
           var names = [members(row.p1), members(row.p2)];
           [0,1].forEach(function (side) {
             var yy = y + 19 + side*(h-18)/2;
@@ -801,7 +819,7 @@
       var final = main.find(function (r) { return r.final; });
       if (final && positions[final.id]) {
         var fx = positions[final.id].x, fy = Math.min(yBottom+7, sectionTop+sectionHeight-17);
-        p.write('CAMPEÃO: __________________  ___ x ___', fx, fy, 6.2, true);
+        p.write('CAMPEÃO: __________________', fx, fy, 6.2, true);
       }
       var third = rows.find(function (r) { return r.third; });
       if (third) {

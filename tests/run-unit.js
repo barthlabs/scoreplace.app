@@ -1896,6 +1896,7 @@ const SUITES = [
   'tests/deploy-liga-firebase-admin.test.js',     // L6.R2.2: "PULADA" não é aprovação no deploy
   'tests/primary-operation-readiness.test.js',
   'tests/hosting-rollout-state.test.js',
+  'tests/cult-group-labels.test.js',
   'tests/preflight-antes-do-push.test.js',        // L6.R2.3: gates ANTES do push (repo e remoto reais)
   'tests/hosting-prerequisites.test.js',          // recibos de convite e trava regional antes da suíte
   'functions-autodraw/test-agenda-core.js',       // L6.R1: fuso do evento, janela de 1 min, trava de slot

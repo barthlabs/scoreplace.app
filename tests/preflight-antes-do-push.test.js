@@ -24,6 +24,7 @@ const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
 
 const RAIZ = path.join(__dirname, '..');
+const shellQuote = value => "'" + String(value).replace(/'/g, "'\\''") + "'";
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗ ' + m); } }
 function eq(a, b, m) { ok(a === b, m + ' — esperado ' + JSON.stringify(b) + ', veio ' + JSON.stringify(a)); }
@@ -130,7 +131,13 @@ function cenario(opcoes) {
   // persistente real é coberta na suíte própria; aqui o helper existe só para que o
   // `source` não interrompa a cena antes do preflight que está sob teste.
   fs.writeFileSync(path.join(repo, 'scripts', 'firebase-credencial-persistente.sh'),
-    '#!/bin/sh\nsp_preparar_credencial_firebase() { :; }\n');
+    o.credencialComTrap ? '#!/bin/sh\nsp_preparar_credencial_firebase() {\n'+
+      'SP_FIREBASE_COFRE="$(mktemp -d)"; export SP_FIREBASE_COFRE\n'+
+      'printf "%s" "$SP_FIREBASE_COFRE" > '+shellQuote(path.join(marcas,'cofre.txt'))+'\n'+
+      'trap \'rm -rf "$SP_FIREBASE_COFRE"\' EXIT\n}\n' :
+      '#!/bin/sh\nsp_preparar_credencial_firebase() { :; }\n');
+  const inheritedCofre=path.join(base,'cofre-herdado');
+  if(o.herdaCofre)fs.mkdirSync(inheritedCofre);
   // gates do preflight que rodam no REPO (não na cópia): version-ahead
   // ⛔ 04/set/2026 — ESTE STUB FALTAVA E DERRUBOU O TESTE INTEIRO. O passo 1.8 do script
   // passou a chamar `scripts/revisar.sh diff` (revisão cruzada), e a árvore mínima daqui só
@@ -306,7 +313,7 @@ function cenario(opcoes) {
 
   const r = spawnSync('bash', o.dryRun ? ['scripts/deploy-hosting.sh', '--dry-run'] : ['scripts/deploy-hosting.sh'], {
     cwd: repo, encoding: 'utf8',
-    env: Object.assign({}, process.env, { PATH: bin + ':' + process.env.PATH, TMPDIR: base })
+    env: Object.assign({}, process.env, { PATH: bin + ':' + process.env.PATH, TMPDIR: base, ...(o.herdaCofre?{SP_FIREBASE_COFRE:inheritedCofre}:{}) })
   });
   if(process.env.SP_PREFLIGHT_TRACE && r.status!==0)console.error('SCENARIO',JSON.stringify(o),'\n'+r.stdout+'\n'+r.stderr);
   const remotoDepois = execFileSync('git', ['rev-parse', 'main'], { cwd: remoto, encoding: 'utf8' }).trim();
@@ -319,6 +326,8 @@ function cenario(opcoes) {
   return {
     status: r.status, saida: (r.stdout || '') + (r.stderr || ''),
     remotoAntes: remotoAntes2, remotoDepois, shaRelease: shaRelease2, chamouFirebase, publicado, pushChamado,
+    cofreCriadoLimpo:fs.existsSync(path.join(marcas,'cofre.txt'))&&!fs.existsSync(fs.readFileSync(path.join(marcas,'cofre.txt'),'utf8')),
+    cofreHerdadoIntacto:fs.existsSync(inheritedCofre),
     estado:fs.existsSync(path.join(base,'scoreplace-deploy','status'))?fs.readFileSync(path.join(base,'scoreplace-deploy','status'),'utf8'):'',
     lockExiste:fs.existsSync(path.join(base,'scoreplace-deploy','lock')),
     ordem:fs.existsSync(path.join(marcas,'ordem.txt'))?fs.readFileSync(path.join(marcas,'ordem.txt'),'utf8'):'',
@@ -381,6 +390,16 @@ ok(sh.indexOf('# MARCO: contingencia-depois-do-site')>sh.indexOf('echo "✓ NO A
    const uploads=c.lerFirebase(),resume=c.retomar();
    eq(c.lerFirebase(),uploads,'retomada de backups não repete upload');
    ok(resume.status!==0,'backup ainda divergente continua pendente');
+ }finally{c.limpar();}
+}
+
+{
+ const c=cenario({preflightPassa:true,credencialComTrap:true,herdaCofre:true});
+ try {
+   eq(c.status,0,'helper realista com trap próprio mantém publicação funcional');
+   ok(/concluído/.test(c.estado)&&!c.lockExiste,'trap de credencial não substitui estado/lock');
+   ok(c.cofreCriadoLimpo,'cofre criado por esta publicação é limpo');
+   ok(c.cofreHerdadoIntacto,'suíte filha preserva cofre herdado de quem a chamou');
  }finally{c.limpar();}
 }
 

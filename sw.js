@@ -529,7 +529,8 @@ self.addEventListener('fetch', function(event) {
   // cache seria o SW respondendo "você está atualizado" com a cópia velha — o
   // app nunca mais sairia da versão presa. Vai SEMPRE à rede, mesmo sem
   // `_swcheck` (chamadas diretas/curl também).
-  if (url.indexOf('/version.txt') !== -1 || url.indexOf('/release.json') !== -1) return;
+  if (url.indexOf('/version.txt') !== -1) return;
+  if (url.indexOf('/release.json') !== -1) return;
   // A eleição regional precisa sempre do manifesto corrente, inclusive sob SW antigo.
   if (url.indexOf('/operation-regions') !== -1) return;
 
