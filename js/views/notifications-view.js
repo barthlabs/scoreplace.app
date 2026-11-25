@@ -267,8 +267,8 @@ function renderNotifications(container) {
         // mantém os dois, que é o comportamento antigo.
         var _pendRes = _resultStillPending(n);
         var _btnEditar =
-          '<button class="btn btn-sm" style="background:#f59e0b;color:#1a1a2e;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✏️ ' +
-          (_pendRes === false ? 'Editar' : (_t('notif.editContest') || 'Editar / Contestar')) + '</button>';
+          '<button class="btn btn-sm" style="background:#f59e0b;color:#1a1a2e;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">' +
+          (_pendRes === false ? 'Editar' : (_t('notif.editContest') || 'Editar / Contestar')) + ' ' + (window._editPencilHtml?.() || '') + '</button>';
         var _btnConfirmar = (_pendRes === false) ? '' :
           '<button class="btn btn-sm" style="background:#10b981;color:#fff;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✅ ' + (_t('notif.confirm') || 'Confirmar') + '</button>';
         // Já resolvido: uma linha diz o que aconteceu, senão o card vira só um

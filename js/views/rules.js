@@ -328,7 +328,7 @@ function renderRules(container, tournamentId) {
         ${isOrg ? `
           <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border-color);">
             <button onclick="window.openEditTournamentModal('${t.id}')" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);color:var(--sp-c-818cf8,#818cf8);padding:8px 18px;border-radius:8px;font-weight:600;cursor:pointer;font-size:0.85rem;">
-              ✏️ ${_t('rules.editRules')}
+              ${_t('rules.editRules')} ${window._editPencilHtml?.() || ''}
             </button>
           </div>` : ''}
       </div>
