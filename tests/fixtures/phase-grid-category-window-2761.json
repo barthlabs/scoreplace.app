@@ -1,0 +1,283 @@
+{
+  "t": {
+    "fmt2": {
+      "disputa": "dupla",
+      "grupos": 1,
+      "parceria": "rotation_groups",
+      "formacaoDupla": "sorteio",
+      "manualPairingOpen": false,
+      "manualPairingPolicy": "organizer_only",
+      "rodadas": {
+        "modo": "fixo",
+        "turnos": "ida",
+        "n": 5,
+        "drawFirstDate": "",
+        "drawFirstTime": "19:00",
+        "drawIntervalDays": 7,
+        "drawManual": false,
+        "allowSelfDeactivation": true,
+        "_intervalAuto": true
+      },
+      "classificationPairing": {
+        "strategy": "ranking_clusters",
+        "clusterSize": 8,
+        "rematchPolicy": "exhaust_cluster_before_repeat"
+      },
+      "rankingRemainderPolicy": "lottery_average",
+      "rankingSitOutScoring": {
+        "mode": "average"
+      },
+      "classifAtiva": true,
+      "classificados": 2,
+      "classifScope": "per_group",
+      "tieResolution": "draw_order",
+      "tieSinglesPoints": 5,
+      "tieSinglesMargin": 1,
+      "eliminatoria": {
+        "ativa": false,
+        "nome": "",
+        "dupla": false,
+        "linhas": 1,
+        "nomes": [
+          ""
+        ],
+        "lineAssignment": "strategy",
+        "lineRankRanges": [],
+        "bestNextByGroup": {
+          "count": 0,
+          "metric": "points_per_game",
+          "destIndex": 0
+        },
+        "origem": "formar",
+        "formacao": "performance",
+        "semeadura": "performance",
+        "qualifyAll": false,
+        "terceiro": true,
+        "grandFinal": true,
+        "finalSeriesBestOf": 1,
+        "lateEnrollment": "inherit",
+        "newMatchups": "inherit",
+        "scoring": null,
+        "endDate": "",
+        "endTime": "",
+        "roundBounds": [],
+        "roundBoundsEditorEnabled": false,
+        "grandFinalReset": false,
+        "politicaDaChave": "repescagem",
+        "openReiRainha": false,
+        "reiRainhaCut": 4
+      },
+      "teamCompetition": {
+        "enabled": false,
+        "teamCount": 0,
+        "teamNames": [],
+        "formation": "draw",
+        "internalMatches": "avoid",
+        "ranking": "points",
+        "aggregation": "overall",
+        "classificationUnit": "team",
+        "schedule": {
+          "enabled": false,
+          "teamsPerGroup": 2,
+          "gamesPerPair": 1,
+          "gamesPerTeam": 1,
+          "pairsPerTeamByCategory": {},
+          "gamesPerPairByCategory": {},
+          "pairDayAssignments": [],
+          "rosterSnapshot": [],
+          "mode": "free",
+          "modeConfirmed": false,
+          "modeChosen": false,
+          "originDayPolicy": ""
+        },
+        "scoring": {
+          "win": 3,
+          "draw": 1,
+          "loss": 0
+        }
+      },
+      "_scoreBy": "individual",
+      "superEightDrawMode": "rounds",
+      "rotationCategoryRules": [
+        {
+          "category": "A",
+          "destination": "ranking",
+          "groupFormation": {
+            "mode": "size",
+            "value": 8
+          },
+          "rounds": 3,
+          "allowRepeatPartners": false
+        }
+      ]
+    },
+    "sport": "Beach Tennis",
+    "combinedCategories": [
+      "A"
+    ],
+    "gameDuration": 15,
+    "callTime": 2,
+    "warmupTime": 3,
+    "setupScope": "first_round",
+    "courtCount": 6,
+    "maxParticipantsByCategory": {
+      "A": 8
+    },
+    "scheduleWindow": {
+      "mode": "organizer",
+      "days": [
+        {
+          "day": "2026-12-01",
+          "startTime": "08:00",
+          "endTime": "22:00"
+        },
+        {
+          "day": "2026-12-02",
+          "startTime": "08:00",
+          "endTime": "22:00"
+        }
+      ],
+      "categoryWindows": [
+        {
+          "category": "A",
+          "day": "2026-12-02",
+          "startTime": "10:00",
+          "endTime": "20:00"
+        }
+      ]
+    }
+  },
+  "days": [
+    {
+      "day": "2026-12-01",
+      "startTime": "08:00",
+      "endTime": "22:00"
+    },
+    {
+      "day": "2026-12-02",
+      "startTime": "08:00",
+      "endTime": "22:00"
+    }
+  ],
+  "plan": {
+    "schema": 2,
+    "editorVersion": 2,
+    "day": "2026-12-01",
+    "days": [
+      {
+        "day": "2026-12-01",
+        "startTime": "08:00",
+        "endTime": "22:00"
+      },
+      {
+        "day": "2026-12-02",
+        "startTime": "08:00",
+        "endTime": "22:00"
+      }
+    ],
+    "courts": 6,
+    "totalGames": 6,
+    "capacities": [
+      8
+    ],
+    "inputSignature": "1f13de00",
+    "blocks": [
+      {
+        "phaseIndex": 0,
+        "kind": "groups",
+        "category": "A",
+        "groupNumber": 1,
+        "bracket": "group",
+        "round": 1,
+        "wave": 1,
+        "sequence": 1,
+        "games": 1,
+        "day": "2026-12-02",
+        "startTime": "10:00",
+        "courts": [
+          1
+        ]
+      },
+      {
+        "phaseIndex": 0,
+        "kind": "groups",
+        "category": "A",
+        "groupNumber": 1,
+        "bracket": "group",
+        "round": 1,
+        "wave": 1,
+        "sequence": 2,
+        "games": 1,
+        "day": "2026-12-02",
+        "startTime": "10:00",
+        "courts": [
+          2
+        ]
+      },
+      {
+        "phaseIndex": 0,
+        "kind": "groups",
+        "category": "A",
+        "groupNumber": 1,
+        "bracket": "group",
+        "round": 2,
+        "wave": 2,
+        "sequence": 1,
+        "games": 1,
+        "day": "2026-12-02",
+        "startTime": "10:20",
+        "courts": [
+          1
+        ]
+      },
+      {
+        "phaseIndex": 0,
+        "kind": "groups",
+        "category": "A",
+        "groupNumber": 1,
+        "bracket": "group",
+        "round": 2,
+        "wave": 2,
+        "sequence": 2,
+        "games": 1,
+        "day": "2026-12-02",
+        "startTime": "10:20",
+        "courts": [
+          2
+        ]
+      },
+      {
+        "phaseIndex": 0,
+        "kind": "groups",
+        "category": "A",
+        "groupNumber": 1,
+        "bracket": "group",
+        "round": 3,
+        "wave": 3,
+        "sequence": 1,
+        "games": 1,
+        "day": "2026-12-02",
+        "startTime": "10:35",
+        "courts": [
+          1
+        ]
+      },
+      {
+        "phaseIndex": 0,
+        "kind": "groups",
+        "category": "A",
+        "groupNumber": 1,
+        "bracket": "group",
+        "round": 3,
+        "wave": 3,
+        "sequence": 2,
+        "games": 1,
+        "day": "2026-12-02",
+        "startTime": "10:35",
+        "courts": [
+          2
+        ]
+      }
+    ]
+  }
+}

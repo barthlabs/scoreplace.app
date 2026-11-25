@@ -26,8 +26,9 @@
     return state && state.tournament && state.tournament.scheduleWindow &&
       state.tournament.scheduleWindow.days || (state && state.day ? [state.day] : []);
   }
+  function displayDays(state) { return model.displayDays(state.plan,state.tiles,daysOf(state)); }
   function dayOf(state) {
-    var days = daysOf(state);
+    var days = displayDays(state);
     return days.find(function (day) { return day.day === state.activeDay; }) || days[0];
   }
   function section() { return document.getElementById('phase-grid-predraw-mount') || document.getElementById('phase-call-order-editor'); }
@@ -151,7 +152,7 @@
       return;
     }
     mount.innerHTML = '<section class="phase-grid-editor phase-grid-launcher" aria-label="Grade de fases e quadras">' +
-      '<div><h3>Grade de fases e quadras</h3><p>' + state.tiles.length + ' blocos em ' + daysOf(state).length +
+      '<div><h3>Grade de fases e quadras</h3><p>' + state.tiles.length + ' blocos em ' + displayDays(state).length +
       ' dia(s). ' + (state.touched ? 'Ajustes pendentes de salvar no torneio.' : 'Abra para conferir e ajustar a programação.') + '</p></div>' +
       (!state.locked && !state.preDrawId ? '<button type="button" class="btn btn-secondary" onclick="window._phaseGridSuggest()">Gerar nova proposta</button><p id="phase-grid-proposal-message" role="alert" hidden></p>' : '') +
       '<button type="button" class="btn btn-secondary" onclick="window._openPhaseGridEditor()">Abrir grade em tela ampla</button></section>';
@@ -161,8 +162,12 @@
     var oldViewport = root.querySelector('.phase-grid-viewport');
     var scrollTop = keepScroll && oldViewport ? oldViewport.scrollTop : 0;
     var scrollLeft = keepScroll && oldViewport ? oldViewport.scrollLeft : 0;
-    var visible = state.tiles.filter(function (tile) { return (tile.day || state.plan.day) === day.day; });
-    var last = visible.reduce(function (max, tile) { return Math.max(max, model.minutes(tile.startTime) + tile.duration); }, end);
+    var dayOrigin=Date.parse(day.day+'T00:00:00Z')/60000;
+    var visible = state.tiles.filter(function (tile) {
+      var at=Date.parse((tile.day || state.plan.day)+'T00:00:00Z')/60000+model.minutes(tile.startTime);
+      return at<dayOrigin+1440 && at+tile.duration>dayOrigin;
+    });
+    var last = visible.reduce(function (max, tile) { return Math.max(max, Math.min(1440,Date.parse(tile.day+'T00:00:00Z')/60000-dayOrigin+model.minutes(tile.startTime)+tile.duration)); }, end);
     var height = (last - start) * 3, columns = Number(state.plan.courts);
     var numbers = model.numbered(state.tiles, state.plan);
     var eliminationNames = model.eliminationLabels(state.tiles);
@@ -179,7 +184,7 @@
     }).join('');
     root.innerHTML = '<section class="phase-grid-editor phase-grid-fullscreen" role="dialog" aria-modal="true" aria-label="Programação visual das fases">' +
       '<div class="phase-grid-toolbar"><div class="phase-grid-toolbar-main"><h2>' + (state.preDrawId ? 'Revisar a grade antes do sorteio' : 'Fases na grade de quadras e horários') + '</h2>' +
-      '<div class="phase-grid-days" aria-label="Data da grade">' + daysOf(state).map(function (d) {
+      '<div class="phase-grid-days" aria-label="Data da grade">' + displayDays(state).map(function (d) {
         return '<button type="button" class="phase-grid-day' + (d.day === day.day ? ' active' : '') + '" onclick="window._phaseGridDay(\'' + esc(d.day) + '\')"' +
           (state.locked ? '' : ' ondragover="event.preventDefault()" ondrop="window._phaseGridDropDay(event,\'' + esc(d.day) + '\')"') +
           '>' + esc(new Date(d.day + 'T12:00:00').toLocaleDateString('pt-BR')) + '</button>';
@@ -203,7 +208,9 @@
           (state.locked ? '' : ' ondragover="event.preventDefault()" ondrop="window._phaseGridDrop(event,' + court + ')"') + '>' +
           lines +
           visible.filter(function (tile) { return tile.court === court; }).map(function (tile) {
-            var top = (model.minutes(tile.startTime) - start) * 3, tileHeight = tile.duration * 3 - 3;
+            var at=Date.parse(tile.day+'T00:00:00Z')/60000-dayOrigin+model.minutes(tile.startTime);
+            var carry=at<0, segmentStart=Math.max(0,at), segmentEnd=Math.min(1440,at+tile.duration);
+            var top = (segmentStart - start) * 3, tileHeight = (segmentEnd-segmentStart) * 3 - 3;
             var id = esc(tile.id), groupName = model.groupLabel(tile);
             var title = tile.kind === 'groups' ? label(tile) : eliminationNames[tile.id];
             var series = tile.kind === 'groups' && (state.plan.schema === 1 || tile.games === 3);
@@ -211,18 +218,18 @@
               ' · Rodada ' + tile.round + (series ? ' · 3 jogos' : '') + (tile.optional ? ' · Se necessário' : '')) : tile.kind === 'groups' ? 'Grupo ' + groupName + ' · 3 jogos' : tile.category;
             var gameTimes = model.gameStarts(tile, state.tournament);
             var accent = 'phase-grid-cat-' + (categories.indexOf(tile.category) % 6);
-            var overflow = model.outsideWindow(tile, day), collision = overlapping.has(tile.id);
+            var overflow = carry || model.outsideWindow(tile, day), collision = overlapping.has(tile.id);
             return '<div class="phase-grid-tile ' + (tile.kind === 'groups' ? 'phase-grid-group' : 'phase-grid-elim') + ' ' + accent +
               (overflow || collision ? ' phase-grid-overflow' : '') +
               (state.selectedId === tile.id ? ' selected' : '') + '" style="top:' + top + 'px;height:' + tileHeight + 'px"' +
               ' data-tile-id="' + id + '" tabindex="0" role="button" aria-label="' + esc(title + ', ' + short + ', quadra ' + court + ', ' + tile.startTime + (overflow ? ', ultrapassa o fim do dia' : '') + (collision ? ', sobreposto a outro bloco' : '')) + '"' +
-              (state.locked ? '' : ' draggable="' + (window.matchMedia && window.matchMedia('(pointer:fine)').matches ? 'true' : 'false') + '"' +
+              (state.locked || carry ? '' : ' draggable="' + (window.matchMedia && window.matchMedia('(pointer:fine)').matches ? 'true' : 'false') + '"' +
                 ' ondragstart="window._phaseGridDragStart(event,\'' + id + '\')" onkeydown="window._phaseGridKey(event,\'' + id + '\')"') + '>' +
               '<strong>' + esc(title) + '</strong><small>' + esc(short) + '</small>' +
               (series ? '<div class="phase-grid-series">' + [0,1,2].map(function (offset) {
                 return '<span>JOGO ' + (numbers[tile.id] + offset) + ' <small>(' + (offset + 1) + '/3) · ' + model.clock(gameTimes[offset]) + '</small></span>';
               }).join('') + '</div>' : '<span class="phase-grid-single">JOGO ' + numbers[tile.id] + '</span>') +
-              '<small>' + esc(tile.startTime) + '–' + esc(model.clock(model.minutes(tile.startTime) + tile.duration)) +
+              '<small>' + esc(tile.startTime) + '–' + esc(model.clock((model.minutes(tile.startTime) + tile.duration)%1440)) +
               (overflow ? ' · Excede o horário' : '') + (collision ? ' · Sobreposição' : '') + '</small></div>';
           }).join('') + '</div>';
       }).join('') + '</div></div></section>';
@@ -231,7 +238,7 @@
     if (state.tiles.some(function (tile) {
       var target = daysOf(state).find(function (d) { return d.day === (tile.day || state.plan.day); });
       return !target || model.outsideWindow(tile, target);
-    })) showError('Blocos listrados ultrapassam o horário do dia. Ajuste a grade ou amplie a janela antes de salvar.');
+    })) showError(state.plan.allowOverflow ? 'A grade usa tempo adicional. Os blocos em vermelho e cinza excedem o horário previsto e podem ser salvos.' : 'Blocos listrados ultrapassam o horário do dia. Gere uma nova proposta para usar tempo adicional.');
     else if (overlapping.size) showError('Blocos listrados ocupam a mesma quadra no mesmo horário. Ajuste-os antes de salvar.');
     else if (state.gridWarning) showError(state.gridWarning + ' Ajuste a sequência antes de salvar.');
   }
@@ -419,10 +426,11 @@
         if (!db || typeof db._callFn !== 'function') throw new Error('Serviço de gravação indisponível.');
         var result = await db._callFn('updateTournamentConfiguration', {
           tournamentId:state.preDrawId, sandbox:db._ehSandbox(state.preDrawId),
-          patch:{ scheduleWindow:{ interleavedPlan:plan } }
+          patch:{ scheduleWindow:Object.assign({interleavedPlan:plan},plan.categoryPlacement==='grid'?{categoryWindows:[]}:{} ) }
         });
         if (!result || result.ok !== true) throw new Error(result && result.message || 'A grade não foi salva.');
         state.tournament.scheduleWindow.interleavedPlan = plan;
+        if(plan.categoryPlacement==='grid') state.tournament.scheduleWindow.categoryWindows=[];
       }
       var id = state.preDrawId;
       window._monarchDrawReviewApproved = window._monarchDrawReviewApproved || {};
@@ -462,7 +470,7 @@
     if (overlayOpen && event.key === 'Escape') { event.preventDefault(); window._closePhaseGridEditor(); }
   });
   window._phaseGridDay = function (day) {
-    var state = window._phaseCallOrderState; if (!state || !daysOf(state).some(function (d) { return d.day === day; })) return;
+    var state = window._phaseCallOrderState; if (!state || !displayDays(state).some(function (d) { return d.day === day; })) return;
     state.activeDay = day; redraw(false);
   };
   window._phaseGridDragStart = function (event, id) {
@@ -483,7 +491,7 @@
     event.preventDefault(); event.stopPropagation();
     var state = window._phaseCallOrderState, id = event.dataTransfer.getData('text/plain');
     var tile = state && state.tiles.find(function (candidate) { return candidate.id === id; });
-    var day = state && daysOf(state).find(function (candidate) { return candidate.day === destination; });
+    var day = state && displayDays(state).find(function (candidate) { return candidate.day === destination; });
     if (!tile || !day || state.locked) return;
     var start = Math.max(model.minutes(tile.startTime), model.minutes(day.startTime));
     applyMove(id, tile.court, model.clock(start), destination);

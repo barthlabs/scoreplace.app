@@ -843,6 +843,9 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       var model=window.ScoreplacePhaseGridPlan, slots=[], occupied=new Map(), people=new Map(), pairsByDay=new Map();
       var jobs=model.technicalPositions(t,all,window), lookup=new Map(jobs.map(job=>[model.positionKey(job),job]));
       var tiles=model.expand(plan,t), numbered=model.numbered(tiles,plan), byId=new Map((all || []).map(m=>[String(m.id),m]));
+      var gridError=model.validate(tiles,plan,t.scheduleWindow.days);
+      if(gridError) return invalid(gridError);
+      var extraMs=0;
       for (var tile of tiles) {
         var key=model.positionKey(tile), job=lookup.get(key);
         if (!job) continue; // reserva de uma fase ou rodada ainda não materializada
@@ -852,9 +855,11 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         var courtName=String(t.courtNames?.[tile.court-1] || 'Quadra '+tile.court);
         var starts=model.gameStarts(tile,t);
         for(var i=0;i<job.matchIds.length;i++) {
-          var id=job.matchIds[i],m=byId.get(id),ms=_ms(tile.day,model.clock(starts[i]));
-          var end=i+1<starts.length?_ms(tile.day,model.clock(starts[i+1])):_ms(tile.day,tile.startTime)+tile.duration*_MIN;
-          if(!day || ms<day.iniMs || end>day.fimMs || end<=ms || m.requiredDay && m.requiredDay!==tile.day) return invalid('horário fora da janela');
+          var id=job.matchIds[i],m=byId.get(id),ms=_ms(tile.day,'00:00')+starts[i]*_MIN;
+          var end=i+1<starts.length?_ms(tile.day,'00:00')+starts[i+1]*_MIN:_ms(tile.day,tile.startTime)+tile.duration*_MIN;
+          if(end<=ms || !Number.isFinite(ms) || (!plan.allowOverflow && (!day || ms<day.iniMs || end>day.fimMs || m.requiredDay && m.requiredDay!==tile.day))) return invalid('horário fora da janela');
+          var referenceEnd=day?.fimMs || jan.dias.at(-1).fimMs;
+          extraMs=Math.max(extraMs,end-referenceEnd);
           if(m.requiredDay) {
             for(var side of [m.team1Obj,m.team2Obj]) {
               if(!side?.fixedPairId) continue;
@@ -875,7 +880,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       if (lookup.size) return invalid('a grade não cobre todas as partidas oficiais');
       var teamSchedule=t.teamCompetition?.schedule || t.phases?.[0]?.teamCompetition?.schedule;
       var cadence=!!pairsByDay.size && Array.from(pairsByDay.values()).every(n=>n===Number(teamSchedule?.gamesPerTeam));
-      return {interleaved:true,atomica:true,cabe:true,cadenceValid:cadence,slots:slots};
+      return {interleaved:true,atomica:true,complete:true,allowOverflow:plan.allowOverflow===true,cabe:extraMs===0,extraMs:extraMs,cadenceValid:cadence,slots:slots};
     }
     if (plan.schema !== 1 || jan.dias.length < 1 || !Array.isArray(plan.blocks) || !plan.blocks.length ||
         (plan.day && !jan.dias.some(function (d) { return String(plan.day) === d.ymd; })) ||
@@ -1938,7 +1943,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   // desta régua existir, e o único jeito de ter data lá era alguém ter combinado.
   window._schAplicarGrade = function (t, alterados) {
     var plano = window._schGradeEstimada(t);
-    if (!plano || !plano.slots.length || (!plano.cabe && plano.cadenceValid !== true)) return 0;
+    if (!plano || !plano.slots.length || (!plano.cabe && plano.cadenceValid !== true && !(plano.interleaved && plano.complete && plano.allowOverflow))) return 0;
     var n = 0;
     plano.slots.forEach(function (s) {
       var m = _schFindMatch(t, s.matchId);
@@ -2794,7 +2799,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   window._schRecalcularGrade = function (tId) {
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
     var plano = window._schGradeEstimada(t);
-    if (plano && !plano.cabe) {
+    if (plano && !plano.cabe && !(plano.interleaved && plano.complete && plano.allowOverflow)) {
       if (typeof showNotification === 'function') showNotification('Agenda excedente', 'Faltam ' + Math.ceil((plano.extraMs || 0) / _MIN) + ' min nas janelas configuradas. Confira os jogos zebrados na prévia antes de publicar.', 'warning');
       return;
     }

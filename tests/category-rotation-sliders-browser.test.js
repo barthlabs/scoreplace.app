@@ -35,6 +35,7 @@ const {chromium}=require('@playwright/test');
   for(let i=0;i<2;i++)for(const key of ['groups','size','games','qualifiers']){
    const el=page.locator('#f2-rotation-'+key+'-'+i);assert.equal(await el.getAttribute('type'),'range');assert(await el.isVisible());
   }
+  assert(await page.locator('input[data-category="Alpha"]').evaluate(el=>!!(el.compareDocumentPosition(document.querySelector('#f2-rotation-groups-0')) & Node.DOCUMENT_POSITION_FOLLOWING)),'vagas ficam acima dos sliders da categoria');
   await set('f2-rotation-groups-0',4);assert.equal(await page.locator('#f2-rotation-size-0').inputValue(),'4');
   await set('f2-rotation-size-0',8);assert.equal(await page.locator('#f2-rotation-groups-0').inputValue(),'2');
   assert.equal(await page.locator('input[data-category="Alpha"]').inputValue(),'16','rerender preserva a capacidade');

@@ -237,24 +237,7 @@ window._renderEstimatedGameHours = function (datesChanged) {
       + (multipleDays && !state.locked && days.length > 1 ? '<button type="button" class="btn btn-secondary" onclick="window._removeEstimatedGameDay(\'' + day + '\')">Retirar dia</button>' : '')
       + '</div>';
   }).join('');
-  var cats = (typeof window._getCreateFormCategoryData === 'function' && window._getCreateFormCategoryData().combinedCategories) || [];
-  if (cats.length) {
-    var savedCats = state.saved && Array.isArray(state.saved.categoryWindows) ? state.saved.categoryWindows : [];
-    var byCat = function (cat, day) {
-      var key = cat + '\u0000' + day;
-      if (Object.prototype.hasOwnProperty.call(state.categoryByKey || {}, key)) return state.categoryByKey[key];
-      return savedCats.find(function (item) { return item && item.category === cat && item.day === day; }) || null;
-    };
-    var escape = function (value) { return String(value).replace(/[&<>"']/g, function (ch) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]; }); };
-    mount.insertAdjacentHTML('beforeend', '<details' + (categoriesOpen ? ' open' : '') + ' style="margin-top:12px;border:1px solid rgba(129,140,248,.3);border-radius:9px;padding:9px"><summary style="cursor:pointer;font-weight:700">Horário de cada categoria</summary><div style="font-size:.75rem;color:var(--text-muted);margin:6px 0 10px">Cada categoria pode usar o dia inteiro ou ficar concentrada em uma faixa. Os horários definidos aqui limitam os jogos dessa categoria.</div>' + days.map(function (day) {
-      var global = state.valuesByDay[day] || saved.find(function (item) { return item && item.day === day; }) || {};
-      var start = global.startTime || defaultStart, end = global.endTime || defaultEnd;
-      return '<div style="margin:10px 0"><strong>' + escape(new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', {weekday:'short',day:'2-digit',month:'2-digit'})) + '</strong>' + cats.map(function (cat) {
-        var current = byCat(cat, day), active = !!current, encoded = encodeURIComponent(cat);
-        return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08)"><label style="min-width:170px"><input type="checkbox" data-category="' + encoded + '" data-day="' + day + '" onchange="window._setCategoryGameWindow(this)"' + (active ? ' checked' : '') + (state.locked ? ' disabled' : '') + '> ' + escape(cat) + '</label><label>Das <input type="time" class="form-control" style="width:105px;display:inline-block" data-category="' + encoded + '" data-day="' + day + '" data-kind="startTime" value="' + escape(active ? current.startTime : start) + '" oninput="window._setCategoryGameWindow(this)"' + (!active || state.locked ? ' disabled' : '') + '></label><label>às <input type="time" class="form-control" style="width:105px;display:inline-block" data-category="' + encoded + '" data-day="' + day + '" data-kind="endTime" value="' + escape(active ? current.endTime : end) + '" oninput="window._setCategoryGameWindow(this)"' + (!active || state.locked ? ' disabled' : '') + '></label></div>';
-      }).join('') + '</div>';
-    }).join('') + '</details>');
-  }
+  // A distribuição por categoria é feita na grade visual de quadras.
   if (state.locked) mount.insertAdjacentHTML('beforeend', '<div style="color:var(--text-muted);font-size:.75rem;margin-top:8px">Agenda já sorteada: estes horários são exibidos sem alterar os jogos publicados.</div>');
   if (typeof window._renderPhaseCallOrder === 'function') window._renderPhaseCallOrder();
   if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh();
@@ -316,6 +299,8 @@ window._readEstimatedGameHours = function () {
   if (result.some(function (item) { return !/^\d{2}:\d{2}$/.test(item.startTime) || !/^\d{2}:\d{2}$/.test(item.endTime) || item.endTime <= item.startTime; })) {
     return { error:'Em cada dia, o horário final deve ser posterior ao inicial.' };
   }
+  if (window._phaseCallOrderState?.plan?.categoryPlacement==='grid' && window._phaseCallOrderState.touched)
+    return {version:1,mode:'organizer',days:result,categoryWindows:[]};
   var cats = (typeof window._getCreateFormCategoryData === 'function' && window._getCreateFormCategoryData().combinedCategories) || [];
   var savedCats = state.saved && Array.isArray(state.saved.categoryWindows) ? state.saved.categoryWindows : [];
   var categoryWindows = [];
@@ -7340,7 +7325,7 @@ window._saveTournamentClickHandler = async function(event) {
           ...((estimatedGameHours || phaseCallOrder || phaseGridPlan) ? { scheduleWindow:Object.assign({},
             window._editingTournament && window._editingTournament.scheduleWindow || {}, estimatedGameHours || {},
             phaseCallOrder ? { phaseCallOrder:phaseCallOrder } : {},
-            phaseGridPlan ? { interleavedPlan:phaseGridPlan } : {}) } : {}),
+            phaseGridPlan ? Object.assign({interleavedPlan:phaseGridPlan},phaseGridPlan.categoryPlacement==='grid'?{categoryWindows:[]}:{} ) : {}) } : {}),
           /* ⏱️ 2.1.98 — a divisão das rodadas que o organizador arrastou (N-1 datas).
            * VAZIO é o padrão e significa "dias iguais": não se grava um arranjo igual, senão
            * ele congelaria e deixaria de acompanhar uma mudança de data depois. A validação

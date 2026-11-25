@@ -38,7 +38,8 @@ async function run() {
   const owner='B17n7JCXYOfqahlcLZ0fKxGGyUu1';
   const invoke=(name,data,uid=owner)=>api[name].run({auth:{uid,token:{uid}},data,rawRequest:{headers:{}}});
   const id='tour_'+Date.now()+'_'+randomBytes(16).toString('hex');
-  const {scenario,G,w,D}=require('./universal-phase-grid.test');
+  const {scenario,G,w}=require('./universal-phase-grid.test');
+  const D=[{day:'2026-12-01',startTime:'23:50',endTime:'23:51'}];
   const categories=['Quadro B','Quadro C'];
   const t=scenario(categories,[16,32],[8,8],[5,5],[4,2]);
   t.fmt2.tieResolution='draw_order';

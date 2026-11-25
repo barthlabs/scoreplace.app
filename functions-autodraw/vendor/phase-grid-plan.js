@@ -16,9 +16,28 @@
     if (days.length) return days;
     return plan && Array.isArray(plan.days) ? plan.days : [];
   }
+  function civilDay(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(value+'T00:00:00Z')) &&
+      new Date(value+'T00:00:00Z').toISOString().slice(0,10)===value;
+  }
+  function absoluteDay(value) { return Date.parse(value+'T00:00:00Z')/60000; }
+  function overflowDay(key,plan,days) {
+    var last=days.slice().sort((a,b)=>a.day.localeCompare(b.day)).at(-1);
+    if (!plan?.allowOverflow || !last || !civilDay(key) || key<=last.day || absoluteDay(key)>absoluteDay(last.day)+400*1440) return null;
+    return {day:key,startTime:'00:00',endTime:'23:59',overflow:true};
+  }
+  function displayDays(plan,tiles,days) {
+    var result=days.slice(), last=days.slice().sort((a,b)=>a.day.localeCompare(b.day)).at(-1);
+    if (!plan?.allowOverflow || !last) return result;
+    var end=tiles.reduce((max,t)=>Math.max(max,absoluteDay(t.day)+minutes(t.startTime)+t.duration-1),absoluteDay(last.day));
+    for(var at=absoluteDay(last.day)+1440;at<=end && result.length<days.length+400;at+=1440) {
+      var key=new Date(at*60000).toISOString().slice(0,10);result.push(overflowDay(key,plan,days));
+    }
+    return result;
+  }
   function dayOf(tile, plan, days) {
     var key = tile && tile.day || plan && plan.day;
-    return days.find(function (day) { return day && day.day === key; }) || null;
+    return days.find(function (day) { return day && day.day === key; }) || overflowDay(key,plan,days);
   }
   function ordinal(tile, plan) { return String(tile.day || plan.day || '') + 'T' + tile.startTime; }
   function expand(plan, tournament) {
@@ -26,7 +45,7 @@
     if (plan.schema===2) return bindAssignments(plan.blocks.map(function (block,i) {
       var tile=Object.assign({},block,{id:'p'+i,court:block.courts[0],duration:v2Duration(block,tournament || {})});
       delete tile.courts;
-      tile.windows=(tournament?.scheduleWindow?.categoryWindows || []).filter(row=>row.category===block.category);
+      tile.windows=(plan.categoryPlacement==='grid' ? [] : tournament?.scheduleWindow?.categoryWindows || []).filter(row=>row.category===block.category);
       return tile;
     }),plan.groupAssignments);
     var tiles = [];
@@ -113,15 +132,15 @@
   }
   function outsideWindow(tile, day) {
     var at = minutes(tile && tile.startTime), start = minutes(day && day.startTime), end = minutes(day && day.endTime);
-    return !Number.isFinite(at) || !Number.isFinite(start) || !Number.isFinite(end) ||
+    return !!day?.overflow || !Number.isFinite(at) || !Number.isFinite(start) || !Number.isFinite(end) ||
       at < start || at + Number(tile.duration) > end;
   }
   function overlapIds(tiles, plan) {
     var ids = new Set(), lanes = {};
     tiles.forEach(function (tile) {
-      var key = (tile.day || plan.day) + ':' + tile.court;
+      var key = tile.court;
       var lane = lanes[key] || (lanes[key] = []);
-      var start = minutes(tile.startTime), end = start + tile.duration;
+      var start = absoluteDay(tile.day || plan.day)+minutes(tile.startTime), end = start + tile.duration;
       lane.forEach(function (other) {
         if (start < other.end && end > other.start) { ids.add(tile.id); ids.add(other.id); }
       });
@@ -181,7 +200,7 @@
     var days = daysOf(plan, day), destination = targetDay || target.day || plan.day;
     var at = minutes(startTime);
     if (!Number.isInteger(Number(court)) || Number(court) < 1 || Number(court) > Number(plan.courts) ||
-        !Number.isFinite(at) || !days.some(function (d) { return d.day === destination && at >= minutes(d.startTime); }))
+        !Number.isFinite(at) || !dayOf({day:destination},plan,days) || at<minutes(dayOf({day:destination},plan,days).startTime))
       return { error:'Escolha uma quadra e um horário válidos.' };
     var original = { court:target.court, startTime:target.startTime, day:target.day || plan.day };
     var lane = next.filter(function (tile) { return tile.id !== id && (tile.day || plan.day) === destination && Number(tile.court) === Number(court); });
@@ -230,7 +249,7 @@
     if (mode !== 'compact' && mode !== 'spread') return { error:'Modo de distribuição inválido.' };
     var days = daysOf(plan, day).slice().sort(function (a, b) { return a.day.localeCompare(b.day); });
     if (!days.length) return { error:'Defina os dias do torneio.' };
-    if (plan.schema===2) return arrange(tiles,days,plan.courts,mode==='spread');
+    if (plan.schema===2) return arrange(tiles,days,plan.courts,mode==='spread',plan.allowOverflow===true);
     function absolute(tile) {
       var key = tile.day || plan.day;
       return Date.parse(key + 'T00:00:00Z') / 60000 + minutes(tile.startTime);
@@ -728,7 +747,7 @@
     try {
       var assignments=validatedAssignments(tiles,rows,plan.courts);
       var nextPlan=Object.assign({},plan,{groupAssignments:assignments});
-      var result=arrange(bindAssignments(tiles,assignments),days,plan.courts,false);
+      var result=arrange(bindAssignments(tiles,assignments),days,plan.courts,false,plan.allowOverflow===true);
       if (result.error) return result;
       var error=validateReservations(result.tiles,nextPlan,days);
       return error ? {error:error} : {tiles:result.tiles,plan:toPlan(nextPlan,result.tiles)};
@@ -744,11 +763,18 @@
     if (a.category!==b.category) return false;
     return (a.kind!=='groups' || a.groupNumber===b.groupNumber || a.bracket==='league') && a.wave<b.wave;
   }
-  function windowAllows(tile, day, start) {
+  function windowAllows(tile, day, start, allowOverflow) {
+    if(allowOverflow) {
+      var at=absoluteDay(day)+start;
+      if(tile.requiredDay && at<absoluteDay(tile.requiredDay)) return false;
+      if((!tile.requiredDay || tile.requiredDay===day) && (!tile.windows?.length || tile.windows.some(row=>row.day===day && start>=minutes(row.startTime)))) return true;
+      var last=tile.windows?.slice().sort((a,b)=>a.day.localeCompare(b.day) || a.endTime.localeCompare(b.endTime)).at(-1);
+      return last ? at>=absoluteDay(last.day)+minutes(last.endTime) : !!tile.requiredDay && at>=absoluteDay(tile.requiredDay)+1440;
+    }
     return (!tile.requiredDay || tile.requiredDay===day) && (!tile.windows?.length ||
       tile.windows.some(row=>row.day===day && start>=minutes(row.startTime) && start+tile.duration<=minutes(row.endTime)));
   }
-  function arrange(jobs,days,courts,spread) {
+  function arrange(jobs,days,courts,spread,allowOverflow) {
     var categories=Array.from(new Set(jobs.map(job=>job.category)));
     var pending=jobs.slice().sort((a,b)=>a.phaseIndex-b.phaseIndex || a.wave-b.wave ||
       categories.indexOf(a.category)-categories.indexOf(b.category) || a.groupNumber-b.groupNumber || a.sequence-b.sequence);
@@ -790,6 +816,33 @@
         at=next;
       }
     }
+    // O fim proposto é uma referência visual: complete as reservas sem alterar
+    // durações, quadras, entradas ou precedência esportiva.
+    if(allowOverflow && pending.length) {
+      var laneEnds=Array(courts).fill(0), lastDay=days.at(-1);
+      placed.forEach(tile=>laneEnds[tile.court-1]=Math.max(laneEnds[tile.court-1],absoluteDay(tile.day)+minutes(tile.startTime)+tile.duration));
+      var horizon=absoluteDay(lastDay.day)+1440+Math.min(400*1440,jobs.reduce((n,j)=>n+j.duration,0)+1440);
+      while(pending.length) {
+        var candidates=[];
+        pending.forEach(function(job) {
+          if(remaining.get(job)!==0) return;
+          var eligible=days.filter(day=>(!job.requiredDay || day.day===job.requiredDay) && (!job.windows?.length || job.windows.some(w=>w.day===day.day)));
+          var base=eligible.at(-1);if(!base) return;
+          for(var lane=0;lane<courts;lane++) {
+            if(job.assignment && !job.assignment.courts.includes(lane+1)) continue;
+            var start=Math.max(absoluteDay(base.day)+minutes(base.startTime),laneEnds[lane],readyAt.get(job));
+            candidates.push({job:job,lane:lane,at:start});
+          }
+        });
+        candidates.sort((a,b)=>a.at-b.at || pending.indexOf(a.job)-pending.indexOf(b.job) || a.lane-b.lane);
+        var chosen=candidates[0];
+        if(!chosen || chosen.at+chosen.job.duration>horizon) return {error:'A distribuição contém dependências ou durações inválidas. Confira as fases e as quadras.'};
+        var item=chosen.job,finish=chosen.at+item.duration;
+        pending.splice(pending.indexOf(item),1);laneEnds[chosen.lane]=finish;
+        placed.push(Object.assign({},item,{day:new Date(chosen.at*60000).toISOString().slice(0,10),court:chosen.lane+1,startTime:clock(chosen.at%1440)}));
+        successors.get(item).forEach(function(after) {remaining.set(after,remaining.get(after)-1);readyAt.set(after,Math.max(readyAt.get(after),finish));});
+      }
+    }
     if(pending.length) return {error:'A janela de jogos não comporta '+pending.length+' reservas. Amplie o horário ou a quantidade de quadras.'};
     return {tiles:placed};
   }
@@ -799,24 +852,26 @@
       var courts=Number(t.courtCount);
       if (!Number.isSafeInteger(courts) || courts<1 || courts>128 || !days.length) throw new Error('Informe os dias e as quadras disponíveis.');
       var jobs=projection.jobs.map((job,i)=>{var tile=Object.assign({},job,{id:'p'+i,duration:v2Duration(job,Object.assign({},t,{phases:projection.phases}))});delete tile.matchIds;return tile;});
-      jobs.forEach(job=>{job.windows=(t.scheduleWindow?.categoryWindows || []).filter(row=>row.category===job.category);});
+      jobs.forEach(job=>{job.windows=[];});
       var total=jobs.reduce((n,j)=>n+j.games,0);
-      var plan={schema:2,editorVersion:2,day:days[0].day,days:days.map(d=>({day:d.day,startTime:d.startTime,endTime:d.endTime})),courts:courts,totalGames:total,capacities:projection.capacities};
-      plan.inputSignature=signatureOf(t,projection);
+      var plan={schema:2,editorVersion:2,allowOverflow:true,categoryPlacement:'grid',day:days[0].day,days:days.map(d=>({day:d.day,startTime:d.startTime,endTime:d.endTime})),courts:courts,totalGames:total,capacities:projection.capacities};
+      plan.inputSignature=signatureOf(t,projection,plan);
       var saved=t.scheduleWindow?.interleavedPlan;
       if (saved && Object.hasOwn(saved,'groupAssignments')) return applyAssignments(jobs,plan,days,saved.groupAssignments);
-      var result=arrange(jobs,days,courts,false);
+      var result=arrange(jobs,days,courts,false,true);
       return result.error ? result : {tiles:result.tiles,plan:toPlan(plan,result.tiles)};
     } catch(error) {return {error:error.message};}
   }
   function validateReservations(tiles,plan,days) {
     var keys=new Set(),placed=[];
+    var lastDay=days.slice().sort((a,b)=>a.day.localeCompare(b.day)).at(-1);
+    var horizon=absoluteDay(lastDay.day)+1440+Math.min(400*1440,tiles.reduce((n,t)=>n+t.duration,0)+1440);
     for(var tile of tiles) {
       var day=dayOf(tile,plan,days), at=minutes(tile.startTime);
       if (tile.assignment && !tile.assignment.courts.includes(tile.court)) return 'A quadra escolhida pertence a outro grupo nesta entrada.';
-      if (!day || !Number.isFinite(at) || outsideWindow(tile,day) || !Number.isInteger(tile.court) ||
+      if (!day || !civilDay(tile.day) || !Number.isFinite(at) || at<minutes(day.startTime) || (!plan.allowOverflow && outsideWindow(tile,day)) || (plan.allowOverflow && absoluteDay(tile.day)+at+tile.duration>horizon) || !Number.isInteger(tile.court) ||
           tile.court<1 || tile.court>plan.courts || !Number.isInteger(tile.duration) || tile.duration<=0 ||
-          !windowAllows(tile,tile.day,at)) return 'Confira o dia, horário e a quadra de cada partida.';
+          !windowAllows(tile,tile.day,at,plan.allowOverflow===true)) return 'Confira o dia, horário e a quadra de cada partida.';
       var key=positionKey(tile);
       if (keys.has(key)) return 'Há uma posição de jogo duplicada na grade.';
       keys.add(key);
@@ -830,8 +885,8 @@
     }
     return null;
   }
-  function signatureOf(t,projected) {
-    var values=[projected.capacities,(t.scheduleWindow?.categoryWindows || []).map(r=>[r.category,r.day,r.startTime,r.endTime]),
+  function signatureOf(t,projected,plan) {
+    var values=[projected.capacities,(plan?.categoryPlacement==='grid' ? [] : t.scheduleWindow?.categoryWindows || []).map(r=>[r.category,r.day,r.startTime,r.endTime]),
       projected.phases.map(p=>[p.kind,p.formatCode,p.classification,p.elimination,p.groupFormation,p.gruposCount,p.source,
         p.gameDuration,p.scoring?.setsToWin,p.rounds,p.fixedPairs,p.grandFinalPolicy,p.grandFinalReset,p.finalSeriesBestOf,
         p.teamCompetition?.schedule,p.teamCompetition?.teamCount]),
@@ -847,15 +902,15 @@
   function assertPlan(t,plan,days,ctx) {
     function reject(msg) {throw new Error(msg);}
     function closed(o,keys) {return o && typeof o==='object' && !Array.isArray(o) && Object.keys(o).every(k=>keys.includes(k));}
-    if (!closed(plan,['schema','editorVersion','day','days','courts','totalGames','capacities','inputSignature','blocks','groupAssignments']) ||
-        plan.schema!==2 || plan.editorVersion!==2 || !Array.isArray(plan.blocks) || !plan.blocks.length || plan.blocks.length>400 ||
+    if (!closed(plan,['schema','editorVersion','day','days','courts','totalGames','capacities','inputSignature','blocks','groupAssignments','allowOverflow','categoryPlacement']) ||
+        plan.schema!==2 || plan.editorVersion!==2 || (Object.hasOwn(plan,'allowOverflow') && plan.allowOverflow!==true) || (Object.hasOwn(plan,'categoryPlacement') && plan.categoryPlacement!=='grid') || !Array.isArray(plan.blocks) || !plan.blocks.length || plan.blocks.length>400 ||
         !Number.isSafeInteger(plan.courts) || Number(t.courtCount)!==plan.courts || Number(plan.courts)<1 ||
         !Array.isArray(days) || !days.length || plan.day!==days[0].day || !Array.isArray(plan.days) || plan.days.length!==days.length ||
         !plan.days.every((d,i)=>closed(d,['day','startTime','endTime']) && ['day','startTime','endTime'].every(k=>d[k]===days[i][k])) ||
         JSON.stringify(plan).length>256*1024) reject('Grade inválida, excessiva ou incompatível com a janela de jogos.');
     var projected=project(t,ctx), expected=new Map(projected.jobs.map(j=>[positionKey(j),j]));
     if (plan.blocks.length!==expected.size || plan.totalGames!==projected.jobs.reduce((n,j)=>n+j.games,0) ||
-        JSON.stringify(plan.capacities)!==JSON.stringify(projected.capacities) || plan.inputSignature!==signatureOf(t,projected))
+        JSON.stringify(plan.capacities)!==JSON.stringify(projected.capacities) || plan.inputSignature!==signatureOf(t,projected,plan))
       reject('A grade está desatualizada para as regras e o elenco desta edição. Gere a proposta novamente.');
     if (Object.hasOwn(plan,'groupAssignments')) {
       var assignments=validatedAssignments(projected.jobs,plan.groupAssignments,plan.courts);
@@ -872,7 +927,7 @@
     var error=validate(expand(plan,Object.assign({},t,{phases:projected.phases})),plan,days);
     if(error) reject(error);
   }
-  var api = { suggestedAssignments:suggestedAssignments,applyAssignments:applyAssignments,bindAssignments:bindAssignments,precedes:precedes,v2Duration:v2Duration,canInterleave:canInterleave,assertPlan:assertPlan,project:project,technicalPositions:technicalPositions,positionKey:positionKey,suggestProjected:suggestProjected, minutes:minutes, clock:clock, duration:duration, expand:expand, validate:validate,
+  var api = {displayDays:displayDays, suggestedAssignments:suggestedAssignments,applyAssignments:applyAssignments,bindAssignments:bindAssignments,precedes:precedes,v2Duration:v2Duration,canInterleave:canInterleave,assertPlan:assertPlan,project:project,technicalPositions:technicalPositions,positionKey:positionKey,suggestProjected:suggestProjected, minutes:minutes, clock:clock, duration:duration, expand:expand, validate:validate,
     move:move, toPlan:toPlan, preset:preset, stageKey:stageKey, groupLabel:groupLabel, numbered:numbered,
     gameStarts:gameStarts, eliminationLabels:eliminationLabels, suggest:suggest,
     expectedSignatures:expectedSignatures, signatures:signatures,

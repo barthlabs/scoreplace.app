@@ -117,6 +117,7 @@ async function datedReview(browser,scripts) {
   await page.locator('#tourn-end-date').fill('2027-02-15');
   assert.equal(await page.evaluate(()=>{_renderEstimatedGameHours(true);return _readEstimatedGameHours().mode;}),'participants');
   assert.equal(await setDates(D[0].day),'organizer');
+  assert.equal(await page.getByText('Horário de cada categoria',{exact:true}).count(),0);
   assert.equal(await page.evaluate(()=>_readEstimatedGameHours().mode),'organizer');
   assert.equal(await page.getByRole('button',{name:'Gerar proposta de grade'}).count(),1);
   assert.equal(await setDates(''),'participants');
@@ -180,9 +181,21 @@ async function datedReview(browser,scripts) {
   }),true);
 
   await open(rotating,[{...D[0],endTime:'08:01'}]);
-  assert.equal(await dialog.count(),0);
-  assert.equal(await page.evaluate(()=>window.alerts.length),1);
+  assert.equal(await dialog.count(),1);
+  assert.equal(await page.evaluate(()=>window.alerts.length),0);
+  assert(await dialog.locator('.phase-grid-overflow').count()>0);
+  assert.match(await dialog.locator('#phase-grid-message').innerText(),/podem ser salvos/);
   assert.deepEqual(await page.evaluate(()=>window.events),[]);
+  await dialog.getByRole('button',{name:'Voltar sem sortear'}).click();
+
+  await open(rotating,[{...D[0],startTime:'23:50',endTime:'23:51'}]);
+  await dialog.waitFor();
+  const extraDay='2026-12-02';
+  await page.evaluate(day=>_phaseGridDay(day),extraDay);
+  assert.equal(await page.evaluate(()=>_phaseCallOrderState.activeDay),extraDay);
+  assert(await dialog.locator('.phase-grid-overflow').count()>0,'continuação visível na aba do dia excedente');
+  assert(await dialog.locator('.phase-grid-lane .phase-grid-tile').count()>0);
+  await dialog.getByRole('button',{name:'Voltar sem sortear'}).click();
 
   for(const outcome of ['reject','invalid','ok']) {
     await open(rotating);

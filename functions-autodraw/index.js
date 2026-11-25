@@ -1210,6 +1210,14 @@ function _pendingInitialScheduleExceedsWindow(t, draft) {
     // Marcador de estimativa sem horário, porém, é uma agenda incompleta.
     return games.some(m => !!m.scheduledKind || !!m.scheduleSource);
   }
+  if(t.scheduleWindow.interleavedPlan?.schema===2 && t.scheduleWindow.interleavedPlan.allowOverflow===true) {
+    const projected=JSON.parse(JSON.stringify(t));
+    _aplicaRascunhoDoSorteioInicial(projected,draft);
+    const estimate=drawWindow._schGradeEstimada(projected);
+    if(!estimate?.interleaved || !estimate.complete || !estimate.allowOverflow || estimate.slots.length!==games.length) return true;
+    const slots=new Map(estimate.slots.map(slot=>[String(slot.matchId),slot]));
+    return games.some(m=>{const slot=slots.get(String(m.id));return !slot || m.scheduledAt!==slot.iso || m.court!==slot.court;});
+  }
   const windowPlan = drawWindow && drawWindow._schJanelaTorneio && drawWindow._schJanelaTorneio(t);
   if (!windowPlan || windowPlan.invalida || !Array.isArray(windowPlan.dias)) return true;
   return games.some(m => {
@@ -2167,11 +2175,12 @@ exports.drawRound = onCall(async (request) => {
       }
       const stagedOverflow = !!(plan && strictTeamDays && !hadBracket && _tcCfg && _tcCfg.enabled === true &&
         plan.cadenceValid === true && Array.isArray(plan.slots) && plan.slots.length === unscoredDrawnMatches.length);
-      if (!plan || (strictTeamDays && plan.cadenceValid !== true) || (plan.cabe !== true && !stagedOverflow)) {
+      const gridOverflow=!!(t.scheduleWindow?.interleavedPlan?.allowOverflow===true && plan?.interleaved && plan.complete===true && plan.allowOverflow===true && plan.slots?.length===realDrawnMatches.length);
+      if (!plan || (strictTeamDays && plan.cadenceValid !== true) || (plan.cabe !== true && !stagedOverflow && !gridOverflow)) {
         throw _drawFail('failed-precondition',
           'Não foi possível gerar uma agenda completa com a cadência escolhida.',
           { tId, matches:unscoredDrawnMatches.length, courts:t.courtCount,
-            slots:plan && plan.slots && plan.slots.length, mode:teamSchedule?.mode });
+            slots:plan && plan.slots && plan.slots.length, reason:plan && plan.reason, mode:teamSchedule?.mode });
       }
     }
     // A grade estimada nasce com a chave, na mesma transação. Datas combinadas
@@ -7443,7 +7452,7 @@ function _refreshAutomaticPhaseTies(t, matchId, nowIso) {
 function _applyProjectedSchedule(t) {
   if (t.scheduleWindow?.interleavedPlan?.schema!==2) return;
   const proposal=drawWindow._schGradeEstimada(t);
-  if (!proposal || !proposal.cabe || !proposal.interleaved)
+  if (!proposal || (!proposal.cabe && !(proposal.complete && proposal.allowOverflow)) || !proposal.interleaved)
     throw new HttpsError('failed-precondition','A nova rodada diverge da grade salva: '+(proposal?.reason || 'programação indisponível'));
   drawWindow._schAplicarGrade(t);
 }

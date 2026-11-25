@@ -1216,7 +1216,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     function preview(rule,index,data) {
       return '<div data-slider-category="'+index+'" style="min-width:0;overflow-wrap:anywhere;color:var(--text-main)">'+
-        (phase?'':'<div data-slider-capacity></div>')+
+        ''+
         '<div data-slider-population style="font-size:.8rem">'+_safe(rule.category || 'Classificação geral')+' · '+
         (data.people ? data.people+' pessoas' : 'Quantidade a definir')+'</div>'+
         '<div id="'+_sliderId('preview',phase,index)+'" role="status" style="font-size:.78rem;margin:6px 0">'+_safe(data.preview)+'</div></div>';
@@ -1235,6 +1235,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var maxQual=Math.max(1,rule.perGroup,data.qualifierLimit);
       html += '<fieldset style="min-width:0;box-sizing:border-box;margin:8px 0;padding:10px;border:1px solid var(--sp-b-255-255-255-02);border-radius:10px"><legend style="font-size:.85rem;color:var(--text-main)">'+
         _safe(mode.common?'Mesma configuração para todas':rule.category || 'Classificação geral')+'</legend>'+
+        (!phase && !mode.common ? '<div data-slider-category="'+index+'"><div data-slider-capacity></div></div>' : '')+
         '<div data-slider-layout style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;max-width:820px">'+
         slider('groups','Número de grupos',data.num || 1,data.num || 'A definir',1,Math.max(1,data.num,Math.min(128,data.people ? Math.floor(data.people/data.minimum) : 128)))+
         slider('size','Pessoas por grupo',Math.max(data.minimum,data.size),data.sizeText,data.minimum,Math.max(data.minimum,data.size,Math.min(128*data.unit,data.people || 128*data.unit)),data.unit)+
@@ -1246,7 +1247,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           'window._f2RotationSlider('+phase+','+index+',\'partners\',!this.checked);window._f2RotationSliderDone()',!!disabled))+
         (mode.common?'':preview(rule,index,data))+'</fieldset>';
     });
-    if(mode.common) rules.forEach((rule,index)=>{html+=preview(rule,index,_sliderData(rule,phase));});
+    if(mode.common) rules.forEach((rule,index)=>{html+=(phase?'':'<div data-slider-category="'+index+'"><div data-slider-capacity></div></div>')+preview(rule,index,_sliderData(rule,phase));});
     var quotas=phase?S.cfg.eliminatoria.formationQualificationCategoryRules:S.cfg.qualificationCategoryRules;
     if(!quotas && S.cfg.eliminatoria.ativa && (S.cfg.eliminatoria.qualifyAll || S.cfg.classifScope==='overall'))
       html+='<div style="font-size:.75rem;color:var(--text-muted)">Ao ajustar classificados, o avanço passa a ser definido por grupo. O corte salvo permanece até esse ajuste.</div>';
