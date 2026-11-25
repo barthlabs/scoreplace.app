@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "backendCommit": "19f9c5a02f3f7b70b30bbd42e0d7e70b52a1264a",
+  "backendCommit": "6ae8bb33ba359eba0b17194506304c17494bd769",
   "scopeNote": "Controles completos do Personalizado nos dois modos de games, com regras opt-in por fase, empate numérico, margens, tie-break e super tie-break; sem reinterpretar torneios legados.",
   "functions": [
     "createTournament",
