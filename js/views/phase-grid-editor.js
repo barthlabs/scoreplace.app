@@ -147,7 +147,53 @@
     return result;
   }
   window._phaseGridVisualGroups=visualGroups;
-  function renderGroupPanels(root,state,visible,start,columns,numbers) {
+  // Ilustração local: nunca entra no plano salvo nem representa o sorteio real.
+  var illustrativeCache=new WeakMap();
+  function illustrativeMatches(state,numbers) {
+    var t=state.tournament, F=window.FORMAT2, core=window.ScoreplaceSuperEight;
+    if(state.locked || t.sorteioDrawId || t.drawTimestamp || window._tournamentHasDraw?.(t) ||
+      state.plan.schema!==2 || !F || !core || !t.fmt2) return {};
+    var signature=JSON.stringify([t.fmt2,t.combinedCategories,t.maxParticipantsByCategory,t.maxParticipantsPerCategory,t.maxParticipants,
+      state.tiles.map(tile=>[tile.id,tile.phaseIndex,tile.kind,tile.category,tile.groupNumber,tile.round,tile.sequence,tile.games]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]);
+    var cached=illustrativeCache.get(state);
+    if(cached?.signature===signature) return cached.matches;
+    var matches={}, groups=new Map(), cycles=new Map();
+    try {
+      var categories=t.combinedCategories?.length?t.combinedCategories:[''];
+      var phases=F.compileToPhases(t.fmt2,{sport:t.sport,categories:categories.filter(Boolean)}).phases;
+      state.tiles.filter(tile=>tile.kind==='groups').forEach(function(tile){
+        var key=JSON.stringify([tile.phaseIndex,tile.category,tile.groupNumber]);
+        if(!groups.has(key)) groups.set(key,[]);groups.get(key).push(tile);
+      });
+      var nextPlayer=1;
+      Array.from(groups.values()).sort((a,b)=>Math.min(...a.map(tile=>numbers[tile.id]))-Math.min(...b.map(tile=>numbers[tile.id]))).forEach(function(tiles){
+        var first=tiles[0], phase=phases[first.phaseIndex], structure=phase?.classification;
+        if(!['groups','unique_8'].includes(structure?.partnerRotation)) return;
+        var people=Number(t.maxParticipantsByCategory?.[first.category] || t.maxParticipantsPerCategory ||
+          (categories.length===1?t.maxParticipants:0)) || core.categoryPopulation(t,first.category);
+        var layout=F.groupPlanForCategory(phase,first.category,people,false);
+        var sizes=layout.sizes || (structure.partnerRotation==='unique_8' && people%8===0 ? Array(people/8).fill(8):[]);
+        var rule=F.rotationRuleForCategory(structure,first.category), rounds=Number(rule?.rounds || structure.rotationRounds || phase.rounds);
+        if(layout.error || sizes[first.groupNumber-1]!==8 || rule?.allowRepeatPartners ||
+          !Number.isInteger(rounds) || rounds<1 || rounds>7 || tiles.length!==rounds*2) return;
+        for(var round=1;round<=rounds;round++) {
+          var pair=tiles.filter(tile=>tile.round===round);
+          if(pair.length!==2 || pair.some(tile=>tile.games!==1) ||
+            !pair.some(tile=>tile.sequence===1) || !pair.some(tile=>tile.sequence===2)) return;
+        }
+        if(!cycles.has(rounds)) cycles.set(rounds,core.buildGroups([0,1,2,3,4,5,6,7],rounds,false).rounds);
+        var cycle=cycles.get(rounds);
+        var names=new Map();
+        cycle[0].flat(2).forEach(function(id){names.set(id,'J'+nextPlayer++);});
+        tiles.forEach(function(tile){matches[tile.id]=cycle[tile.round-1][tile.sequence-1].map(pair=>pair.map(id=>names.get(id)));});
+      });
+    } catch(_error) { matches={}; }
+    illustrativeCache.set(state,{signature:signature,matches:matches});return matches;
+  }
+  function illustrativeHtml(example) {
+    return example?'<span class="phase-grid-example">'+example.map(pair=>'<span>'+esc(pair.join(' / '))+'</span>').join('<span>×</span>')+'</span>':'';
+  }
+  function renderGroupPanels(root,state,visible,start,columns,numbers,examples) {
     if(state.plan.schema!==2) return;
     var body=root.querySelector('.phase-grid-body');
     visualGroups(visible.filter(tile=>tile.day===dayOf(state).day)).forEach(function(group){
@@ -171,7 +217,7 @@
         el.style.height=(tile.duration*pixelsPerMinute-(firstRound?96:0)-3)+'px';
         el.style.left=left?'3px':'calc(50% + 3px)';el.style.right=left?'calc(50% + 3px)':'3px';
         el.innerHTML='<b class="phase-grid-group-game">Jogo '+numbers[tile.id]+'</b>'+
-          '<span class="phase-grid-single" hidden>JOGO '+numbers[tile.id]+'</span>';
+          illustrativeHtml(examples[tile.id])+'<span class="phase-grid-single" hidden>JOGO '+numbers[tile.id]+'</span>';
         panel.appendChild(el);
       });
       body.appendChild(panel);
@@ -239,6 +285,7 @@
       state.tiles=model.describeProjectedTiles(state.tournament,state.tiles,window);
       state.descriptionKey=descriptionKey;
     }
+    var examples=illustrativeMatches(state,numbers);
     var eliminationNames = model.eliminationLabels(state.tiles);
     var overlapping = model.overlapIds(state.tiles, state.plan);
     var categories = Array.from(new Set(state.tiles.map(function (tile) { return tile.category; })));
@@ -266,6 +313,7 @@
       '<div class="phase-grid-presets"><button type="button" class="btn btn-secondary" onclick="window._phaseGridPreset(\'compact\')">Concentrar antes</button>' +
       '<button type="button" class="btn btn-secondary" onclick="window._phaseGridPreset(\'spread\')">Espalhar ao longo do torneio</button></div>' + assignmentPanel(state) +
       '<p class="phase-grid-drag-help">Arraste sobre outro bloco para trocar posições; solte numa vaga livre para mover.</p>') + '</div>' +
+      (Object.keys(examples).length?'<p class="phase-grid-example-help">Exemplo de rodízio · J1, J2… são atletas hipotéticos.</p>':'')+
       '<p id="phase-grid-message" class="phase-grid-error" role="alert" hidden></p>' +
       '<div class="phase-grid-viewport"><div class="phase-grid-head" style="--phase-grid-courts:' + columns + '"><span>Hora</span>' +
       Array.from({ length:columns }, function (_, i) { return '<span>' + esc((state.tournament.courtNames || [])[i] || ('Quadra ' + (i + 1))) + '</span>'; }).join('') +
@@ -289,21 +337,24 @@
             var accent = 'phase-grid-cat-' + (categories.indexOf(tile.category) % 6);
             var overflow = carry || model.outsideWindow(tile, day), collision = overlapping.has(tile.id);
             return '<div class="phase-grid-tile ' + (tile.kind === 'groups' ? 'phase-grid-group' : 'phase-grid-elim') + ' ' + accent +
+              (examples[tile.id] ? ' phase-grid-illustrative' : '') +
               (overflow || collision ? ' phase-grid-overflow' : '') +
               (state.selectedId === tile.id ? ' selected' : '') + '" style="top:' + top + 'px;height:' + tileHeight + 'px"' +
               ' data-tile-id="' + id + '" tabindex="0" role="button" aria-label="' + esc('Jogo '+numbers[tile.id]+', '+title + ', ' + short + ', quadra ' + court + ', ' + tile.startTime + (overflow ? ', ultrapassa o fim do dia' : '') + (collision ? ', sobreposto a outro bloco' : '')) + '"' +
               (state.locked || carry ? '' : ' draggable="' + (window.matchMedia && window.matchMedia('(pointer:fine)').matches ? 'true' : 'false') + '"' +
                 ' ondragend="window._phaseGridDragEnd()" ondragstart="window._phaseGridDragStart(event,\'' + id + '\')" onkeydown="window._phaseGridKey(event,\'' + id + '\')"') + '>' +
+              (examples[tile.id] ? '<strong class="phase-grid-example-category">'+esc(tile.category+' · Grupo '+(tile.assignment?.label || groupName))+'</strong>'+
+                '<span class="phase-grid-single">JOGO '+numbers[tile.id]+'</span>'+illustrativeHtml(examples[tile.id]) :
               (tile.kind==='groups'?'':'<b class="phase-grid-game-number">JOGO '+numbers[tile.id]+'</b>') +
               '<strong>' + esc(title) + '</strong>'+(short?'<small>'+esc(short)+'</small>':'') +
               (matchup?'<small class="phase-grid-matchup">'+esc(matchup)+'</small>':'')+
               (series ? '<div class="phase-grid-series">' + [0,1,2].map(function (offset) {
                 return '<span>JOGO ' + (numbers[tile.id] + offset) + ' <small>(' + (offset + 1) + '/3)</small></span>';
-              }).join('') + '</div>' : '<span class="phase-grid-single"'+(tile.kind==='groups'?'':' hidden')+'>JOGO ' + numbers[tile.id] + '</span>') +
+              }).join('') + '</div>' : '<span class="phase-grid-single"'+(tile.kind==='groups'?'':' hidden')+'>JOGO ' + numbers[tile.id] + '</span>') )+
               (overflow || collision ? '<small>' + (overflow ? 'Excede o horário' : '') + (overflow && collision ? ' · ' : '') + (collision ? 'Sobreposição' : '') + '</small>' : '') + '</div>';
           }).join('') + '</div>';
       }).join('') + '</div></div></section>';
-    renderGroupPanels(root,state,visible,start,columns,numbers);
+    renderGroupPanels(root,state,visible,start,columns,numbers,examples);
     var viewport = root.querySelector('.phase-grid-viewport');
     if (viewport) { viewport.scrollTop = scrollTop; viewport.scrollLeft = scrollLeft; }
     if (state.tiles.some(function (tile) {

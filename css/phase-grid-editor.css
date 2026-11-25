@@ -84,3 +84,11 @@
 .phase-grid-super-group .phase-grid-tile { gap:3px; }
 .phase-grid-group-game,.phase-grid-game-number { font-size:.78rem; }
 .phase-grid-refresh-notice { font-size:.8rem; color:var(--text-main); }
+
+.phase-grid-example { display:flex; flex-wrap:wrap; gap:3px; font-size:.69rem; color:var(--text-main); }
+.phase-grid-example > span { white-space:nowrap; }
+.phase-grid-example-help { margin:0 0 8px; font-size:.75rem; color:var(--text-muted); }
+
+.phase-grid-lane > .phase-grid-illustrative { padding:3px; gap:1px; }
+.phase-grid-lane > .phase-grid-illustrative .phase-grid-example-category { font-size:.6rem; }
+.phase-grid-lane > .phase-grid-illustrative .phase-grid-single { border:0; padding:0; }

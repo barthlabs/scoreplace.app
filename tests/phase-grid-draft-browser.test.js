@@ -35,7 +35,7 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
   var state=_phaseCallOrderState,numbers=ScoreplacePhaseGridPlan.numbered(state.tiles,state.plan);
   return state.tiles.filter(t=>t.kind==='groups').map(t=>{
    var el=Array.from(document.querySelectorAll('[data-tile-id]')).find(el=>el.dataset.tileId===t.id);
-   return {id:t.id,court:t.court,at:t.startTime,group:t.assignment.label,games:t.games,expected:numbers[t.id],text:el.innerText.trim(),aria:el.getAttribute('aria-label')};
+   return {id:t.id,court:t.court,at:t.startTime,group:t.assignment.label,games:t.games,expected:numbers[t.id],text:el.querySelector('.phase-grid-group-game').innerText,matchup:el.querySelector('.phase-grid-example')?.innerText.replace(/\s+/g,' ').trim(),aria:el.getAttribute('aria-label')};
   }).sort((a,b)=>a.at.localeCompare(b.at)||a.court-b.court);
  });
  assert(games.every(g=>g.games===1),'cada reserva é uma partida individual');
@@ -46,6 +46,67 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  assert.equal(new Set(games.map(g=>g.text)).size,84,'uma numeração única por partida nas duas entradas');
  assert(games.every(g=>g.text==='Jogo '+g.expected),'rótulo usa a numeração canônica, não a rodada');
  assert(games.every(g=>g.aria.includes('quadra '+g.court) && g.aria.includes(g.at)),'metadados continuam acessíveis');
+ assert.deepEqual(games.slice(0,6).map(g=>g.matchup),[
+  'J1 / J2 × J3 / J4','J5 / J6 × J7 / J8','J9 / J10 × J11 / J12',
+  'J13 / J14 × J15 / J16','J17 / J18 × J19 / J20','J21 / J22 × J23 / J24'
+ ]);
+ assert.equal(await page.locator('.phase-grid-example').count(),84);
+ assert.match(await page.locator('.phase-grid-example-help').innerText(),/atletas hipotéticos/);
+ const groups=new Map();
+ for(const game of games){if(!groups.has(game.group))groups.set(game.group,[]);groups.get(game.group).push(game)}
+ const allAthletes=new Set();
+ for(const group of groups.values()){
+  const appearances=new Map(),partners=new Map(),partnerships=new Set();
+  for(const game of group){
+   const ids=game.matchup.match(/J\d+/g);assert.equal(new Set(ids).size,4);
+   ids.forEach(id=>appearances.set(id,(appearances.get(id)||0)+1));
+   for(const [a,b] of [[ids[0],ids[1]],[ids[2],ids[3]]]){
+    if(!partners.has(a))partners.set(a,new Set());if(!partners.has(b))partners.set(b,new Set());
+    partners.get(a).add(b);partners.get(b).add(a);partnerships.add([a,b].sort().join('/'));
+   }
+  }
+  assert.equal(appearances.size,8);assert.equal(partnerships.size,28);
+  for(const [id,count] of appearances){assert.equal(count,7);assert.equal(partners.get(id).size,7);assert(!allAthletes.has(id));allAthletes.add(id)}
+  for(let r=0;r<7;r++)assert.equal(new Set(group.slice(r*2,r*2+2).flatMap(g=>g.matchup.match(/J\d+/g))).size,8,'oito atletas distintos nas duas quadras');
+ }
+ assert.equal(allAthletes.size,48);
+ assert.deepEqual(await page.evaluate(()=>_readPhaseGridPlan()),plan,'confrontos não são gravados no plano');
+ const stable=await page.evaluate(()=>{
+  const snapshot=()=>Object.fromEntries(Array.from(document.querySelectorAll('[data-tile-id]')).map(el=>[el.dataset.tileId,el.querySelector('.phase-grid-example')?.textContent]));
+  const before=snapshot(),s=_phaseCallOrderState,savedTiles=structuredClone(s.tiles),savedPlan=structuredClone(s.plan);
+  _closePhaseGridEditor();_openPhaseGridEditor();const reopened=snapshot();
+  _phaseGridPreset('spread');const moved=snapshot();
+  const originalDay=s.activeDay,originalDays=s.tournament.scheduleWindow.days;
+  const next={...originalDays[0],day:'2026-12-02'};
+  s.tournament.scheduleWindow.days=originalDays.concat(next);s.tiles=savedTiles.map(tile=>({...tile,day:next.day}));_phaseGridDay(next.day);
+  const nextDay=snapshot();s.tournament.scheduleWindow.days=originalDays;
+  s.tiles=savedTiles;s.plan=savedPlan;_phaseGridDay(originalDay);
+  return {before,reopened,moved,nextDay};
+ });
+ assert.deepEqual(stable.before,stable.reopened);assert.deepEqual(stable.before,stable.moved,'mover jogo mantém seus quatro atletas');assert.deepEqual(stable.before,stable.nextDay,'trocar dia preserva os identificadores');
+ const guards=await page.evaluate(()=>{
+  const s=_phaseCallOrderState,original=structuredClone(s.tournament.fmt2),capacity=s.tournament.maxParticipantsByCategory[s.tiles[0].category];
+  const count=()=>document.querySelectorAll('.phase-grid-example').length;
+  s.tournament.fmt2=structuredClone(original);
+  s.tournament.fmt2.rotationCategoryRules.forEach(rule=>rule.allowRepeatPartners=true);_phaseGridDay(s.activeDay);const repeated=count();
+  s.tournament.fmt2=structuredClone(original);s.tournament.fmt2.parceria='fixa';_phaseGridDay(s.activeDay);const fixed=count();
+  s.tournament.fmt2=structuredClone(original);s.tournament.maxParticipantsByCategory[s.tiles[0].category]=12;_phaseGridDay(s.activeDay);const notEight=count();
+  s.tournament.maxParticipantsByCategory[s.tiles[0].category]=capacity;
+  const first=s.tiles[0],sequence=first.sequence;first.sequence=0;_phaseGridDay(s.activeDay);const malformed=count();first.sequence=sequence;
+  s.locked=true;_phaseGridDay(s.activeDay);const locked=count();s.locked=false;
+  s.tournament.sorteioDrawId='sorteado';_phaseGridDay(s.activeDay);const drawn=count();delete s.tournament.sorteioDrawId;_phaseGridDay(s.activeDay);
+  const build=ScoreplaceSuperEight.buildGroups;s.tournament.fmt2.rotationCategoryRules[0].rounds=6;
+  ScoreplaceSuperEight.buildGroups=()=>{throw Error('falha sintética')};_phaseGridDay(s.activeDay);const failed=count();
+  ScoreplaceSuperEight.buildGroups=build;s.tournament.fmt2=original;_phaseGridDay(s.activeDay);
+  return {repeated,fixed,notEight,malformed,locked,drawn,failed,restored:count()};
+ });
+ assert.deepEqual(guards,{repeated:0,fixed:0,notEight:56,malformed:70,locked:0,drawn:0,failed:0,restored:84});
+ await page.screenshot({path:'/tmp/sp-2768-group-grid-desktop.png'});
+ await page.setViewportSize({width:390,height:844});
+ for(const el of await page.locator('[data-tile-id]').all())assert(await el.evaluate(e=>e.scrollHeight<=e.clientHeight+1),'mobile sem corte dos confrontos');
+ await page.screenshot({path:'/tmp/sp-2768-group-grid-mobile.png'});
+ await page.setViewportSize({width:1366,height:900});
+
  assert.match(await page.locator('.phase-grid-head').innerText(),/Quadra 1/);
  assert.match(await page.locator('.phase-grid-head').innerText(),/Quadra 6/);
  assert.match(await page.locator('.phase-grid-times').innerText(),/08:00/);
@@ -89,6 +150,13 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
    return el.querySelector('.phase-grid-single').textContent==='JOGO '+n[t.id] && !/[0-9]{2}:[0-9]{2}/.test(el.innerText);
   });
  });assert(compact,'fallback também usa número de partida e não repete horário');
+ assert.equal(await page.locator('.phase-grid-example').count(),84,'compacto também mostra confrontos');
+ await page.screenshot({path:'/tmp/sp-2768-group-grid-compact.png'});
+ const cut=await page.locator('.phase-grid-group').evaluateAll(els=>els.filter(e=>e.scrollHeight>e.clientHeight+1).slice(0,3).map(e=>({text:e.innerText,height:e.clientHeight,scroll:e.scrollHeight,children:Array.from(e.children).map(c=>({text:c.innerText,height:c.clientHeight,font:getComputedStyle(c).fontSize}))})));
+ assert.deepEqual(cut,[],'compacto sem corte');
+ await page.setViewportSize({width:390,height:844});
+ for(const el of await page.locator('.phase-grid-group').all())assert(await el.evaluate(e=>e.scrollHeight<=e.clientHeight+1),'compacto mobile sem corte');
+ await page.setViewportSize({width:1366,height:900});
  await page.evaluate(()=>{document.getElementById('tourn-game-duration').value=25;_phaseGridRefreshDraft();
   window.dragEvent={dataTransfer:{setData(){},getData(){return 'missing'}},preventDefault(){},stopPropagation(){}};
   _phaseGridDragStart(dragEvent,_phaseCallOrderState.tiles[0].id);document.getElementById('tourn-game-duration').value=20;_phaseGridRefreshDraft();});
@@ -123,5 +191,5 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  },frozen);
  assert.deepEqual(untouched,{auto:null,refresh:null,touchedAuto:null,organizer:null,untouched:true,unchanged:true},'modo automático não bloqueia salvar, e grade v1 não tocada permanece intacta');
  assert.deepEqual(errors,[]);
- console.log('✓ grade real: 84 partidas únicas, Q1–Q6/Jogos1–6 e7–12, cabeçalhos sem repetição, fallback, finais, 30→25, locked e drag');
+ console.log('✓ grade real: 84 partidas, 48 atletas hipotéticos, 28 parcerias por grupo, 7 jogos por atleta; rótulos estáveis após mover/dia/reabrir; compacto/mobile e bloqueios OK');
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});
