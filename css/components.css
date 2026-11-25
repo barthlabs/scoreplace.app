@@ -3808,6 +3808,6 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 
 /* Reserve the edit control by tightening score columns before shrinking names. */
 @container (max-width:390px){
-  .sp-match-card:has(.sp-athlete-edit) .sp-set-col{max-width:28px;flex-basis:28px;}
-  .sp-match-card:has(.sp-athlete-edit) .sp-set-grid[data-sp-best-of="3"]{min-width:94px!important;}
+  .sp-match-card:has(.sp-athlete-edit):not(:has(.sp-set-grid input)) .sp-set-col{max-width:28px;flex-basis:28px;}
+  .sp-match-card:has(.sp-athlete-edit):not(:has(.sp-set-grid input)) .sp-set-grid[data-sp-best-of="3"]{min-width:94px!important;}
 }
