@@ -338,6 +338,9 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
   assert.equal((html.match(/id="card-/g)||[]).length,84,'all fourteen games per group remain available');
   assert.equal((html.match(/<tbody>/g)||[]).length,6);assert.equal((html.match(/sp-monarch-standings-name/g)||[]).length,48);
   assert(!/>Pts<|>PA</.test(html));assert(html.includes('faixa de avanço: 4')&&html.includes('faixa de avanço: 2'));
+  const interleaved=Object.assign({},t,{_phaseMaterialized:1});
+  const interleavedHtml=W._renderMonarchStage(interleaved,false,false);
+  assert(interleavedHtml.includes('title="Derrotas"')&&interleavedHtml.includes('title="Aproveitamento informativo: vitórias ÷ partidas disputadas"'),'Super8 keeps all live metrics after a following phase is materialized');
   const phase1=JSON.parse(JSON.stringify(t));phase1.currentPhaseIndex=1;phase1.phases.unshift({kind:'classification'});phase1.matches.forEach(m=>m.phaseIndex=1);
   assert.equal((W._renderPhaseBracket(phase1,false,'',1).match(/sp-monarch-standings-name/g)||[]).length,48,'later phases retain eight-player groups');
   assert.equal((W.renderStandings(phase1,false,false,'','').match(/sp-monarch-standings-name/g)||[]).length,48,'later-phase standings route also retains eight-player groups');

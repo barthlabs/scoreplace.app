@@ -11876,7 +11876,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         if (_ehMon(_phaseCfgForHistoricalRead(t, _pi))) { _idxFaseMon = _pi; break; }
       }
     }
-    var _compacta = !(opts && opts.showHistoricalFullStandings) &&
+    var _compacta = !sg.superEightGroup && !(opts && opts.showHistoricalFullStandings) &&
       (((t._phaseMaterialized || 0) > _idxFaseMon) || ((t.currentPhaseIndex || 0) > _idxFaseMon));
     // Explicit wins ranking displays only configured quantitative criteria.
     // The descriptor drives both headings and cells; direct confrontations stay below.
