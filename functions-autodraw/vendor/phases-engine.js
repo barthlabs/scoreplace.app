@@ -3215,7 +3215,7 @@
         if (!local.source.perGroupQuota) return false;
         cutoff=local.source.perGroupQuota;
       }
-      var rows = _groupTeamStandings(group, { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary });
+      var rows = _groupTeamStandings(group, { tournament:t, tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary });
       if (!Array.isArray(rows) || rows.length <= cutoff ||
           rows.slice(0, cutoff).some(function (row, index) {
             return !Number.isFinite(Number(row.points)) ||
