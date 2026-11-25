@@ -7325,7 +7325,7 @@ window._initialDrawResultModel = function (pd) {
     var groupId = forcedName || m.groupName || (labelGroup && labelGroup !== String(m.label || '') ? labelGroup : null) ||
       (m.monarchGroup != null ? window._groupName(Number(m.monarchGroup)) : null);
     var isGroup = !!(m.isMonarch || m.monarchGroup != null || m.bracket === 'group' || groupId);
-    if (!isGroup) { category.extras.push({ label:'R' + round, name:side(1) + ' × ' + side(2) }); return; }
+    if (!isGroup) { category.extras.push({ id:String(m.id || ''), label:'R' + round, name:side(1) + ' × ' + side(2) }); return; }
     var key = round + '|' + String(groupId || 'Grupo');
     var group = category.groups.find(function (g) { return g.key === key; });
     if (!group) { group = { key:key, name:String(groupId || 'Grupo'), round:round, matches:[] }; category.groups.push(group); }
@@ -7392,11 +7392,62 @@ window._initialDrawResultModel = function (pd) {
   return { categories:categories, gameCount:categories.reduce(function (sum, c) { return sum + c.groups.reduce(function (n, g) { return n + g.matches.length; }, 0) + c.extras.filter(function (e) { return /^R\d+/.test(e.label); }).length; }, 0), teamCount:Number(pd && pd.teamCount) || teams.length };
 };
 
+// Metadados de apresentação: a exportação não aplica nem altera a agenda.
+window._initialDrawPdfSchedule = function (t, pd, model) {
+  var draft = pd && pd.draft || {}, byId = {}, items = {};
+  function timestamp(value) {
+    if (value == null || value === '') return NaN;
+    try {
+      if (typeof value.toMillis === 'function') return Number(value.toMillis());
+      if (typeof value === 'object' && value.seconds != null) return Number(value.seconds) * 1000 + Number(value.nanoseconds || 0) / 1000000;
+      return new Date(value).getTime();
+    } catch (_error) { return NaN; }
+  }
+  function collect(match) {
+    if (match && match.id != null && !match.isBye && !match.isSitOut && !byId[String(match.id)]) byId[String(match.id)] = match;
+  }
+  (draft.matches || []).forEach(collect);
+  (draft.rounds || []).forEach(function (round) { (round.matches || []).forEach(collect); });
+  var view = Object.assign({}, t, draft);
+  view.id = t.id; view.matches = draft.matches; view.scheduleRevision = Number(pd && pd.scheduleRevision || 0);
+  var plan = null;
+  // Sem começo configurado, o planejador usa Date.now(): isso não é um horário
+  // anunciado. A exportação só calcula quando há uma janela declarada.
+  if (typeof window._operationalSchedulePlan === 'function' && isFinite(timestamp(view.startDate))) {
+    plan = window._operationalSchedulePlan(view);
+  }
+  var planned = {};
+  if (plan && Array.isArray(plan.items)) plan.items.forEach(function (item) { planned[String(item.matchId)] = item; });
+  var displayed = [];
+  model.categories.forEach(function (category) {
+    category.groups.forEach(function (group) { displayed = displayed.concat(group.matches); });
+    displayed = displayed.concat(category.extras.filter(function (extra) { return extra.id != null; }));
+  });
+  var first = Infinity, numbers = new Set(), canonicalNumbers = displayed.length > 0;
+  displayed.forEach(function (match) {
+    var raw = byId[match.id] || {}, suggestion = planned[match.id] || {};
+    var at = timestamp(raw.scheduledAt);
+    if (!isFinite(at)) at = timestamp(suggestion.scheduledAt);
+    var number = Number(raw.scheduledGameNumber == null ? suggestion.scheduledGameNumber : raw.scheduledGameNumber);
+    if (!Number.isInteger(number) || number < 1 || numbers.has(number)) canonicalNumbers = false;
+    numbers.add(number);
+    var label = isFinite(at) && typeof window._scheduleDateTimeLabel === 'function'
+      ? window._scheduleDateTimeLabel(new Date(at).toISOString()) : '';
+    var parts = /^(\d{2}\/\d{2}).*?(\d{2}:\d{2})/.exec(label);
+    items[match.id] = { number:number, date:parts ? parts[1] : '', time:parts ? parts[2] : '' };
+    if (parts && at < first) first = at;
+  });
+  return { items:items, canonicalNumbers:canonicalNumbers,
+    firstLabel:isFinite(first) ? window._scheduleDateTimeLabel(new Date(first).toISOString()) : '' };
+};
+
 // Um arquivo para o sorteio inteiro. Cada folha conserva o layout da arte, mas
 // todas as categorias e grupos entram no mesmo PDF, na ordem do modelo acima.
-window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumber, pageCount, logo) {
+window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumber, pageCount, logo, options) {
   var canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
   if (!ctx) return null;
+  options = options || {};
+  var schedule = options.schedule || { items:{} };
   var width = 1500, margin = 48, gap = 20, cardWidth = (width - 2 * margin - gap) / 2, line = 30;
   var sideWidth = 252, leftX = 70, versusX = 354, rightX = cardWidth - 22;
   ctx.font = '24px Arial, sans-serif';
@@ -7415,7 +7466,8 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
       var one = (m.onePlayers || [m.one]).map(function (name) { return lines(name, sideWidth); });
       var two = (m.twoPlayers || [m.two]).map(function (name) { return lines(name, sideWidth); });
       var rowLines = Math.max(2, one.reduce(function (n, parts) { return n + parts.length; }, 0), two.reduce(function (n, parts) { return n + parts.length; }, 0));
-      return { label:'J' + (m.number || i + 1), one:one, two:two, height:rowLines * line + 12 };
+      var slot = schedule.items[m.id] || {};
+      return { label:'J' + (schedule.canonicalNumbers ? slot.number : (m.number || i + 1)), slot:slot, one:one, two:two, height:rowLines * line + 12 };
     });
     var height = 74 + rows.reduce(function (sum, row) { return sum + row.height; }, 0) + 14;
     return { group:g, rows:rows, height:height };
@@ -7491,6 +7543,10 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
   ctx.fillText(t.name || t.title || 'Torneio', margin, 61, headerTextWidth);
   ctx.fillStyle = accent; ctx.font = 'bold 30px Arial, sans-serif';
   ctx.fillText('RESULTADO DO SORTEIO · ' + category.name, margin, 135, headerTextWidth);
+  if (options.timeMode && pageNumber === 1) {
+    ctx.fillStyle = titleColor; ctx.font = '22px Arial, sans-serif';
+    ctx.fillText(schedule.firstLabel ? 'Início do primeiro jogo: ' + schedule.firstLabel : 'Início a definir', margin, 98, headerTextWidth);
+  }
   var y = 170;
   blocks.forEach(function (block, index) {
     var row = Math.floor(index / 2), x = margin + (index % 2) * (cardWidth + gap);
@@ -7500,6 +7556,10 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
     var rowY = top + 58;
     block.rows.forEach(function (match) {
       ctx.fillStyle = cardAccent; ctx.font = 'bold 21px Arial, sans-serif'; ctx.fillText(match.label, x + 20, rowY + 23);
+      if (options.timeMode === 'all' && match.slot.time) {
+        ctx.font = '13px Arial, sans-serif'; ctx.fillText(match.slot.date, x + 20, rowY + 42, 46);
+        ctx.font = '14px Arial, sans-serif'; ctx.fillText(match.slot.time, x + 20, rowY + 61, 46);
+      }
       ctx.fillStyle = cardText; ctx.font = '23px Arial, sans-serif';
       ctx.textAlign = 'center'; ctx.fillText('×', x + versusX, rowY + 23); ctx.textAlign = 'left';
       match.one.forEach(function (player, pi) { player.forEach(function (part, li) {
@@ -7516,7 +7576,12 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
     });
   });
   y = 170 + rowHeights.reduce(function (sum, h) { return sum + h + gap; }, 0);
-  extras.forEach(function (extra) { ctx.fillStyle = '#ffffff'; ctx.font = '22px Arial, sans-serif'; ctx.fillText(extra.label + ': ' + extra.name, margin, y + 20, width - 2 * margin); y += 42; });
+  extras.forEach(function (extra) {
+    var slot = schedule.items[extra.id] || {};
+    var when = options.timeMode === 'all' && slot.time ? ' · ' + slot.date + ' ' + slot.time : '';
+    ctx.fillStyle = '#ffffff'; ctx.font = '22px Arial, sans-serif';
+    ctx.fillText(extra.label + ': ' + extra.name + when, margin, y + 20, width - 2 * margin); y += 42;
+  });
   ctx.fillStyle = luminance(footerBg) >= .18 ? '#000000' : '#ffffff'; ctx.font = '18px Arial, sans-serif'; ctx.textAlign = 'right';
   ctx.fillText('Página ' + pageNumber + ' de ' + pageCount, width - margin, canvas.height - 28);
   ctx.textAlign = 'left';
@@ -7552,12 +7617,15 @@ window._initialDrawPdfBlob = function (canvases) {
   return new Blob(parts, { type:'application/pdf' });
 };
 
-window._downloadInitialDrawPdf = async function (t, pd) {
+window._downloadInitialDrawPdf = async function (t, pd, options) {
+  options = options || {};
+  var timeMode = options.timeMode === 'first' ? 'first' : 'all';
   var model = window._initialDrawResultModel(pd);
   if (!model.gameCount) {
     if (window.showNotification) window.showNotification('PDF indisponível', 'O sorteio ainda não tem jogos para exportar.', 'error');
     return false;
   }
+  var schedule = window._initialDrawPdfSchedule(t, pd, model);
   var plan = [];
   model.categories.forEach(function (category) {
     var pages = Math.max(1, Math.ceil(category.groups.length / 4));
@@ -7586,7 +7654,7 @@ window._downloadInitialDrawPdf = async function (t, pd) {
   }
   try {
     var canvases = plan.map(function (entry, i) {
-      return window._initialDrawPdfPage(t, entry.category, entry.groups, entry.extras, i + 1, plan.length, logo);
+      return window._initialDrawPdfPage(t, entry.category, entry.groups, entry.extras, i + 1, plan.length, logo, { timeMode:timeMode, schedule:schedule });
     });
     if (canvases.some(function (c) { return !c; })) throw new Error('canvas unavailable');
     var url = URL.createObjectURL(window._initialDrawPdfBlob(canvases));
@@ -7598,7 +7666,7 @@ window._downloadInitialDrawPdf = async function (t, pd) {
   var link = document.createElement('a');
   link.href = url;
   link.download = 'resultado-sorteio-' + String(t.name || t.title || 'torneio').normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '.pdf';
+    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() + (timeMode === 'first' ? '-so-inicio.pdf' : '-com-horarios.pdf');
   document.body.appendChild(link); link.click(); link.remove();
   setTimeout(function () { URL.revokeObjectURL(url); }, 300000);
   return { url:url, filename:link.download };
@@ -7612,16 +7680,9 @@ window._bindInitialDrawPdfButton = function (button, t, pd) {
     button.disabled = true;
     button.textContent = 'Preparando PDF…';
     try {
-      var result = await window._downloadInitialDrawPdf(t, pd);
-      if (result && result.url) {
-        button.textContent = 'Baixar PDF novamente';
-        button.onclick = function () {
-          var link = document.createElement('a');
-          link.href = result.url;
-          link.download = result.filename;
-          document.body.appendChild(link); link.click(); link.remove();
-        };
-      } else button.textContent = originalText;
+      var mode = button.getAttribute && button.getAttribute('data-draw-pdf');
+      await window._downloadInitialDrawPdf(t, pd, { timeMode:mode });
+      button.textContent = originalText;
     } catch (error) {
       console.error('[initialDrawPdf] Falha inesperada', error);
       if (window.showNotification) window.showNotification('Erro ao gerar PDF', 'Não foi possível baixar o resultado do sorteio. Tente novamente.', 'error');
@@ -7644,7 +7705,7 @@ window._renderPendingDrawPreview = function (t) {
     var initialHtml = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">' +
       '<span style="font-size:0.78rem;color:var(--text-muted);">' +
       (model.teamCount ? esc(String(model.teamCount)) + ' times · ' : '') + esc(String(model.gameCount)) + ' jogos</span>' +
-      '<button class="btn btn-outline" data-draw-pdf>Baixar resultado completo (PDF)</button></div>';
+      '<button class="btn btn-outline" data-draw-pdf="all">PDF com horários</button><button class="btn btn-outline" data-draw-pdf="first">PDF só com início</button></div>';
     model.categories.forEach(function (category, index) {
       initialHtml += '<div style="margin:14px 0 6px;"><strong style="color:var(--sp-c-22d3ee,#22d3ee);">' + esc(category.name) + '</strong></div>';
       category.groups.forEach(function (group) {
@@ -7713,7 +7774,7 @@ window._openPublishedInitialDrawResult = function (tId) {
     '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px;"><h2 style="margin:0;font-size:1.15rem;">Resultado do sorteio</h2><button class="btn btn-outline" data-close>Fechar</button></div>' +
     '<div style="overflow:auto;padding-right:4px;">' + preview + '</div></div>';
   overlay.querySelector('[data-close]').onclick = function () { overlay.remove(); };
-  window._bindInitialDrawPdfButton(overlay.querySelector('[data-draw-pdf]'), t, pd);
+  overlay.querySelectorAll('[data-draw-pdf]').forEach(function (button) { window._bindInitialDrawPdfButton(button, t, pd); });
   document.body.appendChild(overlay);
 };
 
@@ -8078,8 +8139,9 @@ window._openPendingDrawReview = function (tId, markerRetry) {
       '<button class="btn btn-shine" style="background:#10b981;color:#fff;" data-publish>🚀 Publicar sorteio</button>' +
       '<button class="btn btn-outline" data-close>Voltar</button></div></div>';
   overlay.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { overlay.remove(); }; });
-  var pdfButton = overlay.querySelector('[data-draw-pdf]');
-  if (pdfButton) window._bindInitialDrawPdfButton(pdfButton, t, (window.__pendingInitialDraws || {})[String(tId)] || t.pendingDraw);
+  overlay.querySelectorAll('[data-draw-pdf]').forEach(function (button) {
+    window._bindInitialDrawPdfButton(button, t, (window.__pendingInitialDraws || {})[String(tId)] || t.pendingDraw);
+  });
   var plan = overlay.querySelector('[data-plan]'); if (plan) plan.onclick = function () { overlay.remove(); window._openPendingInitialSchedule(tId); };
   var annul = overlay.querySelector('[data-annul]'); if (annul) annul.onclick = function () { overlay.remove(); window._annulPendingDraw(tId); };
   var publish = overlay.querySelector('[data-publish]'); if (publish) publish.onclick = function () { overlay.remove(); window._publishPendingDraw(tId); };

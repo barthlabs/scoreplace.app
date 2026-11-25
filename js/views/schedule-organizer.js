@@ -232,6 +232,7 @@
     var date = new Date(isoText || '');
     return isNaN(date.getTime()) ? 'Sem horário' : date.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
   }
+  window._scheduleDateTimeLabel = labelDateTime;
   function gameLabel(t, id, scheduledNumber) {
     var games = all(t).filter(function (x) { return x && !x.isBye && !x.isSitOut; });
     var m = games.find(function (x) { return String(x.id) === String(id); });

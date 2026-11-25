@@ -62,7 +62,7 @@ assert.deepStrictEqual(Array.from(model.categories[0].groups[0].matches[0].twoPl
 assert((await window._downloadInitialDrawPdf({ name:'Camis no Beyond', coverColor:'#ab301e', coverGradientColor:'#f2d7cb', coverGradientEnabled:true,
   logoData:'data:image/png;base64,AAAA' }, draft)).url);
 assert(downloaded);
-assert.strictEqual(link.download, 'resultado-sorteio-camis-no-beyond.pdf');
+assert.strictEqual(link.download, 'resultado-sorteio-camis-no-beyond-com-horarios.pdf');
 assert.strictEqual(pdfBlob.type, 'application/pdf');
 assert.strictEqual(canvases.length, 3, 'as três categorias entram no mesmo PDF');
 assert(canvases.every(c => c.width === 1500 && c.height > 500));
@@ -127,7 +127,7 @@ const publishedHtml = window._renderPendingDrawPreview({ id:'published:camis', p
 assert(publishedHtml.includes('Grupo A1') && publishedHtml.includes('Grupo A2') && publishedHtml.includes('Grupo A3'));
 assert(publishedHtml.includes('<span class="sp-draw-player">Fem Diamante atleta 1a</span><span class="sp-draw-player">Fem Diamante atleta 1b</span>'));
 assert(publishedHtml.includes('<span class="sp-draw-player">Fem Diamante atleta 1c</span><span class="sp-draw-player">Fem Diamante atleta 1d</span>'));
-assert.strictEqual((publishedHtml.match(/data-draw-pdf/g) || []).length, 1, 'há um botão para o PDF completo');
+assert.strictEqual((publishedHtml.match(/data-draw-pdf/g) || []).length, 2, 'duas versões do resultado');
 assert(!publishedHtml.includes('Arte PNG'));
 assert(!publishedHtml.includes('placar'));
 const manyGroups = { kind:'initial', draft:{ matches:[] } };
@@ -137,11 +137,11 @@ for (let group = 0; group < 5; group++) for (let game = 1; game <= 3; game++) {
     team1:[`Atleta ${group}A`, `Atleta ${group}B`], team2:[`Atleta ${group}C`, `Atleta ${group}D`] });
 }
 const manyHtml = window._renderPendingDrawPreview({ id:'many', pendingDraw:manyGroups });
-assert.strictEqual((manyHtml.match(/data-draw-pdf/g) || []).length, 1);
+assert.strictEqual((manyHtml.match(/data-draw-pdf/g) || []).length, 2);
 calls.length = 0;
 const countBefore = canvases.length;
 assert((await window._downloadInitialDrawPdf({ name:'Torneio' }, manyGroups)).url);
-assert.strictEqual(link.download, 'resultado-sorteio-torneio.pdf');
+assert.strictEqual(link.download, 'resultado-sorteio-torneio-com-horarios.pdf');
 assert.strictEqual(canvases.length - countBefore, 2, 'cinco grupos formam duas páginas no mesmo arquivo');
 assert(calls.some(c => c[0] === 'text' && c[1] === 'Grupo E'));
 assert(calls.some(c => c[0] === 'text' && c[1] === 'Grupo A'));

@@ -101,6 +101,10 @@ function structure(t) {
       }),
     });
   }
+  // Exportar PDF é um gesto do navegador, nunca uma dependência do sorteio.
+  const pdfNames = ['_initialDrawPdfSchedule', '_initialDrawPdfPage', '_initialDrawPdfBlob', '_downloadInitialDrawPdf'];
+  const originalPdf = pdfNames.map(name => core._window[name]);
+  pdfNames.forEach(name => { core._window[name] = () => { throw new Error('PDF executado no servidor'); }; });
   ['Super Oito', 'Evento livre'].forEach(function (name) {
     const t = configuredTournament(name);
     const compiled = core.compileFromFmt2(t);
@@ -109,6 +113,7 @@ function structure(t) {
     ok('oito duplas configuradas geram 28 jogos: ' + name,
       compiled.ok && drawn.ok && games.length === 28, JSON.stringify({ compiled: compiled, drawn: drawn && drawn.ok, games: games.length }));
   });
+  pdfNames.forEach((name, i) => { core._window[name] = originalPdf[i]; });
 })();
 
 // Uma inscrição manual ligada à mesma pessoa da conta não pode virar os dois
