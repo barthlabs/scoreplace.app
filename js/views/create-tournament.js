@@ -1552,7 +1552,6 @@ function setupCreateTournamentModal() {
                   <input type="hidden" id="select-result-entry" value="organizer">
                 </div>
                 <div id="tie-resolution-section"></div>
-                <div id="ranking-order-summary" role="status" aria-live="polite" style="margin:0 0 .8rem;padding:.7rem .8rem;border:1px solid rgba(56,189,248,.28);border-radius:9px;background:rgba(56,189,248,.07);font-size:.8rem;line-height:1.5;color:var(--text-main);"></div>
                 <div id="tiebreaker-criteria-section">
                 <p style="margin: .85rem 0 0.5rem; font-size: 0.8rem; color: var(--sp-c-58a6ff,#58a6ff); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.tiebreakerSection')}</p>
                 <small class="text-muted" style="display:block;margin-bottom:0.5rem;">${_t('create.tiebreakerDesc')}</small>
@@ -1755,37 +1754,6 @@ function setupCreateTournamentModal() {
       window._updateRankingRecommendations = function() {
         var primaryInput = document.getElementById('ranking-primary');
         var primary = primaryInput && primaryInput.value || 'games_diff';
-        var summary = document.getElementById('ranking-order-summary');
-        if (summary) {
-          var labels = { games_diff:'Saldo de games', wins:'Vitórias', points:'Pontos avançados',
-            saldo_games:'Saldo de games', vitorias:'Vitórias', pontos_avancados:'Pontos avançados',
-            confronto_direto:'Confronto direto', saldo_pontos:'Saldo de pontos', saldo_sets:'Saldo de sets',
-            games_vencidos:'Games vencidos', buchholz:'Buchholz', sonneborn_berger:'Sonneborn–Berger',
-            antiguidade:'Antiguidade', juventude:'Juventude', saldo_tiebreaks:'Saldo de tie-breaks',
-            saldo_pontos_tiebreak:'Saldo de pontos de tie-break', sorteio:'Sorteio registrado' };
-          var tieMode = 'draw_order';
-          try {
-            var cfgForSummary = typeof window._f2GetConfig === 'function' ? window._f2GetConfig() : null;
-            if (cfgForSummary && cfgForSummary.tieResolution) tieMode = cfgForSummary.tieResolution;
-          } catch (e) {}
-          var steps = [labels[primary] || primary];
-          var listForSummary = document.getElementById('tiebreaker-list');
-          // O modo triangular legado pula a lista secundária também no salvamento;
-          // não mostre uma ordem que o cálculo não vai executar.
-          if (tieMode !== 'singles_then_draw' && listForSummary) Array.from(listForSummary.querySelectorAll('li[data-tb]')).forEach(function(li) {
-            var key = li.dataset.tb;
-            if (!key || key === 'sorteio' || key === ({ games_diff:'saldo_games', wins:'vitorias', points:'pontos_avancados' })[primary]) return;
-            steps.push(labels[key] || key);
-          });
-          var finalStep = tieMode === 'singles_draw_two'
-            ? 'Simples: se 2 ainda estiverem empatados, jogam entre si; com 3 ou mais, sorteia 2 para a simples e repete o sorteio se outra posição classificatória continuar empatada.'
-            : tieMode === 'singles_then_draw'
-              ? 'Simples/triangular logo após o principal; este modo não aplica a lista de critérios secundários.'
-              : 'Sem simples automática: o empate restante segue a forma de desempate configurada acima.';
-          summary.innerHTML = '<strong>Ordem aplicada automaticamente:</strong> ' + steps.map(function(label, index) {
-            return (index ? ' <span aria-hidden="true">→</span> ' : '') + '<b>' + (index + 1) + '. ' + (window._safeHtml ? window._safeHtml(label) : label) + '</b>';
-          }).join('') + ' <span aria-hidden="true">→</span> <b>' + (steps.length + 1) + '. ' + finalStep + '</b>';
-        }
         var copy = document.getElementById('ranking-recommendations-copy');
         var apply = document.getElementById('ranking-recommendations-apply');
         if (!copy || !apply || !primaryInput) return;
@@ -8596,7 +8564,9 @@ window._gsmCfgTbTwo=function(v){window._gsmCfgPatch({tiebreakTwoPointAdvantage:!
 window._gsmCfgOption=function(key,value){
   if(['setsToWin','tiebreakPoints','superTiebreakPoints','superTiebreak'].indexOf(key)<0)return;
   if(key!=='superTiebreak'){value=Number(value);if(!Number.isInteger(value)||value<1||(key==='setsToWin'&&value>3))return;}
-  var patch={};patch[key]=value;window._gsmCfgPatch(patch);
+  var current=document.getElementById('gsm-config-overlay')?._scoringDraft;if(!current)return;
+  if(key==='superTiebreak' && value && ![2,3].includes(Number(current.setsToWin)))return;
+  var patch={};patch[key]=value;if(key==='setsToWin' && value===1)patch.superTiebreak=false;window._gsmCfgPatch(patch);
 };
 // Legacy: _gsmSetType always sets 'sets' now (simple/advanced toggle removed)
 window._gsmSetType = function(type) {
@@ -8671,16 +8641,19 @@ window._tieAtToggleHtml = function (o) {
   var tieLocked=locked || !!(window._scoringPhaseHasTiebreak && window._scoringPhaseHasTiebreak(phase));
   if(o.fixedGames && o.customRulesVersion!==1){o.at=o.tiebreakAt;o.rule=o.tieRule;}
   var tb=o.rule==='tiebreak', two=o.setTwoPointAdvantage!==false;
+  var sets=Number(o.setsToWin)||1, stbEligible=sets===2 || sets===3, stb=stbEligible && !!o.superTiebreak;
+  function shown(html,on) {return '<div'+(on?'':' hidden')+'>'+html+'</div>';}
+  function fields(html) {return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 16px;margin:8px 0">'+html+'</div>';}
   var at=typeof window._tbLoserGames==='function' ? window._tbLoserGames({gamesPerSet:g,tiebreakAt:o.at},'') :
     (Number(o.at)>0?Number(o.at):o.at==='g'?g:Math.max(1,g-1));
   var modalIds={'games-target':'gamesPerSet','tie-at':'tieAt','tb-points':'tbPoints','sets-target':'setsToWin','stb-points':'stbPoints'};
   var option=o.onOption || (phase?'window._f2ElimSetOption':'window._gsmSetCustomOption');
   function number(key,label,value,action,freeze,max) {
-    return '<label style="display:block;font-size:.82rem;margin:8px 0">'+label+
-      '<input type="number" inputmode="numeric" min="1" step="1"'+(max?' max="'+max+'"':'')+' id="'+pfx+'-'+(pfx==='gsm-cfg'?modalIds[key]||key:key)+'" aria-label="'+label+'" class="form-control" style="max-width:110px;margin-top:4px" value="'+value+'"'+(freeze?' disabled':'')+' onchange="'+action+'"></label>';
+    return '<label style="display:flex;flex-direction:column;gap:6px;font-size:.82rem;margin:0">'+label+
+      '<input type="number" inputmode="numeric" min="1" step="1"'+(max?' max="'+max+'"':'')+' id="'+pfx+'-'+(pfx==='gsm-cfg'?modalIds[key]||key:key)+'" aria-label="'+label+'" class="form-control" style="width:110px;max-width:100%;height:2rem;min-height:0;padding:4px 8px;font-size:.82rem;box-sizing:border-box" value="'+value+'"'+(freeze?' disabled':'')+' onchange="'+action+'"></label>';
   }
   function toggle(label,value,action,note) {
-    return '<div class="toggle-row" style="padding:8px 0"><div class="toggle-row-label"><span style="font-size:.82rem;font-weight:600">'+label+'</span>'+
+    return '<div class="toggle-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:5px 0;min-height:0"><div class="toggle-row-label" style="min-width:0;flex:1"><span style="font-size:.82rem;font-weight:600">'+label+'</span>'+
       (note?'<div style="font-size:.74rem;color:var(--text-muted);margin-top:4px">'+note+'</div>':'')+'</div><label class="toggle-switch toggle-sm"><input type="checkbox" '+(pfx==='gsm-cfg'?'id="gsm-cfg-'+({'Ativar tie-break no empate':'tiebreak','Exigir dois games de diferença no set':'setTwoPoint','Exigir dois pontos de diferença no tie-break':'tbTwoPoint','Super tie-break no set decisivo':'superTb'}[label])+'" ':'')+'aria-label="'+label+'" '+(value?'checked ':'')+(tieLocked?'disabled ':'')+'onchange="'+action+'"><span class="toggle-slider"></span></label></div>';
   }
   var modes=o.countingType==='numeric'?'':'<div role="group" aria-label="Como definir os games do set" style="display:flex;gap:8px;flex-wrap:wrap">'+[false,true].map(function(v){
@@ -8688,17 +8661,17 @@ window._tieAtToggleHtml = function (o) {
   }).join('')+'</div>';
   var summary=fixed?(two?'O total é o mínimo de games: continua até abrir 2 games de diferença.':'Ao completar o total, vence quem tiver mais games. Se empatar sem tie-break, continua até desempatar.'):'Encerra ao atingir '+g+' games'+(two?' com 2 games de diferença.':'.');
   if(tb) summary+=' Tie-break em '+at+'–'+at+' decide o set, mesmo antes do total ou sem 2 games de diferença.';
-  return '<div id="'+pfx+'-tieat-box" style="margin-top:10px;padding:12px;border-radius:10px;border:1px solid var(--border-color)">'+modes+
-    number('games-target',fixed?'Quantidade de games disputados no set':'Games ganhos para vencer o set',g,o.onGames+'(this.value)',locked)+
+  return '<div id="'+pfx+'-tieat-box" style="margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--border-color);max-width:800px">'+modes+
+    fields(number('games-target',fixed?'Quantidade de games disputados no set':'Games ganhos para vencer o set',g,o.onGames+'(this.value)',locked)+
+      number('sets-target','Sets para vencer',sets,option+"('setsToWin',this.value)",locked,3))+
     toggle('Ativar tie-break no empate',tb,o.onRule+"(this.checked ? 'tiebreak' : 'extend')")+
-    number('tie-at','Empate que ativa o tie-break',at,o.onTieAt+'(this.value)',tieLocked,99)+
+    shown(fields(number('tie-at','Empate que ativa o tie-break',at,o.onTieAt+'(this.value)',tieLocked,99)+
+      number('tb-points','Pontos para vencer o tie-break',o.tiebreakPoints||7,option+"('tiebreakPoints',this.value)",tieLocked)),tb)+
     toggle('Exigir dois games de diferença no set',two,o.onSetTwoPoint+'(this.checked)')+
-    number('tb-points','Pontos para vencer o tie-break',o.tiebreakPoints||7,option+"('tiebreakPoints',this.value)",tieLocked)+
-    toggle('Exigir dois pontos de diferença no tie-break',o.tiebreakTwoPointAdvantage!==false,o.onTbTwoPoint+'(this.checked)','Vale também para o super tie-break.')+
-    number('sets-target','Sets para vencer',o.setsToWin||1,option+"('setsToWin',this.value)",locked,3)+
-    toggle('Super tie-break no set decisivo',!!o.superTiebreak,option+"('superTiebreak',this.checked)",Number(o.setsToWin||1)===1?'Se ativado, substitui o único set por super tie-break em pontos.':'Se ativado, substitui o último set quando ambos tiverem '+(Number(o.setsToWin)-1)+' sets.')+
-    number('stb-points','Pontos para vencer o super tie-break',o.superTiebreakPoints||10,option+"('superTiebreakPoints',this.value)",tieLocked)+
-    '<div role="status" style="font-size:.76rem;color:var(--text-muted);margin-top:8px">'+summary+'</div>'+
+    shown(toggle('Super tie-break no set decisivo',!!o.superTiebreak,option+"('superTiebreak',this.checked)",'Substitui o último set quando ambos tiverem '+(sets-1)+' sets.'),stbEligible)+
+    shown(fields(number('stb-points','Pontos para vencer o super tie-break',o.superTiebreakPoints||10,option+"('superTiebreakPoints',this.value)",tieLocked)),stb)+
+    shown(toggle('Exigir dois pontos de diferença no tie-break',o.tiebreakTwoPointAdvantage!==false,o.onTbTwoPoint+'(this.checked)',tb && stb?'Vale também para o super tie-break.':''),tb || stb)+
+    '<div role="status" style="font-size:.76rem;color:var(--text-muted);margin-top:6px">'+summary+'</div>'+
     (locked?'<small>Regras bloqueadas: já existe resultado nesta fase.</small>':'')+'</div>';
 };
 // O gatilho do ALVO aberto no ⚙️ Personalizado: a eliminatória tem o seu; sem formato próprio,
@@ -8788,7 +8761,9 @@ window._gsmSetTbTwoPointInline=function(enabled) {window._gsmApplyCustomRule({ti
 window._gsmSetCustomOption=function(key,value) {
   if(['setsToWin','tiebreakPoints','superTiebreakPoints','superTiebreak'].indexOf(key)<0)return;
   if(key!=='superTiebreak'){value=Number(value);if(!Number.isInteger(value)||value<1||(key==='setsToWin'&&value>3))return;}
-  var patch={};patch[key]=value;window._gsmApplyCustomRule(patch);
+  var current=window._gsmReadHidden();if(!current)return;
+  if(key==='superTiebreak' && value && ![2,3].includes(Number(current.setsToWin)))return;
+  var patch={};patch[key]=value;if(key==='setsToWin' && value===1)patch.superTiebreak=false;window._gsmApplyCustomRule(patch);
 };
 
 function _gsmSegBtn(ativo, onclick, titulo, sub) {

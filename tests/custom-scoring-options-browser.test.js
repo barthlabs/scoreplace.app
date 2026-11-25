@@ -16,29 +16,48 @@ const {chromium}=require('@playwright/test');
    _f2MountInForm(document.querySelector('main'),'Beach Tennis',cfg,{id:'synthetic-options',sport:'Beach Tennis',participants:[],groups:[],matches:[],rounds:[],fmt2:cfg});
   });
   const toggles=['Ativar tie-break no empate','Exigir dois games de diferença no set','Exigir dois pontos de diferença no tie-break','Super tie-break no set decisivo'];
-  for(const scope of ['#gsm-tieat-inline','#f2elim-tieat-box'])for(const label of toggles)assert(await page.locator(scope).getByRole('checkbox',{name:label,exact:true}).isVisible(),scope+' mostra '+label);
+  for(const scope of ['#gsm-tieat-inline','#f2elim-tieat-box']) {
+   for(const label of toggles.slice(0,2))assert(await page.locator(scope).getByRole('checkbox',{name:label,exact:true}).isVisible());
+   for(const label of toggles.slice(2))assert.equal(await page.locator(scope).getByRole('checkbox',{name:label,exact:true}).isVisible(),false);
+   for(const suffix of ['tie-at','tb-points','stb-points'])assert.equal(await page.locator(scope).locator('#'+(scope==='#gsm-tieat-inline'?'gsm':'f2elim')+'-'+suffix).isVisible(),false);
+  }
   assert.deepEqual(await page.evaluate(()=>_gsmReadHidden()),await page.evaluate(()=>before),'renderização preserva regra legada e gatilho numérico');
   await page.evaluate(()=>_openGSMConfig());
-  for(const label of toggles)assert(await page.locator('#gsm-config-overlay').getByRole('checkbox',{name:label,exact:true}).isVisible(),'modal mostra '+label);
+  for(const label of toggles.slice(0,2))assert(await page.locator('#gsm-config-overlay').getByRole('checkbox',{name:label,exact:true}).isVisible());
+  assert.equal(await page.locator('#gsm-cfg-stbPoints').isVisible(),false);
   await page.getByRole('button',{name:'Cancelar',exact:true}).click();
   assert.deepEqual(await page.evaluate(()=>_gsmReadHidden()),await page.evaluate(()=>before),'cancelar não adere às novas regras');
   const main=page.locator('#gsm-tieat-inline');
   for(const fixed of [false,true]){
    await main.getByRole('button',{name:fixed?'Games disputados no total':'Games ganhos para vencer o set',exact:true}).click();
-   for(const label of toggles){const toggle=main.getByRole('checkbox',{name:label,exact:true});await toggle.setChecked(!(await toggle.isChecked()));assert(await main.getByRole('checkbox',{name:label,exact:true}).isEnabled());}
+   await main.locator('#gsm-sets-target').fill('2');await main.locator('#gsm-sets-target').dispatchEvent('change');
+   await main.getByRole('checkbox',{name:toggles[0],exact:true}).check();
+   assert(await main.locator('#gsm-tie-at').isVisible());assert(await main.locator('#gsm-tb-points').isVisible());
+   for(const label of toggles.slice(1,3)){const toggle=main.getByRole('checkbox',{name:label,exact:true});await toggle.setChecked(!(await toggle.isChecked()));}
+   await main.getByRole('checkbox',{name:toggles[3],exact:true}).check();
+   assert(await main.locator('#gsm-stb-points').isVisible());
+   await main.getByRole('checkbox',{name:toggles[3],exact:true}).uncheck();
+   assert.equal(await main.locator('#gsm-stb-points').isVisible(),false);
+   assert(await main.locator('#gsm-games-target').evaluate(el=>!!(el.compareDocumentPosition(document.querySelector('#gsm-sets-target')) & Node.DOCUMENT_POSITION_FOLLOWING)));
   }
-  await main.getByRole('checkbox',{name: 'Ativar tie-break no empate',exact:true}).uncheck();
   await main.locator('#gsm-tie-at').fill('6');await main.locator('#gsm-tie-at').dispatchEvent('change');
+  await main.getByRole('checkbox',{name: 'Ativar tie-break no empate',exact:true}).uncheck();
+  assert.equal(await main.locator('#gsm-tie-at').isVisible(),false);
   await main.locator('#gsm-games-target').fill('8');await main.locator('#gsm-games-target').dispatchEvent('change');
   assert.equal(await main.locator('#gsm-tie-at').inputValue(),'6','quantidade não redefine gatilho');
+  await main.getByRole('checkbox',{name:toggles[3],exact:true}).check();
+  await main.locator('#gsm-sets-target').fill('1');await main.locator('#gsm-sets-target').dispatchEvent('change');
+  assert.equal(await main.getByRole('checkbox',{name:toggles[3],exact:true}).isVisible(),false);
+  assert.equal(await page.evaluate(()=>_gsmReadHidden().superTiebreak),false);
+  await main.locator('#gsm-sets-target').fill('2');await main.locator('#gsm-sets-target').dispatchEvent('change');
   const sc=await page.evaluate(()=>_gsmReadHidden());assert.equal(sc.customRulesVersion,1);assert.equal(sc.tiebreakEnabled,false);
   await page.evaluate(()=>_openGSMConfig());
   const modal=page.locator('#gsm-config-overlay');
   await modal.getByRole('checkbox',{name:'Super tie-break no set decisivo',exact:true}).check();
-  assert.match(await modal.innerText(),/substitui o único set/);
-  await modal.getByRole('checkbox',{name:'Super tie-break no set decisivo',exact:true}).uncheck();
+  assert.match(await modal.innerText(),/Substitui o último set/);
   await modal.getByRole('checkbox',{name:'Exigir dois games de diferença no set',exact:true}).uncheck();
   await modal.getByRole('checkbox',{name:'Exigir dois pontos de diferença no tie-break',exact:true}).uncheck();
+  await modal.getByRole('checkbox',{name:'Super tie-break no set decisivo',exact:true}).uncheck();
   await modal.getByRole('button',{name:'Aplicar',exact:true}).click();
   const saved=await page.evaluate(()=>_gsmReadHidden());
   assert.equal(saved.customRulesVersion,1);assert.equal(saved.setTwoPointAdvantage,false);assert.equal(saved.tiebreakTwoPointAdvantage,false);assert.equal(saved.superTiebreak,false);assert.equal(saved.tiebreakAt,'6');
@@ -51,7 +70,7 @@ const {chromium}=require('@playwright/test');
   assert.equal(await page.evaluate(()=>_f2GetElimScoring().customRulesVersion),1,'normalização preserva opt-in');
   const beforeFrozenNext=await page.evaluate(()=>_f2GetElimScoring());
   await page.evaluate(()=>{window._scoringPhaseHasResult=()=>true;_gsmRenderTieAt();_openGSMConfig();});
-  for(const label of toggles)assert(await modal.getByRole('checkbox',{name:label,exact:true}).isDisabled(),'congela regra e marcador com resultado');
+  for(const label of toggles)assert(await modal.getByRole('checkbox',{name:label,exact:true,includeHidden:true}).isDisabled(),'congela regra e marcador com resultado');
   await page.evaluate(()=>{_gsmCfgSetTwo(true);_gsmSetSetTwoPointInline(true);_gsmSelectPreset('fixedGames');_f2ElimScoringPreset('fixedGames');});
   assert.deepEqual(await page.evaluate(()=>_gsmReadHidden()),saved,'guardas impedem chamada direta após resultado');
   assert.deepEqual(await page.evaluate(()=>_f2GetElimScoring()),beforeFrozenNext,'preset não reverte contrato da fase com resultado');

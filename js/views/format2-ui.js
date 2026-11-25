@@ -2718,7 +2718,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2ElimSetOption=function(key,value){
     if(['setsToWin','tiebreakPoints','superTiebreakPoints','superTiebreak'].indexOf(key)<0)return;
     if(key!=='superTiebreak'){value=Number(value);if(!Number.isInteger(value)||value<1||(key==='setsToWin'&&value>3))return;}
-    var patch={};patch[key]=value;_setElimGameRule(patch);
+    var current=_elimEffScoring(S&&S.cfg.eliminatoria);if(!current)return;
+    if(key==='superTiebreak' && value && ![2,3].includes(Number(current.setsToWin)))return;
+    var patch={};patch[key]=value;if(key==='setsToWin' && value===1)patch.superTiebreak=false;_setElimGameRule(patch);
   };
   window._f2ElimScoringPreset = function (key) {
     if (!S) return;
