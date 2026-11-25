@@ -240,6 +240,28 @@
       source && source.type === 'previous_phase' && source.scope === 'per_group' &&
       Number(source.qualifyTopN || elimination.gruposClassified) === 2);
   }
+  // Super8 is a configuration contract, independent of tournament names/IDs.
+  function super8GroupRows(t, matches) {
+    var rows = t.scheduleWindow?.interleavedPlan?.groupAssignments || [];
+    return rows.map(function (source) {
+      var row = Object.assign({}, source, { courts:(source.courts || []).slice().sort((a,b)=>a-b) });
+      var phase = t.phases?.[row.phaseIndex];
+      if (phase?.kind !== 'classification' || phase.classification?.partnerRotation !== 'groups' ||
+          row.courts.length !== 2 || row.courts.some(c=>!Number.isInteger(c) || c<1) || row.courts[0]===row.courts[1]) return null;
+      var games = matches.filter(function (game) {
+        return Number(game.phaseIndex || 0) === Number(row.phaseIndex) && String(game.category || '') === row.category &&
+          (game.groupIdx != null ? Number(game.groupIdx)+1 === row.groupNumber : game.scheduledGroupLabel === row.label) &&
+          game.isMonarch && !game.isBye && !game.isSitOut && !game.isTieBreak;
+      });
+      var people = new Set(games.flatMap(game=>(game.team1Uids || game.team1 || []).concat(game.team2Uids || game.team2 || [])));
+      var rule = (phase.classification.rotationCategoryRules || []).find(rule=>rule.category===row.category);
+      var configured = rule?.groupFormation?.mode === 'size' && Number(rule.groupFormation.value) === 8;
+      var rounds = new Map();
+      games.forEach(function(game) { var round=Number(game.round || 1); rounds.set(round,(rounds.get(round) || 0)+1); });
+      if (games.length ? people.size !== 8 || games.length !== 14 || rounds.size !== 7 || Array.from(rounds.values()).some(count=>count!==2) : !configured) return null;
+      return { row:row, games:games };
+    }).filter(Boolean);
+  }
   function eventDayLayout(core) {
     var layout = core.defaults();
     var positions = {
@@ -369,33 +391,64 @@
       courtOccurrences.set(card.name, occurrence + 1);
     });
     // Keep physical courts in the snapshot; only the presentation spans two lanes.
-    var groupRows=t.scheduleWindow?.interleavedPlan?.groupAssignments || [];
-    groupRows.forEach(function(row) {
+    var super8Rows=super8GroupRows(t,matches);
+    var plannedCourts = {};
+    if (super8Rows.length && typeof window._operationalSchedulePlan === 'function') {
+      try { (window._operationalSchedulePlan(t)?.items || []).forEach(function(item) {
+        plannedCourts[String(item.matchId)] = String(item.court || '');
+      }); } catch (error) { /* the round order still determines the two lanes */ }
+    }
+    function belongsToRow(game,row) {
+      return Number(game.phaseIndex || 0)===Number(row.phaseIndex) && String(game.category || '')===row.category &&
+        (game.groupIdx!=null ? Number(game.groupIdx)+1===row.groupNumber : game.scheduledGroupLabel===row.label);
+    }
+    function rowPriority(entry) {
+      if(allActive.some(game=>belongsToRow(game,entry.row))) return 0;
+      if(entry.games.some(game=>!occupancy.isFinished(game))) return 1;
+      return entry.games.length ? 3 : 2;
+    }
+    super8Rows.filter(entry=>Number(entry.row.phaseIndex)===Number(t.currentPhaseIndex || 0)).sort(function(a,b) {
+      var priority=rowPriority(a)-rowPriority(b);
+      var entryOrder=(Number(a.row.entry || 0)-Number(b.row.entry || 0))*(rowPriority(a)===3?-1:1);
+      return priority || entryOrder || Number(a.row.phaseIndex)-Number(b.row.phaseIndex) ||
+        a.row.category.localeCompare(b.row.category) || a.row.groupNumber-b.row.groupNumber;
+    }).forEach(function(entry) {
+      var row=entry.row;
       if(row.courts?.length!==2) return;
-      var phase=t.phases?.[row.phaseIndex];
-      if(phase?.kind!=='classification' || phase.classification?.partnerRotation!=='groups') return;
-      function belongs(game) {
-        return Number(game.phaseIndex || 0)===row.phaseIndex && String(game.category || '')===row.category &&
-          (game.groupIdx!=null ? Number(game.groupIdx)+1===row.groupNumber : game.scheduledGroupLabel===row.label);
-      }
-      var games=matches.filter(game=>belongs(game) && game.isMonarch && !game.isBye && !game.isSitOut && !game.isTieBreak);
-      var people=new Set(games.flatMap(game=>(game.team1Uids || game.team1 || []).concat(game.team2Uids || game.team2 || [])));
-      if(people.size!==8) return;
+      function belongs(game) { return belongsToRow(game,row); }
+      var games=entry.games.slice();
       var names=row.courts.map(c=>courtNames[c-1]);
       if(names.some(name=>!name) || new Set(names).size!==2 ||
-          !allActive.some(game=>names.includes(String(game.court)) && belongs(game)) ||
           allActive.some(game=>names.includes(String(game.court)) && !belongs(game))) return;
       var cards=row.courts.map(c=>courtCards[c-1]);
       if(cards.some(card=>!card || card.super8Group || card.super8GroupMember)) return;
       var key=JSON.stringify([row.phaseIndex,row.category,row.groupNumber]);
       games.sort((a,b)=>Number(a.round || 1)-Number(b.round || 1) ||
         Number(a.scheduledGameNumber || a._gameNum || 0)-Number(b.scheduledGameNumber || b._gameNum || 0) || String(a.id).localeCompare(String(b.id)));
+      var lanes=new Map(), rounds=new Map();
+      games.forEach(function(game) {
+        var round=Number(game.round || 1);
+        if(!rounds.has(round)) rounds.set(round,[]);
+        rounds.get(round).push(game);
+      });
+      rounds.forEach(function(roundGames) {
+        var used=new Set();
+        roundGames.forEach(function(game) {
+          var lane=names.indexOf(String(game.court || plannedCourts[String(game.id)] || ''));
+          if(lane>=0 && !used.has(lane)) { lanes.set(game,lane); used.add(lane); }
+        });
+        roundGames.forEach(function(game) {
+          if(lanes.has(game)) return;
+          var lane=used.has(0)?1:0;
+          lanes.set(game,lane); used.add(lane);
+        });
+      });
       var activeIds=new Set(allActive.map(game=>String(game.id)));
       cards[0].super8Group={key:key,label:row.label,category:row.category,courts:cards.map(card=>({name:card.name,occurrence:card.nameOccurrence || 0})),
         rounds:new Set(games.map(game=>Number(game.round || 1))).size,
         games:games.map(function(game) {
           var done=occupancy.isFinished(game),active=activeIds.has(String(game.id));
-          return {number:game._gameNum || game.scheduledGameNumber || game.matchNumber || '',round:Number(game.round || 1),
+          return {number:game._gameNum || game.scheduledGameNumber || game.matchNumber || '',round:Number(game.round || 1),lane:lanes.get(game),
             a:sideName(t,game,'p1'),b:sideName(t,game,'p2'),aUids:sideUids(t,game,'p1'),bUids:sideUids(t,game,'p2'),
             scoreA:done || active ? (game.wo?'W.O.':gameScore(game,1,done)) : '',
             scoreB:done || active ? (game.wo?'W.O.':gameScore(game,2,done)) : '',
@@ -592,7 +645,7 @@
       } else tvLayout = layoutCore.forPhase(screens, t.currentPhaseIndex || 0, fallbackLayout);
       // O painel aprovado para classificatória Rei/Rainha seguida de duplas
       // eliminatórias é um padrão do formato. Um layout salvo sempre prevalece.
-      if (!tvLayout && isMonarchPairElimination(t)) tvLayout = eventDayLayout(layoutCore);
+      if (!tvLayout && (isMonarchPairElimination(t) || super8Rows.length)) tvLayout = eventDayLayout(layoutCore);
     }
     var matchChoices = matches.filter(function (m) { return m && m.id && !m.isBye && !m.isSitOut; }).map(function (m) {
       return { id: String(m.id), label: 'JOGO ' + (m._gameNum || m.scheduledGameNumber || m.matchNumber || '') +
@@ -690,7 +743,7 @@
       logoShape: t.logoShape === 'circle' ? 'circle' : 'square',
       logoRadius: typeof window._tournamentLogoRadius === 'function'
         ? window._tournamentLogoRadius(t) : (t.logoShape === 'circle' ? '50%' : '14%'),
-      tvLayout: tvLayout, eventBoard: isMonarchPairElimination(t), theme: theme,
+      tvLayout: tvLayout, eventBoard: isMonarchPairElimination(t) || super8Rows.length > 0, theme: theme,
       qrUrl: qrUrl, qrImage: typeof window._qrCodeUrl === 'function' ? window._qrCodeUrl(qrUrl, 320, false) :
         'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(qrUrl) + '&bgcolor=ffffff&color=1a1e2e&margin=10',
       courts: courtCards, nextGame: nextGame, nextGames: nextGames, waitingForTie:!!(nextSelection && nextSelection.waitingForTie),
@@ -726,16 +779,18 @@
       }).join('');
       return '<div class="tv-super8-group" data-super8-group="'+esc(group.key)+'">'+anchors+
         '<article class="tv-court tv-court-series"><div class="tv-court-top"><h2>'+(options.court?esc(title)+' · ':'')+esc('Grupo '+group.label)+'</h2>'+
-        (options.category?'<span>'+esc(group.category)+'</span>':'')+'<b class="tv-court-phase">'+group.rounds+' rodadas · '+group.games.length+' jogos</b></div>'+
-        '<div class="tv-super8-games">'+group.games.map(function(game) {
+        (options.category?'<span>'+esc(group.category)+'</span>':'')+'<b class="tv-court-phase">'+(group.games.length ? group.rounds+' rodadas · '+group.games.length+' jogos' : 'Aguardando sorteio')+'</b></div>'+
+        '<div class="tv-super8-lanes">'+group.courts.map(function(court,lane) {
+          return '<section class="tv-super8-lane"><h3>'+esc(court.name)+'</h3><div class="tv-super8-games tv-series-games" data-tv-autoscroll="'+esc('super8:'+group.key+':'+court.name+':'+court.occurrence)+'">'+group.games.filter(game=>game.lane===lane).map(function(game,index) {
           function side(name,uids,score,n) {
             var result=game.status==='done' && game.winnerSide ? (game.winnerSide===n?' tv-series-win':' tv-series-loss') : '';
             return '<div class="tv-series-side'+result+'">'+(options.players?'<div class="tv-series-players">'+playerRows(name,uids,true)+'</div>':'')+
               (options.score?'<strong>'+esc(score===''?'–':score)+'</strong>':'')+'</div>';
           }
-          return '<div class="tv-series-game tv-series-'+game.status+'"><b>'+(options.number?'JOGO '+esc(game.number)+'<br>':'')+'R'+game.round+
+          return '<div class="tv-series-game tv-series-'+game.status+'"><b>'+(options.number?'JOGO '+esc(game.number)+'<br>':'')+'<small>'+(index+1)+'º jogo</small>'+
             (options.timer && game.timerStart?'<br><small data-tv-start="'+game.timerStart+'">00:00:00</small>':'')+'</b>'+
             side(game.a,game.aUids,game.scoreA,1)+'<span class="tv-series-versus">×</span>'+side(game.b,game.bUids,game.scoreB,2)+'</div>';
+        }).join('')+(group.games.length?'':'<p>Aguardando sorteio</p>')+'</div></section>';
         }).join('')+'</div></article></div>';
     }).join('');
   }
@@ -1081,7 +1136,7 @@
       'window.__tvFitLabels=fit;window.addEventListener("resize",reflow);window.addEventListener("load",reflow);' +
       'document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){resultAt=Date.now();reflow();}});' +
       'if(document.fonts&&document.fonts.ready)document.fonts.ready.then(reflow);' +
-      'window.__tvReplaceMarkup=function(html){var root=document.getElementById("tv-root"),old=root&&root.querySelector(".tv-results-list");' +
+      'window.__tvReplaceMarkup=function(html){Object.keys(boxLoops).forEach(function(key){if(key.indexOf("super8:")===0)boxLoops[key].position=boxLoops[key].node.scrollTop;});var root=document.getElementById("tv-root"),old=root&&root.querySelector(".tv-results-list");' +
       'var day=old&&old.getAttribute("data-result-day"),top=resultPosition;' +
       'if(!root)return;if(typeof document.createElement!=="function"){root.innerHTML=html;fit();ensureCycle();prepareBoxLoops();' +
       'var fallback=root.querySelector(".tv-results-list");resultPosition=fallback&&fallback.getAttribute("data-result-day")===day&&resultCycle?top%resultCycle:0;' +
@@ -1165,10 +1220,11 @@
     '.tv-custom-board{position:relative;margin-left:.35vw;width:calc(100% - .8vw);height:100%;overflow:hidden}.tv-custom-box{position:absolute;min-width:0;min-height:0;overflow:hidden}.tv-custom-box>.tv-header,.tv-custom-box>.tv-courts,.tv-custom-box>.tv-upcoming,.tv-custom-box>.tv-rankings,.tv-custom-box>.tv-brackets,.tv-custom-box>.tv-results,.tv-custom-box>.tv-qr{width:100%;height:100%;min-height:0;overflow:hidden}.tv-custom-box>.tv-header{padding:.35vw .8vw}.tv-custom-box>.tv-courts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr))}.tv-custom-results .tv-results{display:flex}.tv-custom-results .tv-results-main{width:100%}.tv-custom-qr .tv-qr{justify-content:flex-end}.tv-custom-qr .tv-qr-code{max-height:75%;width:88%;height:auto;max-width:88%;box-sizing:border-box;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-brand{width:88%;max-width:88%;margin-inline:auto;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-event .tv-qr-code,.tv-custom-qr .tv-qr-event .tv-qr-brand{transform:translateX(-.6vw)}.tv-custom-qr .tv-qr.tv-qr-has-logo{display:grid;grid-template-rows:minmax(0,1fr) auto auto;justify-content:stretch;justify-items:center;align-items:center;gap:.25vw}.tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo{width:100%;height:100%;max-height:100%;max-width:100%;align-self:center;justify-self:center;object-fit:contain}.tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-event{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-has-logo .tv-qr-code{max-height:none;justify-self:center}.tv-custom-logo{display:flex;align-items:center;justify-content:center}.tv-placed-logo{display:block;width:100%;height:100%;object-fit:contain;border-radius:var(--tv-logo-radius,14%)}.tv-logo-circle .tv-header img,.tv-logo-circle .tv-placed-logo{clip-path:circle(closest-side at center)}' +
     '.tv-brackets{display:flex;flex-direction:column;background:#0d1b2e;border:1px solid #1b3f61;border-radius:.7vw;padding:.55vw;overflow:hidden}.tv-brackets h2{flex:none;color:#fbbf24;font-size:clamp(.9rem,1.15vw,1.5rem);margin:0 0 .4vw}.tv-bracket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,12vw),1fr));gap:.5vw;min-height:0;overflow:auto}.tv-bracket-category{min-width:0;border:1px solid #315376;border-radius:.5vw;padding:.4vw;background:#10223a}.tv-bracket-category h3{margin:0;color:#7dd3fc;font-size:clamp(.9rem,1vw,1.3rem)}.tv-bracket-category small{display:block;color:#cbd5e1;margin:.15vw 0 .35vw;font-size:clamp(.65rem,.7vw,.9rem)}.tv-bracket-match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:.2vw;padding:.2vw;border-top:1px solid #315376;align-items:center;font-size:clamp(.65rem,.75vw,1rem)}.tv-bracket-match>span{grid-column:1/-1;color:#7dd3fc;font-size:.8em}.tv-bracket-match strong{overflow-wrap:anywhere;min-width:0}.tv-bracket-match strong:last-child{text-align:right}.tv-bracket-match b{color:#fbbf24}.tv-series-game.tv-series-latest-result{outline:2px solid #fbbf24;box-shadow:0 0 12px #fbbf2466}' +
     '.tv-custom-courts>.tv-courts{grid-template-rows:none;grid-auto-rows:minmax(115px,auto);align-content:start;overflow-y:auto;scrollbar-width:none;width:calc(100% - .3vw)}.tv-custom-results>.tv-results,.tv-custom-upcoming>.tv-upcoming{width:calc(100% - .3vw);margin-left:.3vw}.tv-custom-results h2{margin-top:0}.tv-custom-courts>.tv-courts::-webkit-scrollbar,.tv-bracket-list::-webkit-scrollbar{display:none}.tv-custom-upcoming>.tv-upcoming,.tv-custom-rankings>.tv-rankings{overflow-y:auto;scrollbar-width:none}.tv-custom-rankings .tv-ranking-group{max-height:none;overflow:visible}.tv-brackets>.tv-bracket-rounds{display:flex;align-items:center;gap:.25vw;overflow:hidden;white-space:nowrap;color:#94a3b8;font-size:clamp(.6rem,.7vw,.95rem)}.tv-bracket-rounds span{overflow:hidden;text-overflow:ellipsis}.tv-bracket-rounds .tv-bracket-round-active{color:#fbbf24;font-weight:900}.tv-brackets>small{color:#cbd5e1;font-size:clamp(.65rem,.7vw,.9rem);margin:.2vw 0}.tv-bracket-list{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none}.tv-bracket-match{border:1px solid #315376;border-radius:.3vw;margin-bottom:.25vw;background:#10223a}.tv-bracket-match-in-court{border:2px solid #4ade80;box-shadow:0 0 12px #4ade8066}.tv-series-game.tv-series-latest-result{outline:2px solid #fbbf24;box-shadow:0 0 12px #fbbf2466}' +
-    '.tv-super8-group{grid-column:1/-1;position:relative;min-height:0;min-width:0}.tv-super8-group>.tv-court{height:100%;box-sizing:border-box}.tv-super8-court-anchor{position:absolute;top:0;width:50%;height:100%;pointer-events:none}.tv-super8-games{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(40px,1fr);gap:.2vw;flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin}.tv-super8-games .tv-series-game{grid-template-columns:3.6em minmax(0,1fr) .8em minmax(0,1fr)}.tv-super8-games [data-tv-start]{font-size:.65em}.tv-super8-group .tv-court-top{flex:none}' +
+    '.tv-super8-group{grid-column:1/-1;position:relative;min-height:0;min-width:0}.tv-super8-group>.tv-court{height:100%;box-sizing:border-box}.tv-super8-court-anchor{position:absolute;top:0;width:50%;height:100%;pointer-events:none}.tv-super8-lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.4vw;flex:1;min-height:0}.tv-super8-lane{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}.tv-super8-lane>h3{margin:.1vw 0 .2vw;color:#cbd5e1;font-size:clamp(.8rem,1vw,1.35rem)}.tv-super8-games.tv-series-games{display:grid;position:relative;grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-auto-rows:minmax(80px,calc((100% - .4vw)/3));gap:.2vw;flex:1;min-height:0;overflow-y:auto;scrollbar-width:none}.tv-super8-games::-webkit-scrollbar{display:none}.tv-super8-games .tv-series-game{grid-template-columns:4.2em minmax(0,1fr) .8em minmax(0,1fr)}.tv-super8-games [data-tv-start]{font-size:.65em}.tv-super8-group .tv-court-top{flex:none}' +
     '.tv-courts,.tv-custom-box>.tv-courts{grid-template-rows:repeat(var(--tv-court-rows,3),minmax(0,1fr))}.tv-custom-courts>.tv-courts{grid-template-rows:none;grid-auto-rows:minmax(115px,auto)}' +
     '.tv-court-series{padding:.35vw .55vw}.tv-court-series .tv-court-top{flex:none;min-height:0;padding-bottom:.12vw}.tv-court-series .tv-court-top h2{font-size:clamp(.9rem,1vw,1.35rem)}.tv-series-games{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));flex:1;min-height:0;gap:.15vw}.tv-series-game{display:grid;grid-template-columns:4.2vw minmax(0,1fr) 1.2vw minmax(0,1fr);align-items:center;gap:.25vw;min-width:0;min-height:0;border-radius:.25vw;background:color-mix(in srgb,var(--tv-secondary) 15%,#16253a);padding:.1vw .3vw}.tv-series-game.tv-series-active{outline:1px solid #38bdf8;background:color-mix(in srgb,var(--tv-primary) 22%,#26394d)}.tv-series-game.tv-series-done{opacity:.88}.tv-series-game>b{color:#7dd3fc;font-size:clamp(.7rem,.75vw,1rem);white-space:nowrap}.tv-series-side{display:flex;align-items:center;justify-content:space-between;gap:.2vw;min-width:0;min-height:0;border-radius:.2vw;padding:.1vw .2vw}.tv-series-side.tv-series-win{background:#123b2b}.tv-series-side.tv-series-loss{background:#4b2027}.tv-series-players{display:flex;flex:1 1 0;width:0;flex-direction:column;justify-content:center;min-width:0;min-height:0;line-height:1.05}.tv-series-players span{display:block;white-space:normal;overflow-wrap:anywhere;font-size:clamp(.68rem,.78vw,1.04rem);font-weight:750}.tv-series-right{flex-direction:row-reverse}.tv-series-right .tv-series-players{text-align:right}.tv-series-side strong{flex:none;color:#fff;font-size:clamp(.85rem,1vw,1.4rem);font-variant-numeric:tabular-nums}.tv-series-win strong{color:#4ade80}.tv-series-loss strong{color:#f87171}.tv-series-versus{text-align:center;color:#94a3b8;font-weight:900}.tv-court-series .tv-court-footer{flex:none;margin-top:.1vw}.tv-court-series .tv-court-footer strong{font-size:clamp(.8rem,.95vw,1.25rem)}' +
     '.tv-custom-courts>.tv-courts{grid-auto-rows:minmax(115px,1fr);align-content:stretch}.tv-custom-courts .tv-series-game>b{font-size:clamp(.8rem,.9vw,1.2rem)}.tv-custom-courts .tv-series-players span{font-size:clamp(.8rem,1.05vw,1.4rem)}.tv-custom-courts .tv-series-side strong{font-size:clamp(1rem,1.25vw,1.7rem)}.tv-custom-courts .tv-court-top h2{font-size:clamp(1rem,1.2vw,1.6rem)}' +
+
     '</style>');
   styles = styles.replace('</style>',
     '.tv-custom-qr{z-index:20}.tv-focus-card,.tv-focus-standing{display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden;padding:.7vw;background:color-mix(in srgb,var(--tv-primary) 18%,#0d1b2e);border:1px solid color-mix(in srgb,var(--tv-secondary) 30%,#1b3f61);border-radius:.7vw}' +
@@ -1528,7 +1584,7 @@
       if (value !== 'manual' && !screen) return;
       selectedMonitor = screen || null;
       if (screen) {
-        try { tv.moveTo(screen.availLeft, screen.availTop); } catch (error) { /* fullscreen targets the same screen */ }
+        try { tv.moveTo(screen.availLeft, screen.availTop); tv.resizeTo(screen.availWidth, screen.availHeight); } catch (error) { /* fullscreen targets the same screen */ }
       }
       enterFullscreen().then(function () {
         if (screenPicker === picker) dismissScreenPicker();
@@ -1582,7 +1638,8 @@
     var id = String(tournament.id || ''), nextPopup;
     selectedMonitor = null;
     try {
-      nextPopup = window.open('', 'scoreplace-live-tv-' + id, 'popup,width=1024,height=640,resizable=yes');
+      nextPopup = popup && !popup.closed && popupTournamentId === id && popup.__tvDetachedWindow === true ? popup :
+        window.open('', '_blank', 'popup=yes,width=1024,height=640,resizable=yes,scrollbars=no');
     }
     catch (e) { nextPopup = null; }
     if (!nextPopup) {
@@ -1590,6 +1647,10 @@
       if (typeof window.showToast === 'function') window.showToast('Permita abrir uma janela para a TV e clique em No ar novamente.');
       return;
     }
+    nextPopup.name = 'scoreplace-live-tv-' + id;
+    nextPopup.__tvDetachedWindow = true;
+    // A named target can reuse an attached tab. Only our live window reference is reusable.
+    if (popup && popup !== nextPopup && !popup.closed) { try { popup.close(); } catch (error) {} }
     // O controle continua no documento original durante a apresentação.
     if (rotationPlayer) rotationPlayer.stop();
     rotationPlayer = null;

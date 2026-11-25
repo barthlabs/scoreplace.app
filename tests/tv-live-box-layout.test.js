@@ -9,10 +9,11 @@ const { chromium } = require('@playwright/test');
   const capture = path.join(os.tmpdir(), `scoreplace-tv-${process.pid}.html`);
   const customCapture = path.join(os.tmpdir(), `scoreplace-tv-custom-${process.pid}.html`);
   const camisCapture = path.join(os.tmpdir(), `scoreplace-tv-camis-${process.pid}.html`);
+  const super8Capture = path.join(os.tmpdir(), `scoreplace-tv-super8-${process.pid}.html`);
   try {
     execFileSync(process.execPath, [path.join(__dirname, 'tv-live-snapshot.test.js')], {
       env: { ...process.env, SP_TV_CAPTURE: capture, SP_TV_CAPTURE_CUSTOM: customCapture,
-        SP_TV_CAPTURE_CAMIS: camisCapture }, stdio: 'pipe'
+        SP_TV_CAPTURE_CAMIS: camisCapture, SP_TV_CAPTURE_SUPER8: super8Capture }, stdio: 'pipe'
     });
     const html = fs.readFileSync(capture, 'utf8').replace(/<script src="[^"]*match-timing[^>]*><\/script>/, '');
     const browser = await chromium.launch();
@@ -149,7 +150,61 @@ const { chromium } = require('@playwright/test');
         camisBounds.logoImageBottom <= camisBounds.logoBottom + 1,
       'a imagem inteira do logo cabe na coluna sem corte: ' + JSON.stringify(camisBounds));
       await camisPage.close();
+      for(const viewport of [{width:1920,height:1080},{width:3840,height:2160}]) {
+        const super8Page=await browser.newPage({viewport});
+        await super8Page.setContent(fs.readFileSync(super8Capture,'utf8'),{waitUntil:'domcontentloaded'});
+        const geometry=await super8Page.evaluate(()=>{
+          const rect=el=>el.getBoundingClientRect().toJSON();
+          const groups=[...document.querySelectorAll('.tv-super8-group')];
+          return {groups:groups.map(rect),results:rect(document.querySelector('.tv-custom-results')),
+            upcoming:rect(document.querySelector('.tv-custom-upcoming')),rankings:document.querySelectorAll('.tv-rankings').length,
+            anchors:document.querySelectorAll('[data-tv-court]').length,
+            clipped:groups.flatMap(group=>[...group.querySelectorAll('.tv-series-game')].filter(game=>{
+              const a=rect(game),b=rect(group);return a.bottom>b.bottom+1||a.right>b.right+1;
+            })).length};
+        });
+        assert.equal(geometry.groups.length,3,'three paired-court blocks');
+        assert.equal(geometry.anchors,6,'all six sponsor targets remain');
+        assert.equal(geometry.rankings,0,'no classification panel on the Super8 default');
+        assert(geometry.groups.every(g=>g.right<=geometry.results.left+2),'groups left of results');
+        assert(geometry.results.bottom<=geometry.upcoming.top+2,'latest results above upcoming');
+        assert(geometry.groups[0].bottom<=geometry.groups[1].top+1 && geometry.groups[1].bottom<=geometry.groups[2].top+1,'groups stacked vertically');
+        const lanes=super8Page.locator('.tv-super8-games');
+        assert.equal(await lanes.count(),6,'six independent court columns');
+        const scrolling=await super8Page.evaluate(()=>[...document.querySelectorAll('.tv-super8-games')].map(node=>({
+          originals:[...node.children].filter(n=>!n.hasAttribute('data-tv-loop-repeat')).length,
+          height:node.clientHeight,scroll:node.scrollHeight,top:node.scrollTop,
+          key:node.getAttribute('data-tv-autoscroll')
+        })));
+        assert(scrolling.every(l=>l.originals===7 && l.scroll>l.height+20),'seven ordered games scroll within each court');
+        await super8Page.waitForTimeout(400);
+        const moved=await lanes.first().evaluate(node=>node.scrollTop);
+        assert(moved>0,'court scroll advances automatically');
+        await super8Page.emulateMedia({reducedMotion:'reduce'});
+        await lanes.first().evaluate(node=>{node.scrollTop=110;});
+        await lanes.nth(1).evaluate(node=>{node.scrollTop=45;});
+        await super8Page.waitForTimeout(100);
+        assert.equal(await lanes.first().evaluate(n=>n.scrollTop),110,'reduced motion keeps manual scrolling');
+        assert.equal(await lanes.nth(1).evaluate(n=>n.scrollTop),45,'court scroll positions are independent');
+        await super8Page.evaluate(()=>{
+          const root=document.getElementById('tv-root'),draft=root.cloneNode(true);
+          draft.querySelectorAll('[data-tv-loop-repeat],[data-tv-repeat]').forEach(n=>n.remove());
+          draft.querySelector('.tv-super8-games .tv-series-side strong').textContent='5';
+          window.__tvReplaceMarkup(draft.innerHTML);
+        });
+        assert(Math.abs(await lanes.first().evaluate(n=>n.scrollTop)-110)<2,'score update preserves the first court scroll');
+        assert(Math.abs(await lanes.nth(1).evaluate(n=>n.scrollTop)-45)<2,'score update preserves the second court scroll');
+        await super8Page.evaluate(()=>{
+          const root=document.getElementById('tv-root'),draft=root.cloneNode(true);
+          draft.querySelectorAll('[data-tv-loop-repeat],[data-tv-repeat]').forEach(n=>n.remove());
+          draft.querySelectorAll('.tv-super8-games').forEach(n=>n.setAttribute('data-tv-autoscroll',n.getAttribute('data-tv-autoscroll')+':next-group'));
+          window.__tvReplaceMarkup(draft.innerHTML);
+        });
+        assert.equal(await lanes.first().evaluate(n=>n.scrollTop),0,'next group starts at the beginning');
+        if(process.env.SP_TV_SCREENSHOT_DIR)await super8Page.screenshot({path:path.join(process.env.SP_TV_SCREENSHOT_DIR,`super8-${viewport.width}.png`)});
+        await super8Page.close();
+      }
     } finally { await browser.close(); }
     console.log('✓ TV: etiquetas, placares e próximo jogo contidos nos boxes');
-  } finally { try { fs.unlinkSync(capture); } catch (_) {} try { fs.unlinkSync(customCapture); } catch (_) {} try { fs.unlinkSync(camisCapture); } catch (_) {} }
+  } finally { try { fs.unlinkSync(capture); } catch (_) {} try { fs.unlinkSync(customCapture); } catch (_) {} try { fs.unlinkSync(camisCapture); } catch (_) {} try { fs.unlinkSync(super8Capture); } catch (_) {} }
 })().catch(error => { console.error(error); process.exitCode = 1; });

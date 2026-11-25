@@ -871,7 +871,7 @@ assert.equal(liveButton.attributes['aria-pressed'], 'false', 'heartbeat vencido 
 assert.equal(window._tvLiveWindow, null, 're-render da chave também verá estado inativo');
 window._tvLiveToggle();
 const staleRecoveryGeneration = Number(popupHtml.match(/,gen=(\d+),origin=/)[1]);
-assert.equal(openCalls, 3, 'clique sem heartbeat reaproveita uma única janela nomeada');
+assert.equal(openCalls, 2, 'clique sem heartbeat recupera a referência da janela desacoplada sem abrir outra');
 assert(staleRecoveryGeneration > reopenedGeneration, 'recuperação substitui a geração anterior');
 assert.equal(liveButton.attributes['aria-pressed'], 'false', 'recuperação aguarda o novo heartbeat');
 assert.equal(parentActiveIntervals.size, 2, 'só o monitor global e o refresh novo ficam ativos');
@@ -993,6 +993,10 @@ if (process.env.SP_TV_CAPTURE_CUSTOM) {
 }
 if (process.env.SP_TV_CAPTURE_CAMIS) fs.writeFileSync(process.env.SP_TV_CAPTURE_CAMIS,
   popupHtml.replace('<div id="tv-root"></div>', '<div id="tv-root">' + camisHtml + '</div>'));
+assert.equal(require('node:crypto').createHash('sha256').update(window._tvLiveBodyHtml(snapshot)).digest('hex'),
+  'f5c29a5eaf2d87cc9f752679fa42448af5d61101426702f4a6e84a5f959b2c51','Neon HTML remains byte-identical to the pre-fix reference');
+assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).digest('hex'),
+  'e18d565c76af323bc4fee07a35943935e30a4777b64037eee4fe5b26c00fc8a8','Rei/Rainha HTML remains byte-identical to the pre-fix reference');
 {
   const assignments=[['B1','Categoria B',1,1,[1,2]],['B2','Categoria B',2,2,[1,2]],['C1','Categoria C',1,1,[3,4]],['C2','Categoria C',2,1,[5,6]],['C3','Categoria C',3,2,[3,4]],['C4','Categoria C',4,2,[5,6]]]
     .map(([label,category,groupNumber,entry,courts])=>({label,category,groupNumber,entry,courts,phaseIndex:0}));
@@ -1008,6 +1012,37 @@ if (process.env.SP_TV_CAPTURE_CAMIS) fs.writeFileSync(process.env.SP_TV_CAPTURE_
       team1Uids:names.slice(lane*4,lane*4+2),team2Uids:names.slice(lane*4+2,lane*4+4),
       ...(row.entry===1 && round===1?{court:super8.courtNames[row.courts[lane]-1],courtCalledAt:'2026-10-22T21:00:00Z',scoreP1:2,scoreP2:1}:{})});
   }});
+  const idle={...super8,matches:super8.matches.map(({court,courtCalledAt,startedAt,...game})=>game)};
+  const groupLabels=snap=>Array.from(snap.courts.filter(c=>c.super8Group),c=>c.super8Group.label);
+  const idleSnapshot=window._tvLiveBuildSnapshot(idle);
+  assert.deepEqual(groupLabels(idleSnapshot),['B1','C1','C2'],'Super8 groups exist before any court is called');
+  assert.equal(idleSnapshot.eventBoard,true);
+  assert.equal(idleSnapshot.tvLayout.sections.rankings.visible,false,'Super8 operational board has no rankings pane');
+  assert(idleSnapshot.tvLayout.sections.results.y < idleSnapshot.tvLayout.sections.upcoming.y,'results above upcoming');
+  assert(idleSnapshot.tvLayout.sections.courts.x < idleSnapshot.tvLayout.sections.results.x,'courts on the left');
+  assert.doesNotMatch(window._tvLiveBodyHtml(idleSnapshot),/class="tv-rankings"/);
+  const reordered=window._tvLiveBuildSnapshot({...idle,scheduleWindow:{interleavedPlan:{schema:2,groupAssignments:[...assignments].reverse()}}});
+  assert.deepEqual(groupLabels(reordered),['B1','C1','C2'],'entry number wins over array order');
+  const secondEntry={...idle,matches:idle.matches.map(game=>assignments.some(row=>row.entry===1 && row.label===game.scheduledGroupLabel)
+    ? {...game,winner:game.p1,scoreP1:4,scoreP2:3,resultAt:'2026-10-22T21:00:00Z'} : game)};
+  assert.deepEqual(groupLabels(window._tvLiveBuildSnapshot(secondEntry)),['B2','C3','C4'],'completed entry yields to next pending group');
+  const laterActive={...idle,matches:idle.matches.map(game=>game.id==='B2-1-0'?{...game,court:'Areia A',courtCalledAt:'2026-10-22T21:00:00Z'}:game)};
+  assert.equal(groupLabels(window._tvLiveBuildSnapshot(laterActive))[0],'B2','actual court call wins over pending earlier entry');
+  const noDraw={...idle,matches:[],phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:
+    ['Categoria B','Categoria C'].map(category=>({category,groupFormation:{mode:'size',value:8}}))}}]};
+  const noDrawSnapshot=window._tvLiveBuildSnapshot(noDraw);
+  assert.deepEqual(groupLabels(noDrawSnapshot),['B1','C1','C2']);
+  assert(noDrawSnapshot.courts.filter(c=>c.super8Group).every(c=>c.super8Group.games.length===0));
+  assert.match(window._tvLiveBodyHtml(noDrawSnapshot),/Aguardando sorteio/);
+  const fourPlayers={...noDraw,phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:
+    ['Categoria B','Categoria C'].map(category=>({category,groupFormation:{mode:'size',value:4}}))}}]};
+  assert.equal(window._tvLiveBuildSnapshot(fourPlayers).tvLayout,null,'ordinary four-player rotation keeps its own classic layout');
+  assert.equal(window._tvLiveBuildSnapshot({...noDraw,scheduleWindow:{}}).tvLayout,null,'no court-pair assignment means no Super8 layout');
+  const explicit=window.ScoreplaceTvLayout.defaults();explicit.background='#314159';
+  assert.equal(window._tvLiveBuildSnapshot({...idle,tvLayout:explicit}).tvLayout.background,'#314159');
+  const explicitScreens=vm.runInContext('JSON.parse('+JSON.stringify(JSON.stringify([{phaseIndex:0,layout:explicit}]))+')',context);
+  assert.equal(window._tvLiveBuildSnapshot({...idle,tvScreens:explicitScreens}).tvLayout.background,'#314159');
+  assert.equal(window._tvLiveBuildSnapshot({...idle,tvScreens:explicitScreens,tvActiveScreen:0}).tvLayout.background,'#314159');
   let groupSnapshot=window._tvLiveBuildSnapshot(super8,Date.parse('2026-10-22T21:02:10Z'));
   assert.equal(groupSnapshot.courts.length,6,'snapshot preserves all physical courts');
   assert.equal(groupSnapshot.courts.filter(c=>c.super8Group).length,3);
@@ -1018,6 +1053,23 @@ if (process.env.SP_TV_CAPTURE_CAMIS) fs.writeFileSync(process.env.SP_TV_CAPTURE_
   assert.equal((groupHtml.match(/data-tv-court=/g)||[]).length,6,'sponsors still target six physical courts');
   assert.match(groupHtml,/Areia A e Areia B · Grupo B1/);
   assert.match(groupHtml,/7 rodadas · 14 jogos/);
+  assert.equal((groupHtml.match(/data-tv-autoscroll="super8:/g)||[]).length,6,'each physical court has an independent loop');
+  for(const card of groupSnapshot.courts.filter(c=>c.super8Group)) {
+    const games=card.super8Group.games;
+    assert.equal(games.filter(g=>g.lane===0).length,7);
+    assert.equal(games.filter(g=>g.lane===1).length,7);
+    assert.equal(new Set(games.map(g=>g.number)).size,14,'no duplicated matches between lanes');
+    for(const lane of [0,1])assert.deepEqual(Array.from(games.filter(g=>g.lane===lane),g=>g.round),[1,2,3,4,5,6,7]);
+  }
+  for(const court of ['Areia A','Quadra fora do par']) {
+    const conflict=window._tvLiveBuildSnapshot({...idle,matches:idle.matches.map(m=>m.scheduledGroupLabel==='B1' && m.round===1?{...m,court}:m)});
+    const games=conflict.courts.find(c=>c.super8Group?.label==='B1').super8Group.games;
+    assert.equal(games.filter(g=>g.lane===0).length,7,'court conflict does not duplicate or lose a game');
+    assert.equal(games.filter(g=>g.lane===1).length,7);
+  }
+  const partial=window._tvLiveBuildSnapshot({...idle,matches:idle.matches.filter(m=>m.id!=='B1-1-1')});
+  assert(!partial.courts.some(c=>c.super8Group?.label==='B1'),'partial group does not invent seven matches per court');
+
   assert.equal((groupHtml.match(/class="tv-series-game tv-series-active"/g)||[]).length,6);
   const first=super8.matches.find(m=>m.id==='B1-1-0');first.winner=first.p1;first.scoreP1=4;first.scoreP2=3;
   const next=super8.matches.find(m=>m.id==='B1-2-0');next.court='Areia A';next.courtCalledAt='2026-10-22T21:03:00Z';
