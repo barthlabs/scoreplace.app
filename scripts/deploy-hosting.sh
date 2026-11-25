@@ -19,7 +19,7 @@
 #      (igual · main atrás · main À FRENTE ⇒ aborta · divergiu ⇒ aborta). O terceiro é o
 #      que faltava até 22/set/2026: o script dizia "já contém este commit" e publicava o
 #      estado ANTIGO por cima do novo, anunciando sucesso.
-#   2.5 roda TODOS os portões (preflight). O `--dry-run` sai AQUI, sem tocar no remoto.
+#   2.5 valida principal/configurações e roda preflight. O `--dry-run` sai sem tocar no remoto.
 #   2.8 empurra o commit pro `main` com `--force-with-lease` sobre a base congelada, e
 #      confirma no REMOTO por `ls-remote`.
 #      ⚠️ É o main que passa a descrever o ar, então ele é atualizado ANTES do upload:
@@ -49,6 +49,8 @@ cd "$RAIZ"
 
 DRY=0
 [[ "${1:-}" == "--dry-run" ]] && DRY=1
+RESUME_BACKUPS=0
+[[ "${1:-}" == "--resume-backups" ]] && RESUME_BACKUPS=1
 RESUME_PREFLIGHT=0
 [[ "${1:-}" == "--resume-preflight" ]] && RESUME_PREFLIGHT=1
 
@@ -81,7 +83,7 @@ printf '%s\n' "$$" > "$SP_LOCK/pid"
 _sp_state() { printf '%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "${2:-}" > "$SP_STATE"; }
 _sp_state 'iniciando' "pid=$$ log=$SP_LOG"
 exec > >(tee -a "$SP_LOG") 2>&1
-_sp_finish() { local rc=$?; _sp_state "$([[ $rc -eq 0 ]] && echo concluído || echo falhou)" "rc=$rc"; rm -rf "$SP_LOCK"; exit "$rc"; }
+_sp_finish() { local rc=$?; if [[ "${SP_BACKUPS_PENDING:-0}" == 1 ]]; then _sp_state published-backups-pending "rc=$rc site confirmado; retome com --resume-backups"; rm -rf "$SP_LOCK"; exit "$rc"; fi; _sp_state "$([[ $rc -eq 0 ]] && echo concluído || echo falhou)" "rc=$rc"; rm -rf "$SP_LOCK"; exit "$rc"; }
 trap _sp_finish EXIT
 
 # ⛔⛔ A CONTA DE SERVIÇO TEM DE VENCER A SESSÃO DE USUÁRIO VELHA.
@@ -209,12 +211,101 @@ cat > "$DEST/.deploy-alignment.json" <<JSON
   "por": "scripts/deploy-hosting.sh"
 }
 JSON
+cat > "$DEST/release.json" <<JSON
+{"commit":"$COMMIT","versao":"$VERSAO"}
+JSON
 echo "▸ extraído em $DEST (carimbado)"
 }
 
 
+validar_configuracao_regional_local() {
+  cd "$RAIZ"
+  local blob="$COMMIT:operation-regions.json"
+  local tamanho
+  if ! git cat-file -e "$blob" 2>/dev/null; then
+    echo "✗ configuração regional não está no commit $COMMIT — abortando antes do push."
+    return 1
+  fi
+  tamanho="$(git cat-file -s "$blob")" || return 1
+  if [[ "$tamanho" -le 0 ]]; then
+    echo "✗ configuração regional vazia no commit — abortando."
+    return 1
+  fi
+  for manifesto in .claude/tmp/operation-regions-manifest-v2.json .claude/tmp/operation-regions-manifest-v3.json .claude/tmp/operation-legacy-gate-manifest-v2.json; do
+    if [[ ! -s "$manifesto" ]]; then
+      echo "✗ manifesto regional ausente: $manifesto — abortando."
+      return 1
+    fi
+  done
+  if [[ ! -s operation-regions.json ]] || ! cmp -s operation-regions.json <(git show "$blob"); then
+    echo "✗ configuração regional local diverge do commit — abortando."
+    return 1
+  fi
+  local v3blob="$COMMIT:operation-regions-v3.json"
+  if ! git cat-file -e "$v3blob" 2>/dev/null || [[ ! -s operation-regions-v3.json ]] ||
+     ! cmp -s operation-regions-v3.json <(git show "$v3blob"); then
+    echo "✗ configuração v3 ausente ou divergente do commit — abortando."
+    return 1
+  fi
+  # Placar, chamada e controle usam seus cortes dirigidos; as revisões servidas
+  # são conferidas abaixo, inclusive a rota de recuperação.
+  node scripts/check-operation-regions-mixed.js v2 --require-court-control-refresh || return 1
+  node scripts/check-operation-regions-mixed.js v3 --require-court-control-refresh || return 1
+  node scripts/generate-operation-regions-config.js --check || return 1
+  node scripts/generate-operation-regions-v3-config.js --check || return 1
+  echo "  ✓ configuração regional no commit: $(git rev-parse "$blob")"
+}
+
+verificar_contingencia_regional() {
+  cd "$RAIZ"
+  scripts/deploy-operation-regions.sh --check-v2-live || return 1
+  scripts/deploy-operation-regions.sh --check-v3 || return 1
+  scripts/deploy-operation-regions.sh --check-legacy-gate-live || return 1
+}
+fingerprint_regional() {
+  cd "$RAIZ"
+  node - <<'NODE'
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+const files = [
+  '.claude/tmp/operation-regions-manifest-v2.json',
+  '.claude/tmp/operation-regions-manifest-v3.json',
+  '.claude/tmp/operation-legacy-gate-manifest-v2.json',
+  'operation-regions.json',
+  'operation-regions-v3.json'
+];
+try {
+  const hash = crypto.createHash('sha256');
+  for (const file of files) {
+    const data = fs.readFileSync(file);
+    if (!data.length) throw new Error(file + ' está vazio');
+    hash.update(file).update('\0').update(data).update('\0');
+  }
+  process.stdout.write(hash.digest('hex'));
+} catch (error) {
+  console.error('✗ fingerprint regional indisponível: ' + error.message);
+  process.exitCode = 1;
+}
+NODE
+}
+
 VERSAO="$(tr -d '[:space:]' < version.txt)"
 COMMIT="$(git rev-parse HEAD)"
+if [[ $RESUME_BACKUPS -eq 1 ]]; then
+  node scripts/hosting-rollout-state.js resume-check "$COMMIT" "$VERSAO" || exit 1
+  SP_BACKUPS_PENDING=1
+  _sp_state published-backups-pending "retomando contingência de ${COMMIT:0:8}"
+  if ! verificar_contingencia_regional; then "$RAIZ/scripts/backup-bundle.sh" || true; exit 1; fi
+  node scripts/hosting-rollout-state.js complete "$COMMIT" "$VERSAO" || exit 1
+  "$RAIZ/scripts/backup-bundle.sh" || true
+  SP_BACKUPS_PENDING=0
+  echo "✓ principal, site e contingência conferidos; sem repetir upload ou versão."
+  exit 0
+fi
+if git ls-files --error-unmatch release.json >/dev/null 2>&1; then
+  echo "✗ release.json deve ser gerado apenas na cópia de publicação."; exit 1
+fi
+
 
 # ⏱️ QUANTO CADA FASE CUSTA — medido, não estimado. Ordem do dono (13/set/2026):
 # _"mais de 20 min a cada publicacao parece um funcionario publico burocrata"_. Antes de
@@ -494,6 +585,13 @@ if [[ -f "$RAIZ/scripts/check-hosting-prerequisites.js" ]]; then
   node "$RAIZ/scripts/check-hosting-prerequisites.js" || exit 1
 fi
 
+validar_configuracao_regional_local || exit 1
+fase "servidor principal disponível"
+if [[ $DRY -eq 1 ]]; then
+  node scripts/check-primary-operation-readiness.js --dry-run || exit 1
+else
+  node scripts/check-primary-operation-readiness.js || exit 1
+fi
 fase "gates de versão"
 SP_PREFLIGHT_ATTEST="$SP_DEPLOY_DIR/preflight-${COMMIT}.ok"
 PRE_OK=1
@@ -569,80 +667,7 @@ fi
 # ⛔ `--force-with-lease` SOBRE A BASE CONGELADA é a GARANTIA, não as conferências acima.
 # Qualquer avanço do remoto depois da amostra faz o push RECUSAR — e sem push não há upload.
 # MARCO: push-do-main
-verificar_contingencia_regional() {
-  cd "$RAIZ"
-  local blob="$COMMIT:operation-regions.json"
-  local tamanho
-  if ! git cat-file -e "$blob" 2>/dev/null; then
-    echo "✗ configuração regional não está no commit $COMMIT — abortando antes do push."
-    return 1
-  fi
-  tamanho="$(git cat-file -s "$blob")" || return 1
-  if [[ "$tamanho" -le 0 ]]; then
-    echo "✗ configuração regional vazia no commit — abortando."
-    return 1
-  fi
-  for manifesto in .claude/tmp/operation-regions-manifest-v2.json .claude/tmp/operation-regions-manifest-v3.json .claude/tmp/operation-legacy-gate-manifest-v2.json; do
-    if [[ ! -s "$manifesto" ]]; then
-      echo "✗ manifesto regional ausente: $manifesto — abortando."
-      return 1
-    fi
-  done
-  if [[ ! -s operation-regions.json ]] || ! cmp -s operation-regions.json <(git show "$blob"); then
-    echo "✗ configuração regional local diverge do commit — abortando."
-    return 1
-  fi
-  local v3blob="$COMMIT:operation-regions-v3.json"
-  if ! git cat-file -e "$v3blob" 2>/dev/null || [[ ! -s operation-regions-v3.json ]] ||
-     ! cmp -s operation-regions-v3.json <(git show "$v3blob"); then
-    echo "✗ configuração v3 ausente ou divergente do commit — abortando."
-    return 1
-  fi
-  # Placar, chamada e controle usam seus cortes dirigidos; as revisões servidas
-  # são conferidas abaixo, inclusive a rota de recuperação.
-  node scripts/check-operation-regions-mixed.js v2 --require-court-control-refresh || return 1
-  node scripts/check-operation-regions-mixed.js v3 --require-court-control-refresh || return 1
-  scripts/deploy-operation-regions.sh --check-v2-live || return 1
-  scripts/deploy-operation-regions.sh --check-v3 || return 1
-  scripts/deploy-operation-regions.sh --check-legacy-gate-live || return 1
-  node scripts/generate-operation-regions-config.js --check || return 1
-  node scripts/generate-operation-regions-v3-config.js --check || return 1
-  echo "  ✓ configuração regional no commit: $(git rev-parse "$blob")"
-}
-
-verificar_contingencia_regional || exit 1
-# A malha remota já foi conferida nesta tentativa. Guardar apenas a integridade
-# dos cinco insumos locais evita repetir 48 descrições de serviço após o push.
-# Este digest vive só neste processo; uma retomada faz nova conferência remota.
-# Limite deliberado: uma mudança EXTERNA em algum serviço após o gate remoto e
-# antes do upload não é detectada nesta tentativa; a próxima detectará. O
-# fingerprint abaixo protege somente os cinco arquivos locais.
-fingerprint_regional() {
-  cd "$RAIZ"
-  node - <<'NODE'
-const fs = require('node:fs');
-const crypto = require('node:crypto');
-const files = [
-  '.claude/tmp/operation-regions-manifest-v2.json',
-  '.claude/tmp/operation-regions-manifest-v3.json',
-  '.claude/tmp/operation-legacy-gate-manifest-v2.json',
-  'operation-regions.json',
-  'operation-regions-v3.json'
-];
-try {
-  const hash = crypto.createHash('sha256');
-  for (const file of files) {
-    const data = fs.readFileSync(file);
-    if (!data.length) throw new Error(file + ' está vazio');
-    hash.update(file).update('\0').update(data).update('\0');
-  }
-  process.stdout.write(hash.digest('hex'));
-} catch (error) {
-  console.error('✗ fingerprint regional indisponível: ' + error.message);
-  process.exitCode = 1;
-}
-NODE
-}
+validar_configuracao_regional_local || exit 1
 REGIONAL_FINGERPRINT="$(fingerprint_regional)" || exit 1
 [[ -n "$REGIONAL_FINGERPRINT" ]] || { echo "✗ fingerprint regional vazio — abortando."; exit 1; }
 echo "▸ empurrando o main ANTES do upload (falhar aqui é barato)…"
@@ -794,6 +819,20 @@ if [[ "${AR:-}" != "$VERSAO" ]]; then
   exit 1
 fi
 echo "✓ NO AR: $VERSAO  ·  main alinhado em ${COMMIT:0:8}"
+cd "$RAIZ"
+SP_BACKUPS_PENDING=1
+node scripts/hosting-rollout-state.js record "$COMMIT" "$VERSAO" || exit 1
+_sp_state published-backups-pending "site confirmado; verificando contingência"
+# A entrega do principal e do site precede a conferência remota dos backups.
+# MARCO: contingencia-depois-do-site
+if ! verificar_contingencia_regional; then
+  "$RAIZ/scripts/backup-bundle.sh" || true
+  echo "✗ site publicado; contingência pendente. Retome com --resume-backups."
+  exit 1
+fi
+node scripts/hosting-rollout-state.js complete "$COMMIT" "$VERSAO" || exit 1
+SP_BACKUPS_PENDING=0
+
 
 # ── 8. o backup JÁ FOI — o push aconteceu no passo 3, antes do upload ───────
 # ⛔ Não há push aqui. Ele saiu daqui de propósito: enquanto morou depois do upload, uma

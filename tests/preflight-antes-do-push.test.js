@@ -159,15 +159,22 @@ function cenario(opcoes) {
   // A prontidão da nova capacidade é validada pelo gate próprio; o laboratório
   // de ordem usa serviço fictício e precisa manter essa validação externa neutra.
   fs.writeFileSync(path.join(repo, 'scripts', 'check-end-court-readiness.js'), 'process.exit(0);\n');
+  fs.writeFileSync(path.join(repo,'scripts','check-primary-operation-readiness.js'),
+    'const fs=require("fs");fs.appendFileSync('+JSON.stringify(path.join(marcas,'ordem.txt'))+',"principal\\n");'+
+    (o.principalDivergente?'process.exit(1);':'process.exit(0);'));
+  fs.writeFileSync(path.join(repo,'scripts','hosting-rollout-state.js'),
+    'const fs=require("fs");const mode=process.argv[2];'+
+    'fs.appendFileSync('+JSON.stringify(path.join(marcas,'ordem.txt'))+',mode+"\\n");'+
+    'if(!fs.existsSync('+JSON.stringify(path.join(marcas,'publicado.txt'))+'))process.exit(1);');
   fs.writeFileSync(path.join(repo, 'scripts', 'deploy-operation-regions.sh'),
-    '#!/bin/sh\n' + (o.regiaoDivergente ? 'exit 1\n' :
+    '#!/bin/sh\necho backup >> '+JSON.stringify(path.join(marcas,'ordem.txt'))+'\n' + (o.regiaoDivergente ? 'exit 1\n' :
       o.fingerprintInicialFalha ? ': > .claude/tmp/operation-regions-manifest-v2.json\nexit 0\n' : 'exit 0\n'));
   fs.chmodSync(path.join(repo, 'scripts', 'deploy-operation-regions.sh'), 0o755);
   fs.writeFileSync(path.join(repo, 'scripts', 'generate-operation-regions-config.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'generate-operation-regions-v3-config.js'), 'process.exit(0);\n');
   // O gate de uniformidade regional é coberto na suíte própria; este cenário
   // mantém o foco na ordem preflight → push → Hosting.
-  fs.writeFileSync(path.join(repo, 'scripts', 'check-operation-regions-mixed.js'), 'process.exit(0);\n');
+  fs.writeFileSync(path.join(repo, 'scripts', 'check-operation-regions-mixed.js'), o.fingerprintInicialFalha ? 'require("fs").writeFileSync(".claude/tmp/operation-regions-manifest-v2.json","");process.exit(1);\n' : 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.0', scripts: {} }));
   // node_modules que o script exige encontrar (raiz + subprojeto)
   fs.mkdirSync(path.join(repo, 'node_modules', '@playwright', 'test'), { recursive: true });
@@ -208,6 +215,7 @@ function cenario(opcoes) {
         JSON.stringify(path.join(repo, o.alteraRegionalAposGate)) + ' ;; esac\n'
       : '') +
     'case "$*" in *"deploy --only hosting"*)\n' +
+    '  echo hosting >> '+JSON.stringify(path.join(marcas,'ordem.txt'))+'\n' +
     '  cat js/marcador-release.txt >> ' + JSON.stringify(path.join(marcas, 'publicado.txt')) + ' 2>/dev/null\n' +
     ';; esac\n' +
     'case "$*" in\n' +
@@ -300,6 +308,7 @@ function cenario(opcoes) {
     cwd: repo, encoding: 'utf8',
     env: Object.assign({}, process.env, { PATH: bin + ':' + process.env.PATH, TMPDIR: base })
   });
+  if(process.env.SP_PREFLIGHT_TRACE && r.status!==0)console.error('SCENARIO',JSON.stringify(o),'\n'+r.stdout+'\n'+r.stderr);
   const remotoDepois = execFileSync('git', ['rev-parse', 'main'], { cwd: remoto, encoding: 'utf8' }).trim();
   const chamouFirebase = fs.existsSync(path.join(marcas, 'firebase.txt'))
     ? fs.readFileSync(path.join(marcas, 'firebase.txt'), 'utf8') : '';
@@ -310,6 +319,9 @@ function cenario(opcoes) {
   return {
     status: r.status, saida: (r.stdout || '') + (r.stderr || ''),
     remotoAntes: remotoAntes2, remotoDepois, shaRelease: shaRelease2, chamouFirebase, publicado, pushChamado,
+    ordem:fs.existsSync(path.join(marcas,'ordem.txt'))?fs.readFileSync(path.join(marcas,'ordem.txt'),'utf8'):'',
+    retomar:()=>spawnSync('bash',['scripts/deploy-hosting.sh','--resume-backups'],{cwd:repo,encoding:'utf8',env:{...process.env,PATH:bin+':'+process.env.PATH,TMPDIR:base}}),
+    lerFirebase:()=>fs.existsSync(path.join(marcas,'firebase.txt'))?fs.readFileSync(path.join(marcas,'firebase.txt'),'utf8'):'',
     limpar: () => { try { fs.rmSync(base, { recursive: true, force: true }); } catch (e) {} }
   };
 }
@@ -320,7 +332,7 @@ for (const [nome, opcoes] of [
   ['manifestos presentes, JSON ausente', { semJsonRegional: true }],
   ['JSON presente, manifesto regional ausente', { semManifestoRegional: true }],
   ['JSON presente, manifesto da trava ausente', { semManifestoGate: true }],
-  ['serviço regional divergente', { regiaoDivergente: true }]
+  ['servidor principal divergente', { principalDivergente: true }]
 ]) {
   const c = cenario({ preflightPassa: true, ...opcoes });
   try {
@@ -353,12 +365,20 @@ for (const file of [
     ok(!/deploy --only hosting/.test(c.chamouFirebase), file + ': alteração não publica');
   } finally { c.limpar(); }
 }
-ok((sh.match(/verificar_contingencia_regional \|\| exit 1/g) || []).length === 1,
-  'a malha remota é conferida uma única vez por tentativa');
-// O ensaio não simula mudança externa de serviço depois do gate: por escolha
-// operacional, esse intervalo não é coberto pela segunda checagem local.
-ok(/mudança EXTERNA em algum serviço após o gate remoto[\s\S]*não é detectada nesta tentativa/.test(sh),
-  'o limite da conferência única da malha está explícito no roteiro');
+ok(sh.indexOf('# MARCO: contingencia-depois-do-site')>sh.indexOf('echo "✓ NO AR:'),
+ 'contingência remota só roda após confirmar o ar');
+{
+ const c=cenario({preflightPassa:true,regiaoDivergente:true});
+ try {
+   ok(c.status!==0,'backup divergente retorna estado parcial não-zero');
+   ok(/deploy --only hosting/.test(c.chamouFirebase),'falha do backup acontece após publicar site');
+   ok(c.ordem.indexOf('principal')<c.ordem.indexOf('hosting') && c.ordem.indexOf('hosting')<c.ordem.indexOf('backup'),'ordem principal → site → backup');
+   ok(/contingência pendente/.test(c.saida),'mensagem preserva confirmação do site');
+   const uploads=c.lerFirebase(),resume=c.retomar();
+   eq(c.lerFirebase(),uploads,'retomada de backups não repete upload');
+   ok(resume.status!==0,'backup ainda divergente continua pendente');
+ }finally{c.limpar();}
+}
 
 console.log('▸ ② preflight REPROVADO: não empurra e não publica');
 {
