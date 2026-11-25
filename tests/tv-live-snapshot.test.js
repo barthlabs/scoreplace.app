@@ -993,4 +993,42 @@ if (process.env.SP_TV_CAPTURE_CUSTOM) {
 }
 if (process.env.SP_TV_CAPTURE_CAMIS) fs.writeFileSync(process.env.SP_TV_CAPTURE_CAMIS,
   popupHtml.replace('<div id="tv-root"></div>', '<div id="tv-root">' + camisHtml + '</div>'));
+{
+  const assignments=[['B1','Categoria B',1,1,[1,2]],['B2','Categoria B',2,2,[1,2]],['C1','Categoria C',1,1,[3,4]],['C2','Categoria C',2,1,[5,6]],['C3','Categoria C',3,2,[3,4]],['C4','Categoria C',4,2,[5,6]]]
+    .map(([label,category,groupNumber,entry,courts])=>({label,category,groupNumber,entry,courts,phaseIndex:0}));
+  const super8={id:'super8-six-courts',name:'Super 8',courtCount:6,courtNames:['Areia A','Areia B','Areia C','Areia D','Areia E','Areia F'],
+    phases:[{kind:'classification',classification:{structure:'groups',partnerRotation:'groups'}}],
+    scheduleWindow:{interleavedPlan:{schema:2,groupAssignments:assignments}},matches:[]};
+  assignments.forEach(row=>{for(let round=1;round<=7;round++)for(let lane=0;lane<2;lane++) {
+    const names=Array.from({length:8},(_,i)=>row.label+' player'+i);
+    super8.matches.push({id:row.label+'-'+round+'-'+lane,isMonarch:true,phaseIndex:0,category:row.category,groupIdx:row.groupNumber-1,
+      scheduledGroupLabel:row.label,round,scheduledGameNumber:super8.matches.length+1,
+      p1:names.slice(lane*4,lane*4+2).join(' / '),p2:names.slice(lane*4+2,lane*4+4).join(' / '),
+      team1:names.slice(lane*4,lane*4+2),team2:names.slice(lane*4+2,lane*4+4),
+      team1Uids:names.slice(lane*4,lane*4+2),team2Uids:names.slice(lane*4+2,lane*4+4),
+      ...(row.entry===1 && round===1?{court:super8.courtNames[row.courts[lane]-1],courtCalledAt:'2026-10-22T21:00:00Z',scoreP1:2,scoreP2:1}:{})});
+  }});
+  let groupSnapshot=window._tvLiveBuildSnapshot(super8,Date.parse('2026-10-22T21:02:10Z'));
+  assert.equal(groupSnapshot.courts.length,6,'snapshot preserves all physical courts');
+  assert.equal(groupSnapshot.courts.filter(c=>c.super8Group).length,3);
+  assert.deepEqual(Array.from(groupSnapshot.courts.filter(c=>c.super8Group),c=>c.super8Group.label),['B1','C1','C2']);
+  assert(groupSnapshot.courts.filter(c=>c.super8Group).every(c=>c.super8Group.games.length===14 && c.super8Group.rounds===7));
+  let groupHtml=window._tvLiveBodyHtml(groupSnapshot);
+  assert.equal((groupHtml.match(/data-super8-group=/g)||[]).length,3);
+  assert.equal((groupHtml.match(/data-tv-court=/g)||[]).length,6,'sponsors still target six physical courts');
+  assert.match(groupHtml,/Areia A e Areia B · Grupo B1/);
+  assert.match(groupHtml,/7 rodadas · 14 jogos/);
+  assert.equal((groupHtml.match(/class="tv-series-game tv-series-active"/g)||[]).length,6);
+  const first=super8.matches.find(m=>m.id==='B1-1-0');first.winner=first.p1;first.scoreP1=4;first.scoreP2=3;
+  const next=super8.matches.find(m=>m.id==='B1-2-0');next.court='Areia A';next.courtCalledAt='2026-10-22T21:03:00Z';
+  groupSnapshot=window._tvLiveBuildSnapshot(super8,Date.parse('2026-10-22T21:04:00Z'));
+  assert.equal(groupSnapshot.courts.find(c=>c.super8Group?.label==='B1').super8Group.games.filter(g=>g.status==='done').length,1);
+  const conflict={id:'other-elim',phaseIndex:1,round:1,category:'Categoria B',p1:'Outro',p2:'Outro 2',court:'Areia B',courtCalledAt:'2026-10-22T21:05:00Z'};
+  const mixed=window._tvLiveBuildSnapshot({...super8,matches:super8.matches.filter(m=>m.id!=='B1-1-1').concat(conflict)},Date.parse('2026-10-22T21:06:00Z'));
+  assert(!mixed.courts.some(c=>c.super8Group?.label==='B1'),'do not merge an elimination with an active group');
+  const customSuper8=window._tvLiveBuildSnapshot({...super8,tvLayout:window.ScoreplaceTvLayout.defaults()},Date.parse('2026-10-22T21:04:00Z'));
+  assert.match(window._tvLiveBodyHtml(customSuper8),/data-super8-group=/,'custom layout uses same shared group renderer');
+  if(process.env.SP_TV_CAPTURE_SUPER8) fs.writeFileSync(process.env.SP_TV_CAPTURE_SUPER8,
+    popupHtml.replace('<div id="tv-root"></div>','<div id="tv-root">'+window._tvLiveBodyHtml(groupSnapshot)+'</div>'));
+}
 console.log('✓ TV: 6 quadras chamadas, relógio, placar ao vivo, 3 resultados e saldo geral por time');
