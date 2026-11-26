@@ -12073,7 +12073,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
           '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((gameDiff >= 0 ? '#8b5cf6' : '#f87171'), 'color') + ';" title="Saldo de games">' + (gameDiff >= 0 ? '+' : '') + gameDiff + '</td>' +
           '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f59e0b,#f59e0b);" title="Tie-breaks V-D">' + s.tiebreaksWon + '-' + s.tiebreaksLost + '</td>';
       }
-      row += ((_configuredColumns || (_compacta && !_isSuperEightMon)) ? '' : '<td style="padding:6px 10px;text-align:center;color:var(--text-muted);font-weight:600;" title="Aproveitamento (V/J)">' + winRatePct + '%</td>') +
+      row += ((_configuredColumns || (_compacta && !_isSuperEightMon)) ? '' : '<td style="padding:6px 10px;text-align:center;color:var(--text-muted);font-weight:600;" title="' + _percentageTitle + '">' + winRatePct + '%</td>') +
       '</tr>';
       return row;
     }).join('');
