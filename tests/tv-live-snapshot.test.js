@@ -1062,7 +1062,32 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
     normal.matches.filter(m=>m.scheduledGameNumber>=7&&m.scheduledGameNumber<=11).forEach(m=>Object.assign(m,{court:normal.courtNames[m.scheduledGameNumber-7],courtCalledAt:'2026-10-22T21:02:00Z'}));
     const readForward=t=>window._tvLiveBuildSnapshot(t,Date.parse('2026-10-22T21:06:00Z'));
     const numbers=snap=>Array.from(snap.nextGames,m=>m.number);
+    // AA CC DD, depois B1 em outra quadra: B2 continua à frente de F.
+    const grade=JSON.parse(JSON.stringify(fast));grade.id='grade-tv-ordered';
+    grade.matches.forEach(m=>{for(const key of ['winner','resultAt','court','courtCalledAt','startedAt','courtClockBaseAt','scoreP1','scoreP2','courtReleasedAt'])delete m[key];
+      if(m.scheduledGameNumber<=6)Object.assign(m,{court:grade.courtNames[m.scheduledGameNumber-1],courtCalledAt:'2026-10-22T21:00:00Z'});
+      if(m.scheduledGameNumber===1||m.scheduledGameNumber===5)m.courtReleasedAt='2026-10-22T21:04:00Z';
+      if(m.scheduledGameNumber===7)Object.assign(m,{court:grade.courtNames[0],courtCalledAt:'2026-10-22T21:05:00Z'});
+    });
+    const savedHelpers=Object.fromEntries(['_bracketOperationsSelect','_bracketCourtReleased','_bracketCourtReleaseCache','_bracketCourtPostponed','_bracketCourtPostponedReady','_bracketPostponedOrder'].map(k=>[k,window[k]]));
+    const gradeReleased=Object.fromEntries(grade.matches.filter(m=>m.courtReleasedAt).map(m=>[m.id,m.courtReleasedAt]));
+    window._bracketCourtReleased=()=>gradeReleased;window._bracketCourtReleaseCache={[grade.id]:{released:gradeReleased,lastReleasedByCourt:{[grade.courtNames[4]]:{releasedAt:'2026-10-22T21:04:00Z'}}}};
+    delete window._bracketOperationsSelect;
+    const gradeBefore=JSON.stringify(grade),gradeFallback=readForward(grade);
+    assert.equal(gradeFallback.nextGame.number,8,'fallback anuncia segundo B, não F da quadra liberada');
+    assert.deepEqual(numbers(gradeFallback),Array.from({length:12},(_,i)=>i+8));
+    context._bracketOperationsGroup=()=>null;context._matchCardTimestamp=v=>Date.parse(v)||0;
+    window._bracketCourtPostponed=()=>[];window._bracketCourtPostponedReady=()=>[];window._bracketPostponedOrder=list=>list;
+    const selectStart=bracketSource.indexOf('window._bracketOperationsSelect = function'),selectEnd=bracketSource.indexOf('\nfunction _bracketReconcileOperationalOrder(',selectStart);
+    vm.runInContext(bracketSource.slice(selectStart,selectEnd),context);
+    assert.equal(window._bracketOperationsSelect(grade).next.scheduledGameNumber,8,'seletor real segue grade');
+    assert.deepEqual(numbers(readForward(grade)),numbers(gradeFallback),'controle real e fallback anunciam os mesmos doze jogos');
+    assert.equal(JSON.stringify(grade),gradeBefore);
+    for(const [key,value] of Object.entries(savedHelpers)){if(value===undefined)delete window[key];else window[key]=value;}
+
     assert.deepEqual(numbers(readForward(normal)),Array.from({length:12},(_,i)=>i+12),'12 seguido de 13–23, sem reanunciar os ativos');
+    // Os jogos antigos já saíram da quadra e aguardam placar, não nova chamada.
+    forward.matches.filter(m=>m.scheduledGameNumber>=7&&m.scheduledGameNumber<=11).forEach(m=>Object.assign(m,{courtCalledAt:'2026-10-22T21:01:00Z',courtReleasedAt:'2026-10-22T21:02:00Z'}));
     for(let i=0;i<5;i++)forward.matches.push({id:'holder-'+i,category:'Outra',phaseIndex:0,p1:'Holder '+i+' A',p2:'Holder '+i+' B',court:forward.courtNames[i],courtCalledAt:'2026-10-22T21:02:00Z'});
     const unchanged=JSON.stringify(forward),fallback=readForward(forward);
     assert.equal(fallback.nextGame.number,12,'quadra livre escolhe 12 mesmo com antigos ainda na fila');

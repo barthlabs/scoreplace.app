@@ -169,6 +169,64 @@ async function run() {
     await assert.rejects(invoke('applyTournamentFormat',{tournamentId:oldRef.id,fmt2:invalid}),{code:'failed-precondition'});
     console.log('Fast 8 real config: alternância + terceiro opcional atômicos, classificação e jogos físicos preservados');
   }
+  // Eixos novos + combinação com zero devem ser uma única edição atômica.
+  {
+    const moverId='tour_'+Date.now()+'_'+require('node:crypto').randomBytes(16).toString('hex');
+    const base=['Fem','Masc'];
+    const rotation=fmt.defaultConfig('Beach Tennis');
+    Object.assign(rotation,{disputa:'dupla',parceria:'rotation_groups',classifAtiva:true,grupos:1,classificados:2,classifScope:'per_group',classificationSliderMode:'category'});
+    rotation.eliminatoria.ativa=false;
+    rotation.rotationCategoryRules=base.map((category,i)=>({category,groupFormation:{mode:'size',value:8},rounds:i?7:5,allowRepeatPartners:false,destination:'ranking'}));
+    const initial=fmt.compileToPhases(rotation,{sport:'Beach Tennis',categories:base});
+    await invoke('createTournament',{tournamentId:moverId,config:{...initial.topLevel,name:'Matriz sintética',sport:'Beach Tennis',fmt2:rotation,
+      genderCategories:['fem','masc'],skillCategories:[],ageCategories:[],customCategories:[],gameTypes:'duplas',
+      combinedCategories:base,excludedCategories:[],maxParticipants:32,maxParticipantsByCategory:{Fem:16,Masc:16}}});
+    const mr=db.collection('tournaments').doc(moverId);
+    const pristine=(await mr.get()).data();
+    assert(pristine.canonicalRegistrationMigration.fingerprint);
+    const all=['Fem A','Fem B','Fem C','Fem PROFESSORES','Masc A','Masc B','Masc C','Masc PROFESSORES'];
+    const active=all.filter(c=>c!=='Fem PROFESSORES');
+    const caps=Object.fromEntries(active.map((c,i)=>[c,c==='Masc PROFESSORES'?8:i%2?24:16]));
+    const next=structuredClone(rotation);
+    next.rotationCategoryRules=active.map(category=>({category,groupFormation:{mode:'size',value:8},rounds:7,allowRepeatPartners:false,destination:'ranking'}));
+    const projected=fmt.compileToPhases(next,{sport:'Beach Tennis',categories:active});
+    const patch={...projected.topLevel,fmt2:next,genderCategories:['fem','masc'],skillCategories:['A','B','C'],customCategories:['PROFESSORES'],ageCategories:[],gameTypes:'duplas',
+      combinedCategories:active,excludedCategories:['Fem PROFESSORES'],maxParticipantsByCategory:caps,maxParticipants:Object.values(caps).reduce((a,b)=>a+b,0)};
+    const rejectedUnchanged=async(pattern,uid)=>{
+      const before=(await mr.get()).data();
+      await assert.rejects(invoke('updateTournamentConfiguration',{tournamentId:moverId,patch},uid),pattern);
+      assert.deepEqual((await mr.get()).data(),before);
+    };
+    await rejectedUnchanged({code:'permission-denied'},'visitor');
+    const fem=pristine.categoryDefinitions.find(d=>d.label==='Fem').id;
+    await mr.update({placeholderReservations:[{id:'reserved',categoryId:fem}]});
+    await rejectedUnchanged(/reservas/);
+    await mr.set(pristine);
+    const rid=require('../functions/registration-core.js').registrationId('uid:synthetic-person',fem);
+    const reg={registrationId:rid,tournamentId:moverId,categoryId:fem,participantKey:'uid:synthetic-person',participantKind:'account',participantUid:'synthetic-person',status:'confirmed',fixedPairId:null};
+    await mr.collection('registrations').doc(rid).set(reg);
+    await mr.update({'canonicalRegistrationMigration.registrationCount':1});
+    await rejectedUnchanged(/inscrições vinculadas/);
+    assert.deepEqual((await mr.collection('registrations').doc(rid).get()).data(),reg);
+    await mr.collection('registrations').doc(rid).delete();
+    await mr.set(pristine);
+    await mr.update({registrationSettings:{pricing:{mode:'category',centsByCategory:{Fem:1000}}}});
+    await rejectedUnchanged(/preço específico/);
+    await mr.set(pristine);
+    await invoke('updateTournamentConfiguration',{tournamentId:moverId,patch});
+    const stored=(await mr.get()).data();
+    assert.deepEqual(stored.combinedCategories,active);
+    assert.deepEqual(stored.excludedCategories,['Fem PROFESSORES'],'nenhum pai órfão persiste');
+    assert.deepEqual(stored.categoryDefinitions.map(d=>d.label),active);
+    assert.deepEqual(stored.maxParticipantsByCategory,caps);
+    assert.equal(stored.maxParticipants,patch.maxParticipants);
+    assert.deepEqual(stored.fmt2.rotationCategoryRules,next.rotationCategoryRules);
+    assert.equal(stored.name,pristine.name,'configuração omitida preservada');
+    const withoutIntent={combinedCategories:active.slice(1),excludedCategories:[],maxParticipantsByCategory:Object.fromEntries(Object.entries(caps).filter(([c])=>c!==active[0])),maxParticipants:Object.entries(caps).filter(([c])=>c!==active[0]).reduce((n,[,v])=>n+v,0)};
+    await assert.rejects(invoke('updateTournamentConfiguration',{tournamentId:moverId,patch:withoutIntent}),/Categoria removida sem exclusão explícita/);
+    assert.deepEqual((await mr.get()).data(),stored);
+    console.log('Matriz canônica: zero + novos eixos atômicos, vagas e regras preservadas; reservas, inscrições, preços e autorização protegidos');
+  }
   console.log('group category config: OK');
 }
 run().then(()=>console.log('✓ Firestore demo: criação, edição antiga, regras por categoria, autorização e bloqueio pós-sorteio'))

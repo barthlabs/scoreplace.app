@@ -1499,12 +1499,14 @@ window._bracketOperationsSelect = function (t) {
   var ordered = window._bracketPostponedOrder(candidates, postponed, ready);
   var fast8 = window.ScoreplaceGroupAlternation && window.ScoreplaceGroupAlternation.enabled(t)
     ? window.ScoreplaceGroupAlternation.selection(t, matches, released,{lastReleasedByCourt:(window._bracketCourtReleaseCache[String(t.id)] || {}).lastReleasedByCourt}) : null;
+  // A recomendação de quadra não altera a ordem global da grade.
+  var fast8Next = fast8 && (fast8.eligible && !fast8.incomplete ? fast8.waiting[0] || null : fast8.next);
   if (fast8 && fast8.waiting.length) {
     var fastIds = new Set(fast8.waiting.map(function (m) { return String(m.id); }));
-    ordered = [fast8.next].concat(fast8.waiting, ordered.filter(function (m) { return !fastIds.has(String(m.id)); }))
+    ordered = fast8.waiting.concat(ordered.filter(function (m) { return !fastIds.has(String(m.id)); }))
       .filter(function (m, i, all) { return m && all.findIndex(function (other) { return other && String(other.id) === String(m.id); }) === i; });
   }
-  var next = fast8 && fast8.waiting.length ? fast8.next : window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
+  var next = fast8 && fast8.waiting.length ? fast8Next : window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(ordered, matches, released, t) : null;
   var freeCourts = occupancy.freeCourts(courts, courtOccupants);
   var explicitQueue = ordered.some(function (item) {

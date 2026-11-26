@@ -513,7 +513,7 @@
     }
     if (fast8) {
       if (!(nextSelection && nextSelection.fast8)) {
-        nextMatch=fast8.next;
+        nextMatch=fast8.eligible && !fast8.incomplete ? fast8.waiting[0] || null : fast8.next;
         nextQueue=fast8.waiting.slice();
       }
       nextQueue=nextMatch ? [nextMatch].concat(nextQueue).filter((m,i,all)=>m && all.findIndex(other=>other && String(other.id)===String(m.id))===i) : [];

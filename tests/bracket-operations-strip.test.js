@@ -1110,6 +1110,55 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       assert(synchronous.setterPending===1&&synchronous.preparationRejected&&synchronous.preparationCleared,'preparo síncrono também libera guard e Map sem enviar CF');
       assert(synchronous.previousSelectionPreserved,'falha de preparo preserva a seleção pendente anterior');
       assert.equal(synchronous.routes,0,'erro não remonta o detalhe');
+      await real.addScriptTag({path:'js/domain/group-alternation.js'});
+      await real.addStyleTag({path:'css/components.css'});await real.addStyleTag({path:'css/bracket.css'});
+      const gradeQueue=await real.evaluate(async()=>{
+        document.body.innerHTML='<main id="view-container"><section id="tourn-grid-container"></section><nav data-bracket-tabs-root="1" data-tournament-id="sb_grade"></nav></main>';
+        const rows=[['A','B',1,1,[1,2]],['B','B',2,2,[1,2]],['C','C',1,1,[3,4]],['D','C',2,1,[5,6]],['E','C',3,2,[3,4]],['F','C',4,2,[5,6]]].map(([label,category,groupNumber,entry,courts])=>({label,category,groupNumber,entry,courts,phaseIndex:0}));
+        const t={id:'sb_grade',creatorUid:'org',format:'Fase de Grupos + Eliminatórias',scoring:{type:'simple'},courtCount:6,courtNames:Array.from({length:6},(_,i)=>'Quadra '+(i+1)),currentPhaseIndex:0,
+          phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:['B','C'].map(category=>({category,groupFormation:{mode:'size',value:8},groupAlternation:true}))}}],scheduleWindow:{interleavedPlan:{schema:2,groupAssignments:rows}},matches:[]};
+        for(const g of rows)for(let round=1;round<=3;round++)for(let lane=0;lane<2;lane++){
+          const people=(round===1?[0,1,2,3,4,5,6,7]:[0,4,1,5,2,6,3,7]).slice(lane*4,lane*4+4).map(i=>g.label+' player '+i);
+          t.matches.push({id:g.label+'-'+round+'-'+lane,isMonarch:true,phaseIndex:0,category:g.category,groupIdx:g.groupNumber-1,round,scheduledGroupLabel:g.label,
+            scheduledAt:new Date(Date.parse('2026-11-26T12:00:00Z')+((round-1)*2+g.entry-1)*35*60000).toISOString(),
+            scheduledGameNumber:(round-1)*12+(g.entry-1)*6+rows.filter(r=>r.entry===g.entry).indexOf(g)*2+lane+1,
+            scheduledCourt:t.courtNames[g.courts[lane]-1],p1:people.slice(0,2).join(' / '),p2:people.slice(2).join(' / '),team1Uids:people.slice(0,2),team2Uids:people.slice(2)});
+        }
+        t._nJogos=t.matches.length;window._findTournamentById=()=>t;window._collectAllMatches=x=>x.matches;
+        window.AppStore={currentUser:{uid:'org'},tournaments:[t],publicDiscovery:[]};
+        window._souOrganizador=window._isUserAuthority=window._isUserOrgOrCoHost=()=>true;
+        window._isConcentratedTournament=()=>true;window._scoringUsesSets=()=>false;window._bracketIsPendingMatch=()=>false;
+        window._matchSetPlan=()=>({multi:false,columns:[]});window._softRefreshView=()=>{};window.showNotification=()=>{};
+        location.hash='#tournaments/'+t.id;window._courtOperationEcho=null;window._spOperationsNextScrollByTournament={};
+        const cache={ready:true,revision:0,released:{},postponed:[],postponedReady:[],lastReleasedByCourt:{}};
+        window._bracketCourtReleaseCache={[t.id]:cache};
+        const root=document.querySelector('[data-bracket-tabs-root]'),m=id=>t.matches.find(g=>g.id===id);
+        const ticks=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+        const read=()=>{const list=root._bracketOperationsStrip.querySelector('.sp-operations-next-scroll');return{head:list.querySelector('[data-operations-base-match]').getAttribute('data-operations-base-match'),top:list.scrollTop};};
+        const refresh=async()=>{_bracketOperationsRefresh(t,root);await ticks();return read();};
+        const release=id=>{cache.released[id]='2026-11-26T12:12:00Z';cache.lastReleasedByCourt[m(id).court]={releasedAt:'2026-11-26T12:12:00Z'};};
+        for(const game of t.matches.filter(g=>g.scheduledGameNumber<=6))Object.assign(game,{court:game.scheduledCourt,courtCalledAt:'2026-11-26T12:00:00Z'});
+        const states=[await refresh(),await refresh()];let calls=0;
+        window._callCF=async(name,p)=>{if(name!=='assignMatchCourt')throw Error('unexpected '+name);calls++;return{data:{ok:true,courtCalledAt:'2026-11-26T12:13:00Z'}};};
+        const confirm=async(id,court)=>{const card=root._bracketOperationsStrip.querySelector('[data-operations-base-match="'+id+'"]');const select=card.querySelector('select'),button=card.querySelector('.sp-match-confirm');
+          if(![...select.options].some(o=>o.value===court))select.add(new Option(court,court));select.value=court;button.disabled=false;
+          await _confirmMatchCourtCall(button,t.id,id);return refresh();};
+        release('A-1-0');states.push(await refresh());states.push(await confirm('B-1-0','Quadra 1'));
+        const allFullCard=root._bracketOperationsStrip.querySelector('.sp-operations-next-scroll [data-operations-base-match]');
+        const fullDisabled=allFullCard.querySelector('.sp-match-confirm').disabled;
+        const before=calls;await confirm('B-1-1','Quadra 2');const blockedWrites=calls-before;
+        release('D-1-0');states.push(await refresh());states.push(await confirm('B-1-1','Quadra 5'));
+        release('D-1-1');states.push(await refresh());
+        const list=root._bracketOperationsStrip.querySelector('.sp-operations-next-scroll');list.dispatchEvent(new WheelEvent('wheel',{deltaY:130}));list.scrollTop=130;await ticks();const manual=list.scrollTop;
+        await refresh();const preserved=Math.abs(read().top-manual)<1;
+        root._bracketOperationsStrip.querySelector('.sp-operations-next-scroll').scrollTop=0;await ticks();states.push(await refresh());
+        return{states,fullDisabled,blockedWrites,calls,preserved};
+      });
+      assert(gradeQueue.states.every(s=>s.top===0),'sem gesto manual, topo precisa permanecer zero: '+JSON.stringify(gradeQueue));
+      assert.deepEqual(gradeQueue.states.map(s=>s.head),['B-1-0','B-1-0','B-1-0','B-1-1','B-1-1','E-1-0','E-1-0','E-1-0']);
+      assert(gradeQueue.fullDisabled&&gradeQueue.blockedWrites===0,'quadra ocupada bloqueia mesmo chamada forçada');
+      assert.equal(gradeQueue.calls,2);assert(gradeQueue.preserved,'posição manual continua preservada');
+      console.log('✓ AA CC DD → B B → E mantém grade, topo zero e bloqueios reais');
     } finally { await real.close(); }
     const scoringPage = await browser.newPage();
     try {

@@ -6544,7 +6544,8 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       const nextSet = new Set(nextLabels.map(normalizeCategory));
       const removedLabels = previousLabels.filter(label => !nextSet.has(normalizeCategory(label)));
       const excludedSet = new Set(patch.excludedCategories.map(normalizeCategory));
-      if (removedLabels.some(label => !excludedSet.has(normalizeCategory(label)))) {
+      // Eixos/tipo editados recompõem os rótulos; zero exclui só a combinação atual.
+      if (!axesChanged && !gameTypesChanged && removedLabels.some(label => !excludedSet.has(normalizeCategory(label)))) {
         throw new HttpsError('failed-precondition', 'Categoria removida sem exclusão explícita.');
       }
       await _assertCategoryConfigBeforeDraw(tx, ref, t);

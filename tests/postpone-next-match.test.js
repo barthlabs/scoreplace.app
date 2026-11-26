@@ -204,3 +204,48 @@ pending.then(() => {
   assert.deepEqual(Array.from(entry.postponedReady), ['j1']);
   console.log('✓ a fila respeita os adiamentos persistidos e a revisão confirmada pelo servidor');
 }).catch(error => { console.error(error); process.exitCode = 1; });
+
+// A recomendação física de uma quadra não muda a ordem pública da grade.
+const fc={window:{},Map,Set,String,Array,Date};
+for(const file of ['next-match','court-occupancy','group-alternation'])vm.runInNewContext(fs.readFileSync('js/domain/'+file+'.js','utf8'),fc);
+vm.runInNewContext(source.slice(start,end),fc);
+fc.window._collectAllMatches=t=>t.matches;fc.window._bracketCourtPostponed=()=>[];fc.window._bracketCourtPostponedReady=()=>[];
+fc.window._dashboardNextMatchCompare=(a,b)=>fc.window.ScoreplaceGroupAlternation.compareQueue(a.item.m,b.item.m);
+fc._matchCardTimestamp=v=>Date.parse(v)||0;fc._bracketOperationsGroup=()=>null;
+vm.runInNewContext(source.slice(selectStart,selectEnd),fc);
+const rows=[['A','B',1,1,[1,2]],['B','B',2,2,[1,2]],['C','C',1,1,[3,4]],['D','C',2,1,[5,6]],['E','C',3,2,[3,4]],['F','C',4,2,[5,6]]]
+ .map(([label,category,groupNumber,entry,courts])=>({label,category,groupNumber,entry,courts,phaseIndex:0}));
+const ft={id:'queue-grade',courtCount:6,courtNames:Array.from({length:6},(_,i)=>'Quadra '+(i+1)),currentPhaseIndex:0,
+ phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:['B','C'].map(category=>({category,groupFormation:{mode:'size',value:8},groupAlternation:true}))}}],scheduleWindow:{interleavedPlan:{schema:2,groupAssignments:rows}},matches:[]};
+for(const g of rows)for(let round=1;round<=3;round++)for(let lane=0;lane<2;lane++){
+ const people=(round===1?[0,1,2,3,4,5,6,7]:[0,4,1,5,2,6,3,7]).slice(lane*4,lane*4+4).map(i=>g.label+'-p'+i);
+ ft.matches.push({id:g.label+'-'+round+'-'+lane,isMonarch:true,category:g.category,groupIdx:g.groupNumber-1,scheduledGroupLabel:g.label,phaseIndex:0,round,
+  scheduledAt:new Date(Date.parse('2026-11-26T12:00:00Z')+((round-1)*2+g.entry-1)*35*60000).toISOString(),
+  scheduledGameNumber:(round-1)*12+(g.entry-1)*6+rows.filter(r=>r.entry===g.entry).indexOf(g)*2+lane+1,
+  scheduledCourt:ft.courtNames[g.courts[lane]-1],p1:people.slice(0,2).join(' / '),p2:people.slice(2).join(' / '),team1Uids:people.slice(0,2),team2Uids:people.slice(2)});
+}
+ft._nJogos=ft.matches.length;const released={},cache={released,lastReleasedByCourt:{}};
+fc.window._bracketCourtReleased=()=>released;fc.window._bracketCourtReleaseCache={[ft.id]:cache};
+const match=id=>ft.matches.find(m=>m.id===id),read=()=>fc.window._bracketOperationsSelect(ft);
+const call=(id,court)=>Object.assign(match(id),{court,courtCalledAt:'2026-11-26T12:11:00Z'});
+const release=id=>{released[id]='2026-11-26T12:12:00Z';cache.lastReleasedByCourt[match(id).court]={releasedAt:released[id]};};
+for(const m of ft.matches.filter(m=>m.scheduledGameNumber<=6))call(m.id,m.scheduledCourt);
+assert.equal(read().next.id,'B-1-0');
+release('A-1-0');call('B-1-0','Quadra 1');
+assert.equal(read().next.id,'B-1-1','todas ocupadas: próximo B permanece primeiro');
+release('D-1-0');const snapshot=JSON.stringify(ft),state=read();
+assert.equal(state.fast8.next.id,'F-1-0','recomendação física original continua disponível internamente');
+assert.equal(state.next.id,'B-1-1','F da quadra livre não ultrapassa o segundo B');
+assert.deepEqual(Array.from(state.queue.slice(0,5),m=>m.id),['B-1-1','E-1-0','E-1-1','F-1-0','F-1-1']);
+assert(state.fast8.check(match('B-1-1'),'Quadra 5').ok);
+assert.equal(state.fast8.check(match('B-1-1'),'Quadra 2').ok,false,'quadra ocupada continua bloqueada');
+assert.equal(JSON.stringify(ft),snapshot,'consulta não muda grade ou partidas');
+const originalUid=match('B-1-1').team1Uids[0];match('B-1-1').team1Uids[0]=match('B-1-0').team1Uids[0];
+assert.equal(read().next.id,'B-1-1','cabeça com atleta ocupado não promove posterior');assert.equal(read().fast8.check(match('B-1-1'),'Quadra 5').reason,'fast8-player-busy');match('B-1-1').team1Uids[0]=originalUid;
+for(const [id,court,releaseId,next] of [['B-1-1','Quadra 5','D-1-1','E-1-0'],['E-1-0','Quadra 6','C-1-0','E-1-1'],['E-1-1','Quadra 3','C-1-1','F-1-0'],['F-1-0','Quadra 4','A-1-1','F-1-1']]){
+ call(id,court);release(releaseId);assert.equal(read().next.id,next,'liberação em outra quadra mantém BB EE FF');
+}
+const odd=JSON.parse(JSON.stringify(ft));odd.id='odd-queue';odd.scheduleWindow.interleavedPlan.groupAssignments=odd.scheduleWindow.interleavedPlan.groupAssignments.filter(g=>g.label!=='F');odd.matches=odd.matches.filter(m=>m.scheduledGroupLabel!=='F');odd.matches.forEach(m=>{delete m.court;delete m.courtCalledAt;});odd._nJogos=odd.matches.length;
+fc.window._bracketCourtReleased=()=>({});const oddState=fc.window._bracketOperationsSelect(odd);assert(oddState.fast8.eligible);assert.equal(oddState.next.scheduledGameNumber,1);assert.deepEqual(Array.from(oddState.queue,m=>m.scheduledGameNumber),Array.from(oddState.queue,m=>m.scheduledGameNumber).sort((a,b)=>a-b));fc.window._bracketCourtReleased=()=>released;
+const savedCount=ft._nJogos;ft._nJogos++;assert.equal(read(),null,'carga incompleta não habilita chamada');ft._nJogos=savedCount;
+console.log('✓ chamada Fast8 mantém grade BB EE FF independentemente da quadra livre');
