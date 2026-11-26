@@ -1495,7 +1495,14 @@ window._bracketOperationsSelect = function (t) {
     ready = old ? [old] : [];
   }
   var ordered = window._bracketPostponedOrder(candidates, postponed, ready);
-  var next = window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
+  var fast8 = window.ScoreplaceGroupAlternation && window.ScoreplaceGroupAlternation.enabled(t)
+    ? window.ScoreplaceGroupAlternation.selection(t, matches, released) : null;
+  if (fast8 && fast8.waiting.length) {
+    var fastIds = new Set(fast8.waiting.map(function (m) { return String(m.id); }));
+    ordered = [fast8.next].concat(fast8.waiting, ordered.filter(function (m) { return !fastIds.has(String(m.id)); }))
+      .filter(function (m, i, all) { return m && all.findIndex(function (other) { return other && String(other.id) === String(m.id); }) === i; });
+  }
+  var next = fast8 && fast8.waiting.length ? fast8.next : window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(ordered, matches, released, t) : null;
   var freeCourts = occupancy.freeCourts(courts, courtOccupants);
   var explicitQueue = ordered.some(function (item) {
@@ -1532,7 +1539,7 @@ window._bracketOperationsSelect = function (t) {
     return _matchCardTimestamp(a.scheduledAt) - _matchCardTimestamp(b.scheduledAt) ||
       Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0);
   });
-  return { next: suggested, queue: queued, future: future, nextCallable: !!callableTie || (!!next && next === suggested), waitingForTie: waitingForTie,
+  return { fast8:fast8, next: suggested, queue: queued, future: future, nextCallable: !!callableTie || (!!next && next === suggested), waitingForTie: waitingForTie,
     tieCanPostpone: !!(callableTie && otherReady),
     active: active, pending: pending, courts: courts, freeCourts: freeCourts, matches: matches };
 };
@@ -1604,6 +1611,38 @@ function _bracketOperationalDetailCard(root) {
   return card && !card.closest('#view-container') ? card : null;
 }
 
+// Só a fila secundária se move; o próximo imediato nunca entra no scroller.
+function _bracketFast8QueueScroll(surface, scroller) {
+  if (!scroller || typeof requestAnimationFrame !== 'function') return;
+  var frame = 0, last = 0, pauseUntil = 0, position = scroller.scrollTop, direction = 1, disposed = false;
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+  function pause() { pauseUntil = Date.now() + 5000; last = 0; position = scroller.scrollTop; }
+  var events = ['pointerenter', 'pointerdown', 'wheel', 'touchstart', 'keydown', 'focusin'];
+  events.forEach(function (event) { scroller.addEventListener(event, pause, { passive:true }); });
+  function tick(now) {
+    if (disposed || !surface.isConnected || !scroller.isConnected) { cleanup(); return; }
+    var focused = scroller.contains(document.activeElement);
+    var hovering = typeof scroller.matches === 'function' && scroller.matches(':hover');
+    var max = scroller.scrollHeight - scroller.clientHeight;
+    if (!document.hidden && !(reduced && reduced.matches) && !focused && !hovering && Date.now() >= pauseUntil && max > 1) {
+      if (last) {
+        position = Math.max(0, Math.min(max, position + direction * Math.min(50, now - last) * .018));
+        scroller.scrollTop = position;
+        if (position === max || position === 0) { direction *= -1; pauseUntil = Date.now() + 2000; }
+      } else position = scroller.scrollTop;
+      last = now;
+    } else last = 0;
+    frame = requestAnimationFrame(tick);
+  }
+  function cleanup() {
+    disposed = true;
+    cancelAnimationFrame(frame);
+    events.forEach(function (event) { scroller.removeEventListener(event, pause); });
+  }
+  surface._spFast8QueueCleanup = cleanup;
+  frame = requestAnimationFrame(tick);
+}
+
 function _bracketDisposeOperationalSurface(surface, root) {
   if (!surface) return;
   var owner = surface._bracketOperationsOwner;
@@ -1611,6 +1650,8 @@ function _bracketDisposeOperationalSurface(surface, root) {
   if (surface._spOperationsOnResize) window.removeEventListener('resize', surface._spOperationsOnResize);
   clearTimeout(surface._spOperationsResizeTimer);
   surface._spOperationsResizeTimer = null;
+  if (surface._spFast8QueueCleanup) surface._spFast8QueueCleanup();
+  surface._spFast8QueueCleanup = null;
   if (surface._spNextScrollRestoreObserver) surface._spNextScrollRestoreObserver.disconnect();
   if (surface._spSeriesLabelObserver) surface._spSeriesLabelObserver.disconnect();
   surface._spNextScrollRestoreObserver = null;
@@ -2937,6 +2978,10 @@ window._bracketOperationsRefresh = function (t, root) {
   var nextCards = (state.queue || []).concat(state.future || []).filter(categoryMatches).filter(function (m, index, list) {
     return m && list.findIndex(function (item) { return item && String(item.id) === String(m.id); }) === index;
   });
+  if (state.fast8 && nextCards[0] && state.fast8.groupFor(nextCards[0])) {
+    var nextRound=Number(nextCards[0].round || 1), nextPhase=Number(nextCards[0].phaseIndex || 0);
+    nextCards=nextCards.filter(function(m) {return state.fast8.groupFor(m) && Number(m.phaseIndex || 0)===nextPhase && Number(m.round || 1)===nextRound;});
+  }
   var readyIds = new Set((state.queue || []).map(function (m) { return String(m.id); }));
   var releasedMatches = window._bracketCourtReleased(t.id);
   var estimates = _bracketOperationsFutureEstimates(state, t);
@@ -2951,9 +2996,10 @@ window._bracketOperationsRefresh = function (t, root) {
     : '';
   var nextAvailability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '"><span>' +
     freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</span></div>';
-  var nextCardsHtml = nextCards.map(function (m, index) {
+  var nextCardFragments = nextCards.map(function (m, index) {
     var available = readyIds.has(String(m.id)) && window.ScoreplaceNextMatch &&
-      window.ScoreplaceNextMatch.firstAvailable([m], state.matches, releasedMatches, t) === m;
+      window.ScoreplaceNextMatch.firstAvailable([m], state.matches, releasedMatches, t) === m &&
+      (!state.fast8 || !state.fast8.groupFor(m) || state.fast8.check(m).ok);
     var playerBusy = !!(window.ScoreplaceNextMatch && window.ScoreplaceCourtOccupancy &&
       window.ScoreplaceNextMatch.conflictsWithActive(m, window.ScoreplaceCourtOccupancy.activeMatches(state.matches, releasedMatches, t)));
     var callable = canCall && available;
@@ -2975,14 +3021,20 @@ window._bracketOperationsRefresh = function (t, root) {
       categoryFilter:categoryFilter
     }, index === 0 ? nextLabel : 'PRÓXIMO JOGO · ' + (index + 1) + '/' + nextCards.length,
     availability, root, state.matches, 'next:' + String(m.id));
-  }).join('');
+  });
+  var pinnedFast8 = !!state.fast8 && nextCardFragments.length > 0;
+  var nextCardsHtml = nextCardFragments.join('');
+  var nextContentHtml = pinnedFast8
+    ? '<div class="sp-operations-next-pinned" aria-label="Próximo jogo imediato">' + advancePhaseHtml + nextCardFragments[0] + '</div>' +
+      '<div class="sp-operations-next-scroll" aria-label="Demais jogos da próxima rodada">' + nextCardFragments.slice(1).join('') + '</div>'
+    : '<div class="sp-operations-next-scroll" aria-label="Próximos jogos">' + advancePhaseHtml +
+      (nextCardsHtml || '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
+      (categoryFilter ? 'Nenhum próximo jogo nesta categoria.' : state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
+        'Nenhum jogo aguardando chamada') + '</div>') + '</div>';
+  if (existing._spFast8QueueCleanup) { existing._spFast8QueueCleanup(); existing._spFast8QueueCleanup = null; }
   if (existing._spNextScrollRestoreObserver) { existing._spNextScrollRestoreObserver.disconnect(); existing._spNextScrollRestoreObserver = null; }
   if (existing._spSeriesLabelObserver) { existing._spSeriesLabelObserver.disconnect(); existing._spSeriesLabelObserver = null; }
-  existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next"><div class="sp-operations-next-scroll" aria-label="Próximos jogos">' +
-    advancePhaseHtml +
-    (nextCardsHtml || '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
-      (categoryFilter ? 'Nenhum próximo jogo nesta categoria.' : state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
-        'Nenhum jogo aguardando chamada') + '</div>') + '</div></div>' + (state.pending.some(categoryMatches) ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
+  existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next' + (pinnedFast8 ? ' sp-operations-next--fast8' : '') + '">' + nextContentHtml + '</div>' + (state.pending.some(categoryMatches) ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
     state.pending.filter(categoryMatches).map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false, pending: true, categoryFilter:categoryFilter }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
     '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><div class="sp-operations-courts-heading"><span class="sp-operations-section-title">EM QUADRA</span>' +
     (typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user) ?
@@ -3077,6 +3129,7 @@ window._bracketOperationsRefresh = function (t, root) {
         existing._spNextScrollRestoreObserver.observe(nextScroll);
       }
     }
+    if (pinnedFast8) _bracketFast8QueueScroll(existing, nextScroll);
     var pendingScroll = existing.querySelector('.sp-operations-pending-track');
     if (pendingScroll) pendingScroll.scrollTop = pendingScrollTop;
     _bracketOperationsBindScrollbar(courtTrack, existing.querySelector('.sp-operations-scrollbar'));
@@ -6469,6 +6522,12 @@ window._cancelCourtAction = function (tId, matchId, action, button) {
   }).finally(function () { if (button && button.isConnected) button.disabled = false; });
   });
 };
+function _fast8MatchCheck(t, m, matches, court) {
+  if (!t || !t.scheduleWindow || t.scheduleWindow.groupAlternation !== true || !m || !m.isMonarch || m.isTieBreak || m.courtCalledAt) return {ok:true};
+  var core = window.ScoreplaceGroupAlternation;
+  if (!core) return {ok:false,reason:'fast8-incomplete-draw',message:'Atualize o aplicativo para usar o Fast 8.'};
+  return core.selection(t,matches,window._bracketCourtReleased(t.id)).check(m,court);
+}
 function _matchPlayerBusyLabel() {
   return typeof window._t === 'function' ? window._t('bracket.playerInCourt') : 'Atleta em quadra';
 }
@@ -6481,7 +6540,8 @@ function _syncMatchCourtCopies(tId, matchId, value, persisted) {
   var m = allMatches.find(function (item) { return String(item.id) === String(matchId); });
   var occupancy = window.ScoreplaceCourtOccupancy;
   var active = occupancy ? occupancy.activeMatches(allMatches, released, t) : [];
-  var playerBusy = !!(m && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(m, active));
+  var fastGate = t && t.scheduleWindow && t.scheduleWindow.groupAlternation === true ? _fast8MatchCheck(t,m,allMatches) : null;
+  var playerBusy = !!(m && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(m, active)) || !!(fastGate && fastGate.reason === 'fast8-player-busy');
   Array.prototype.forEach.call(document.querySelectorAll('.sp-match-card[data-match-player-id]'), function (card) {
     if (card.getAttribute('data-match-player-id') !== String(matchId)) return;
     card.setAttribute('data-match-player-busy', playerBusy ? '1' : '0');
@@ -6503,10 +6563,10 @@ function _syncMatchCourtCopies(tId, matchId, value, persisted) {
     return node.getAttribute('data-match-id') === String(matchId);
   });
   copies.forEach(function (node) {
-    node.disabled = playerBusy || !!(edit && edit.calling);
+    node.disabled = playerBusy || !!(fastGate && !fastGate.ok) || !!(edit && edit.calling);
     var courtOptions = Array.prototype.filter.call(node.options, function (option) { return !!option.value; });
     courtOptions.forEach(function (option) {
-      var busy = !!(occupancy && occupancy.occupant(active, option.value, matchId));
+      var busy = !!(occupancy && occupancy.occupant(active, option.value, matchId)) || !!(fastGate && !_fast8MatchCheck(t,m,allMatches,option.value).ok);
       option.disabled = busy;
       option.classList.toggle('sp-court-occupied', busy);
       option.textContent = option.value + (busy ? ' · ocupada' : ' · livre');
@@ -6529,7 +6589,7 @@ function _syncMatchCourtCopies(tId, matchId, value, persisted) {
     node.classList.toggle('sp-court-placeholder-busy', !node.value && (storedBusy || !free || selectedBusy));
     var row = node.closest('.sp-match-operational');
     var button = row && row.querySelector('button.sp-match-confirm');
-    if (button) button.disabled = !!(edit && edit.calling) || playerBusy || button.getAttribute('data-call-allowed-today') !== '1' || !node.value || selectedBusy;
+    if (button) button.disabled = !!(edit && edit.calling) || playerBusy || !!(fastGate && !fastGate.ok) || button.getAttribute('data-call-allowed-today') !== '1' || !node.value || selectedBusy;
   });
 }
 
@@ -6610,6 +6670,10 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
     if (occupancy && occupancy.occupant(active, court, matchId)) throw new Error('A quadra escolhida já está ocupada.');
     if (window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(candidate, active))
       throw new Error('Uma das duplas já está em outra quadra. Chame outro jogo.');
+    if (current && current.scheduleWindow && current.scheduleWindow.groupAlternation === true) {
+      var fastCheck = _fast8MatchCheck(current,candidate,all,court);
+      if (!fastCheck.ok) throw new Error(fastCheck.message);
+    }
     return window._callCF('assignMatchCourt', { tournamentId: tId, sandbox: tId.startsWith('sb_'), matchId: String(matchId), court: court, confirmCall: true }, 'Entre na sua conta para chamar o jogo.');
   })
     .then(function(res) {
@@ -10868,6 +10932,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     var _activeForCard = window.ScoreplaceCourtOccupancy.activeMatches(window._collectAllMatches(t), _releasedForCard, t);
     _playerInAnotherCourt = window.ScoreplaceNextMatch.conflictsWithActive(m, _activeForCard);
   }
+  var _fast8CardGate = _isConcentratedEvent && t && t.scheduleWindow && t.scheduleWindow.groupAlternation === true
+    ? _fast8MatchCheck(t,m,window._collectAllMatches(t)) : null;
+  if (_fast8CardGate && _fast8CardGate.reason === 'fast8-player-busy') _playerInAnotherCourt = true;
   var _courtCardHtml = '';
   // Na agenda concentrada a quadra e o horário formam um único dado operacional.
   // `scheduledKind: estimate` vem do planejador; o ≈ deixa explícito que a
@@ -10889,6 +10956,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     : _matchTimeMs
     ? '<span class="sp-match-estimated-time" title="' + (_playedMs ? 'Horário jogado' : 'Horário estimado do jogo') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:' + (_playedMs ? 'var(--sp-c-4ade80,#4ade80)' : 'var(--sp-c-7dd3fc,#7dd3fc)') + ';">🕒 ' + (_playedMs ? '' : '≈ ') + window._safeHtml(_matchCardVisibleDateTime(_matchTimeMs, t, _isConcentratedEvent)) + '</span>'
     : '';
+  if (_fast8CardGate && !_calledMs && !_playedMs) _estimatedTimeHtml = '';
   if (_canChangeCardCourt && _cardCourts.length) {
     var _suggestedCourt = (typeof window._suggestFreedCourtForMatch === 'function') ? window._suggestFreedCourtForMatch(t, m) : '';
     var _occupancy = window.ScoreplaceCourtOccupancy;
@@ -10899,6 +10967,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     var _persistedBusy = !!(_persistedCourt && _occupancy && _occupancy.occupant(_allForCourts, _persistedCourt, m.id));
     var _freeCourts = _occupancy ? _occupancy.freeCourts(_cardCourts,
       _allForCourts.filter(function (item) { return String(item.id) !== String(m.id); })) : _cardCourts;
+    if (_fast8CardGate) _freeCourts = _freeCourts.filter(function (court) { return _fast8MatchCheck(t,m,window._collectAllMatches(t),court).ok; });
     // A agenda pode apontar uma quadra já ocupada enquanto outra está livre.
     // A sugestão é apenas visual; a callable ainda valida a ocupação no clique.
     var _preferredCourt = opts && opts.preferredCourt && _freeCourts.includes(opts.preferredCourt) ? opts.preferredCourt : '';
@@ -10915,7 +10984,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     var _emptyCourtDisabled = _busyPlaceholder || !!m.courtCalledAt || !!_persistedCourt;
     var _courtOpts = '<option value=""' + (!_displayCourt ? ' selected' : '') + (_emptyCourtDisabled ? ' disabled' : '') +
       (_busyPlaceholder ? ' class="sp-court-placeholder-busy"' : '') + '>' + window._safeHtml(_emptyCourtLabel) + '</option>' + _cardCourts.map(function (court) {
-      var busy = _occupancy && _occupancy.occupant(_allForCourts, court, m.id);
+      var busy = _occupancy && _occupancy.occupant(_allForCourts, court, m.id) || _fast8CardGate && !_fast8MatchCheck(t,m,window._collectAllMatches(t),court).ok;
       return '<option value="' + window._safeHtml(court) + '"' + (_displayCourt === court && !busy ? ' selected' : '') + (busy ? ' disabled class="sp-court-occupied"' : '') + '>' + window._safeHtml(court) + (busy ? ' · ocupada' : ' · livre') + '</option>';
     }).join('');
     _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label class="sp-match-court"><select aria-label="Quadra" data-match-id="' + window._safeHtml(String(m.id)) + '" data-persisted-court="' + window._safeHtml(_persistedCourt) + '" class="' + (_busyPlaceholder && !_displayCourt ? 'sp-court-placeholder-busy' : '') + '" onclick="event.stopPropagation()" onchange="window._assignMatchCourtFromSelect(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\').catch(function(){})">' + _courtOpts + '</select></label><button type="button" class="sp-match-confirm" data-call-allowed-today="' + (_callAllowedToday ? '1' : '0') + '" aria-label="Confirmar chamada para a quadra"' + ((!_callAllowedToday || !_displayCourt || (_occupancy && _occupancy.occupant(_allForCourts, _displayCourt, m.id))) ? ' disabled' : '') + (!_callAllowedToday ? ' title="' + window._safeHtml(_callDayMessage) + '"' : '') + ' onclick="event.stopPropagation();window._confirmMatchCourtCall(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')" style="padding:4px 9px;border-radius:7px;border:1px solid #22c55e;background:#166534;color:#fff;font-weight:800;cursor:pointer;">' + (m.courtCalledAt ? '✓ OK' : 'OK') + '</button>' + (!_callAllowedToday ? '<span class="sp-match-call-day-hint">' + window._safeHtml(_callDayMessage) + '</span>' : '') + _estimatedTimeHtml + '</div>';
@@ -11660,22 +11729,28 @@ window._super8StandingsGroups = function (t, sourceMatches) {
   var matches = sourceMatches || (typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : t.matches) || [];
   var groups = new Map(), seen = new Set();
   matches.forEach(function (m) {
-    if (!m || !m.isMonarch || m.isBye || m.isSitOut || m.isTieBreak || m.groupIdx == null ||
-        !Number.isInteger(Number(m.groupIdx)) || Number(m.groupIdx) < 0) return;
+    if (!m || !m.isMonarch || m.isBye || m.isSitOut || m.isTieBreak) return;
     var phaseIndex = Number(m.phaseIndex || 0), phase = (t.phases || [])[phaseIndex];
     var category = String(m.category || '');
     var rule = (phase?.classification?.rotationCategoryRules || []).find(r => r.category === category);
-    if (phase?.kind !== 'classification' || phase.classification?.partnerRotation !== 'groups' ||
-        rule?.groupFormation?.mode !== 'size' || Number(rule.groupFormation.value) !== 8) return;
-    var key = JSON.stringify([phaseIndex, category, Number(m.groupIdx)]);
+    var classic=phase?.superEight===true || phase?.classification?.partnerRotation==='unique_8';
+    var groupIndex=m.groupIdx;
+    if (groupIndex==null && classic) {
+      var assigned=(t.scheduleWindow?.interleavedPlan?.groupAssignments || []).filter(r=>Number(r.phaseIndex)===phaseIndex && r.category===category);
+      if (assigned.length===1) groupIndex=Number(assigned[0].groupNumber)-1;
+    }
+    if (groupIndex==null || !Number.isInteger(Number(groupIndex)) || Number(groupIndex)<0) return;
+    if (phase?.kind !== 'classification' || !classic && (phase.classification?.partnerRotation !== 'groups' ||
+        rule?.groupFormation?.mode !== 'size' || Number(rule.groupFormation.value) !== 8)) return;
+    var key = JSON.stringify([phaseIndex, category, Number(groupIndex)]);
     var id = m.id == null ? m : String(m.id);
     if (seen.has(id)) return;
     seen.add(id);
     if (!groups.has(key)) {
       var assignment = (t.scheduleWindow?.interleavedPlan?.groupAssignments || []).find(r =>
-        Number(r.phaseIndex) === phaseIndex && r.category === category && Number(r.groupNumber) === Number(m.groupIdx) + 1);
-      var label = String(m.scheduledGroupLabel || assignment?.label || m.groupName || window._groupName(Number(m.groupIdx)));
-      groups.set(key, { superEightGroup:true, key:key, phaseIndex:phaseIndex, category:category, groupIdx:Number(m.groupIdx),
+        Number(r.phaseIndex) === phaseIndex && r.category === category && Number(r.groupNumber) === Number(groupIndex) + 1);
+      var label = String(m.scheduledGroupLabel || assignment?.label || m.groupName || window._groupName(Number(groupIndex)));
+      groups.set(key, { superEightGroup:true, key:key, phaseIndex:phaseIndex, category:category, groupIdx:Number(groupIndex),
         label:label, name:category + ' · ' + (/^Grupo /.test(label) ? label : 'Grupo ' + label),
         players:[], playersUids:[], playersSlotIds:[], matches:[], seen:new Set() });
     }

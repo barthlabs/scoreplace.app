@@ -992,6 +992,65 @@
     var error=validate(expand(plan,Object.assign({},t,{phases:projected.phases})),plan,days);
     if(error) reject(error);
   }
+  // Recompõe somente a fase ainda não sorteada. Todas as reservas publicadas
+  // permanecem obstáculos fixos, inclusive quando categorias se intercalam.
+  function rebuildFuture(before, after, context) {
+    var saved=before.scheduleWindow && before.scheduleWindow.interleavedPlan;
+    if (!saved || saved.schema!==2) return null;
+    var days=before.scheduleWindow.days, current=Number(before.currentPhaseIndex || 0);
+    assertPlan(before,saved,days,context);
+    var projection=project(after,context), jobs=projection.jobs.map(function (job,i) {
+      var copy=Object.assign({},job,{id:'future-'+i,duration:v2Duration(job,Object.assign({},after,{phases:projection.phases}),saved)});
+      delete copy.matchIds; copy.windows=[]; return copy;
+    });
+    var expected=new Map(jobs.map(job=>[positionKey(job),job]));
+    var oldTiles=expand(saved,before), fixed=oldTiles.filter(tile=>Number(tile.phaseIndex || 0)<=current);
+    fixed=fixed.map(function (tile) {
+      var job=expected.get(positionKey(tile));
+      if (!job || job.games!==tile.games || job.duration!==tile.duration || job.wave!==tile.wave)
+        throw new Error('A alteração modificaria reservas de uma fase já sorteada.');
+      return Object.assign({},job,{id:tile.id,day:tile.day,court:tile.court,startTime:tile.startTime});
+    });
+    if (jobs.filter(job=>Number(job.phaseIndex || 0)<=current).length!==fixed.length)
+      throw new Error('A alteração modificaria jogos da fase em andamento.');
+    var pending=jobs.filter(job=>Number(job.phaseIndex || 0)>current), placed=fixed.slice();
+    var horizon=absoluteDay(days.at(-1).day)+1440+Math.min(400*1440,jobs.reduce((n,j)=>n+j.duration,0)+1440);
+    function endOf(tile) { return absoluteDay(tile.day)+minutes(tile.startTime)+tile.duration; }
+    while (pending.length) {
+      var choices=[];
+      pending.forEach(function (job,index) {
+        if (pending.some(other=>other!==job && precedes(other,job))) return;
+        var ready=placed.reduce((at,other)=>precedes(other,job)?Math.max(at,endOf(other)):at,0);
+        days.forEach(function (day) {
+          if (job.requiredDay && job.requiredDay!==day.day) return;
+          for (var lane=1;lane<=saved.courts;lane++) {
+            var at=Math.max(ready,absoluteDay(day.day)+minutes(day.startTime));
+            var limit=saved.allowOverflow ? horizon : absoluteDay(day.day)+minutes(day.endTime);
+            var obstacles=placed.filter(tile=>tile.court===lane).sort((a,b)=>endOf(a)-endOf(b));
+            for (var tile of obstacles) {
+              var start=absoluteDay(tile.day)+minutes(tile.startTime);
+              if (at<endOf(tile) && at+job.duration>start) at=endOf(tile);
+            }
+            if (at+job.duration<=limit) choices.push({job:job,index:index,court:lane,at:at});
+          }
+        });
+      });
+      choices.sort((a,b)=>a.at-b.at || a.index-b.index || a.court-b.court);
+      var chosen=choices[0];
+      if (!chosen) throw new Error('A fase futura não cabe na agenda preservando os jogos publicados.');
+      placed.push(Object.assign({},chosen.job,{court:chosen.court,
+        day:new Date(chosen.at*60000).toISOString().slice(0,10),startTime:clock(chosen.at%1440)}));
+      pending.splice(pending.indexOf(chosen.job),1);
+    }
+    var plan=Object.assign({},saved,{totalGames:jobs.reduce((n,j)=>n+j.games,0),capacities:projection.capacities});
+    plan.inputSignature=signatureOf(after,projection,plan);
+    var rebuilt=toPlan(plan,placed);
+    // Reutiliza os objetos publicados: nem horário, quadra, ordem ou metadado é reescrito.
+    rebuilt.blocks=saved.blocks.filter(block=>Number(block.phaseIndex || 0)<=current).concat(
+      rebuilt.blocks.filter(block=>Number(block.phaseIndex || 0)>current));
+    assertPlan(after,rebuilt,days,context);
+    return rebuilt;
+  }
   var operationEstimates=new WeakMap();
   function estimateOperation(t,context) {
     if(!t?.fmt2 || t.fmt2.teamCompetition?.enabled) return null;
@@ -1028,7 +1087,7 @@
     }catch(error){value={error:error.message};}
     operationEstimates.set(t,{key:key,value:value});return value;
   }
-  var api = {estimateOperation:estimateOperation,displayDays:displayDays, suggestedAssignments:suggestedAssignments,applyAssignments:applyAssignments,bindAssignments:bindAssignments,precedes:precedes,v2Duration:v2Duration,canInterleave:canInterleave,assertPlan:assertPlan,project:project,technicalPositions:technicalPositions,positionKey:positionKey,suggestProjected:suggestProjected, minutes:minutes, clock:clock, duration:duration, expand:expand, validate:validate,
+  var api = {rebuildFuture:rebuildFuture,estimateOperation:estimateOperation,displayDays:displayDays, suggestedAssignments:suggestedAssignments,applyAssignments:applyAssignments,bindAssignments:bindAssignments,precedes:precedes,v2Duration:v2Duration,canInterleave:canInterleave,assertPlan:assertPlan,project:project,technicalPositions:technicalPositions,positionKey:positionKey,suggestProjected:suggestProjected, minutes:minutes, clock:clock, duration:duration, expand:expand, validate:validate,
     move:move, toPlan:toPlan, preset:preset, stageKey:stageKey, groupLabel:groupLabel, numbered:numbered,
     gameStarts:gameStarts, eliminationLabels:eliminationLabels,describeProjectedTiles:describeProjectedTiles,matchupLabel:matchupLabel, suggest:suggest,
     expectedSignatures:expectedSignatures, signatures:signatures,

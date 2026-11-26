@@ -10,7 +10,8 @@ function validate(t, HttpsError) {
   // Documentos legados sem modo nem janelas preservam a leitura anterior.
   if (schedule.mode === undefined && schedule.categoryWindows === undefined) return [];
   if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule) ||
-      Object.keys(schedule).some(key => !['version', 'mode', 'days', 'categoryWindows', 'interleavedPlan', 'phaseCallOrder'].includes(key))) fail('Agenda de jogos inválida.');
+      Object.keys(schedule).some(key => !['version', 'mode', 'days', 'categoryWindows', 'interleavedPlan', 'phaseCallOrder', 'groupAlternation'].includes(key))) fail('Agenda de jogos inválida.');
+  if (schedule.groupAlternation !== undefined && typeof schedule.groupAlternation !== 'boolean') fail('Alternância de grupos inválida.');
   if (schedule.mode !== undefined && !['organizer', 'participants'].includes(schedule.mode)) fail('Modo de horários inválido.');
   if (schedule.mode === 'participants' && ((Array.isArray(schedule.days) && schedule.days.length) ||
       (Array.isArray(schedule.categoryWindows) && schedule.categoryWindows.length) || schedule.interleavedPlan)) fail('Jogos combinados pelos participantes não podem ter grade fixa.');

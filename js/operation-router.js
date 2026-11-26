@@ -111,7 +111,10 @@
       var data = await response.json().catch(function () { return {}; });
       if (data && data.error) {
         var status = String(data.error.status || 'internal').toLowerCase().replace(/_/g, '-');
-        throw fail(data.error.message || 'Operação recusada.', status, response.status >= 500);
+        var failure = fail(data.error.message || 'Operação recusada.', status, response.status >= 500);
+        var reason = data.error.details && data.error.details.reason;
+        if (status === 'failed-precondition' && ['fast8-turn','fast8-wrong-court','fast8-player-busy','fast8-incomplete-draw'].indexOf(reason) >= 0) failure.fast8Reason = reason;
+        throw failure;
       }
       if (!response.ok) throw fail('Servidor HTTP ' + response.status, 'unavailable', response.status >= 500);
       return data.result || {};

@@ -90,6 +90,12 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, ca
   if (!fmt2 || typeof fmt2 !== 'object' || Array.isArray(fmt2)) {
     throw new HttpsError('invalid-argument', 'Configuração de formato inválida.');
   }
+  if (fmt2.thirdPlacePolicy !== undefined || fmt2.eliminatoria && fmt2.eliminatoria.thirdPlacePolicy !== undefined)
+    throw new HttpsError('invalid-argument','A política de terceiro lugar é compilada pelo servidor.');
+  const third = fmt2.eliminatoria?.thirdPlaceEnabled;
+  if (third !== undefined && (typeof third !== 'boolean' || !require('./vendor/group-alternation').eightConfig(fmt2))) {
+    throw new HttpsError('invalid-argument', 'A opção de terceiro lugar é exclusiva do Super 8 e do Fast 8.');
+  }
   const prev = stored?.fmt2;
   if(prev?.eliminatoria?.semeadura==='grupos' && fmt2.eliminatoria?.semeadura!=='grupos' &&
       fmt2.eliminatoria?.groupCrossChangeConfirmed!==true)

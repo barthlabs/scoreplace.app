@@ -85,6 +85,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     await page.addStyleTag({ path: 'css/bracket.css' });
     await page.addScriptTag({ path: 'js/domain/next-match.js' });
     await page.addScriptTag({ path: 'js/domain/court-occupancy.js' });
+    await page.addScriptTag({ path: 'js/domain/group-alternation.js' });
     await page.addScriptTag({ path: 'js/views/bracket-model.js' });
     await page.addScriptTag({ content: source.slice(start, end) });
     await page.addScriptTag({ content: source.slice(source.indexOf('function _limparCamadasTransitóriasDaChave('), source.indexOf('function _pintarEmEtapas(')) });
@@ -1632,6 +1633,67 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(saturated.full, { ids:['a','b','c'], skip:false, free:0, readOnly:false });
     assert.deepEqual(saturated.released.ids, ['a','b','c']);
     assert.equal(saturated.released.free, 1);
+    await page.bringToFront();
+    await page.mouse.move(-100,-100);
+    const fastPinned = await page.evaluate(async () => {
+      const t = window._findTournamentById();
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      window._bracketTabState = {};
+      root.removeAttribute('data-bracket-line-tabs');
+      const assignments = [['A','B',1,1,[1,2]],['B','B',2,2,[1,2]],['C','C',1,1,[3,4]],
+        ['D','C',2,1,[5,6]],['E','C',3,2,[3,4]],['F','C',4,2,[5,6]]].map(([label,category,groupNumber,entry,courts]) =>
+        ({label,category,groupNumber,entry,courts,phaseIndex:0}));
+      Object.assign(t, {courtCount:6,courtNames:Array.from({length:6},(_,i)=>'Quadra '+(i+1)),currentPhaseIndex:0,
+        phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:
+          ['B','C'].map(category=>({category,rounds:2,groupFormation:{mode:'size',value:8}}))}}],
+        scheduleWindow:{groupAlternation:true,interleavedPlan:{schema:2,groupAssignments:assignments}},
+        rounds:[],phaseRounds:{},matches:[]});
+      for (const g of assignments) for (let round=1;round<=2;round++) for (let lane=0;lane<2;lane++) {
+        const players = Array.from({length:4},(_,n)=>g.label+'-player-'+(lane*4+n));
+        t.matches.push({id:g.label+'-'+round+'-'+lane,isMonarch:true,groupIdx:g.groupNumber-1,phaseIndex:0,
+          category:g.category,round,scheduledGroupLabel:g.label,_gameNum:t.matches.length+1,
+          p1:players.slice(0,2).join(' / '),p2:players.slice(2).join(' / '),team1:players.slice(0,2),team2:players.slice(2)});
+      }
+      t._nJogos=t.matches.length;
+      window.AppStore.currentUser={uid:'org'};
+      _bracketOperationsRefresh(t,root);
+      await new Promise(resolve=>setTimeout(resolve,180));
+      let strip=root._bracketOperationsStrip;
+      const head=strip.querySelector('.sp-operations-next-pinned');
+      const tail=strip.querySelector('.sp-operations-next-scroll');
+      if (!head || !tail) return {missing:true};
+      const initial=head.querySelector('[data-operations-base-match]').getAttribute('data-operations-base-match');
+      const before=head.getBoundingClientRect().top;
+      tail.scrollTop=130;
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+      const stationary=Math.abs(head.getBoundingClientRect().top-before)<1 && tail.scrollTop>100;
+      const autoBefore=tail.scrollTop;
+      await new Promise(resolve=>setTimeout(resolve,240));
+      const autoAdvanced=tail.scrollTop>autoBefore+1 && Math.abs(head.getBoundingClientRect().top-before)<1;
+      tail.dispatchEvent(new PointerEvent('pointerenter'));
+      const pauseAt=tail.scrollTop;
+      await new Promise(resolve=>setTimeout(resolve,120));
+      const paused=tail.scrollTop===pauseAt;
+
+      const unique=Array.from(strip.querySelectorAll('[id]')).map(node=>node.id);
+      const noDuplicates=new Set(unique).size===unique.length;
+      const allFirstRound=assignments.every(g=>[0,1].every(lane=>strip.querySelector('[data-operations-base-match="'+g.label+'-1-'+lane+'"]')));
+      const secondaryCount=tail.querySelectorAll('.sp-operations-replica').length;
+      const cleanup=strip._spFast8QueueCleanup;
+      const m=t.matches.find(m=>m.id===initial);
+      Object.assign(m,{court:'Quadra 1',courtCalledAt:'2026-11-25T12:00:00Z'});
+      _bracketOperationsRefresh(t,root);
+      const next=strip.querySelector('.sp-operations-next-pinned [data-operations-base-match]').getAttribute('data-operations-base-match');
+      const cleanupReplaced=cleanup!==strip._spFast8QueueCleanup;
+      _bracketDisposeOperationalSurface(strip,root);
+      return {initial,next,stationary,autoAdvanced,paused,autoState:{hidden:document.hidden,hover:tail.matches(':hover'),focus:tail.contains(document.activeElement),reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,connected:tail.isConnected,before:autoBefore,after:pauseAt,max:tail.scrollHeight-tail.clientHeight},noDuplicates,allFirstRound,secondaryCount,cleanupReplaced,
+        disposed:strip._spFast8QueueCleanup===null&&!strip.isConnected};
+    });
+    assert.equal(fastPinned.initial,'A-1-0',JSON.stringify(fastPinned));
+    assert.equal(fastPinned.next,'A-1-1',JSON.stringify(fastPinned));
+    assert(fastPinned.stationary && fastPinned.autoAdvanced && fastPinned.paused && fastPinned.noDuplicates && fastPinned.allFirstRound && fastPinned.secondaryCount>=11 &&
+      fastPinned.cleanupReplaced && fastPinned.disposed,JSON.stringify(fastPinned));
+    console.log('✓ Fast 8 mantém o próximo fixo, a rodada completa rolante e limpa a animação ao atualizar/sair');
     console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

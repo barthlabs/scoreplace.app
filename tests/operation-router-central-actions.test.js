@@ -14,7 +14,7 @@ const config = { schema: 2, regions, services: Object.fromEntries(services.map(s
 })) };
 
 function harness({ noConfig = false, centralError = false, receipt = false, probeError = false,
-  interleaved = false } = {}) {
+  interleaved = false, businessReason = null } = {}) {
   const calls = [], store = new Map();
   let currentReceipt = receipt;
   let failCentral = centralError;
@@ -40,6 +40,7 @@ function harness({ noConfig = false, centralError = false, receipt = false, prob
       if (payload.probe) return failProbe
         ? { ok: false, status: 503, json: async () => ({}) }
         : { ok: true, json: async () => ({ result: { ok: true, region, sourceDigest: digest } }) };
+      if (name === 'sp-op-court-v2' && businessReason) return {ok:false,status:400,json:async()=>({error:{status:'FAILED_PRECONDITION',message:'Aguarde a rodada anterior.',details:{reason:businessReason}}})};
       if (name === 'sp-op-control-v2') {
         let result;
         if (payload.action === 'current') result = { selected: !!selected, region: selected, day: '2026-10-23', revision };
@@ -66,6 +67,13 @@ function harness({ noConfig = false, centralError = false, receipt = false, prob
 (async () => {
   const headers = { Authorization: 'Bearer test' };
   const payload = action => ({ tournamentId: 'tour_test', matchId: 'm1', action });
+  for (const reason of ['fast8-turn','fast8-wrong-court','fast8-player-busy','fast8-incomplete-draw']) {
+    const busy=harness({businessReason:reason});
+    await assert.rejects(busy.router.call('assignMatchCourt',{tournamentId:'tour_test',matchId:'m1',court:'Quadra 1',confirmCall:true},headers),
+      error=>error.code==='functions/failed-precondition' && error.fast8Reason===reason && error.infrastructure===false);
+    assert.equal(busy.calls.filter(c=>c.payload.matchId==='m1' && !c.payload.probe).length,1,'negação de negócio não é reenviada');
+    assert.equal(busy.store.get('sp-operation-pending-v2'),'{}','negação conhecida limpa a pendência');
+  }
   const isolated = harness({ noConfig: true, probeError: true });
   assert.equal((await isolated.router.call('endMatchOnCourt', payload('cancel-call'), headers)).ok, true);
   assert.equal((await isolated.router.call('endMatchOnCourt', payload('postpone'), headers)).ok, true);

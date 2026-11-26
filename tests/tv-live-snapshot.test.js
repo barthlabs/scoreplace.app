@@ -1022,6 +1022,29 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
       ...(row.entry===1 && round===1?{court:super8.courtNames[row.courts[lane]-1],courtCalledAt:'2026-10-22T21:00:00Z',scoreP1:2,scoreP2:1}:{})});
   }});
   const idle={...super8,matches:super8.matches.map(({court,courtCalledAt,startedAt,...game})=>game)};
+  {
+    vm.runInContext(fs.readFileSync(path.join(root,'js/domain/group-alternation.js'),'utf8'),context);
+    const fast=JSON.parse(JSON.stringify(super8));
+    fast.scheduleWindow.groupAlternation=true;
+    const released=fast.matches.find(m=>m.id==='C2-1-0');
+    Object.assign(released,{winner:released.p1,scoreP1:7,scoreP2:0,resultAt:'2026-10-22T21:04:00Z'});
+    Object.assign(fast.matches.find(m=>m.id==='B2-1-0'),{court:'Areia E',courtCalledAt:'2026-10-22T21:05:00Z'});
+    const board=window._tvLiveBuildSnapshot(fast,Date.parse('2026-10-22T21:06:00Z'));
+    assert(!board.courts.some(c=>c.super8Group || c.super8GroupMember));
+    assert.equal(board.courts[4].fast8Group,'B2','primeira quadra livre recebe outro grupo sem prendê-lo ao par original');
+    assert.equal(board.courts[0].fast8Groups.length,6);
+    assert(board.courts[0].fast8Groups.every(g=>g.standings.length===8),'todas as classificações exibem oito atletas próprios');
+    const html=window._tvLiveBodyHtml(board);
+    assert.equal((html.match(/class="tv-fast8-court tv-fast8-active/g)||[]).length,6);
+    assert.equal((html.match(/class="tv-fast8-standing"/g)||[]).length,6);
+    assert.match(html,/Areia E · Grupo B2/);
+    assert.doesNotMatch(html,/Areia A e Areia B/);
+    assert.match(html,/tv-upcoming-pinned/);
+    assert.match(html,/Próxima quadra livre/);
+    assert.equal(board.nextGame.number,fast.matches.find(m=>m.id==='B2-1-1').scheduledGameNumber);
+    if (process.env.SP_TV_CAPTURE_FAST8) fs.writeFileSync(process.env.SP_TV_CAPTURE_FAST8,
+      popupHtml.replace('<div id="tv-root"></div>','<div id="tv-root">'+html+'</div>'));
+  }
   const groupLabels=snap=>Array.from(snap.courts.filter(c=>c.super8Group),c=>c.super8Group.label);
   const idleSnapshot=window._tvLiveBuildSnapshot(idle);
   assert.deepEqual(groupLabels(idleSnapshot),['B1','C1','C2'],'Super8 groups exist before any court is called');
@@ -1150,6 +1173,16 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
   assert(currentHeader.includes('data-tv-start="'+Date.parse('2026-10-22T21:03:00Z')+'"'),'new round updates its court header clock');
   const released=window._tvLiveBuildSnapshot({...namedOnly,matches:namedOnly.matches.map(game=>game.id==='B1-1-0'?{...game,court:'Areia A',courtCalledAt:'2026-10-22T21:00:00Z',courtReleasedAt:'2026-10-22T21:02:00Z'}:game)});
   assert.equal((window._tvLiveBodyHtml(released).match(/>Livre<\/p>/g)||[]).length,6);
+  assert.equal(released.courts[0].super8Group.games.find(g=>g.round===1 && g.lane===0).status,'pending','encerrado sem placar não volta a waiting');
+  const releasedNext=window._tvLiveBodyHtml(released).split('class="tv-super8-round tv-super8-next">')[1];
+  assert.equal(releasedNext.match(/data-super8-round="(\d+)"/)[1],'2','sem alternância, a próxima formação avança de 1/7 para 2/7 após Encerra');
+  const releaseProvider=window._bracketCourtReleased;
+  window._bracketCourtReleased=()=>({'B1-1-0':'2026-10-22T21:02:00Z'});
+  const releasedCanonical=window._tvLiveBuildSnapshot({...namedOnly,matches:namedOnly.matches.map(game=>game.id==='B1-1-0'?{...game,court:'Areia A',courtCalledAt:'2026-10-22T21:00:00Z'}:game)});
+  assert.equal(releasedCanonical.courts[0].super8Group.games.find(g=>g.round===1 && g.lane===0).status,'pending','courtState canônico também exclui jogo liberado do próximo');
+  assert.equal(window._tvLiveBodyHtml(releasedCanonical).split('class="tv-super8-round tv-super8-next">')[1].match(/data-super8-round="(\d+)"/)[1],'2');
+  window._bracketCourtReleased=releaseProvider;
+
   assert.equal((calledHtml.match(/class="tv-super8-round tv-super8-round-called/g)||[]).length,3,'called pair is a native row in each group');
   assert.doesNotMatch(oneCalledHtml,/class="tv-super8-round tv-super8-round-called/,'single called court never highlights a free neighbor');
   assert.equal((window._tvLiveBodyHtml(groupSnapshot).match(/class="tv-super8-round tv-super8-round-called/g)||[]).length,2,'different active rounds do not get a joint border');

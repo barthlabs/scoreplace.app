@@ -209,6 +209,7 @@ g.window._expandFormationAllowed = function (t) {
 g.window.ScoreplaceParticipantIdentity = require('./vendor/participant-identity.js');
 g.window.ScoreplaceCourtOccupancy = require('./vendor/court-occupancy.js');
 require('./vendor/next-match.js');
+require('./vendor/group-alternation.js');
 g.window.ScoreplaceWaitlist = require('./vendor/waitlist.js');
 g.window.ScoreplaceStandings = require('./vendor/standings.js');
 // index.js também importa este módulo antes de criar `window`. Nesse primeiro

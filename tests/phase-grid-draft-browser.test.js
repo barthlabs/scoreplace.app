@@ -5,8 +5,8 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
 (async()=>{const browser=await chromium.launch();try{
  const page=await browser.newPage({viewport:{width:1366,height:900}});await page.route('**/*',r=>r.abort());
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.setContent('<style>:root{--bg-card:#18527a;--text-main:white;--text-muted:#ddd;--border-color:#99bbee}body{margin:0}</style>'+['tourn-court-count','tourn-game-duration','tourn-call-time','tourn-warmup-time','tourn-max-by-category','tourn-max-participants','select-sport'].map(id=>'<input id="'+id+'">').join('')+'<input type="checkbox" checked id="setup-first-round-only"><input type="checkbox" checked id="tourn-custom-category-capacity"><section id="phase-call-order-editor"></section>');
- const scripts=['domain/standings','domain/team-competition','domain/phase-grid-plan','views/sport-rules','views/standings-core','views/super-eight-core','views/format2','views/tournaments-categories','views/bracket-model','views/bracket-logic','views/bracket-policy','views/chaves','views/chaves-adapter','views/phases-engine','views/tournaments-utils','views/tournaments-draw','views/schedule-poll','views/phase-grid-editor'];
+ await page.setContent('<style>:root{--bg-card:#18527a;--text-main:white;--text-muted:#ddd;--border-color:#99bbee}body{margin:0}</style>'+['tourn-court-count','tourn-game-duration','tourn-call-time','tourn-warmup-time','tourn-max-by-category','tourn-max-participants','select-sport'].map(id=>'<input id="'+id+'">').join('')+'<input type="checkbox" checked id="setup-first-round-only"><input type="checkbox" checked id="tourn-custom-category-capacity"><section id="phase-call-order-editor"></section><section id="fast8-options"></section>');
+ const scripts=['domain/group-alternation','domain/standings','domain/team-competition','domain/phase-grid-plan','views/sport-rules','views/standings-core','views/super-eight-core','views/format2','views/tournaments-categories','views/bracket-model','views/bracket-logic','views/bracket-policy','views/chaves','views/chaves-adapter','views/phases-engine','views/tournaments-utils','views/tournaments-draw','views/schedule-poll','views/phase-grid-editor'];
  for(const file of scripts)await page.addScriptTag({path:root+'/js/'+file+'.js'});
  for(const css of ['style','components','layout','responsive','phase-grid-editor'])await page.addStyleTag({path:root+'/css/'+css+'.css'});
  const t=scenario(['Retinol · Categoria B','Colágeno · Categoria C'],[16,32],[8,8],[7,7],[4,2]);t.gameDuration=30;t.callTime=5;t.warmupTime=5;
@@ -199,6 +199,42 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
   return {auto,refresh,touchedAuto,organizer,untouched:!_phaseCallOrderState.touched,unchanged:before===JSON.stringify(_phaseCallOrderState.plan)};
  },frozen);
  assert.deepEqual(untouched,{auto:null,refresh:null,touchedAuto:null,organizer:null,untouched:true,unchanged:true},'modo automático não bloqueia salvar, e grade v1 não tocada permanece intacta');
+ const fast8Form=await page.evaluate(({t,plan,D})=>{
+  var projection=ScoreplacePhaseGridPlan.project(t,window),saved={...t,phases:projection.phases,fmt2:projection.cfg || t.fmt2,
+    scheduleWindow:{mode:'organizer',days:D,interleavedPlan:plan}};
+  _phaseCallOrderState={tournament:saved,plan,tiles:ScoreplacePhaseGridPlan.expand(plan,saved),locked:true};
+  _estimatedGameHoursState={mode:'organizer',saved:saved.scheduleWindow,locked:true};
+  _renderPhaseGridEditor();
+  var toggle=document.getElementById('fast8-enabled'),before=JSON.stringify(plan);
+  var enabled=!!toggle && !toggle.disabled;
+  if(toggle){toggle.click();}
+  return {enabled,value:_readFast8Options(),unchanged:JSON.stringify(_phaseCallOrderState.plan)===before,
+    gradeLocked:_phaseCallOrderState.locked,readGrade:_readPhaseGridPlan()};
+ },{t:{...t,gameDuration:25},plan,D});
+ assert.deepEqual(fast8Form,{enabled:true,value:{groupAlternation:true},unchanged:true,gradeLocked:true,readGrade:null},
+   'organizador ativa alternância com grade bloqueada sem replanejar quadras/horários');
+ await page.addScriptTag({path:root+'/js/views/format2-ui.js'});
+ const thirdToggle=await page.evaluate(t=>{
+  var mount=document.createElement('section');document.body.appendChild(mount);
+  var compiled=FORMAT2.compileToPhases(t.fmt2,{sport:t.sport,categories:t.combinedCategories});
+  var tournament={...t,phases:compiled.phases,matches:[{id:'drawn',phaseIndex:0}],currentPhaseIndex:0};
+  _f2MountInForm(mount,t.sport,t.fmt2,tournament);
+  var selector='input[onchange*="_f2ThirdPlaceEnabled"]';
+  var control=mount.querySelector(selector),visible=!!control && !control.disabled;
+  if(control)control.click();
+  var disabledThird=_f2GetConfig().eliminatoria.thirdPlaceEnabled===false;
+  var noThird=FORMAT2.compileToPhases(_f2GetConfig(),{sport:t.sport,categories:t.combinedCategories}).phases[1].thirdPlace===false;
+  _f2MountInForm(mount,t.sport,t.fmt2,{...tournament,currentPhaseIndex:1});
+  var locked=mount.querySelector(selector)?.disabled;
+  _f2ThirdPlaceEnabled(false);
+  var kept=_f2GetConfig().eliminatoria.thirdPlaceEnabled!==false;
+  _f2MountInForm(mount,t.sport,FORMAT2.defaultConfig(t.sport),null);
+  var legacyHidden=!mount.querySelector(selector);
+  _f2ThirdPlaceEnabled(false);
+  return {visible,disabledThird,noThird,locked,kept,legacyHidden,legacyMandatory:_f2GetConfig().eliminatoria.terceiro===true};
+ },t);
+ assert.deepEqual(thirdToggle,{visible:true,disabledThird:true,noThird:true,locked:true,kept:true,legacyHidden:true,legacyMandatory:true},
+   'controle de terceiro lugar executa a escolha do organizador e trava após materializar a eliminatória');
  assert.deepEqual(errors,[]);
  console.log('✓ grade real: 84 partidas, 48 atletas hipotéticos, 28 parcerias por grupo, 7 jogos por atleta; rótulos estáveis após mover/dia/reabrir; compacto/mobile e bloqueios OK');
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

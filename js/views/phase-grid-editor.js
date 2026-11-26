@@ -231,7 +231,36 @@
       row.courts?.length && row.courts.every(c=>Number.isInteger(c) && c>=1 && c<=courts));
   }
   window._phaseGridAssignmentsCompatible=assignmentsCompatible;
+  function renderFast8Options() {
+    var mount=document.getElementById('fast8-options'), state=window._phaseCallOrderState,
+      form=window._estimatedGameHoursState, core=window.ScoreplaceGroupAlternation;
+    if (!mount || !form || !core) return;
+    if (state && state.preDrawId) { mount.innerHTML=''; return; }
+    var t=Object.assign({},window._editingTournament || {},state && state.tournament || {});
+    t.scheduleWindow=Object.assign({},t.scheduleWindow || {},form.saved || {},
+      state && state.plan ? {interleavedPlan:state.plan} : {});
+    if (form.fast8Value === undefined) form.fast8Value=t.scheduleWindow.groupAlternation===true;
+    var settings=core.config(t), disabled=!settings.eligible && !form.fast8Value || t.status==='finished';
+    var waves=settings.eligible ? Array.from(new Set(settings.groups.map(g=>g.entry))).sort((a,b)=>a-b).map(function (entry) {
+      return settings.groups.filter(g=>g.entry===entry).map(g=>g.label || 'Grupo '+g.groupNumber).join(', ');
+    }).join(' → ') : settings.reason;
+    mount.innerHTML='<section class="phase-grid-editor"><label><input type="checkbox" role="switch" id="fast8-enabled" '+
+      (form.fast8Value?'checked ':'')+(disabled?'disabled ':'')+'onchange="window._setFast8Enabled(this.checked)"> '+
+      '<strong>Fast 8 · alternar grupos</strong></label><p>'+esc(waves)+
+      (settings.eligible?'. Após a entrada inicial, cada próximo jogo pode ocupar a primeira quadra livre.':'')+'</p></section>';
+  }
+  window._setFast8Enabled=function(value) {
+    var form=window._estimatedGameHoursState;
+    if (!form) return;
+    form.fast8Value=value===true; form.fast8Touched=true;
+    renderFast8Options();
+  };
+  window._readFast8Options=function() {
+    var form=window._estimatedGameHoursState;
+    return form && form.fast8Touched ? {groupAlternation:form.fast8Value===true} : null;
+  };
   function redraw(keepScroll) {
+    renderFast8Options();
     var mount = section(), state = window._phaseCallOrderState;
     if (!mount) { if (overlayOpen) window._closePhaseGridEditor(); return; }
     if (overlayOpen && !overlay()) {

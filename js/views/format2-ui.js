@@ -1977,6 +1977,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }).join('');
       eb += _sec('Destino por categoria', '<div id="f2-rotation-destinations">'+destinations+'</div>');
     }
+    if (window.ScoreplaceGroupAlternation && window.ScoreplaceGroupAlternation.eightConfig(cfg)) {
+      eb += '<div style="margin-top:14px;">' + _toggleRight('Disputa de terceiro lugar',
+        e.thirdPlaceEnabled !== false, 'window._f2ThirdPlaceEnabled(this.checked)', _elimLocked) + '</div>';
+    }
     var elimInner = e.ativa ? (_elimDatesExtra + eb + _elimEndExtra + _elimInitExtra) : '';
     // v4.4.52: fase avançou → config da eliminatória travada (cinza, sem cliques). Nota muda
     // conforme haja classificatória (avançou de fase) ou seja eliminação direta (já sorteada).
@@ -2831,9 +2835,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     else if(e.semeadura==='grupos') e.groupCrossChangeConfirmed=true;
     e.semeadura=v; _norm(); _rerender();
   };
-  /* window._f2Terceiro APAGADO (2.1.41): setter SEM CHAMADOR de um campo que `_norm()`
-   * força a `true` na linha seguinte. Decoy — faz o próximo leitor consertar o lugar
-   * errado. [[project_third_place_always]] [[feedback_funcao_dentro_de_outra_nao_existe]] */
+  window._f2ThirdPlaceEnabled = function (value) {
+    if (!S || !window.ScoreplaceGroupAlternation || !window.ScoreplaceGroupAlternation.eightConfig(S.cfg)) return;
+    if (_faseLockState(S).elimLocked) return;
+    S.cfg.eliminatoria.thirdPlaceEnabled = value === true;
+    _norm(); _rerender();
+  };
   window._f2LineName = function (i, v) { if (S && S.cfg.eliminatoria.nomes) S.cfg.eliminatoria.nomes[i] = v; };
   window._f2LineAssignment = function (value) {
     if (!S) return;

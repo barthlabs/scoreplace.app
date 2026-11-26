@@ -85,6 +85,8 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       fail('invalid-argument', 'Largura da mistura inválida.');
     }
     require('./category-window-core').validate(config, HttpsError);
+    if ((config.phases || []).some(phase=>phase && phase.thirdPlacePolicy !== undefined))
+      require('./fast8-configuration-core').validateIntent(Object.assign({},config,{scheduleWindow:{groupAlternation:false}}),HttpsError);
     if ('membersOnly' in config || 'organizerOnly' in config) {
       if (typeof config.isPublic !== 'boolean' || typeof config.membersOnly !== 'boolean' || typeof config.organizerOnly !== 'boolean'
         || [config.isPublic, config.membersOnly, config.organizerOnly].filter(Boolean).length !== 1) {
@@ -167,6 +169,7 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         const lastBounds = config.fmt2.eliminatoria && config.fmt2.eliminatoria.roundBounds;
         if (Array.isArray(lastBounds) && t.phases.length > 1) t.phases[t.phases.length - 1].roundBounds = lastBounds;
       }
+      require('./fast8-configuration-core').validateIntent(t,HttpsError);
       // Torneio sem categorias nasce realmente vazio. A projeção histórica só
       // é usada quando há rótulos declarados; sem eles ela inventaria "Geral".
       let categoryDefinitions;

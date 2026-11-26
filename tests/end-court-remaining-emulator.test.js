@@ -158,6 +158,38 @@ async function run() {
   const afterRelease=await invoke(functions.assignMatchCourt,{matchId:nextRoundGame.id,court:'Quadra 1',confirmCall:true});
   assert.equal(afterRelease.ok,true,'após liberar todos os atletas a callable permite a próxima formação');
   console.log('✓ rodízio: duas quadras, encerramento individual, placar físico e teste preservado');
+  // A global Fast 8 entry can use whichever court is released first.
+  const rows=[['A','B',1,1,[1,2]],['B','B',2,2,[1,2]],['C','C',1,1,[3,4]],['D','C',2,1,[5,6]],['E','C',3,2,[3,4]],['F','C',4,2,[5,6]]]
+    .map(([label,category,groupNumber,entry,courts])=>({label,category,groupNumber,entry,courts,phaseIndex:0}));
+  const fastGames=[];
+  for(const row of rows)for(let round=1;round<=2;round++)for(let lane=0;lane<2;lane++){
+    const ids=(round===1?[0,1,2,3,4,5,6,7]:[0,4,1,5,2,6,3,7]).slice(lane*4,lane*4+4).map(n=>row.label+'-synthetic-'+n);
+    fastGames.push({id:row.label+'-'+round+'-'+lane,isMonarch:true,groupIdx:row.groupNumber-1,round,phaseIndex:0,
+      category:row.category,scheduledGroupLabel:row.label,_gameNum:fastGames.length+1,p1:ids.slice(0,2).join(' / '),p2:ids.slice(2).join(' / '),
+      team1:ids.slice(0,2),team2:ids.slice(2),team1Uids:ids.slice(0,2),team2Uids:ids.slice(2)});
+  }
+  const fastRef=db.collection('tournaments').doc('tour_fast8_'+randomUUID());
+  const fastParts=backend('./vendor/tournament-split-core.js').dividir({matches:fastGames},['matches']);
+  const fw=db.batch();fw.set(fastRef,{creatorUid:'owner',name:'Fast8 synthetic',status:'active',courtCount:6,
+    courtNames:Array.from({length:6},(_,i)=>'Quadra '+(i+1)),currentPhaseIndex:0,_nJogos:fastGames.length,_nPartes:{matches:fastGames.length},matches:[],participants:[],
+    phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:['B','C'].map(category=>({category,rounds:2,groupFormation:{mode:'size',value:8}}))}}],
+    scheduleWindow:{groupAlternation:true,interleavedPlan:{schema:2,groupAssignments:rows}}});
+  fastParts.matches.forEach(record=>fw.set(fastRef.collection('matches').doc(record._chave),record));await fw.commit();
+  const fc=(matchId,court)=>functions.assignMatchCourt.run({auth:{uid:'owner',token:{uid:'owner'}},data:{tournamentId:fastRef.id,matchId,court,confirmCall:true,operationId:randomUUID()},rawRequest:{headers:{}}});
+  const fe=matchId=>functions.endMatchOnCourt.run({auth:{uid:'owner',token:{uid:'owner'}},data:{tournamentId:fastRef.id,matchId,action:'release',operationId:randomUUID()},rawRequest:{headers:{}}});
+  await assert.rejects(fc('B-1-0','Quadra 5'),/entrada atual/,'não começa a segunda entrada antes de chamar a primeira');
+  for(const row of rows.filter(r=>r.entry===1))for(let lane=0;lane<2;lane++)assert((await fc(row.label+'-1-'+lane,'Quadra '+row.courts[lane])).ok);
+  await fe('D-1-0');
+  assert((await fc('B-1-0','Quadra 5')).ok,'a CF real chama B na quadra 5 que vagou primeiro');
+  await fe('D-1-1');await fe('A-1-0');
+  const races=await Promise.allSettled([fc('B-1-1','Quadra 6'),fc('B-1-1','Quadra 1')]);
+  assert.equal(races.filter(r=>r.status==='fulfilled').length,1,'a mesma formação não atende duas quadras em corrida');
+  assert.equal(races.filter(r=>r.status==='rejected').length,1);
+  const persisted=(await fastRef.collection('matches').doc('B-1-1').get()).data().jogo;
+  assert(['Quadra 1','Quadra 6'].includes(persisted.court));
+  assert.equal((await fc('B-1-1',persisted.court)).ok,true,'replay na mesma quadra é idempotente');
+  await assert.rejects(fc('A-2-0',persisted.court==='Quadra 1'?'Quadra 6':'Quadra 1'),/entrada atual/,'rodada seguinte não fura E/F ainda não chamados');
+  console.log('✓ Fast8 real: entrada A/C/D, B na quadra 5, corrida de chamada e ordem global');
   console.log('end-court physical: OK');
 }
 run().then(() => console.log('✓ callable real e documentos físicos de quadra')).catch(error => {

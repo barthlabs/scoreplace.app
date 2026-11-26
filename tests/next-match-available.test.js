@@ -101,3 +101,65 @@ for (const index of [0,1,2,3]) {
 }
 assert.equal(next.conflictsWithActive({id:'manual-next',team1:['Ana','Bia'],team1Uids:[null,null],team1ManualIds:['slot-a','slot-b'],team2:['Cris','Dani'],team2ManualIds:['slot-c','slot-d']},
   [{id:'manual-active',team1:['Nome corrigido','Eva'],team1Uids:[null,null],team1ManualIds:['slot-d','slot-e']}]),true,'identidade manual bloqueia mesmo com nome corrigido');
+
+const fast8 = require('../js/domain/group-alternation.js');
+function fastFixture(rounds = 3) {
+  const assignments = [['A','B',1,1,[1,2]],['B','B',2,2,[1,2]],['C','C',1,1,[3,4]],
+    ['D','C',2,1,[5,6]],['E','C',3,2,[3,4]],['F','C',4,2,[5,6]]].map(([label,category,groupNumber,entry,courts]) =>
+    ({label,category,groupNumber,entry,courts,phaseIndex:0}));
+  const t = {id:'synthetic-fast-eight',courtCount:6,courtNames:Array.from({length:6},(_,i)=>'Quadra '+(i+1)),
+    currentPhaseIndex:0,phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:
+      ['B','C'].map(category=>({category,rounds,groupFormation:{mode:'size',value:8}}))}}],
+    scheduleWindow:{groupAlternation:true,interleavedPlan:{schema:2,groupAssignments:assignments}},matches:[]};
+  for (const g of assignments) for (let round=1;round<=rounds;round++) for (let lane=0;lane<2;lane++) {
+    const order=round===1?[0,1,2,3,4,5,6,7]:[0,4,1,5,2,6,3,7];
+    const people=order.slice(lane*4,lane*4+4).map(n=>g.label+'-player-'+n);
+    t.matches.push({id:g.label+'-'+round+'-'+lane,isMonarch:true,groupIdx:g.groupNumber-1,phaseIndex:0,category:g.category,
+      round,scheduledGroupLabel:g.label,_gameNum:t.matches.length+1,p1:people.slice(0,2).join(' / '),p2:people.slice(2).join(' / '),
+      team1:people.slice(0,2),team2:people.slice(2),team1Uids:people.slice(0,2),team2Uids:people.slice(2)});
+  }
+  t._nJogos=t.matches.length;return t;
+}
+const ft=fastFixture(), fr={}, fh={occupancy,next};
+const fm=id=>ft.matches.find(m=>m.id===id);
+const fsnap=()=>fast8.selection(ft,ft.matches,fr,fh);
+assert(fast8.config(ft).eligible);
+assert.equal(fsnap().next.id,'A-1-0');
+assert.equal(fsnap().check(fm('A-1-0'),'Quadra 5').reason,'fast8-wrong-court','só a entrada inicial mantém distribuição física');
+assert.deepEqual(fsnap().batch.map(m=>m.scheduledGroupLabel),['A','A','C','C','D','D']);
+for(const entry of fast8.sequence(ft,ft.matches).filter(e=>e.match.round===1 && e.group.entry===1)) {
+  const m=entry.match,g=entry.group;
+  m.court=g.courts[Number(m.id.slice(-1))];m.courtCalledAt='2026-11-25T12:00:00Z';
+}
+assert.equal(fsnap().next.id,'B-1-0','basta terem sido chamados, não esperar todas as seis quadras terminarem');
+assert.equal(fsnap().freeCourts.length,0);
+fr['D-1-0']='2026-11-25T12:10:00Z';
+assert(fsnap().check(fm('B-1-0'),'Quadra 5').ok,'B pode entrar na quadra 5 que vagou primeiro');
+assert.equal(fsnap().check(fm('A-2-0'),'Quadra 5').reason,'fast8-turn','não salta a entrada B/E/F');
+Object.assign(fm('B-1-0'),{court:'Quadra 5',courtCalledAt:'2026-11-25T12:10:01Z'});
+fr['B-1-0']='2026-11-25T12:20:00Z';
+assert.equal(fsnap().next.id,'B-1-1');
+assert(fsnap().check(fm('B-1-1'),'Quadra 5').ok,'fila global não prende B a um par nem exige outro grupo por quadra');
+for(const m of ft.matches.filter(m=>m.round===1 && ['A','C','D'].includes(m.scheduledGroupLabel) && m.id!=='A-1-1')) fr[m.id]='2026-11-25T12:20:00Z';
+for(const id of ['B-1-1','E-1-0','E-1-1','F-1-0','F-1-1']) {
+  const state=fsnap(),m=fm(id),court=state.freeCourts.find(c=>state.check(m,c).ok);
+  assert(court,'há quadra livre para '+id);Object.assign(m,{court,courtCalledAt:'2026-11-25T12:21:00Z'});
+}
+fr['E-1-0']='2026-11-25T12:30:00Z';
+assert.equal(fsnap().check(fm('A-2-0'),fm('E-1-0').court).reason,'fast8-player-busy','o grupo aguarda TODA a rodada anterior');
+assert.equal(fsnap().next.scheduledGroupLabel,'C','outro grupo disponível da mesma entrada pode avançar');
+assert(!fsnap().waiting.some(m=>m.id==='B-1-0'),'liberado sem placar não volta à fila');
+assert.equal(fast8.selection(ft,ft.matches.slice(1),fr,fh).check(fm('C-2-0')).reason,'fast8-incomplete-draw','cache incompleto não autoriza chamada');
+assert(fast8.config(fastFixture(5)).eligible,'N não é fixado em sete');
+const one=fastFixture();one.scheduleWindow.interleavedPlan.groupAssignments.forEach(g=>{g.entry=1;});
+assert(!fast8.config(one).eligible,'entrada única não inventa alternância');
+const four=fastFixture();four.phases[0].classification.rotationCategoryRules.forEach(r=>{r.groupFormation.value=4;});
+assert(!fast8.config(four).eligible,'grupos de quatro não viram Fast 8');
+assert(!fast8.enabled({...ft,scheduleWindow:{...ft.scheduleWindow,groupAlternation:false}}));
+assert(fast8.eightConfig({classifAtiva:true,parceria:'rotation_groups_8'}));
+assert(!fast8.eightConfig({classifAtiva:true,parceria:'fixa'}));
+console.log('✓ Fast 8 global: A/C/D→B/E/F, B na primeira quadra livre, barreira de rodada, identidade e N variável');
+
+delete fm('A-1-1').courtCalledAt;delete fr['A-1-1'];
+assert.equal(fsnap().allowedCourts(fm('A-1-1')).length,6,
+  'uma chamada inicial cancelada após a passagem da primeira entrada retorna à fila global sem prender a quadra antiga');

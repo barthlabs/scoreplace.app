@@ -874,7 +874,12 @@
         ? (e.lateEnrollment === 'expand') : 'inherit';
     }
     if (e.lateEnrollment === 'closed') e.newMatchups = false;
-    e.terceiro = true; // 3º lugar SEMPRE existe (project_third_place_always) — não é opcional.
+    // A intenção nova é exclusiva dos grupos de oito. Falsos legados continuam
+    // sem efeito nos demais formatos, inclusive thirdPlace:false em fases antigas.
+    var eightPolicy = window.ScoreplaceGroupAlternation;
+    var optionalThird = eightPolicy && eightPolicy.eightConfig(out);
+    if (!optionalThird) delete e.thirdPlaceEnabled;
+    e.terceiro = !(optionalThird && e.thirdPlaceEnabled === false);
     // v4.4.33: fase classificatória on/off. Ao menos UMA fase ativa: sem classificatória ⇒
     // eliminatória obrigatória (eliminação direta do enrollment).
     out.classifAtiva = out.classifAtiva !== false;
@@ -1129,6 +1134,11 @@
     var result = compileBasePhases(cfg, opts);
     var cuts = [cfg && cfg.qualificationCategoryRules, cfg && cfg.eliminatoria && cfg.eliminatoria.formationQualificationCategoryRules];
     result.phases.forEach(function (phase, index) {
+      if (phase.kind === 'elimination' && window.ScoreplaceGroupAlternation &&
+          window.ScoreplaceGroupAlternation.eightConfig(result.cfg)) {
+        phase.thirdPlacePolicy = 'optional_super8';
+        phase.thirdPlace = result.cfg.eliminatoria.thirdPlaceEnabled !== false;
+      }
       var rules = cuts[index - 1];
       if (phase.source && phase.source.type === 'previous_phase' && Array.isArray(rules) && rules.length) {
         phase.source = Object.assign({}, phase.source, {qualificationCategoryRules:rules, scope:'per_group',

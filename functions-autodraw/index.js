@@ -4970,6 +4970,15 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (!Array.isArray(all)) throw _drawFail('internal', 'Não foi possível conferir a ocupação das quadras.', { tId, matchId });
       const activeTies = _courtOccupancy.activeMatches([], released, t);
       const activeCandidates = all.filter(item => item && !released[String(item.id)]).concat(activeTies);
+      if (confirmCall && t.scheduleWindow?.groupAlternation === true && m.isMonarch === true && !m.isTieBreak) {
+        const fast = drawWindow.ScoreplaceGroupAlternation;
+        if (!fast) throw _drawFail('failed-precondition','Atualize o aplicativo para usar o Fast 8.',{reason:'fast8-incomplete-draw'});
+        if (m.courtCalledAt && court !== atual) throw _drawFail('failed-precondition','Este jogo já foi chamado em outra quadra. Atualize a ficha.',{reason:'fast8-turn'});
+        if (!m.courtCalledAt) {
+          const gate = fast.selection(t,all,released,{occupancy:_courtOccupancy,next:drawWindow.ScoreplaceNextMatch}).check(m,court);
+          if (!gate.ok) throw _drawFail('failed-precondition',gate.message,{reason:gate.reason});
+        }
+      }
       if (confirmCall && !m.courtCalledAt) {
         if (Number(m.phaseIndex || 0) > 0 &&
             (!drawWindow.ScoreplaceNextMatch ||
@@ -5013,7 +5022,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       }
       if (atual === court && (!confirmCall || m.courtCalledAt)) return commitReply({ ok: true, changed: false, courtCalledAt: m.courtCalledAt || null });
       const reassigned = [];
-      if (court && m.scheduledAt && (court !== atual || (confirmCall && !m.courtCalledAt))) {
+      if (t.scheduleWindow?.groupAlternation !== true && court && m.scheduledAt && (court !== atual || (confirmCall && !m.courtCalledAt))) {
         // A troca vale só para o mesmo horário. Jogos de rodadas posteriores
         // podem usar a mesma quadra; jogos já chamados ou iniciados são intocáveis.
         const slot = Date.parse(String(m.scheduledAt));
@@ -6373,6 +6382,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
   const bytes = Buffer.byteLength(JSON.stringify(patch), 'utf8');
   if (bytes > 96 * 1024) throw new HttpsError('invalid-argument', 'Configuração grande demais.');
   const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId), agoraIso = new Date().toISOString();
+  const fast8Input=JSON.parse(JSON.stringify(patch));
   return db.runTransaction(async tx => {
     if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
@@ -6381,6 +6391,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     if (t.testModeEnabled === true && uid !== TEST_DEVELOPER_UID) {
       throw new HttpsError('permission-denied', 'Torneio em teste.');
     }
+    const fast8Prepared=require('./fast8-configuration-core').prepare(t,fast8Input,drawWindow,HttpsError,hasDrawnBracket(t));
+    Object.keys(patch).forEach(key=>delete patch[key]);
+    Object.assign(patch,fast8Prepared.patch);
     const turningTestOn = t.testModeEnabled !== true && patch.testModeEnabled === true;
     const turningTestOff = t.testModeEnabled === true && patch.testModeEnabled === false;
     const hasPreserveDrawPatch = Object.prototype.hasOwnProperty.call(patch, 'preserveDrawOnTestReset');
@@ -6603,7 +6616,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       if (planSupplied || (original && planInputsChanged) || (existingV2 && patch.scheduleWindow)) {
         const proposed = planSupplied ? patch.scheduleWindow.interleavedPlan : original;
         if (!_configAtiva.igual(original, proposed) || planInputsChanged || (existingV2 && (daysChanged || !_configAtiva.igual(existingCategoryWindows,validatedWindow.categoryWindows || [])))) {
-          if (hasDraw) throw new HttpsError('failed-precondition', 'A grade de jogos publicados não pode mudar depois do sorteio.');
+          if (hasDraw && !fast8Prepared.futureOnly) throw new HttpsError('failed-precondition', 'A grade de jogos publicados não pode mudar depois do sorteio.');
           const effectiveTournament = Object.assign({}, t, patch,{scheduleWindow:validatedWindow});
           if (original?.groupAssignments?.length && !Object.hasOwn(proposed || {},'groupAssignments'))
             throw new HttpsError('failed-precondition','Atualize o aplicativo para editar a distribuição dos grupos nas quadras.');
@@ -7067,6 +7080,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
      * Fechar manualmente depois limpa o agendamento e volta a prevalecer. */
     const openingAt = Date.parse(String(t.registrationOpenAt || ''));
     if (!hasDraw && t.status === 'closed' && !require('./registration-settings-core').requiresClosedEnrollment(t.registrationSettings) && Number.isFinite(openingAt) && openingAt > Date.now()) t.status = 'open';
+    require('./fast8-configuration-core').validateIntent(t,HttpsError);
     t.updatedAt = agoraIso;
     if (!Array.isArray(t.history)) t.history = [];
     t.history.push({ date: agoraIso, message: _futurePlan

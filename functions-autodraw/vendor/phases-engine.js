@@ -198,6 +198,15 @@
     return cmp || null;
   }
 
+  function _thirdPlaceAllowed(cfg) {
+    var policy=typeof window!=='undefined' && window.ScoreplaceGroupAlternation;
+    if (!policy && cfg && cfg.thirdPlacePolicy==='optional_super8' && typeof require==='function') {
+      try {policy=require('./group-alternation.js');}
+      catch(error) {try {policy=require('../domain/group-alternation.js');} catch(missing) {}}
+    }
+    return policy ? policy.thirdPlace(cfg) : true;
+  }
+
   function _numero(v) { return (typeof v === 'number' && isFinite(v)) ? v : 0; }
 
   // A promoção é de uma DUPLA JÁ FORMADA. A régua, portanto, é o desempenho COMBINADO:
@@ -1091,14 +1100,9 @@
     // Com convergência (grande final entre 2/4 linhas), o 3º/4º é o do nível da
     // convergência (perdedores das finais das linhas), não interno a cada linha.
     var _wgf = phaseCfg ? (phaseCfg.grandFinal !== false) : true;
-    /* 3º LUGAR É O CAMINHO NATURAL — NÃO É OPÇÃO (2.1.41). Ordem do dono: _"não existe
-     * razão motivo ou circunstância para a disputa do 3º lugar ser ignorada"_ e _"isso é
-     * código morto, acabe com essa merda que sempre regride nisso"_. Quem perdeu a semi
-     * disputa o 3º, e pronto. A flag já era forçada a `true` no normalizador do format2
-     * (`e.terceiro = true`); o que sobrava era mato — um setter SEM CHAMADOR e oito
-     * condições que nunca eram falsas, cada uma um lugar onde o jogo podia sumir de novo.
-     * [[project_third_place_always]] */
-    var _wth = true;
+    // Só fases compiladas a partir da intenção explícita Super 8/Fast 8
+    // podem omitir a disputa. A flag legada isolada continua sem efeito.
+    var _wth = _thirdPlaceAllowed(phaseCfg);
     // Com três linhas há só uma semifinal na convergência: não existem dois
     // perdedores de semifinais para formar 3º/4º geral. Cada linha conserva
     // sua própria disputa de 3º/4º.
@@ -1147,7 +1151,7 @@
     // pela estratégia (linhas em ordem de seed): performance/'top' = (L1×L4),(L2×L3);
     // equilíbrio/'balanced' = (L1×L3),(L2×L4). Sem grande final → nada disso (independentes).
     var withGF = phaseCfg ? (phaseCfg.grandFinal !== false) : true;
-    var withThird = true;   // 3º lugar sempre — ver a nota em _wth
+    var withThird = _wth;
     var tierKeys = destOrder.filter(function (d) { return tiers[d]; });
     function _mkConv(idSuffix, bracket, label) { return { id: idPrefix + idSuffix, bracket: bracket, round: 99, p1: 'TBD', p2: 'TBD', winner: null, tierLabel: label }; }
     if (withGF && tierKeys.length === 2) {
@@ -1213,7 +1217,7 @@
       var root = branch(0, size);
       var gfN = root && root.match;
       var semisN = convN.filter(function (m) { return m.round === 98; });
-      var thirdN = semisN.length === 2 ? _mkConv('-thirdplace', 'thirdplace', '🥉 Disputa de 3º/4º') : null;
+      var thirdN = _wth && semisN.length === 2 ? _mkConv('-thirdplace', 'thirdplace', '🥉 Disputa de 3º/4º') : null;
       if (thirdN) {
         semisN[0].loserNextMatchId = thirdN.id; semisN[0].loserNextSlot = 'p1';
         semisN[1].loserNextMatchId = thirdN.id; semisN[1].loserNextSlot = 'p2';
@@ -2264,24 +2268,10 @@
       prepareSurplusDecision: cfg && cfg._prepareSurplusDecision,
       phaseIndex: cfg && cfg._surplusPhaseIndex,
       category: cfg && cfg._surplusCategory,
-      /* ⛔⛔⛔ A DISPUTA DE 3º LUGAR EXISTE SEMPRE — CONCEITO, não regra de ninguém: é o jogo entre os
-       * dois perdedores das semifinais, anterior à final, sempre previsto e sempre contado. O conceito
-       * inteiro (incluindo por que tratá-lo como opcional quebra a contagem de jogos e a classificação)
-       * está escrito em `chaves.js`.
-       *
-       * ⛔ E POR ISSO ESTA LINHA NÃO LÊ MAIS `cfg.thirdPlace`. Ela lia, e isso era o último buraco:
-       * um documento de fase ANTIGO com `thirdPlace: false` gravado (a flag morreu na 2.1.41, mas o
-       * campo ficou no banco) desligava o jogo em SILÊNCIO, e a contagem de jogos daquela fase
-       * passava a divergir de todas as fórmulas. Campo de configuração morto não pode continuar
-       * mandando no desenho.
-       *
-       * ⚠️ O QUE SOBRA NÃO É OPCIONALIDADE, É GEOMETRIA, e agora tem nome próprio para ninguém
-       * confundir de novo: `_terceiroNestaChave`. Sob CONVERGÊNCIA (linhas que se juntam numa grande
-       * final) existe UM 3º lugar, no nível da convergência — não um por linha, senão nasceriam dois
-       * "3º lugar" no mesmo torneio. Quem passa `false` aqui está dizendo "o 3º deste torneio é lá",
-       * nunca "este torneio não tem". O underscore marca que é PARÂMETRO do chamador, não configuração.
-       * [[project_third_place_always]] */
-      tierThird: (cfg && cfg._terceiroNestaChave === false) ? false : true,
+      // Convergência e a exceção autorizada de oito atletas compartilham
+      // o mesmo gate; cfg.thirdPlace:false antigo não desliga a disputa.
+      tierThird: !(cfg && cfg._terceiroNestaChave === false) &&
+        _thirdPlaceAllowed(cfg),
       /* ⛔⛔ A ESCOLHA DO ORGANIZADOR ENTRE OS TRÊS DESENHOS (bloco 7 da reforma) passa daqui para o
        * adapter e do adapter para o motor. Ausente = repescagem, que é o que todo torneio existente é.
        * ⚠️ A leitura é do DOCUMENTO, não da tela: a política é decidida antes do sorteio e congelada,
@@ -4375,6 +4365,7 @@
   }
 
   var api = {
+    combinedPairMetrics: _metricasDaDupla,
     isMultiPhase: isMultiPhase,
     mkTeam: mkTeam,
     buildEntrantsByDest: buildEntrantsByDest,

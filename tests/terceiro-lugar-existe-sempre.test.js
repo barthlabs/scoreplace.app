@@ -1,4 +1,7 @@
 'use strict';
+/* Exceção autorizada em 25/nov/2026: Super 8/Fast 8 pode desligar a PARTIDA
+ * pelo novo intent thirdPlaceEnabled. O terceiro colocado continua existindo,
+ * definido pelos critérios configurados. Flags falsas legadas seguem ignoradas. */
 /* O 3º COLOCADO EXISTE SEMPRE — e o JOGO de 3º existe sempre que houver um 4º para disputá-lo.
  * node tests/terceiro-lugar-existe-sempre.test.js
  *
@@ -194,8 +197,8 @@ ok(!/tierThird: doGrupo\.some/.test(adCodigo),
  * ⛔ A única supressão legítima: com linhas que se juntam numa grande final, o 3º é o do nível da
  * convergência. Se a supressão existisse sem a criação lá, o torneio perderia o jogo — é o caso que
  * eu tinha de MEDIR antes de mexer, e medi: o bloco da convergência cria o jogo sem condição. */
-ok(/var withThird = true;/.test(pe),
-  '⑥ no nível da convergência o 3º é criado SEM condição nenhuma');
+ok(/var withThird = _wth;/.test(pe),
+  '⑥ convergência segue a política canônica: terceiro obrigatório fora da exceção explícita Super 8/Fast 8');
 ok(/_mkConv\('-thirdplace'/.test(pe),
   '⑥ e o jogo da convergência existe de verdade (2 linhas)');
 ok((pe.match(/thirdplace/g) || []).length >= 2,

@@ -635,6 +635,13 @@ console.log('✅ Súmula por quadra e lista de chamada');
   const model=core.collect(tournament,games),first=model.matches.find(m=>m.id==='a');
   assert.deepStrictEqual(first.nextCourts1,['','Q2']);assert.deepStrictEqual(first.nextCourts2,['','Q2']);
   assert.deepStrictEqual(model.matches.find(m=>m.id==='d').nextCourts1,['','']);
+  const fast=core.collect({...tournament,scheduleWindow:{...tournament.scheduleWindow,groupAlternation:true}},games);
+  if(process.env.SP_SUMULA_FAST8_SAMPLE)fs.writeFileSync(process.env.SP_SUMULA_FAST8_SAMPLE,core.encodePdf(core.makePages(fast)));
+  assert(fast.matches.every(m=>!m.nextCourts1 && !m.nextCourts2 && !m.court && !m.time),
+    'Fast 8 omite previsões de horário e quadra futura, inclusive setas de próxima rodada');
+  assert(core.makePages(fast).flatMap(p=>p.commands).join('\n').includes('Fast 8'),
+    'súmula Fast 8 comunica a sequência das chamadas');
+
   for(const orientation of ['landscape','portrait']) {
     const pages=core.makePages(model,{orientation});
     const commands=pages.flatMap(p=>p.commands).join('\n');

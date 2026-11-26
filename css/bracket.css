@@ -871,3 +871,34 @@ summary::-webkit-details-marker { display: none; }
 .sp-draw-player { overflow-wrap: anywhere; }
 
 .sp-operations-series-position { display:block;font-size:.8rem;font-weight:800;line-height:1.2;text-align:center;color:var(--text-bright); }
+
+/* Fast 8: cabeça fora da janela rolante, sem cópias dos controles. */
+.sp-operations-next--fast8 {
+  display:flex;
+  flex-direction:column;
+  height:auto;
+  gap:8px;
+}
+.sp-operations-next-pinned {
+  position:relative;
+  z-index:2;
+  flex:none;
+  background:var(--bg-card);
+}
+.sp-operations-next--fast8 > .sp-operations-next-scroll {
+  position:relative;
+  height:clamp(180px, 24vh, 300px);
+  flex:none;
+  scroll-behavior:auto;
+}
+.sp-operations-next--fast8 > .sp-operations-next-scroll .sp-operations-replica {
+  grid-template-rows:auto auto auto;
+}
+.sp-operations-next--fast8 > .sp-operations-next-scroll .sp-operations-replica > .sp-match-card {
+  height:auto!important;
+  min-height:0;
+  border-color:var(--border-color, #64748b)!important;
+}
+.sp-operations-next--fast8 > .sp-operations-next-scroll .sp-match-card[data-match-player-busy="1"] {
+  border-color:var(--sp-c-ef4444, #ef4444)!important;
+}

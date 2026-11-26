@@ -82,6 +82,7 @@
   }
   // A court hint is schedule data, never an account-link requirement.
   function nextCourtHints(t, real, originals) {
+    if (t.scheduleWindow && t.scheduleWindow.groupAlternation === true) return;
     var rows=t.scheduleWindow?.interleavedPlan?.groupAssignments || [];
     var roster=new Map();
     var identitySlots=root._identitySlotsForEntry || root.ScoreplaceParticipantIdentity?.participantSlots;
@@ -137,6 +138,8 @@
     });
   }
   function collect(t, allMatches) {
+    var fast8=!!(t.scheduleWindow && t.scheduleWindow.groupAlternation === true);
+    var alternateOrder=new Map(fast8 && root.ScoreplaceGroupAlternation ? root.ScoreplaceGroupAlternation.sequence(t,allMatches).map((entry,i)=>[text(entry.match.id),i]) : []);
     var seen = new Set();
     var plannedCourts = {}, plannedNumbers = {};
     if (typeof root._operationalSchedulePlan === 'function') {
@@ -158,9 +161,9 @@
     }).map(function (m) {
       var dated = !!(m.scheduledAt && localDay(m.scheduledAt));
       return {
-        id: text(m.id), day: dated ? localDay(m.scheduledAt) : '', time: dated ? localTime(m.scheduledAt) : '',
+        id: text(m.id), day: dated ? localDay(m.scheduledAt) : '', time: dated && !fast8 ? localTime(m.scheduledAt) : '',
         at: dated ? timestamp(m.scheduledAt) : NaN, phaseIndex:Number(m.phaseIndex) || 0,
-        court: text(m.court) || plannedCourts[text(m.id)] || '',
+        court: fast8 ? (m.courtCalledAt || m.startedAt ? text(m.court) : '') : text(m.court) || plannedCourts[text(m.id)] || '',
         number:Number(m.scheduledGameNumber) || plannedNumbers[text(m.id)] || matchNumber(m), category: text(m.category || m.categoryName),
         groupLabel:text(m.scheduledGroupLabel || (t.scheduleWindow?.interleavedPlan?.groupAssignments?.length && m.groupName) || ''),
         round: m.round == null ? '' : String(m.round), bracket:text(m.bracket || 'main'),
@@ -175,6 +178,7 @@
     });
     nextCourtHints(t,real,new Map((allMatches || []).filter(Boolean).map(m=>[text(m.id),m])));
     var matches = real.filter(function (m) { return !!m.day; }).sort(function (a, b) {
+      if (fast8) return (alternateOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER)-(alternateOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER) || (a.number || 0)-(b.number || 0);
       return a.at - b.at || a.court.localeCompare(b.court, 'pt-BR', { numeric:true }) || (a.number || 0) - (b.number || 0) || a.id.localeCompare(b.id);
     });
     var undated = real.filter(function (m) { return !m.day; }).sort(function (a, b) {
@@ -230,7 +234,7 @@
       : real.map(function (m) { return m.category || 'Sem categoria'; });
     var showCategories = new Set(renderedCategories.filter(Boolean)).size > 1;
     return { tournament: text(t.name || t.title || 'Torneio'), superEight:t.superEight === true,
-      showCategories:showCategories,
+      fast8:fast8, showCategories:showCategories,
       matches: matches, undated: undated,
       days: days, future:future, pending:pending, tiebreakGroups:tiebreakGroups,
       groupStandings:groupStandings,
@@ -492,7 +496,7 @@
       if (labels[1]) p.write(labels[1], divider+12, y+7, portrait ? 6 : 6.4, false, limit);
       p.line(divider + (portrait ? 106 : 141), y+3, right-3, y+3, 0.45);
     });
-    p.write('scoreplace.app  |  Quadra prevista; anote mudança na coluna. Após o placar, cada atleta assina uma vez.',
+    p.write(model.fast8 ? 'Fast 8 | Quadra anunciada no painel e pelo microfone. Após o placar, cada atleta assina uma vez.' : 'scoreplace.app  |  Quadra prevista; anote mudança na coluna. Após o placar, cada atleta assina uma vez.',
       left, p.height-24, portrait ? 6 : 7);
     return p;
   }
@@ -605,7 +609,7 @@
       p.line(20, y+4, 822, y+4, 0.85);
     });
     if (note) p.write(fitLabel(note, 795, 7, true), 22, 562, 7, true);
-    p.write('Primeiro jogo de cada atleta. Horários e quadras previstos podem mudar durante o evento.', 22, 581, 7);
+    p.write(model.fast8 ? 'Primeiro jogo de cada atleta. Acompanhe a chamada e a quadra no painel e pelo microfone.' : 'Primeiro jogo de cada atleta. Horários e quadras previstos podem mudar durante o evento.', 22, 581, 7);
     return p;
   }
   function makeCallListPages(model) {
@@ -990,6 +994,14 @@
     var orientation = options.orientation === 'portrait' ? 'portrait' : 'landscape';
     var pages = [];
     function appendScorePages(dated, undated) {
+      if (model.fast8) {
+        var ordered=dated.concat(undated),chunks=balancedChunks(ordered,14);
+        chunks.forEach(function(chunk,index) {
+          pages.push(scorePage(model,chunk[0] && chunk[0].day || 'Data a definir','Fast 8 · sequência de chamadas',chunk,index+1,chunks.length,
+            chunk.length>12?'portrait':orientation,chunk.length>12));
+        });
+        return;
+      }
       var courts = Array.from(new Set(dated.map(function (m) {
         return m.court || 'Quadra a definir';
       }))).sort(function (a, b) {

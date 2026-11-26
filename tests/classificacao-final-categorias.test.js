@@ -180,3 +180,24 @@ const convergedSections = W._categoryFinalPlacements(completedGrandFinal);
 assert.equal(convergedSections.length, 1, 'a Grande Final concluída une a classificação da categoria');
 assert.equal(convergedSections[0].line, null, 'após a convergência a seção deixa de representar uma linha');
 console.log('✅ classificação completa por categoria e posições progressivas');
+
+{
+  W.ScoreplaceGroupAlternation=require('../js/domain/group-alternation');
+  const field=category('Oito');
+  for(const match of [field.semi1,field.semi2,field.final]) {
+    match.winner=match.p1;match.scoreP1=6;match.scoreP2=0;
+  }
+  const noThird={...t,combinedCategories:['Oito'],titleAwards:[],phases:[t.phases[0],
+    {...t.phases[1],thirdPlacePolicy:'optional_super8',thirdPlace:false}],matches:field.matches.filter(m=>m!==field.third)};
+  let section=W._categoryFinalPlacements(noThird)[0];
+  const loserNames=[...field.pairs[1].people,...field.pairs[3].people];
+  assert(section.entries.filter(e=>loserNames.includes(e.name)).every(e=>e.pos===3),
+    'empate integral na campanha classificatória não inventa um quarto colocado');
+  noThird.matches.find(m=>m.id==='Oito-g3-0-2').scoreP1=8;
+  section=W._categoryFinalPlacements(noThird)[0];
+  assert(section.entries.filter(e=>field.pairs[3].people.includes(e.name)).every(e=>e.pos===3),
+    'melhor saldo combinado da classificatória define o terceiro sem criar outro jogo');
+  assert(section.entries.filter(e=>field.pairs[1].people.includes(e.name)).every(e=>e.pos===4),JSON.stringify(section.displayEntries));
+  assert(!noThird.matches.some(m=>m.isThirdPlace));
+  console.log('✓ terceiro opcional: mérito combinado define 3º/4º e empate exato preserva empate');
+}

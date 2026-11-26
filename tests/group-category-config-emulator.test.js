@@ -113,6 +113,49 @@ async function run() {
   const oldNoop=await invoke('updateTournamentConfiguration',{tournamentId:oldRef.id,patch:{name:'Sem fmt2'}});
   assert.equal(oldNoop.changed,false);
   assert.deepEqual((await oldRef.get()).data(),oldBefore);
+  // A alteração operacional e o terceiro opcional percorrem o endpoint real.
+  {
+    const {w,G,scenario,D}=require('./universal-phase-grid.test');
+    const draft=scenario(['Divisão B','Divisão C'],[16,32],[8,8],[7,7],[4,2]);
+    draft.maxParticipants=48;
+    const rules=fmt.compileToPhases(draft.fmt2,{sport:draft.sport,categories:draft.combinedCategories});
+    const plan=G.suggestProjected({...draft,phases:rules.phases,fmt2:rules.cfg},D,w).plan;
+    const fastId='tour_'+Date.now()+'_'+require('node:crypto').randomBytes(16).toString('hex');
+    await invoke('createTournament',{tournamentId:fastId,config:{...draft,fmt2:rules.cfg,name:'Fast 8 sintético',
+      startDate:'2026-12-01',endDate:'2026-12-01',scheduleWindow:{mode:'organizer',version:1,days:D,interleavedPlan:plan}}});
+    const fastRef=db.collection('tournaments').doc(fastId);
+    const forged=structuredClone(cfg);forged.eliminatoria.thirdPlaceEnabled=false;
+    const pristine=(await fastRef.get()).data();
+    await assert.rejects(invoke('applyTournamentFormat',{tournamentId:fastId,fmt2:forged}),{code:'invalid-argument'});
+    assert.deepEqual((await fastRef.get()).data(),pristine);
+    await assert.rejects(invoke('createTournament',{tournamentId:'tour_'+Date.now()+'_'+require('node:crypto').randomBytes(16).toString('hex'),
+      config:{name:'Inválido sintético',sport:'Beach Tennis',fmt2:forged,combinedCategories:categories}}),{code:'invalid-argument'});
+
+    const existing={id:'already-played',phaseIndex:0,category:'Divisão B',isMonarch:true,groupIdx:0,round:1,
+      p1:'Pessoa A / Pessoa B',p2:'Pessoa C / Pessoa D',winner:'Pessoa A / Pessoa B',scoreP1:7,scoreP2:0};
+    const part=backend('./vendor/tournament-split-core.js').dividir({matches:[existing]},['matches']).matches[0];
+    await fastRef.collection('matches').doc(part._chave).set(part);
+    await fastRef.update({_nJogos:1,_nPartes:{matches:1},matches:[],status:'active'});
+    const prior=(await fastRef.get()).data(),next=structuredClone(prior.fmt2);
+    next.eliminatoria.thirdPlaceEnabled=false;
+    await invoke('updateTournamentConfiguration',{tournamentId:fastId,patch:{fmt2:next,scheduleWindow:{groupAlternation:true}}});
+    const after=(await fastRef.get()).data();
+    assert(after.scheduleWindow.groupAlternation);
+    assert.equal(after.fmt2.eliminatoria.thirdPlaceEnabled,false);
+    assert.equal(after.phases[1].thirdPlace,false);
+    assert.deepEqual(after.phases[0],prior.phases[0]);
+    assert.deepEqual(after.scheduleWindow.interleavedPlan.blocks.filter(b=>b.phaseIndex===0),prior.scheduleWindow.interleavedPlan.blocks.filter(b=>b.phaseIndex===0));
+    assert.deepEqual((await fastRef.collection('matches').doc(part._chave).get()).data(),part);
+    const old=structuredClone(after.fmt2);delete old.eliminatoria.thirdPlaceEnabled;old.eliminatoria.terceiro=true;
+    await invoke('updateTournamentConfiguration',{tournamentId:fastId,patch:{name:'Nome novo sintético',fmt2:old}});
+    assert.equal((await fastRef.get()).data().fmt2.eliminatoria.thirdPlaceEnabled,false);
+    const invalid=structuredClone(cfg);invalid.eliminatoria.thirdPlaceEnabled=false;
+    const unchanged=(await ref.get()).data();
+    await assert.rejects(invoke('updateTournamentConfiguration',{tournamentId:id,patch:{fmt2:invalid}}),{code:'invalid-argument'});
+    assert.deepEqual((await ref.get()).data(),unchanged);
+    await assert.rejects(invoke('applyTournamentFormat',{tournamentId:oldRef.id,fmt2:invalid}),{code:'failed-precondition'});
+    console.log('Fast 8 real config: alternância + terceiro opcional atômicos, classificação e jogos físicos preservados');
+  }
   console.log('group category config: OK');
 }
 run().then(()=>console.log('✓ Firestore demo: criação, edição antiga, regras por categoria, autorização e bloqueio pós-sorteio'))

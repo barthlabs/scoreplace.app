@@ -16319,7 +16319,7 @@ window._categoryFinalPlacements = function (t) {
     if (games.length && games.every(function (m) { return m.winner || m.isBye; }) && categories.indexOf(category) < 0) categories.push(category);
   });
   var raw = window._phasesEngine.prevPhaseGroups(Object.assign({}, t, { matches: all }));
-  function idOf(row) { return row && row.uid ? 'uid:' + String(row.uid) : 'name:' + String(row && (row.name || row.displayName) || ''); }
+  function idOf(row) { return row && row.uid ? 'uid:' + String(row.uid) : row && row.manualParticipantId ? 'manual:' + String(row.manualParticipantId) : 'name:' + String(row && (row.name || row.displayName) || ''); }
   function positionalUids(m, side) {
     var uids = typeof window._slotUidsPositional === 'function' ? window._slotUidsPositional(m, side, t) : [];
     return uids.length ? uids : (typeof window._slotUids === 'function' ? window._slotUids(m, side) : []);
@@ -16327,8 +16327,19 @@ window._categoryFinalPlacements = function (t) {
   function members(m, side) {
     var obj = m[side === 'p1' ? 'team1Obj' : 'team2Obj'];
     var list = obj && Array.isArray(obj.participants) && obj.participants.length ? obj.participants : null;
-    if (list) return list.map(function (p) { return { name:p.name || p.displayName || '', uid:p.uid || null }; });
     var uids = positionalUids(m, side);
+    if (list) return list.map(function (p,index) {
+      var slot=String((m[side === 'p1' ? 'team1SlotIds' : 'team2SlotIds'] || [])[index] || '');
+      return { name:p.name || p.displayName || '', uid:uids[index] || p.uid || null,
+        manualParticipantId:p.manualParticipantId || (slot.indexOf('manual:')===0?slot.slice(7):null) };
+    });
+    var names = m[side === 'p1' ? 'team1' : 'team2'];
+    if (!Array.isArray(names)) names = String(m[side] || '').split(' / ');
+    var slots = m[side === 'p1' ? 'team1SlotIds' : 'team2SlotIds'] || [];
+    if (names.length > 1) return names.map(function(name,index) {
+      var slot=String(slots[index] || '');
+      return {name:name,uid:uids[index] || null,manualParticipantId:slot.indexOf('manual:')===0?slot.slice(7):null};
+    });
     var isLineMatch = Number(m && m.phaseIndex || 0) === phaseIndex;
     return uids.length ? uids.map(function (uid) { return { name:'', uid:uid }; }) :
       (!phase.fixedPairs || !isLineMatch ? [{ name:m[side], uid:null }] : []);
@@ -16423,6 +16434,30 @@ window._categoryFinalPlacements = function (t) {
       pairs[key] = { members:found, label:label }; pairCount++;
     }); });
     var placed = window._classifEntriesFromMatches(t, lm);
+    if (window.ScoreplaceGroupAlternation && !window.ScoreplaceGroupAlternation.thirdPlace(phase) &&
+        window._phasesEngine.combinedPairMetrics) {
+      var losers=placed.filter(function(pair) {return pair.pos===3 || pair.pos===4;});
+      if (losers.length===2) {
+        var metrics=losers.map(function(pair) {
+          var known=pairs[pair.key], rows=known && known.members.map(member=>statsById[idOf(member)]).filter(Boolean) || [];
+          return rows.length===2 ? window._phasesEngine.combinedPairMetrics({displayName:pair.name,participants:rows}) : null;
+        });
+        if (metrics.every(Boolean)) {
+          var pairBirth={}, birth=typeof window._tbBirthByName==='function'?window._tbBirthByName(t):{};
+          losers.forEach(function(pair,index) {
+            var values=pairs[pair.key].members.map(member=>birth[member.uid || member.name]);
+            if (values.length===2 && values.every(value=>typeof value==='number' && Number.isFinite(value)))
+              pairBirth[metrics[index].uid]=(values[0]+values[1])/2;
+          });
+          // A dupla ainda não existia na classificação: confronto direto é
+          // neutro, como na semeadura por mérito combinado do motor.
+          var order=window._standingsCompareConfig(metrics[0],metrics[1],{
+            primaryField:primary,tiebreakers:compareOpts.tiebreakers,h2h:{},birth:pairBirth,ordem:null});
+          losers[0].pos=order>0?4:3;losers[1].pos=order<0?4:3;
+          if (order===0) losers.forEach(function(pair) {pair.tied=true;});
+        }
+      }
+    }
     if (t.rankingPrimary === 'games_diff' && Array.isArray(t.tiebreakers) && !t.tiebreakers.length &&
         phase.elimination && phase.elimination.bracketType === 'single') {
       var performance = {}, exitRound = {};

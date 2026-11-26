@@ -870,6 +870,7 @@ function setupCreateTournamentModal() {
                   <div id="estimated-games-window-days" style="margin-top:8px"></div>
                 </div>
                 <div id="phase-call-order-editor" style="margin-top:12px"></div>
+                <div id="fast8-options" style="margin-top:12px"></div>
                 <!-- ⏱️ 2.1.98 — DIVISÃO DAS RODADAS (slider de stops).
                      Pedido do dono: "um slider com x stops. em cada stop a data dd/mm e entre
                      os stops y dias… o organizador pode esticar umas rodadas e reduzir outras
@@ -7143,6 +7144,7 @@ window._saveTournamentClickHandler = async function(event) {
           : (endDateRaw && window._estimatedGameHoursState && window._estimatedGameHoursState.mode === 'organizer'
             ? endDateRaw + 'T23:59' : endDateRaw);
         const estimatedGameHours = window._readEstimatedGameHours();
+        const fast8Options = typeof window._readFast8Options === 'function' ? window._readFast8Options() : null;
         const phaseCallOrder = window._readPhaseCallOrder();
         const phaseGridPlan = typeof window._readPhaseGridPlan === 'function' ? window._readPhaseGridPlan() : null;
         if (estimatedGameHours && estimatedGameHours.error) {
@@ -7308,8 +7310,8 @@ window._saveTournamentClickHandler = async function(event) {
           startDate: startDateVal,
           endDate: endDateVal,
           endTimeEstimated,
-          ...((estimatedGameHours || phaseCallOrder || phaseGridPlan) ? { scheduleWindow:Object.assign({},
-            window._editingTournament && window._editingTournament.scheduleWindow || {}, estimatedGameHours || {},
+          ...((estimatedGameHours || phaseCallOrder || phaseGridPlan || fast8Options) ? { scheduleWindow:Object.assign({},
+            window._editingTournament && window._editingTournament.scheduleWindow || {}, estimatedGameHours || {}, fast8Options || {},
             phaseCallOrder ? { phaseCallOrder:phaseCallOrder } : {},
             phaseGridPlan ? Object.assign({interleavedPlan:phaseGridPlan},phaseGridPlan.categoryPlacement==='grid'?{categoryWindows:[]}:{} ) : {}) } : {}),
           /* ⏱️ 2.1.98 — a divisão das rodadas que o organizador arrastou (N-1 datas).
