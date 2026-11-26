@@ -119,6 +119,61 @@ async function restore(tournamentId) {
     assert.equal(checkpoint.marker((await missingSnapshot.tournamentRef.get()).data()), 'resetting',
       'a falha permanece bloqueada para recuperação explícita');
 
+    // Activation after an already completed draw pins RAW root and match documents.
+    const lateId = id + '_late', lateRef = db.collection('tournaments').doc(lateId);
+    fixtures.push({tournamentRef:lateRef,tournamentId:lateId});
+    const pristine = {id:lateId,creatorUid:UID,testModeEnabled:true,preserveDrawOnTestReset:false,
+      status:'active',currentPhaseIndex:0,matches:[{id:'official',team1:['A','B'],team2:['C','D']}],
+      groups:[{name:'A'}],rounds:[],isPublic:false,organizerOnly:true};
+    await lateRef.set(pristine);
+    await lateRef.collection('matches').doc('official').set(pristine.matches[0]);
+    checkpoint.assertCanCaptureExisting(pristine,pristine.matches,HttpsError);
+    for (const bad of [{courtCalledAt:'now'},{winner:'p1'},{scoreP1:1},{sets:[{p1:2,p2:0}]}]) {
+      assert.throws(()=>checkpoint.assertCanCaptureExisting(pristine,[{...pristine.matches[0],...bad}],HttpsError));
+    }
+    assert.throws(()=>checkpoint.assertCanCaptureExisting({...pristine,_faltamPesados:true},pristine.matches,HttpsError));
+    const lateEntries=[{path:'matches/official',data:pristine.matches[0]}];
+    const pins=checkpoint.gamePins(pristine,lateEntries);
+    assert.deepEqual(checkpoint.gamePins({...pristine,matches:pristine.matches},lateEntries),pins);
+    const pending={...pristine,preserveDrawOnTestReset:true};
+    const lateEpoch=checkpoint.prepareDraw(pending);
+    Object.assign(pending.drawCheckpoint,{expectedGames:pins,preserveBefore:false});
+    await lateRef.set(pending);
+    const captured=await service.capture(lateId,lateEpoch);
+    const active=(await lateRef.get()).data();
+    assert(checkpoint.preserved(active));assert(checkpoint.protectedDraw(active));
+    assert.equal((await service.abortExistingCapture(lateId,lateEpoch,'too-late')).aborted,false);
+    const markerBefore=JSON.stringify(active.drawCheckpoint);
+    active.currentPhaseIndex=1;active.matches.push({id:'future'});
+    assert.equal(checkpoint.prepareDraw(active),null,'later phase cannot replace original baseline');
+    assert.equal(JSON.stringify(active.drawCheckpoint),markerBefore);
+    for(let run=0;run<2;run++) {
+      await lateRef.update({currentPhaseIndex:1,matches:active.matches});
+      await lateRef.collection('matches').doc('official').update({scoreP1:6,winner:'p1'});
+      await service.restore({auth:{uid:UID},data:{tournamentId:lateId}});
+      const restored=(await lateRef.get()).data();
+      assert.equal(restored.currentPhaseIndex,0);
+      assert.deepEqual(checkpoint.gamePins(restored,[{path:'matches/official',data:(await lateRef.collection('matches').doc('official').get()).data()}]),pins);
+      assert.equal(restored.drawCheckpoint.hash,captured.hash);
+    }
+    // A concurrent game edit invalidates a retrospective capture, then its
+    // bounded abort preserves that fresh game and every other fresh field.
+    const raceId=id+'_late_race',raceRef=db.collection('tournaments').doc(raceId);
+    fixtures.push({tournamentRef:raceRef,tournamentId:raceId});
+    const racing={...pristine,id:raceId,preserveDrawOnTestReset:true};
+    const raceEpoch=checkpoint.prepareDraw(racing);
+    Object.assign(racing.drawCheckpoint,{expectedGames:pins,preserveBefore:false});
+    await raceRef.set(racing);
+    await raceRef.collection('matches').doc('official').set({...pristine.matches[0],courtCalledAt:'concurrent'});
+    await raceRef.update({name:'fresh name'});
+    await assert.rejects(service.capture(raceId,raceEpoch),e=>e.code==='aborted');
+    assert.equal((await service.abortExistingCapture(raceId,raceEpoch,'aborted')).aborted,true);
+    assert.equal((await service.abortExistingCapture(raceId,raceEpoch,'again')).aborted,false);
+    const aborted=(await raceRef.get()).data();
+    assert.equal(aborted.name,'fresh name');assert.equal(aborted.preserveDrawOnTestReset,false);
+    assert.equal(aborted.drawCheckpoint,undefined);
+    assert.equal((await raceRef.collection('matches').doc('official').get()).data().courtCalledAt,'concurrent');
+
     console.log('✅ checkpoint pós-sorteio: reset repetível, recuperação e integridade no Firestore Emulator');
   } finally {
     for (const fixture of fixtures) await deleteRecursively(fixture.tournamentRef);

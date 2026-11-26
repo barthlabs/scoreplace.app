@@ -32,12 +32,100 @@ function slots(registrations) {
 }
 function fingerprint(tournament, registrations) {
   const rows = (registrations || []).map((item) => [item.registrationId, item.status, item.categoryId,
-    item.fixedPairId || '', item.manualDisplayName || '', item.participantUid || ''])
+    item.fixedPairId || '', item.manualDisplayName || '', item.participantUid || '', item.importSlotCategory||'',item.importSlotOrdinal||0,item.isPlaceholder===true])
     .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
   return crypto.createHash('sha256').update(JSON.stringify([tournament.id, tournament.canonicalRegistrationMigration, rows])).digest('hex');
 }
+function individualMode(t) {
+  return t?.enrollmentMode === 'individual' || ['rotation_groups','rei_rainha'].includes(t?.fmt2?.parceria) ||
+    (t?.phases||[]).some(p=>p?.classification?.rotationPartners===true);
+}
+function individualImportError(t) {
+  if (t?.status==='finished'||['capturing','resetting'].includes(t?.drawCheckpoint?.state)||
+      ['capturing','resetting'].includes(t?.rehearsal?.state))return 'O torneio está encerrado ou em restauração.';
+  const settings=t?.registrationSettings,pricing=settings?.pricing;
+  if(settings?.source==='scoreplace'&&(Number(pricing?.cents)>0||Object.values(pricing?.centsByCategory||{}).some(n=>Number(n)>0)))
+    return 'Este torneio tem cobrança configurada. Use o fluxo de inscrição com pagamento.';
+  return '';
+}
+function individualId(categoryId,ordinal) {
+  return 'importslot-'+crypto.createHash('sha256').update(categoryId+'\0'+ordinal).digest('hex').slice(0,32);
+}
+function individualRoster(registrations) {
+  return (registrations||[]).filter(item=>active(item)&&item.participantKind==='manual'&&!item.fixedPairId&&
+    item.manualParticipantId===individualId(item.categoryId,item.importSlotOrdinal)&&item.importSlotCategory===item.categoryId)
+    .map(item=>({categoryId:item.categoryId,ordinal:item.importSlotOrdinal,name:item.manualDisplayName,
+      placeholder:item.isPlaceholder===true,manualParticipantId:item.manualParticipantId}));
+}
+function normalizedIndividual(row) {
+  const categoryId=text(row?.categoryId),ordinal=row?.ordinal,people=row?.people,placeholder=row?.placeholder===true;
+  if(!categoryId||!Number.isSafeInteger(ordinal)||ordinal<1||ordinal>10000||!Array.isArray(people)||people.length!==1)
+    throw new Error('posição individual ou categoria inválida');
+  if(people[0]?.uid)throw new Error('importação individual não vincula conta');
+  const name=text(people[0]?.name).replace(/\s+/g,' ');
+  if((!placeholder&&name.length<2)||name.length>120||/[<>\u0000-\u001f]/.test(name)||placeholder&&name)
+    throw new Error('nome individual inválido');
+  const expectedName=row.expectedName===undefined?null:text(row.expectedName);
+  return {kind:'individual',categoryId,ordinal,placeholder,expectedName,people:[{name,uid:null}]};
+}
+function applyReviewedIndividuals(tournament,registrations,rawBlock) {
+  if(!individualMode(tournament))throw new Error('O torneio não aceita esta importação individual.');
+  const blocked=individualImportError(tournament);if(blocked)throw new Error(blocked);
+  const block=normalizedBlock(rawBlock),original=boundary.verifiedRoster(tournament,registrations).registrations;
+  const definitions=new Map((tournament.categoryDefinitions||[]).map(d=>[d.id,d.label||d.name||'']));
+  const excluded=new Set(tournament.excludedCategories||[]);
+  let current=original.slice(),nextNumber=Math.max(0,...current.map(r=>Number((text(r.manualDisplayName).match(/^Jogador\s+(\d+)$/i)||[])[1])||0));
+  for(const row of block){
+    if(row.kind!=='individual')throw new Error('Não misture duplas e pessoas no mesmo bloco.');
+    const label=definitions.get(row.categoryId);
+    if(!label||excluded.has(label)||Object.hasOwn(tournament.maxParticipantsByCategory||{},label)&&Number(tournament.maxParticipantsByCategory[label])===0)
+      throw new Error('Categoria inexistente ou sem vagas.');
+    const manualParticipantId=individualId(row.categoryId,row.ordinal);
+    const source=current.find(r=>r.manualParticipantId===manualParticipantId);
+    if(source&&(source.participantKind!=='manual'||!active(source)||source.fixedPairId||
+      source.importSlotCategory!==row.categoryId||source.importSlotOrdinal!==row.ordinal))
+      throw new Error('Posição alterada; atualize a prévia.');
+    if(source&&(source.paymentState||source.paymentDueCents||source.proofPath))throw new Error('Inscrição com pagamento não pode ser substituída pela planilha.');
+    if(source&&row.placeholder)continue; // A preliminary file can never erase a known name.
+    const name=row.placeholder?'Jogador '+(++nextNumber):row.people[0].name;
+    if(source){
+      if(source.manualDisplayName===name)continue;
+      if(row.expectedName!==source.manualDisplayName)throw new Error('O nome mudou; revise a substituição na prévia.');
+      if(current.some(r=>active(r)&&r.participantKind==='account'))throw new Error('Edite este participante pela lista de inscritos antes de reimportar.');
+      const virtual={...tournament,canonicalRegistrationMigration:{...tournament.canonicalRegistrationMigration,registrationCount:current.length}};
+      const plan=require('./rename-canonical-participant-core').plan(virtual,current,
+        {oldName:source.manualDisplayName,newName:name,manualParticipantId},[],[]);
+      if(Object.keys(plan.rootPatch).length||plan.documents.length)throw new Error('Edite este participante pela lista de inscritos antes de reimportar.');
+      current=current.map(r=>r.registrationId===source.registrationId?{...r,manualDisplayName:name,isPlaceholder:false}:r);
+    }else{
+      if(current.some(r=>active(r)&&r.participantKind==='manual'&&manualNames.normalizeName(r.manualDisplayName)===manualNames.normalizeName(name)))
+        throw new Error('Nome já inscrito em outra posição; confira a categoria e a numeração da planilha.');
+      const changes=mutations.enroll(tournament.id,current,{manualParticipantId},[row.categoryId],
+        {status:'confirmed',validationState:'approved',manualDisplayName:name});
+      changes.creates.forEach(r=>Object.assign(r,{isPlaceholder:row.placeholder,importSlotOrdinal:row.ordinal,importSlotCategory:row.categoryId}));
+      current=current.concat(changes.creates);
+    }
+  }
+  const cap=Number(tournament.maxParticipants);
+  if(Number.isSafeInteger(cap)&&cap>0&&new Set(current.filter(active).map(r=>r.participantKey)).size>cap)throw new Error('A planilha ultrapassa o total de vagas.');
+  for(const [id,label]of definitions){
+    const raw=Object.hasOwn(tournament.maxParticipantsByCategory||{},label)?tournament.maxParticipantsByCategory[label]:tournament.maxParticipantsPerCategory;
+    const limit=Number(raw);if(Number.isSafeInteger(limit)&&limit>0&&current.filter(r=>active(r)&&r.categoryId===id).length>limit)
+      throw new Error('A planilha ultrapassa as vagas de '+label+'.');
+  }
+  const before=new Map(original.map(r=>[r.registrationId,r]));
+  return {updates:current.filter(r=>before.has(r.registrationId)&&JSON.stringify(r)!==JSON.stringify(before.get(r.registrationId))),
+    creates:current.filter(r=>!before.has(r.registrationId))};
+}
 function normalizedBlock(block) {
   if (!Array.isArray(block) || !block.length || block.length > 8) throw new Error('bloco exige de 1 a 8 duplas');
+  if(block.some(row=>row&&row.kind==='individual')){
+    if(block.some(row=>row?.kind!=='individual'))throw new Error('Não misture duplas e pessoas no mesmo bloco.');
+    const keys=new Set();
+    return block.map(row=>{const next=normalizedIndividual(row),key=next.categoryId+'|'+next.ordinal;
+      if(keys.has(key))throw new Error('posição individual repetida');keys.add(key);return next;});
+  }
+  if(block.some(row=>row?.kind!==undefined&&row.kind!=='pairs'))throw new Error('tipo de importação desconhecido');
   const usedPairs = new Set(), usedUids = new Set();
   return block.map((row) => {
     const pairId = text(row && row.pairId), categoryId = text(row && row.categoryId);
@@ -108,4 +196,4 @@ function applyReviewedBlock(tournament, registrations, rawBlock) {
     creates: current.filter((item) => !before.has(item.registrationId)),
   };
 }
-module.exports = { slots, fingerprint, normalizedBlock, payloadHash, receiptNames, applyReviewedBlock };
+module.exports = { individualMode, individualImportError, individualRoster, individualId, applyReviewedIndividuals, slots, fingerprint, normalizedBlock, payloadHash, receiptNames, applyReviewedBlock };

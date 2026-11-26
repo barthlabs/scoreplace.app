@@ -9282,7 +9282,12 @@ window._prefillFromTemplate = function(tpl) {
   // o format2 pra ele iniciar a partir dela (torneio NOVO a partir de template = sem editId).
   if (tpl.fmt2) {
     window._f2PendingTemplateCfg = window._f2TemplateCopy(tpl.fmt2);
-    var _fm = document.getElementById('f2-config-mount'); if (_fm) { try { _fm.remove(); } catch (e) {} }
+    var _fm = document.getElementById('f2-config-mount');
+    if (_fm) {
+      if (typeof window._f2StashExtSections !== 'function') throw new Error('Reabra o formulário para carregar o configurador antes de aplicar o modelo.');
+      window._f2StashExtSections();
+      _fm.remove();
+    }
   }
   if (tpl.phase1Name != null) {
     window._phase1Name = tpl.phase1Name;
@@ -9337,57 +9342,56 @@ window._discardCreateTournament = function() {
 };
 
 // ─── Navigation helper + page renderer (v1.3.13-beta) ────────────────────
-// ── ANCORAGEM DE SCROLL DO CRIAR/EDITAR (invariante do dono) ──────────────────
-// REGRA: ao alterar QUALQUER configuração no criar/editar torneio, a tela NUNCA
-// pode pular/rolar/mudar de posição — o usuário não pode se perder. Os toggles
-// dão show/hide em seções acima do controle clicado, mudando a altura do documento
-// → o controle "salta". Solução geral (sem tocar handler por handler): um listener
-// em fase de CAPTURA registra a posição do controle ANTES dos handlers rodarem;
-// no rAF seguinte (após a mutação do DOM, ANTES do paint) compensa o scroll do
-// container pra manter o controle exatamente onde estava. Vale pra clique e change,
-// em modo modal (#modal-create-tournament) e page-route (#novo-torneio).
+// Interações do formulário preservam a posição absoluta; rolagem manual e
+// navegação explicitamente solicitada continuam livres.
 (function _attachCreateFormScrollAnchor() {
   if (typeof document === 'undefined' || window._createFormAnchorAttached) return;
   window._createFormAnchorAttached = true;
-  function _scrollParent(el) {
-    for (var p = el && el.parentElement; p; p = p.parentElement) {
-      var oy = '';
-      try { oy = getComputedStyle(p).overflowY; } catch (e) {}
-      if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight + 1) return p;
-    }
-    return null; // null → usar window
+  var pending = null;
+  function _cancel() {
+    if (!pending) return;
+    cancelAnimationFrame(pending.frame);
+    pending.styles.forEach(function(item) {
+      if (item.value) item.el.style.setProperty('overflow-anchor', item.value, item.priority);
+      else item.el.style.removeProperty('overflow-anchor');
+    });
+    pending = null;
   }
-  var pendingCriteriaFrame=null, restoreCriteriaScroll=null;
   function _onInteract(e) {
     var form = document.getElementById('form-create-tournament');
     if (!form || !e.target || !form.contains(e.target)) return;
-    if(e.target.closest?.('[data-tb-move]')) {
-      if(pendingCriteriaFrame!==null){cancelAnimationFrame(pendingCriteriaFrame);restoreCriteriaScroll();}
-      var positions=[];
-      for(var parent=e.target.parentElement;parent;parent=parent.parentElement) {
-        if(parent.scrollHeight>parent.clientHeight) positions.push([parent,parent.scrollTop,parent.scrollLeft]);
-      }
-      var x=window.scrollX,y=window.scrollY;
-      restoreCriteriaScroll=function(){positions.forEach(function(item){item[0].scrollTo({top:item[1],left:item[2],behavior:'instant'});});window.scrollTo({top:y,left:x,behavior:'instant'});};
-      pendingCriteriaFrame=requestAnimationFrame(function(){restoreCriteriaScroll();pendingCriteriaFrame=null;restoreCriteriaScroll=null;});
-      return;
+    if (e.target.closest?.('[data-allow-auto-scroll]')) { _cancel(); return; }
+    if (pending && pending.form !== form) _cancel();
+    if (pending) return;
+    var elements = [];
+    for (var parent = e.target.parentElement; parent; parent = parent.parentElement) {
+      var style = getComputedStyle(parent);
+      if (/(auto|scroll|overlay)/.test(style.overflowX + ' ' + style.overflowY)) elements.push(parent);
     }
-    var anchor = (e.target.closest && e.target.closest('button, label, .form-group, .toggle-switch, input, select, .formato-btn, .draw-mode-btn')) || e.target;
-    if (!anchor || !anchor.getBoundingClientRect) return;
-    var cont = _scrollParent(anchor);
-    var beforeTop = anchor.getBoundingClientRect().top;
-    // Captura roda ANTES dos onclick/onchange inline (bubble). O rAF roda DEPOIS
-    // deles mutarem o DOM e ANTES do paint → compensa sem flicker.
-    requestAnimationFrame(function () {
-      if (!document.body || !document.body.contains(anchor)) return;
-      var delta = anchor.getBoundingClientRect().top - beforeTop;
-      if (Math.abs(delta) < 1) return;
-      if (cont && cont.scrollBy) cont.scrollBy(0, delta);
-      else window.scrollBy(0, delta);
+    if (document.scrollingElement && !elements.includes(document.scrollingElement)) elements.push(document.scrollingElement);
+    var task = {form:form, x:window.scrollX, y:window.scrollY,
+      positions:elements.map(function(el) { return {el:el, top:el.scrollTop, left:el.scrollLeft}; }),
+      styles:elements.map(function(el) { return {el:el,
+        value:el.style.getPropertyValue('overflow-anchor'), priority:el.style.getPropertyPriority('overflow-anchor')}; })};
+    task.styles.forEach(function(item) { item.el.style.setProperty('overflow-anchor','none'); });
+    pending = task;
+    task.frame = requestAnimationFrame(function() {
+      if (pending !== task) return;
+      if (form.isConnected && document.getElementById('form-create-tournament') === form) {
+        task.positions.forEach(function(item) {
+          if (item.el.isConnected) item.el.scrollTo({top:item.top,left:item.left,behavior:'instant'});
+        });
+        window.scrollTo({top:task.y,left:task.x,behavior:'instant'});
+      }
+      _cancel();
     });
   }
-  document.addEventListener('click', _onInteract, true);
-  document.addEventListener('change', _onInteract, true);
+  ['click','change','input'].forEach(function(type) { document.addEventListener(type,_onInteract,true); });
+  ['wheel','touchmove'].forEach(function(type) { document.addEventListener(type,_cancel,{capture:true,passive:true}); });
+  document.addEventListener('keydown',function(e) {
+    var editable = e.target?.isContentEditable || e.target?.matches?.('textarea,select,input:not([type=button]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=submit])');
+    if (!editable && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End',' '].includes(e.key)) _cancel();
+  },true);
 })();
 
 // Padrão centralizado: criar/editar torneio é page-route #novo-torneio.
@@ -9960,10 +9964,21 @@ window._applyTemplateInCreate = function(index) {
   // Close the alert dialog
   var overlay = document.querySelector('.alert-dialog-overlay');
   if (overlay) overlay.remove();
-  // Reset form and apply template
   var form = document.getElementById('form-create-tournament');
+  var nameField = form && form.querySelector('#tourn-name');
+  var typedName = nameField ? nameField.value : '';
+  if (tpl.fmt2 && document.getElementById('f2-config-mount') && typeof window._f2StashExtSections !== 'function') {
+    if (typeof showAlertDialog === 'function') showAlertDialog('Modelo de torneio', 'Reabra o formulário para carregar o configurador antes de aplicar o modelo.');
+    return;
+  }
   if (form) form.reset();
-  if (typeof window._prefillFromTemplate === 'function') window._prefillFromTemplate(tpl);
+  if (nameField) nameField.value = typedName;
+  try {
+    if (typeof window._prefillFromTemplate === 'function') window._prefillFromTemplate(tpl);
+  } finally {
+    if (nameField) nameField.value = typedName;
+    if (typeof window._refreshCoverPreview === 'function') window._refreshCoverPreview();
+  }
   if (typeof showNotification === 'function') showNotification(window._t('create.templateApplied'), window._safeHtml(tpl.name), 'success');
   setTimeout(function() {
     if (typeof window._updateGSMSummaryFromHidden === 'function') window._updateGSMSummaryFromHidden();

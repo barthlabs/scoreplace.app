@@ -7398,6 +7398,74 @@ window._initialDrawResultModel = function (pd) {
   return { categories:categories, gameCount:categories.reduce(function (sum, c) { return sum + c.groups.reduce(function (n, g) { return n + g.matches.length; }, 0) + c.extras.filter(function (e) { return /^R\d+/.test(e.label); }).length; }, 0), teamCount:Number(pd && pd.teamCount) || teams.length };
 };
 
+// Composição do sorteio usa a mesma identidade global da classificação e da TV.
+window._initialDrawGroupsModel = function (t, pd) {
+  var draft = pd && pd.draft || {}, source = Array.isArray(draft.matches) ? draft.matches : [];
+  var view = Object.assign({}, t || {}, draft, { matches:source });
+  var phases = view.phases || [];
+  var phaseIds = phases.map(function (p, i) {
+    return p && p.kind === 'classification' && (p.superEight === true ||
+      p.classification?.partnerRotation === 'unique_8' ||
+      p.classification?.partnerRotation === 'groups' && (p.classification.rotationCategoryRules || [])
+        .some(function (r) { return r.groupFormation?.mode === 'size' && Number(r.groupFormation.value) === 8; })) ? i : -1;
+  }).filter(function (i) { return i >= 0; });
+  if (!phaseIds.length) return null;
+  var fail = function () { throw new Error('Não foi possível conferir os grupos completos. Reabra o resultado do sorteio.'); };
+  if (typeof window._super8StandingsGroups !== 'function' || t?._faltamPesados || t?._resumo ||
+      Number(t?._nJogos) > 0 && Array.isArray(t.matches) && t.matches.length < Number(t._nJogos)) fail();
+  var games = source.filter(function (m) { return m && phaseIds.indexOf(Number(m.phaseIndex || 0)) >= 0 && !m.isBye && !m.isSitOut && !m.isTieBreak; });
+  var grouped = window._super8StandingsGroups(view, games);
+  var assignments = (view.scheduleWindow?.interleavedPlan?.groupAssignments || [])
+    .filter(function (a) { return phaseIds.indexOf(Number(a.phaseIndex)) >= 0; });
+  var seenMatches = new Set(), categories = [], order = view.combinedCategories || [];
+  grouped.forEach(function (g) {
+    var assignment = assignments.find(function (a) { return Number(a.phaseIndex) === g.phaseIndex &&
+      a.category === g.category && Number(a.groupNumber) === g.groupIdx + 1; });
+    var label = String(g.label || '').replace(/^Grupo\s+/, '');
+    if (assignments.length && (!assignment || String(assignment.label).replace(/^Grupo\s+/, '') !== label)) fail();
+    if (g.players.length !== 8 || !label || !g.category || order.length && order.indexOf(g.category) < 0) fail();
+    var identities = new Map();
+    g.matches.forEach(function (m) {
+      seenMatches.add(String(m.id));
+      [1, 2].forEach(function (side) {
+        var names = m['team' + side] || [];
+        if (names.length !== 2) fail();
+        names.forEach(function (name, i) {
+          var uid = (m['team' + side + 'Uids'] || [])[i], slot = (m['team' + side + 'SlotIds'] || [])[i];
+          var key = uid ? 'uid:' + uid : slot || 'name:' + name;
+          if (!name || name === 'A definir' || identities.has(key) && identities.get(key) !== name) fail();
+          identities.set(key, name);
+        });
+      });
+    });
+    if (identities.size !== 8) fail();
+    var first = g.matches.filter(function (m) { return Number(m.round || 1) === 1; });
+    if (first.length !== 2 || new Set(first.flatMap(function (m) {
+      return [1, 2].flatMap(function (side) { return m['team' + side].map(function (name, i) {
+        var uid = (m['team' + side + 'Uids'] || [])[i];
+        return uid ? 'uid:' + uid : (m['team' + side + 'SlotIds'] || [])[i] || 'name:' + name;
+      }); });
+    })).size !== 8) fail();
+    var category = categories.find(function (c) { return c.name === g.category; });
+    if (!category) { category = { name:g.category, groups:[], extras:[] }; categories.push(category); }
+    category.groups.push({ name:'Grupo ' + label, label:label, phaseIndex:g.phaseIndex, groupIdx:g.groupIdx,
+      players:g.players.slice(), matches:[] });
+  });
+  if (!grouped.length || games.some(function (m) { return !seenMatches.has(String(m.id)); }) ||
+      assignments.length && grouped.length !== assignments.length) fail();
+  categories.sort(function (a, b) {
+    var ai = order.indexOf(a.name), bi = order.indexOf(b.name);
+    return (ai < 0 ? order.length : ai) - (bi < 0 ? order.length : bi);
+  });
+  categories.forEach(function (c) { c.groups.sort(function (a, b) {
+    if (!assignments.length) return a.phaseIndex - b.phaseIndex || a.groupIdx - b.groupIdx;
+    return assignments.findIndex(function (r) { return Number(r.phaseIndex) === a.phaseIndex && r.category === c.name && Number(r.groupNumber) === a.groupIdx + 1; }) -
+      assignments.findIndex(function (r) { return Number(r.phaseIndex) === b.phaseIndex && r.category === c.name && Number(r.groupNumber) === b.groupIdx + 1; });
+  }); });
+  return { rosterOnly:true, categories:categories, gameCount:seenMatches.size,
+    playerCount:grouped.reduce(function (n, g) { return n + g.players.length; }, 0), groupCount:grouped.length };
+};
+
 // Metadados de apresentação: a exportação não aplica nem altera a agenda.
 window._initialDrawPdfSchedule = function (t, pd, model) {
   var draft = pd && pd.draft || {}, byId = {}, items = {};
@@ -7468,6 +7536,13 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
     return out.length ? out : [''];
   }
   var blocks = pageGroups.map(function (g) {
+    if (options.rosterOnly) {
+      var rosterRows = g.players.map(function (name) {
+        var parts = lines(name, cardWidth - 40);
+        return { one:[parts], height:Math.max(line + 12, parts.length * line + 12) };
+      });
+      return { group:g, rows:rosterRows, height:74 + rosterRows.reduce(function (n, row) { return n + row.height; }, 0) + 14 };
+    }
     var rows = g.matches.map(function (m, i) {
       var one = (m.onePlayers || [m.one]).map(function (name) { return lines(name, sideWidth); });
       var two = (m.twoPlayers || [m.two]).map(function (name) { return lines(name, sideWidth); });
@@ -7561,6 +7636,12 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
     ctx.fillStyle = cardAccent; ctx.font = 'bold 27px Arial, sans-serif'; ctx.fillText(block.group.name, x + 20, top + 38);
     var rowY = top + 58;
     block.rows.forEach(function (match) {
+      if (options.rosterOnly) {
+        ctx.fillStyle = cardText; ctx.font = '23px Arial, sans-serif'; ctx.textAlign = 'left';
+        match.one[0].forEach(function (part, i) { ctx.fillText(part, x + 20, rowY + 23 + i * line); });
+        rowY += match.height;
+        return;
+      }
       ctx.fillStyle = cardAccent; ctx.font = 'bold 21px Arial, sans-serif'; ctx.fillText(match.label, x + 20, rowY + 23);
       if (options.timeMode === 'all' && match.slot.time) {
         ctx.font = '13px Arial, sans-serif'; ctx.fillText(match.slot.date, x + 20, rowY + 42, 46);
@@ -7626,12 +7707,18 @@ window._initialDrawPdfBlob = function (canvases) {
 window._downloadInitialDrawPdf = async function (t, pd, options) {
   options = options || {};
   var timeMode = options.timeMode === 'first' ? 'first' : 'all';
-  var model = window._initialDrawResultModel(pd);
+  var composition;
+  try { composition = window._initialDrawGroupsModel(t, pd); }
+  catch (error) {
+    if (window.showNotification) window.showNotification('PDF indisponível', error.message, 'error');
+    return false;
+  }
+  var model = composition || window._initialDrawResultModel(pd);
   if (!model.gameCount) {
     if (window.showNotification) window.showNotification('PDF indisponível', 'O sorteio ainda não tem jogos para exportar.', 'error');
     return false;
   }
-  var schedule = window._initialDrawPdfSchedule(t, pd, model);
+  var schedule = composition ? { items:{} } : window._initialDrawPdfSchedule(t, pd, model);
   var plan = [];
   model.categories.forEach(function (category) {
     var pages = Math.max(1, Math.ceil(category.groups.length / 4));
@@ -7660,7 +7747,7 @@ window._downloadInitialDrawPdf = async function (t, pd, options) {
   }
   try {
     var canvases = plan.map(function (entry, i) {
-      return window._initialDrawPdfPage(t, entry.category, entry.groups, entry.extras, i + 1, plan.length, logo, { timeMode:timeMode, schedule:schedule });
+      return window._initialDrawPdfPage(t, entry.category, entry.groups, entry.extras, i + 1, plan.length, logo, { timeMode:composition ? null : timeMode, schedule:schedule, rosterOnly:!!composition });
     });
     if (canvases.some(function (c) { return !c; })) throw new Error('canvas unavailable');
     var url = URL.createObjectURL(window._initialDrawPdfBlob(canvases));
@@ -7672,7 +7759,7 @@ window._downloadInitialDrawPdf = async function (t, pd, options) {
   var link = document.createElement('a');
   link.href = url;
   link.download = 'resultado-sorteio-' + String(t.name || t.title || 'torneio').normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() + (timeMode === 'first' ? '-so-inicio.pdf' : '-com-horarios.pdf');
+    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() + (composition ? '-grupos.pdf' : timeMode === 'first' ? '-so-inicio.pdf' : '-com-horarios.pdf');
   document.body.appendChild(link); link.click(); link.remove();
   setTimeout(function () { URL.revokeObjectURL(url); }, 300000);
   return { url:url, filename:link.download };
@@ -7706,6 +7793,23 @@ window._renderPendingDrawPreview = function (t) {
    * da organização; a chave pública segue vazia até "Publicar sorteio". */
   if (pd.kind === 'initial') {
     if (!pd.draft) return '<div style="color:var(--text-muted);font-size:0.8rem;">Rascunho protegido. Abra a revisão para conferi-lo.</div>';
+    var composition;
+    try { composition = window._initialDrawGroupsModel(t, pd); }
+    catch (error) { return '<div role="alert">' + esc(error.message) + '</div>'; }
+    if (composition) {
+      var rosterHtml = '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
+        '<span>' + composition.groupCount + ' grupos · ' + composition.playerCount + ' atletas</span>' +
+        '<button class="btn btn-outline" data-draw-pdf="groups">Baixar PDF dos grupos</button></div>';
+      composition.categories.forEach(function (category) {
+        rosterHtml += '<h3>' + esc(category.name) + '</h3>';
+        category.groups.forEach(function (group) {
+          rosterHtml += '<section class="sp-draw-roster"><h4>' + esc(group.name) + '</h4><ul>';
+          group.players.forEach(function (name) { rosterHtml += '<li class="sp-draw-player">' + esc(name) + '</li>'; });
+          rosterHtml += '</ul></section>';
+        });
+      });
+      return rosterHtml;
+    }
     var model = window._initialDrawResultModel(pd);
     if (!model.gameCount) return '<div style="color:var(--text-muted);font-size:0.8rem;">(rascunho sem jogos)</div>';
     var initialHtml = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">' +

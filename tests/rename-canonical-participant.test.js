@@ -41,3 +41,38 @@ assert.equal(embedded.rootPatch.rounds[0].matches[0].p1,'Kelly Barth / Ana');
 assert.equal(embedded.rootPatch.participantSlotReplacements.events[0].newName,'Kelly Barth');
 assert.equal(embedded.rootPatch.participantSlotReplacements.events[0].pointsPolicy,'inherit');
 console.log('✓ rename-canonical-participant');
+
+// Administrative label substitutions keep every slot and game intact.
+{
+ const subs=require('../scripts/cult-name-substitutions-core.cjs'),reg=require('../functions/registration-core');
+ const fixtureRoot={id:'synthetic-cult',testModeEnabled:true,categoryDefinitions:[{id:'b',label:'Categoria B'},{id:'c',label:'Categoria C'}],
+  canonicalRegistrationMigration:{fingerprint:'synthetic',registrationCount:48},checkedIn:{'Atleta 0 0':true}};
+ const fixtureRegs=[],fixtureDocs=[];
+ for(let g=0;g<6;g++){
+  const category=g<2?'b':'c',players=Array.from({length:8},(_,i)=>'Atleta '+g+' '+i);
+  players.forEach((name,i)=>{const manualParticipantId='slot-'+g+'-'+i,key='manual:'+manualParticipantId;
+   fixtureRegs.push({registrationId:reg.registrationId(key,category),tournamentId:fixtureRoot.id,participantKey:key,manualParticipantId,
+    participantKind:'manual',participantUid:null,categoryId:category,status:'confirmed',validationState:'approved',fixedPairId:null,manualDisplayName:name});});
+  for(let i=0;i<14;i++){const p=Array.from({length:4},(_,j)=>(i*4+j)%8),id='game-'+g+'-'+i;
+   fixtureDocs.push({id,collection:'matches',ref:{path:'tournaments/synthetic-cult/matches/'+id},data:{jogo:{id,groupName:'Grupo '+String.fromCharCode(65+g),
+    team1:p.slice(0,2).map(k=>players[k]),team2:p.slice(2).map(k=>players[k]),team1SlotIds:p.slice(0,2).map(k=>'manual:slot-'+g+'-'+k),
+    team2SlotIds:p.slice(2).map(k=>'manual:slot-'+g+'-'+k),groupLetterAssignments:players.map(name=>({name})),scheduledGameNumber:g*14+i+1}}});
+  }
+ }
+ const fixtureChanges=[0,1,2,3,4].map(g=>({oldName:'Atleta '+g+' 0',newName:'Substituta '+g,group:String.fromCharCode(65+g),category:g<2?'Categoria B':'Categoria C'}));
+ const p=subs.build(fixtureRoot,fixtureRegs,fixtureDocs,fixtureChanges,[]);
+ const oldRehearsal={state:'active',mode:'preDraw',epoch:'old',hash:'old-hash'};
+ const withRehearsal=subs.build({...fixtureRoot,rehearsal:oldRehearsal},fixtureRegs,fixtureDocs,fixtureChanges,[]);
+ assert.equal(withRehearsal.rootPatch.rehearsal,undefined);
+ for(const rehearsal of [{state:'capturing',mode:'preDraw'},{state:'resetting',mode:'preDraw'},{state:'active',mode:'postDraw'}])
+  assert.throws(()=>subs.build({...fixtureRoot,rehearsal},fixtureRegs,fixtureDocs,fixtureChanges,[]));
+ assert.equal(p.targets.length,5);assert.equal(p.changedDocs.length,70);assert.equal(p.writes,77);
+ assert(p.targets.every(t=>t.appearances===7));
+ assert.equal(p.rootPatch.checkedIn['Substituta 0'],true,'map keys follow labels');
+ assert.throws(()=>subs.build({...fixtureRoot,testModeEnabled:false},fixtureRegs,fixtureDocs,fixtureChanges,[]));
+ assert.throws(()=>subs.build(fixtureRoot,fixtureRegs.map((r,i)=>i? r:{...r,participantUid:'account'}),fixtureDocs,fixtureChanges,[]),/vínculo/);
+ assert.throws(()=>subs.build(fixtureRoot,fixtureRegs,fixtureDocs.map((d,i)=>i?d:{...d,data:{jogo:{...d.data.jogo,courtCalledAt:'now'}}}),fixtureChanges,[]),/chamada/);
+ assert.throws(()=>subs.build(fixtureRoot,fixtureRegs,fixtureDocs,fixtureChanges,['Substituta 0']),/conta/);
+ assert.equal(require('../functions/rename-canonical-participant-core').replaceStrings('Outro Atleta 0 0 Extra','Atleta 0 0','Substituta 0'),'Outro Atleta 0 0 Extra','no substring replacement');
+ console.log('✓ cinco substituições administrativas: slots, 84 jogos e mapas reversíveis, com recusas de vínculo/chamada');
+}

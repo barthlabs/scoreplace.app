@@ -15,7 +15,48 @@ function locked(tournament) {
   return marker(tournament) === 'capturing' || marker(tournament) === 'resetting';
 }
 
+const ROOT_GAME_FIELDS = ['matches', 'rounds', 'groups', 'phaseRounds', 'thirdPlaceMatch'];
+
+function preserved(tournament) {
+  const cp = tournament && tournament.drawCheckpoint;
+  return tournament?.preserveDrawOnTestReset === true && cp?.state === 'active' &&
+    typeof cp.epoch === 'string' && !!cp.epoch && /^[0-9a-f]{64}$/.test(cp.hash || '');
+}
+
+function protectedDraw(tournament) {
+  return tournament?.preserveDrawOnTestReset === true && ['active', 'capturing', 'resetting'].includes(marker(tournament));
+}
+
+function gamePins(root, entries) {
+  const fields = {};
+  ROOT_GAME_FIELDS.forEach(key => { if (Object.prototype.hasOwnProperty.call(root, key)) fields[key] = root[key]; });
+  const parts = (entries || []).filter(item => /^matches\/[^/]+$/.test(item.path))
+    .map(item => ({ path:item.path, data:item.data })).sort((a,b) => a.path.localeCompare(b.path));
+  return { root:fingerprint(fields), parts:fingerprint(parts) };
+}
+
+function assertCanCaptureExisting(t, games, HttpsError) {
+  const fail = () => { throw new HttpsError('failed-precondition',
+    'Preserve o sorteio antes de iniciar a simulação. Há dados incompletos, chamada ou resultado; a chave continua intacta.'); };
+  if (!t || t.testModeEnabled !== true || t.isSandbox === true || t.pendingDraw ||
+      t.drawCheckpoint || Number(t.currentPhaseIndex || 0) !== 0 || t.status === 'finished' ||
+      t._finished === true || !Array.isArray(games) || !games.length ||
+      t._faltamPesados || t._resumo || Number(t._nJogos || 0) > games.length) fail();
+  const ids = new Set();
+  games.forEach(m => {
+    if (!m || !m.id || ids.has(String(m.id))) fail();
+    ids.add(String(m.id));
+    if (m.isBye || m.isSitOut) return;
+    if (m.winner != null && m.winner !== '' || Number(m.scoreP1) || Number(m.scoreP2) ||
+        m.completed === true || m._scoreSubmitted === true ||
+        ['finished','completed'].includes(m.status) ||
+        ['courtCalledAt','warmupStartedAt','gameStartedAt','startedAt','endedAt','finishedAt'].some(k => !!m[k]) ||
+        Array.isArray(m.sets) && m.sets.some(s => Number(s.scoreP1) || Number(s.scoreP2) || Number(s.p1) || Number(s.p2))) fail();
+  });
+}
+
 function prepareDraw(tournament) {
+  if (preserved(tournament)) return null;
   if (!tournament || tournament.testModeEnabled !== true || tournament.preserveDrawOnTestReset !== true ||
       tournament.isSandbox === true) return null;
   const epoch = randomUUID();
@@ -114,6 +155,13 @@ function makeService({ db, HttpsError, loadTournament }) {
     }
     const root = rootForSnapshot(live.data());
     const tree = await readTree(ref);
+    const expectedGames = live.data().drawCheckpoint.expectedGames;
+    function checkPins(data, entries) {
+      if (expectedGames && fingerprint(gamePins(data, entries)) !== fingerprint(expectedGames)) {
+        fail('aborted', 'Os jogos mudaram durante a preservação; a fotografia oficial não foi substituída.');
+      }
+    }
+    checkPins(live.data(), tree);
     const hash = fingerprint({ root, tree });
     if (projectedSize(root) > MAX_SAFE_BYTES) {
       fail('resource-exhausted', 'A ficha do torneio excede o limite seguro para preservar o sorteio.');
@@ -127,11 +175,17 @@ function makeService({ db, HttpsError, loadTournament }) {
         fingerprint(entries) !== fingerprint(tree)) {
       fail('aborted', 'Os dados mudaram durante a fotografia; o torneio permanece bloqueado para retomada.');
     }
+    checkPins(after, againTree);
     await db.runTransaction(async tx => {
       const [rootSnap, manifest] = await Promise.all([tx.get(ref), tx.get(cpRef)]);
       const current = rootSnap.exists ? rootSnap.data() : null;
       if (!current || !allowedStates.includes(marker(current)) || current.drawCheckpoint.epoch !== epoch) {
         fail('aborted', 'A trava da fotografia mudou.');
+      }
+      if (expectedGames) {
+        if (fingerprint(current.drawCheckpoint.expectedGames) !== fingerprint(expectedGames)) fail('aborted', 'Os pins da captura mudaram.');
+        const parts = await tx.get(ref.collection('matches'));
+        checkPins(current, parts.docs.map(doc => ({ path:'matches/' + doc.id, data:doc.data() })));
       }
       const previous = manifest.exists ? manifest.data() : {};
       tx.set(cpRef, { ...previous, activeEpoch: epoch, state: keepLocked ? 'resetting' : 'active', hash, updatedAt: new Date().toISOString() });
@@ -139,6 +193,28 @@ function makeService({ db, HttpsError, loadTournament }) {
       tx.update(snapRef, { state: 'active' });
     });
     return { ok: true, epoch, hash, count: tree.length };
+  }
+
+
+  // Apenas uma captura retrospectiva provisória pode ser abandonada; nunca uma foto ativa.
+  async function abortExistingCapture(id, epoch, reason) {
+    const ref = rootRef(id), cpRef = checkpointRef(id), snapRef = snapshotRef(id, epoch);
+    return db.runTransaction(async tx => {
+      const [root, manifest, snap] = await Promise.all([tx.get(ref), tx.get(cpRef), tx.get(snapRef)]);
+      const t = root.exists ? root.data() : null, cp = t?.drawCheckpoint;
+      if (!t || cp?.state !== 'capturing' || cp.epoch !== epoch || !cp.expectedGames ||
+          manifest.exists && manifest.data().activeEpoch === epoch || snap.exists && snap.data().state === 'active') {
+        return { aborted:false };
+      }
+      const fresh = { ...t, preserveDrawOnTestReset:cp.preserveBefore === true };
+      delete fresh.drawCheckpoint;
+      tx.set(ref, fresh);
+      tx.set(cpRef.collection('captureAttempts').doc(epoch), {
+        state:'aborted', epoch, reason:String(reason || 'capture-failed').slice(0,160),
+        expectedGames:cp.expectedGames, at:new Date().toISOString()
+      });
+      return { aborted:true };
+    });
   }
 
   async function restore(request) {
@@ -173,9 +249,9 @@ function makeService({ db, HttpsError, loadTournament }) {
       if (state === 'capturing') {
         // A queda ocorreu depois de materializar a chave. Finaliza a fotografia
         // dentro do lock antes de tentar restaurá-la.
-        tx.update(ref, { drawCheckpoint: { state: 'resetting', epoch, hash: '' } });
+        tx.update(ref, { drawCheckpoint: { ...t.drawCheckpoint, state: 'resetting', epoch, hash: '' } });
       } else {
-        tx.update(ref, { drawCheckpoint: { state: 'resetting', epoch, hash: cp.hash || t.drawCheckpoint.hash || '' } });
+        tx.update(ref, { drawCheckpoint: { ...t.drawCheckpoint, state: 'resetting', epoch, hash: cp.hash || t.drawCheckpoint.hash || '' } });
       }
       tx.set(cpRef, { ...cp, state: state === 'capturing' ? 'capturing' : 'resetting', activeEpoch: epoch,
         updatedAt: new Date().toISOString() });
@@ -209,7 +285,7 @@ function makeService({ db, HttpsError, loadTournament }) {
     return { ok: true, mode: 'testModePostDraw', tournament, hash: saved.hash };
   }
 
-  return { capture, restore };
+  return { capture, restore, abortExistingCapture };
 }
 
-module.exports = { makeService, marker, locked, prepareDraw, MAX_SAFE_BYTES, MAX_TREE_DOCUMENTS };
+module.exports = { makeService, marker, locked, preserved, protectedDraw, gamePins, assertCanCaptureExisting, prepareDraw, MAX_SAFE_BYTES, MAX_TREE_DOCUMENTS };

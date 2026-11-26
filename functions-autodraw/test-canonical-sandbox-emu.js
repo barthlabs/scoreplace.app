@@ -61,6 +61,28 @@ const categories = [{ id: 'light', label: 'Light' }];
   assert.equal(testOffSaved.isPublic, true, 'desligar teste restaura a visibilidade anterior');
   console.log('✓ desligar teste com preservar sorteio ativo retorna ao estado normal sem erro');
 
+  const lateId='tour_1234567890123_'+'b'.repeat(32), lateRef=db.collection('tournaments').doc(lateId);
+  const officialGame={id:'official-1',p1:'A',p2:'B',team1:['A','B'],team2:['C','D'],scoreP1:null,scoreP2:null,winner:null};
+  await lateRef.set({id:lateId,creatorUid:testDeveloperUid,memberUids:[testDeveloperUid],
+    testModeEnabled:true,preserveDrawOnTestReset:false,isPublic:false,organizerOnly:true,
+    rulesContractVersion:1,participants:[],matches:[],_semPesados:['matches'],_nJogos:1,rounds:[],groups:[],phases:[],currentPhaseIndex:0});
+  await lateRef.collection('matches').doc(officialGame.id).set({_chave:officialGame.id,_loc:{tipo:'matches',mi:0},jogo:officialGame});
+  const late=await callFn('updateTournamentConfiguration',{tournamentId:lateId,patch:{preserveDrawOnTestReset:true}},testDeveloper);
+  assert.equal(late.status,200,JSON.stringify(late.body));
+  const lateSaved=(await lateRef.get()).data();
+  assert.equal(lateSaved.drawCheckpoint.state,'active');assert.equal(lateSaved.testModeEnabled,true);
+  assert.equal(lateSaved.preserveDrawOnTestReset,true);
+  const beforeReset=require('./tournament-rehearsal').fingerprint(lateSaved.matches);
+  const staleReset=await callFn('resetTournamentToEnrollment',{tournamentId:lateId,restoreMode:'testModePreDraw'},testDeveloper);
+  assert.equal(staleReset.status,400,JSON.stringify(staleReset.body));
+  assert.equal(require('./tournament-rehearsal').fingerprint((await lateRef.get()).data().matches),beforeReset);
+  const forced=await callFn('drawRound',{tournamentId:lateId,allowRedraw:true},testDeveloper);
+  assert.notEqual(forced.status,200,'forced redraw must refuse preserved baseline');
+  const restoreLate=await callFn('resetTournamentToEnrollment',{tournamentId:lateId,restoreMode:'testModePostDraw'},testDeveloper);
+  assert.equal(restoreLate.status,200,JSON.stringify(restoreLate.body));
+  assert.equal(require('./tournament-rehearsal').fingerprint((await lateRef.get()).data().matches),beforeReset);
+  console.log('✓ callable real preserva sorteio existente e bloqueia reset pré-sorteio/re-sorteio');
+
   const id = 'same-id-in-both-collections';
   const real = db.collection('tournaments').doc(id);
   const sb = db.collection('sandboxes').doc(id);

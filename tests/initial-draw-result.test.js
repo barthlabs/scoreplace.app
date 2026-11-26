@@ -161,5 +161,60 @@ const bytes = await pdfBlob.arrayBuffer();
   assert.strictEqual(await window._downloadInitialDrawPdf({ name:'Torneio' }, manyGroups), false);
   assert(notices.some(n => n[0] === 'Erro ao gerar PDF'), 'falha do PDF aparece na tela');
   window._initialDrawPdfBlob = originalBlob;
+  // A identidade global deve vir do mesmo helper da classificação/TV.
+  const bracketSource=fs.readFileSync(path.join(__dirname,'../js/views/bracket.js'),'utf8');
+  const groupStart=bracketSource.indexOf('window._super8StandingsGroups = function (t, sourceMatches)');
+  const groupEnd=bracketSource.indexOf('// ── Rei/Rainha da Praia Rendering',groupStart);
+  assert(groupStart>=0&&groupEnd>groupStart,'assinatura real do helper central');
+  vm.runInContext(bracketSource.slice(groupStart,groupEnd),sandbox);
+  const rows=[['A','Categoria B',0],['B','Categoria B',1],['C','Categoria C',0],['D','Categoria C',1],['E','Categoria C',2],['F','Categoria C',3]];
+  const official={id:'synthetic-official',name:'Conferência',combinedCategories:['Categoria B','Categoria C'],matches:[],
+    phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:['Categoria B','Categoria C'].map(category=>({category,groupFormation:{mode:'size',value:8}}))}}],
+    scheduleWindow:{interleavedPlan:{groupAssignments:rows.map(([label,category,idx])=>({label,category,phaseIndex:0,groupNumber:idx+1}))}}};
+  for(const [label,category,idx] of rows.slice(2).concat(rows.slice(0,2)))for(let round=1;round<=7;round++)for(let lane=0;lane<2;lane++){
+    const players=Array.from({length:4},(_,i)=>label+' Pessoa '+(lane*4+i));
+    official.matches.push({id:label+'-'+round+'-'+lane,category,isMonarch:true,phaseIndex:0,groupIdx:idx,monarchGroup:round*2+lane,round,
+      groupName:'Grupo '+String.fromCharCode(65+idx),label:'Grupo '+String.fromCharCode(65+idx)+' • Rodada '+round+' • Jogo '+(lane+1),
+      team1:players.slice(0,2),team2:players.slice(2),team1SlotIds:players.slice(0,2).map(n=>'manual:'+n),team2SlotIds:players.slice(2).map(n=>'manual:'+n)});
+  }
+  official._nJogos=84;
+  const officialDraft={kind:'initial',draft:{matches:structuredClone(official.matches),rounds:[]}};
+  const beforeOfficial=JSON.stringify({official,officialDraft});
+  const composition=window._initialDrawGroupsModel(official,officialDraft);
+  assert.deepEqual(Array.from(composition.categories,c=>c.name),['Categoria B','Categoria C']);
+  assert.deepEqual(Array.from(composition.categories.flatMap(c=>c.groups),g=>g.name),['Grupo A','Grupo B','Grupo C','Grupo D','Grupo E','Grupo F']);
+  assert.equal(composition.groupCount,6);assert.equal(composition.playerCount,48);assert.equal(composition.gameCount,84);
+  assert(composition.categories.every(c=>c.groups.every(g=>g.players.length===8)));
+  const officialHtml=window._renderPendingDrawPreview({...official,pendingDraw:officialDraft});
+  assert.equal((officialHtml.match(/data-draw-pdf/g)||[]).length,1);
+  assert(!officialHtml.includes('sp-draw-result-match')&&!officialHtml.includes('horários'));
+  for(const label of ['A','B','C','D','E','F'])for(let i=0;i<8;i++)assert.equal(officialHtml.split(label+' Pessoa '+i).length-1,1);
+  calls.length=0;const countOfficial=canvases.length;
+  sandbox.Image=FakeImage;assert((await window._downloadInitialDrawPdf(official,officialDraft)).url);
+  assert.equal(link.download,'resultado-sorteio-conferencia-grupos.pdf');assert.equal(canvases.length-countOfficial,2);
+  const resultTexts=calls.filter(c=>c[0]==='text').map(c=>String(c[1]));
+  assert(!resultTexts.some(x=>/^J\d+$/.test(x)||x==='×'||/\d{2}:\d{2}/.test(x)));
+  assert.equal(resultTexts.filter(x=>/Pessoa/.test(x)).length,48);
+  assert.equal(JSON.stringify({official,officialDraft}),beforeOfficial,'exportação não muda o sorteio');
+  const central=window._super8StandingsGroups;delete window._super8StandingsGroups;
+  assert.equal(await window._downloadInitialDrawPdf(official,officialDraft),false);
+  assert(!window._renderPendingDrawPreview({...official,pendingDraw:officialDraft}).includes('data-draw-pdf'),'ausência do helper falha antes do botão');
+  window._super8StandingsGroups=central;
+  for(const alter of [
+    t=>{t._faltamPesados=true},
+    t=>{t.matches=t.matches.slice(1)},
+    t=>{t.matches[0].scheduledGroupLabel='Z'},
+    t=>{t.matches.forEach(m=>{if(m.category==='Categoria C'&&m.groupIdx===0){m.team1SlotIds=m.team1.map(()=>null);m.team2SlotIds=m.team2.map(()=>null);m.team1=m.team1.map(()=>'Mesmo nome');m.team2=m.team2.map(()=>'Mesmo nome')}})}
+  ]){
+    const invalid=structuredClone(official);alter(invalid);
+    assert.equal(await window._downloadInitialDrawPdf(invalid,{draft:{matches:invalid.matches}}),false);
+  }
+  const homonyms=structuredClone(official);
+  homonyms.matches.forEach(m=>{if(m.groupIdx===0)m.team1[0]='Nome igual'});
+  const homonymModel=window._initialDrawGroupsModel(homonyms,{draft:{matches:homonyms.matches}});
+  assert.equal(homonymModel.playerCount,48,'pessoas com identidades distintas não somem');
+  const genericHomonyms={draft:{matches:[{id:'h1',category:'Categoria X',isMonarch:true,monarchGroup:0,team1:['Nome igual','Pessoa 2'],team2:['Pessoa 3','Pessoa 4']},{id:'h2',category:'Categoria Y',isMonarch:true,monarchGroup:0,team1:['Nome igual','Pessoa 5'],team2:['Pessoa 6','Pessoa 7']}]}};
+  assert.equal(window._initialDrawResultModel(genericHomonyms).categories.length,2,'fallback genérico não funde homônimos entre categorias');
+  console.log('Composição oficial: helper central real,6grupos48atletas,categorias na ordem,PDF2páginas,recusas e pureza OK.');
   console.log('Resultado do sorteio: grupos, ordem e PDF único OK');
 })().catch(error => { console.error(error); process.exitCode = 1; });

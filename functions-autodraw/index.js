@@ -2120,6 +2120,7 @@ exports.drawRound = onCall(async (request) => {
             groups: (t.groups || []).length, currentPhaseIndex: t.currentPhaseIndex,
             phaseMaterialized: t._phaseMaterialized });
       }
+      if (_drawCheckpoint.protectedDraw(t)) throw new HttpsError('failed-precondition', 'O sorteio preservado não pode ser substituído.');
       _clearForRedraw(t);
     }
 
@@ -2800,6 +2801,7 @@ exports.resetTournamentToEnrollment = onCall({ timeoutSeconds: 540, memory: '512
     if (!_isTournamentAdmin(t, uid)) {
       throw _drawFail('permission-denied', 'Só a organização reseta o torneio.', { tId, uid });
     }
+    if (_drawCheckpoint.protectedDraw(t)) throw new HttpsError('failed-precondition', 'Este sorteio está preservado. Use o reset pós-sorteio.');
     // O modo de teste é uma configuração persistida e protegida no servidor.
     // Qualquer formato pode voltar ao pré-sorteio, inclusive após placares.
     const isFinished = t.status === 'finished' || t._finished === true;
@@ -6343,7 +6345,7 @@ exports.uploadTournamentImage = onCall({ timeoutSeconds: 60, memory: '512MiB' },
   return { ok: true, url: 'https://firebasestorage.googleapis.com/v0/b/' + bucket.name + '/o/' + encodeURIComponent(file.name) + '?alt=media&token=' + token };
 });
 
-exports.updateTournamentConfiguration = onCall(async (request) => {
+exports.updateTournamentConfiguration = onCall({ timeoutSeconds:540, memory:'512MiB' }, async (request) => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};
   const tId = String(data.tournamentId || '').trim();
@@ -6417,7 +6419,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
   if (bytes > 96 * 1024) throw new HttpsError('invalid-argument', 'Configuração grande demais.');
   const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId), agoraIso = new Date().toISOString();
   const fast8Input=JSON.parse(JSON.stringify(patch));
-  return db.runTransaction(async tx => {
+  const outcome = await db.runTransaction(async tx => {
     if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
@@ -6440,9 +6442,17 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     if (preserveDraw && !testEnabledAfter) {
       throw new HttpsError('failed-precondition', '“Preservar sorteio” só pode ficar ativado em torneio de teste.');
     }
-    if (preserveDraw && hasDrawnBracket(t) &&
-        !(_drawCheckpoint.marker(t) === 'active' && t.drawCheckpoint.hash)) {
-      throw new HttpsError('failed-precondition', 'Ative “Preservar sorteio” antes de sortear; não há fotografia pós-sorteio disponível.');
+    if (_drawCheckpoint.locked(t)) throw new HttpsError('failed-precondition', 'A fotografia do sorteio está em andamento.');
+    let existingCapture = null;
+    if (preserveDraw && hasDrawnBracket(t) && !_drawCheckpoint.preserved(t)) {
+      _drawCheckpoint.assertCanCaptureExisting(t, t.matches, HttpsError);
+      if (sandbox || drawWindow._hasAnyMatchResult(t)) throw new HttpsError('failed-precondition', 'Preserve o sorteio antes de iniciar a simulação.');
+      const [root, parts, manifest] = await Promise.all([
+        tx.get(ref), tx.get(ref.collection('matches')), tx.get(db.collection('tournamentDrawCheckpoints').doc(tId))
+      ]);
+      if (manifest.exists && manifest.data().activeEpoch) throw new HttpsError('failed-precondition', 'Já há uma fotografia anterior; a base não será substituída.');
+      existingCapture = { expectedGames:_drawCheckpoint.gamePins(root.data(),
+        parts.docs.map(doc => ({path:'matches/' + doc.id, data:doc.data()}))), preserveBefore:t.preserveDrawOnTestReset === true };
     }
     const testVisibilityBefore = turningTestOn ? {
       isPublic: t.isPublic === true,
@@ -7138,6 +7148,11 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         createdAt: agoraIso, createdAtMs: Date.parse(agoraIso), dispatchStatus: 'pending'
       } });
     }
+    let captureEpoch = null;
+    if (existingCapture) {
+      captureEpoch = _drawCheckpoint.prepareDraw(t);
+      Object.assign(t.drawCheckpoint, existingCapture);
+    }
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso, extras });
     if (camisNameRebase) {
       tx.update(camisNameRebase.baselineRef, {
@@ -7145,8 +7160,24 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       });
       tx.update(camisNameRebase.summaryRef, { name:t.name });
     }
-    return { ok:true, changed:true, tournament:b.clean, scheduleWindow:b.clean.scheduleWindow || null };
+    return { ok:true, changed:true, tournament:b.clean, scheduleWindow:b.clean.scheduleWindow || null, ...(captureEpoch ? {captureEpoch} : {}) };
   });
+  if (outcome.captureEpoch) {
+    const epoch = outcome.captureEpoch;
+    const service = _drawCheckpoint.makeService({db,HttpsError});
+    try {
+      await service.capture(tId, epoch);
+    } catch (error) {
+      const fresh = await ref.get();
+      if (!(fresh.exists && _drawCheckpoint.preserved(fresh.data()) && fresh.data().drawCheckpoint.epoch === epoch)) {
+        await service.abortExistingCapture(tId, epoch, error.code || 'capture-failed');
+        throw error;
+      }
+    }
+    outcome.tournament.drawCheckpoint = (await ref.get()).data().drawCheckpoint;
+    delete outcome.captureEpoch;
+  }
+  return outcome;
 });
 
 // ─── Ciclo presencial: comandos estreitos, nunca mutadores da tela ───────────
@@ -8084,6 +8115,9 @@ exports.resolvePendingDraw = onCall(async (request) => {
     const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização altera o sorteio em revisão.',{tId,uid});
     let pd=t.pendingDraw; if(!pd) return {ok:true,changed:false};
+    if (action === 'publish' && pd.kind === 'initial' && hasDrawnBracket(t) && _drawCheckpoint.protectedDraw(t)) {
+      throw new HttpsError('failed-precondition', 'O sorteio preservado não pode ser substituído.');
+    }
     const billingSnapshot = _billingSnapshots.get(tx)?.get(ref.path);
     _tournamentBilling.assertCanPublishPendingDraw(action, t,
       billingSnapshot?.fingerprint, billingSnapshot?.unreviewedProofCount,

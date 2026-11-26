@@ -91,6 +91,8 @@ var ScoreplaceRegistrationRoster;
             entry.manualParticipantId = person.manualParticipantId;
             entry.displayName = person.name;
             entry.name = person.name;
+            if (typeof registration.isPlaceholder === 'boolean')
+                entry.isPlaceholder = registration.isPlaceholder;
         }
         return entry;
     }

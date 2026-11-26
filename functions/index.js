@@ -5151,6 +5151,7 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
       patch.gender = item.gender || null;
       patch.genderSource = item.genderSource || null;
     }
+    if (typeof item.isPlaceholder === 'boolean') patch.isPlaceholder = item.isPlaceholder;
     tx.update(tournamentRef.collection("registrations").doc(item.registrationId), patch);
   });
   creates.forEach((item) => {
@@ -5228,7 +5229,14 @@ exports.previewTournamentImport = onCall(
     const regSnap = await ref.collection("registrations").limit(migration.expectedCount + 1).get();
     const registrations = regSnap.docs.map((doc) => doc.data());
     _canonicalRegistrationBoundary.verifiedRoster(tournament, registrations);
+    const mode = _tournamentImport.individualMode(tournament) ? 'individual' : 'pairs';
+    if (mode === 'individual' && !(request.data?.acceptModes || []).includes('individual')) {
+      throw new HttpsError('failed-precondition', 'Atualize o aplicativo para importar inscrições individuais.');
+    }
     return {
+      mode,
+      existingIndividuals: mode === 'individual' ? _tournamentImport.individualRoster(registrations) : [],
+      individualImportError: mode === 'individual' ? _tournamentImport.individualImportError(tournament) : '',
       fingerprint: _tournamentImport.fingerprint(tournament, registrations),
       slots: _tournamentImport.slots(registrations),
       count: registrations.filter((item) => item.status !== "withdrawn").length,
@@ -5243,7 +5251,7 @@ exports.previewTournamentImport = onCall(
             registration.categoryId === id && registration.status !== "withdrawn").length,
           capacity: Number.isSafeInteger(limit) && limit > 0 ? limit : null };
         }).filter((item) => item.id),
-      photoImportEnabled: true,
+      photoImportEnabled: mode !== 'individual',
     };
   }
 );
@@ -5350,6 +5358,14 @@ exports.applyTournamentImportBlock = onCall(
       if (_hasCanonicalTournamentDraw(tournament) || tournament.drawCompleted || tournament.substitutions && tournament.substitutions.length) {
         throw new HttpsError("failed-precondition", "importação indisponível após o sorteio");
       }
+      const individual = block[0]?.kind === 'individual';
+      if (individual && (input.mode !== 'individual' || !_tournamentImport.individualMode(tournament))) {
+        throw new HttpsError('failed-precondition', 'Atualize a prévia para importar inscrições individuais.');
+      }
+      if (tournament.status === 'finished' || ['capturing','resetting'].includes(tournament.drawCheckpoint?.state) ||
+          ['capturing','resetting'].includes(tournament.rehearsal?.state)) {
+        throw new HttpsError('failed-precondition', 'O torneio está encerrado ou em restauração.');
+      }
       const checked = await _loadCanonicalRosterForMutation(tx, tournamentRef, raw);
       if (_tournamentImport.fingerprint(tournament, checked.registrations) !== expected) {
         throw new HttpsError("aborted", "elenco alterado; atualize a prévia antes de gravar");
@@ -5386,16 +5402,22 @@ exports.applyTournamentImportBlock = onCall(
       try { _tournamentImport.normalizedBlock(resolvedBlock); }
       catch (error) { throw new HttpsError("failed-precondition", error.message); }
       let changes;
-      try { changes = _tournamentImport.applyReviewedBlock(tournament, checked.registrations, resolvedBlock); }
+      try { changes = individual
+        ? _tournamentImport.applyReviewedIndividuals(Object.assign({id:tournamentId},raw), checked.registrations, resolvedBlock)
+        : _tournamentImport.applyReviewedBlock(tournament, checked.registrations, resolvedBlock); }
       catch (error) { throw new HttpsError("failed-precondition", error.message); }
-      if (!changes.updates.length && !changes.creates.length) throw new HttpsError("failed-precondition", "bloco sem alteração");
-      const next = _writeCanonicalRosterChanges(tx, tournamentRef, raw, checked.registrations, changes);
+      if (!individual && !changes.updates.length && !changes.creates.length) throw new HttpsError("failed-precondition", "bloco sem alteração");
+      const next = changes.updates.length || changes.creates.length
+        ? _writeCanonicalRosterChanges(tx, tournamentRef, raw, checked.registrations, changes)
+        : {tournament,registrations:checked.registrations};
       const receipt = {
         tournamentId, organizerUid: uid, blockIndex: index, payloadHash: hash,
         names: _tournamentImport.receiptNames(block),
-        pairs: block.map((row) => ({ pairId: row.pairId,
+        ...(individual ? {individuals:block.map(row=>({categoryId:row.categoryId,ordinal:row.ordinal,placeholder:row.placeholder}))}
+          : {pairs: block.map((row) => ({ pairId: row.pairId,
           sourceCategoryId: checked.registrations.find((item) => item.fixedPairId === row.pairId).categoryId,
-          targetCategoryId: row.categoryId })),
+          targetCategoryId: row.categoryId }))}),
+        ...(individual ? {existingIndividuals:_tournamentImport.individualRoster(next.registrations)} : {}),
         count: next.registrations.filter((item) => item.status !== "withdrawn").length,
         fingerprint: _tournamentImport.fingerprint(next.tournament, next.registrations),
         appliedAt: new Date().toISOString(),

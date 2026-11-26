@@ -245,6 +245,9 @@ function makeService({ db, HttpsError }) {
       const [live, saved] = await Promise.all([tx.get(ref), tx.get(baseline)]);
       const t = live.exists ? live.data() : null, b = saved.exists ? saved.data() : null;
       authority(uid, id, t);
+      if (t.preserveDrawOnTestReset === true && ['active','capturing','resetting'].includes(t.drawCheckpoint?.state)) {
+        fail('failed-precondition', 'Este sorteio está preservado. Use o reset pós-sorteio.');
+      }
       // O ensaio só pode ser restaurado enquanto o torneio continua privado.
       // Uma marca antiga de ensaio não autoriza apagar jogos depois da publicação.
       if (t.status === 'finished' || t._finished === true || t.isPublic !== false ||

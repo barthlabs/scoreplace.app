@@ -12,6 +12,7 @@ namespace ScoreplaceRegistrationRoster {
     categoryId?: unknown;
     originCategoryId?: unknown;
     participantKind?: unknown;
+    isPlaceholder?: unknown;
     participantUid?: unknown;
     manualParticipantId?: unknown;
     manualDisplayName?: unknown;
@@ -92,7 +93,9 @@ namespace ScoreplaceRegistrationRoster {
     const entry: Record<string, unknown> = { categoryId, category: categoryId, categories: [categoryId], enrollSeq: explicit === undefined ? position + 1 : explicit };
     if (person.genderSource === 'organizador') { entry.gender = person.gender; entry.genderSource = person.genderSource; }
     if (person.uid) entry.uid = person.uid;
-    else { entry.manualParticipantId = person.manualParticipantId as string; entry.displayName = person.name; entry.name = person.name; }
+    else { entry.manualParticipantId = person.manualParticipantId as string; entry.displayName = person.name; entry.name = person.name;
+      if (typeof registration.isPlaceholder === 'boolean') entry.isPlaceholder = registration.isPlaceholder;
+    }
     return entry;
   }
   function pairEntry(categoryId: string, pairId: string, first: Person, second: Person): Record<string, unknown> {

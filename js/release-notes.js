@@ -1948,6 +1948,9 @@ window._RELEASE_NOTES_HTML = (function () {
       '<div style="font-weight:800;margin-bottom:8px;">v2.7.84 — Ordem de chamada e categorias</div>' +
       '<p>A chamada e o painel No ar seguem a ordem prevista na grade. Liberar uma quadra de outro grupo mantém o segundo jogo do grupo atual em primeiro na fila, sem deslocamento automático da lista.</p>' +
       '<p>Ao editar gêneros e níveis, uma combinação com zero vagas fica ausente. As outras categorias, vagas e regras são preservadas no mesmo salvamento.</p>' +
+      '<p>O formulário mantém a posição de rolagem durante a edição das vagas. Aplicar um template conserva o nome já digitado e os campos necessários para salvar.</p>' +
+      '<p>A importação de planilhas reconhece blocos individuais lado a lado, categorias e vagas numeradas sem nome. A prévia permite revisar inclusões e substituições; repetir o arquivo conserva as posições já importadas.</p>' +
+      '<p>O PDF do sorteio rotativo apresenta os nomes de cada grupo e sua categoria. Em modo de teste, um sorteio já realizado pode ser preservado antes da simulação, para que o reset retorne à fotografia original.</p>' +
     '</div>' +
     // v2.7.83 — fila, súmula e ficha do torneio.
     '<div style="margin-bottom:1rem;padding:14px 16px;">' +

@@ -132,6 +132,48 @@ const filledFinal = boundary.applyChanges({ ...maleLight.tournament,
 assert.strictEqual(filledFinal.filter((item) => item.status === 'confirmed').length, 4);
 assert.strictEqual(filledFinal.filter((item) => item.status === 'confirmed' && item.categoryId === 'masc-power').length, 4);
 
+// Side-by-side preliminary individual rosters retain empty numbered slots.
+{
+ const {categories,matrix}=require('./fixtures/tournament-import-matrix').matrixFixture();
+ const parsed=parser.parseMatrix(matrix,categories,{mode:'individual'});
+ assert.equal(parsed.rows.length,80);assert.equal(parsed.rows.filter(r=>r.placeholder).length,3);
+ categories.forEach((cat,i)=>assert.equal(parsed.rows.filter(r=>r.categoryId===cat.id).length,i<3?16:8));
+ assert.equal(parsed.rows.find(r=>r.categoryId===categories[4].id&&r.ordinal===1).placeholder,true,'lookahead stays inside new Masc B block');
+ const unknown=parser.parseMatrix([['','FEMININA'],[1,'','', ''],[2,'','',''],[1,'','Fem A','Nome Posterior']],categories,{mode:'individual'});
+ assert(unknown.rows.slice(0,2).every(r=>!r.categoryId),'unlabelled run never borrows next block category');
+ const reordered=parser.parseMatrix([['Nome','Categoria'],['Pessoa Teste','Feminina A']],categories,{mode:'individual'});
+ assert.equal(reordered.rows[0].people[0].name,'Pessoa Teste');
+ let t={id:'individual-fixture',enrollmentMode:'individual',status:'closed',categoryDefinitions:categories,
+  maxParticipants:80,maxParticipantsByCategory:Object.fromEntries(categories.map(c=>[c.label,c.capacity])),
+  canonicalRegistrationMigration:{fingerprint:'fixture',registrationCount:0}};
+ let regs=[];
+ function apply(block){const changes=core.applyReviewedIndividuals(t,regs,block);const next=boundary.applyChanges(t,regs,changes.updates,changes.creates);t=next.tournament;regs=next.registrations;return changes;}
+ for(let i=0;i<80;i+=8)apply(parsed.rows.slice(i,i+8));
+ assert.equal(regs.length,80);assert.equal(regs.filter(r=>r.isPlaceholder).length,3);
+ assert(regs.every(r=>r.participantKind==='manual'&&r.participantUid===null&&!r.fixedPairId));
+ assert.equal(new Set(regs.map(r=>r.manualDisplayName)).size,80);
+ const projected=require('../js/domain/registration-roster').rosterFromRegistrations(regs);
+ assert.equal(projected.filter(r=>r.isPlaceholder).length,3);
+ assert(projected.every(r=>!r.uid&&r.manualParticipantId),'draw roster keeps all 80 manual slot identities');
+ for(let i=0;i<80;i+=8){const noop=apply(parsed.rows.slice(i,i+8));assert.equal(noop.creates.length+noop.updates.length,0);}
+ const empty=parsed.rows.find(r=>r.placeholder),source=core.individualRoster(regs).find(r=>r.categoryId===empty.categoryId&&r.ordinal===empty.ordinal);
+ const filled={...empty,placeholder:false,expectedName:source.name,people:[{name:'Pessoa Nomeada Nova',uid:null}]};
+ assert.throws(()=>apply([{...filled,expectedName:'desatualizado'}]),/nome mudou/);
+ apply([filled]);assert.equal(regs.length,80);assert.equal(regs.filter(r=>r.isPlaceholder).length,2);
+ assert.equal(apply([empty]).updates.length,0,'later preliminary blank cannot erase a name');
+ const renamed={...filled,expectedName:'Pessoa Nomeada Nova',people:[{name:'Substituta Confirmada',uid:null}]};
+ apply([renamed]);assert(regs.some(r=>r.manualDisplayName==='Substituta Confirmada'));
+ assert.throws(()=>apply([{...renamed,categoryId:categories[1].id,ordinal:17}]),/Nome já inscrito/);
+ assert.throws(()=>apply([{...renamed,ordinal:17,people:[{name:'Pessoa Fora Do Limite',uid:null}]}]),/vagas/);
+ assert.throws(()=>core.applyReviewedIndividuals({...t,registrationSettings:{source:'scoreplace',pricing:{cents:100}}},regs,[empty]),/cobrança/);
+ assert.throws(()=>core.normalizedBlock([{...renamed,kind:'unknown'}]),/tipo/);
+ assert.throws(()=>core.normalizedBlock([{...renamed,people:[{name:'Conta',uid:'x'}]}]),/vincula conta/);
+ assert.throws(()=>core.normalizedBlock([renamed,renamed]),/repetida/);
+ assert.throws(()=>core.applyReviewedIndividuals({...t,excludedCategories:[categories[0].label]},regs,[renamed]),/sem vagas/);
+ assert.equal(core.individualRoster(regs).length,80);
+ assert.notEqual(core.payloadHash([empty]),core.payloadHash([filled]));
+ console.log('✓ importação individual: 80 posições, 7 categorias, 3 placeholders, reimportação e substituições revisadas');
+}
 const cats = [{ id: 'fem-light', label: 'Fem Light' }, { id: 'masc-light', label: 'Masc Light' }];
 assert.strictEqual(parser.categoryFor('LIGHT FEMININO', cats), 'fem-light');
 assert.strictEqual(parser.parsePhotoText('LIGHT FEMININO\n1. Ana Souza + Bia Lima', cats).rows[0].people[0].name, 'Ana Souza');

@@ -215,8 +215,53 @@ async function driver() {
   const visibleIds = visible.map((user) => user._docId);
   for (const id of [linkedUid, 'mutual-import', 'venue-import', 'shared-import']) assert(visibleIds.includes(id), id + ' é descobrível');
   assert(!visibleIds.includes('hidden-import'), 'pessoa sem relação não aparece');
-  assert(visible.every((user) => !Object.prototype.hasOwnProperty.call(user, 'preferredLocations')),
-    'locais individuais não são enviados ao cliente');
+  assert(visible.every((user) => (user.preferredLocations || []).every(location =>
+    Object.keys(location).length === 1 && typeof location.label === 'string' && !/rua|são paulo|—|,/i.test(location.label))),
+    'a descoberta expõe só a chave pública do clube, sem endereço ou campos privados');
+  {
+  // Individual preliminary workbook, using the real callable and canonical writes.
+  const individualTid='test-import-individual-emulator',individualRef=db.doc('tournaments/'+individualTid);
+  const fixture=require('./fixtures/tournament-import-matrix').matrixFixture();
+  const individualRows=require('../js/views/tournaments-import-parser').parseMatrix(fixture.matrix,fixture.categories,{mode:'individual'}).rows;
+  await individualRef.set({id:individualTid,creatorUid:organizer,adminUids:[organizer],memberUids:[organizer],
+    enrollmentMode:'individual',status:'closed',categoryDefinitions:fixture.categories,_semPesados:['participants','matches'],participants:[],matches:[],
+    maxParticipants:80,maxParticipantsByCategory:Object.fromEntries(fixture.categories.map(c=>[c.label,c.capacity])),
+    canonicalRegistrationMigration:{fingerprint:'individual-emulator',registrationCount:0}});
+  await rejectsCode(call('previewTournamentImport',{tournamentId:individualTid}),'failed-precondition','old client must update');
+  let ip=await call('previewTournamentImport',{tournamentId:individualTid,acceptModes:['pairs','individual']});
+  assert.equal(ip.mode,'individual');assert.equal(ip.existingIndividuals.length,0);
+  const individualImportId='b1b2c3d4-1234-4123-8123-123456789abc';
+  const firstIndividual={tournamentId:individualTid,mode:'individual',importId:individualImportId,blockIndex:0,
+    fingerprint:ip.fingerprint,block:individualRows.slice(0,8)};
+  for(let i=0;i<80;i+=8){
+    const result=await call('applyTournamentImportBlock',{...firstIndividual,blockIndex:i/8,fingerprint:ip.fingerprint,block:individualRows.slice(i,i+8)});
+    ip={...ip,...result};
+  }
+  assert.equal(ip.count,80);assert.equal(ip.existingIndividuals.length,80);
+  const replay=await call('applyTournamentImportBlock',firstIndividual);
+  assert.equal(replay.alreadyApplied,true,'retry older block after later commits uses its existing receipt');
+  const current=await call('previewTournamentImport',{tournamentId:individualTid,acceptModes:['individual']});
+  assert.equal(current.count,80);assert.equal(current.existingIndividuals.filter(r=>r.placeholder).length,3);
+  const originalEmpty=individualRows.find(r=>r.placeholder);
+  const old=current.existingIndividuals.find(r=>r.categoryId===originalEmpty.categoryId&&r.ordinal===originalEmpty.ordinal);
+  const edited={...originalEmpty,placeholder:false,expectedName:old.name,people:[{name:'Pessoa Preenchida Depois',uid:null}]};
+  const secondFile={tournamentId:individualTid,mode:'individual',importId:'c1b2c3d4-1234-4123-8123-123456789abc',blockIndex:0,fingerprint:current.fingerprint,block:[edited]};
+  const update=await call('applyTournamentImportBlock',secondFile);
+  assert.equal(update.count,80);assert.equal(update.existingIndividuals.filter(r=>r.placeholder).length,2);
+  await rejectsCode(call('applyTournamentImportBlock',{...secondFile,blockIndex:1,block:[individualRows[0]]}),'aborted','concurrent stale roster rejected');
+  const kept=await call('applyTournamentImportBlock',{...secondFile,blockIndex:1,fingerprint:update.fingerprint,block:[originalEmpty]});
+  assert(kept.existingIndividuals.some(r=>r.name==='Pessoa Preenchida Depois'),'blank in later file never erases a known name');
+  const saved=(await individualRef.collection('registrations').get()).docs.map(d=>d.data());
+  assert.equal(saved.length,80);assert(saved.every(r=>r.participantKind==='manual'&&r.participantUid===null&&!r.fixedPairId));
+  assert.equal(saved.filter(r=>r.isPlaceholder).length,2);
+  assert(saved.every(r=>!r.source&&!r.fileName),'no source file or coordinates are exposed');
+  await individualRef.update({status:'finished'});
+  await rejectsCode(call('applyTournamentImportBlock',{...secondFile,blockIndex:2,fingerprint:kept.fingerprint,block:[originalEmpty]}),'failed-precondition');
+  await app.auth().signInWithEmailAndPassword('outsider@example.com','senha123');
+  await rejectsCode(call('previewTournamentImport',{tournamentId:individualTid,acceptModes:['individual']}),'permission-denied');
+  await app.auth().signInWithEmailAndPassword('organizer@example.com','senha123');
+  console.log('✓ INDIVIDUAL_IMPORT_OK: 80 canonical positions, retry after 10 blocks, fill, blank protection and CAS');
+  }
   console.log('✓ EMULATOR_IMPORT_OK: autorização, transação, reclassificação, UID, retry, conflito e 2 blocos');
   process.exit(0);
 }

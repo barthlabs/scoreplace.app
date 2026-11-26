@@ -26,5 +26,34 @@ const anchor=source.slice(source.indexOf('(function _attachCreateFormScrollAncho
  await page.evaluate(()=>{for(let i=0;i<5;i++)document.querySelector('#tiebreaker-excluded-list button')?.click()});
  await page.evaluate(()=>new Promise(requestAnimationFrame));assert.equal(await position(),before,'cliques rápidos mantêm posição');
  assert.equal(await page.locator('#tiebreaker-list li').count(),6);await page.close();
+
+ }for(const nested of [false,true]){
+ const page=await browser.newPage({viewport:{width:360,height:700}});
+ await page.setContent('<style>#host{'+(nested?'height:600px;overflow:auto':'')+'}input,select,button{display:block;margin:12px}</style><div id="host"><form id="form-create-tournament"><div id="above" style="height:1000px"></div><input type="number"><select><option>1</option><option>2</option></select><button type="button">Toggle</button><button type="button" data-allow-auto-scroll>Ir</button><div style="height:2500px"></div></form></div>');
+ await page.addScriptTag({content:anchor});
+ await page.evaluate(()=>{for(const type of ['input','change','click'])document.querySelector('form').addEventListener(type,()=>{above.style.height=(parseInt(above.style.height)+40)+'px'})});
+ const read=()=>page.evaluate(()=>({top:scrollY,panel:document.getElementById('host').scrollTop}));
+ await page.evaluate(n=>{if(n)document.getElementById('host').scrollTop=850;else scrollTo(0,850)},nested);
+ const before=await read();
+ await page.locator('input').focus();await page.keyboard.type('123');
+ await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+ assert.deepEqual(await read(),before,'input real com reflow acima mantém posição absoluta');
+ await page.locator('select').evaluate(el=>{el.value='2';el.dispatchEvent(new Event('change',{bubbles:true}))});
+ await page.evaluate(()=>new Promise(requestAnimationFrame));assert.deepEqual(await read(),before);
+ // No RAF after explicit manual intent may restore the old position.
+ await page.evaluate(n=>{
+  document.querySelector('input').dispatchEvent(new Event('input',{bubbles:true}));
+  document.dispatchEvent(new WheelEvent('wheel',{deltaY:100,bubbles:true}));
+  if(n)document.getElementById('host').scrollTop+=90;else scrollBy(0,90);
+ },nested);
+ const manual=await read();await page.evaluate(()=>new Promise(requestAnimationFrame));assert.deepEqual(await read(),manual);
+ assert.equal(await page.evaluate(()=>document.documentElement.style.getPropertyValue('overflow-anchor')),'');
+ await page.evaluate(()=>{
+  document.querySelector('input').dispatchEvent(new Event('input',{bubbles:true}));
+  document.querySelector('form').remove();
+  const next=document.createElement('form');next.id='form-create-tournament';next.style.height='4000px';document.getElementById('host').append(next);
+ });
+ const remounted=await read();await page.evaluate(()=>new Promise(requestAnimationFrame));assert.deepEqual(await read(),remounted,'remontagem descarta fotografia antiga');
+ await page.close();
  }console.log('✓ critérios: excluir vários, último, reativar e cliques rápidos preservam scroll da janela e container');
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

@@ -101,5 +101,42 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  assert.deepEqual(result.variants,[false,false]);assert(result.unknownHeader && result.extraTime);assert.equal(result.unknownClocks,0);
  assert.deepEqual(result.fallbackNumbers,Array.from({length:28},(_,i)=>'J'+(i+1)));assert.equal(result.none,'');assert.equal(result.noFormatter,'');
  assert.equal(result.stamps.firstLabel,'29/11, 08:00');assert.equal(result.stamps.items['match-1'].time,'09:25');
+ const bracketCode=fs.readFileSync(root+'/js/views/bracket.js','utf8');
+ const helperStart=bracketCode.indexOf('window._super8StandingsGroups = function (t, sourceMatches)');
+ const helperEnd=bracketCode.indexOf('// ── Rei/Rainha da Praia Rendering',helperStart);
+ assert(helperStart>=0&&helperEnd>helperStart);
+ await page.addScriptTag({content:bracketCode.slice(helperStart,helperEnd)});
+ await page.evaluate(()=>{
+  const rows=[['A','Categoria B',0],['B','Categoria B',1],['C','Categoria C',0],['D','Categoria C',1],['E','Categoria C',2],['F','Categoria C',3]];
+  const official={id:'synthetic-official',name:'Sorteio oficial sintético',combinedCategories:['Categoria B','Categoria C'],matches:[],
+   phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:['Categoria B','Categoria C'].map(category=>({category,groupFormation:{mode:'size',value:8}}))}}],
+   scheduleWindow:{interleavedPlan:{groupAssignments:rows.map(([label,category,idx])=>({label,category,phaseIndex:0,groupNumber:idx+1}))}}};
+  for(const [label,category,idx] of rows.slice(2).concat(rows.slice(0,2)))for(let round=1;round<=7;round++)for(let lane=0;lane<2;lane++){
+   const names=Array.from({length:4},(_,i)=>label+' Atleta '+(lane*4+i));
+   official.matches.push({id:label+'-'+round+'-'+lane,category,isMonarch:true,phaseIndex:0,groupIdx:idx,monarchGroup:round*2+lane,round,
+    groupName:'Grupo '+String.fromCharCode(65+idx),label:'Grupo '+String.fromCharCode(65+idx)+' • Rodada '+round+' • Jogo '+(lane+1),
+    team1:names.slice(0,2),team2:names.slice(2),team1SlotIds:names.slice(0,2).map(n=>'manual:'+n),team2SlotIds:names.slice(2).map(n=>'manual:'+n)});
+  }
+  official._nJogos=84;window.t=official;window.pd={kind:'initial',draft:{matches:structuredClone(official.matches),rounds:[]}};
+  window._findTournamentById=()=>t;AppStore.tournaments=[t];__pendingInitialDraws={[t.id]:pd};
+ });
+ for(const modal of ['published','pending']){
+  await page.evaluate(modal=>{document.querySelectorAll('.modal-overlay').forEach(e=>e.remove());modal==='published'?_openPublishedInitialDrawResult(t.id):_openPendingDrawReview(t.id)},modal);
+  assert.equal(await page.locator('[data-draw-pdf]').count(),1);
+  assert.equal(await page.locator('.sp-draw-roster').count(),6);assert.equal(await page.locator('.sp-draw-roster li').count(),48);
+  assert.equal(await page.locator('.sp-draw-game').count(),0);
+  const before=await page.evaluate(()=>JSON.stringify({t,pd}));
+  for(let repeat=0;repeat<2;repeat++){
+   await page.evaluate(()=>pdfTexts=[]);const promised=page.waitForEvent('download');await page.locator('[data-draw-pdf="groups"]').click();const got=await promised;
+   assert(got.suggestedFilename().endsWith('-grupos.pdf'));await got.saveAs(path.join(output,'official-'+modal+'-'+repeat+'.pdf'));
+   const texts=await page.evaluate(()=>pdfTexts.map(x=>x.text));
+   assert.equal(texts.filter(x=>/Atleta/.test(x)).length,48);assert.equal(texts.filter(x=>/^Grupo [A-F]$/.test(x)).length,6);
+   assert.equal(texts.filter(x=>/^Página \d de 2$/.test(x)).length,2);
+   assert(!texts.some(x=>/^J\d+$/.test(x)||x==='×'||/\d{2}:\d{2}/.test(x)));
+   assert(texts.indexOf('RESULTADO DO SORTEIO · Categoria B')<texts.indexOf('RESULTADO DO SORTEIO · Categoria C'));
+   assert.equal(await page.evaluate(()=>JSON.stringify({t,pd})),before);
+  }
+ }
+ console.log('✓ PDF dos grupos: 2 categorias,6grupos48atletas,2páginas,semconfrontos/horários e downloads repetidos nos dois modais.');
  assert.deepEqual(errors,[]);console.log('✓ Resultado do sorteio: dois modais, dois PDFs de quatro páginas, horários, repetição, agenda pura, timestamps e numeração. PDFs: '+output);
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});
