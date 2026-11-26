@@ -104,6 +104,7 @@
       });
     }
     function assignment(m) {
+      if (root.ScoreplaceGroupAlternation?.categoryEnabled(t,m.category,m.phaseIndex)) return null;
       var source=originals.get(m.id) || {};
       var eligible=rows.filter(function(row) {
         var phase=t.phases?.[row.phaseIndex],rule=(phase?.classification?.rotationCategoryRules || []).find(r=>r.category===row.category);
@@ -417,13 +418,45 @@
     return prefix + shown.join(', ') + (categories.length > shown.length ? ' +' + (categories.length - shown.length) : '');
   }
   // Quadras com 13 ou 14 jogos usam a altura da folha vertical sem perder placar ou assinaturas.
-  function scorePage(model, day, courtLabel, matches, part, total, orientation, dense) {
+  function fullCategoryLines(value, width) {
+    var result=[], line='';
+    String(value || '').split(/\s+/).filter(Boolean).forEach(function(word) {
+      if (line && labelWidth(line+' '+word,6.5,false)<=width) { line+=' '+word; return; }
+      if (line) { result.push(line); line=''; }
+      Array.from(word).forEach(function(character) {
+        if (line && labelWidth(line+character,6.5,false)>width) { result.push(line); line=''; }
+        line+=character;
+      });
+    });
+    if (line) result.push(line);
+    return result;
+  }
+  function scoreCategory(model,m) {
+    var group=text(m.groupLabel);
+    if (group && !/^Grupo\s+/i.test(group)) group='Grupo '+group;
+    return [group,model.showCategories?(m.category || 'Sem categoria'):''].filter(Boolean).join(' · ');
+  }
+  function scoreLayout(model,matches,orientation,dense) {
+    var portrait=orientation==='portrait',width=portrait?595:842,height=portrait?842:595;
+    var left=portrait?18:20,divider=portrait?397:559;
+    var lines=model.fast8?matches.reduce(function(max,m) {
+      return Math.max(max,fullCategoryLines(scoreCategory(model,m),divider-8-left-6).length);
+    },1):1;
+    var extra=model.fast8?(lines-1)*8:0;
+    var offset=extra+(model.fast8 && !portrait?10:0);
+    var rowHeight=(dense?50:portrait?54:38)+offset;
+    var capacity=model.fast8?Math.min(dense?14:12,Math.floor((height-105-(portrait?37:34))/rowHeight)):(dense?14:12);
+    if (capacity<1) throw new Error('A identificação do grupo e da categoria excede a área de uma folha.');
+    return {rowHeight:rowHeight,capacity:capacity,offset:offset};
+  }
+  function scorePage(model, day, courtLabel, matches, part, total, orientation, dense, layout) {
     var portrait = orientation === 'portrait';
     var p = portrait ? pdfPage(595, 842) : pdfPage(842, 595);
     var left = portrait ? 18 : 20, right = p.width - left;
     var divider = portrait ? 397 : 559, top = 86, bodyTop = 105;
-    var rowHeight = dense ? 50 : portrait ? 54 : 38;
-    var bodyRows = dense ? 14 : 12;
+    layout=layout || scoreLayout(model,matches,orientation,dense);
+    var rowHeight = layout.rowHeight;
+    var bodyRows = layout.capacity;
     var slots = model.scoring && model.scoring.slots || 1;
     var gamesPerSet = model.scoring && model.scoring.gamesPerSet || 6;
     var gameLabel = slots === 1 ? '1 set de ' + gamesPerSet + ' games' : 'melhor de ' + slots + ' sets';
@@ -468,13 +501,16 @@
       p.write(m.time, hourX+3, y+rowHeight/2+3, 7.5);
       var categoryWidth = namesX - courtX - 14;
       var categoryLabel = [m.groupLabel,model.showCategories ? (m.category || 'Sem categoria') : ''].filter(Boolean).join(' · ');
-      var categoryLines = categoryLabel ? (sideLines(categoryLabel, categoryWidth, 5.5, false)
+      var categoryLines = model.fast8?fullCategoryLines(scoreCategory(model,m),contentRight-left-6):categoryLabel ? (sideLines(categoryLabel, categoryWidth, 5.5, false)
         || [fitLabel(categoryLabel, categoryWidth, 5.5, false)]) : [];
-      if (categoryLines[0]) p.write(categoryLines[0], courtX+3, y+10, 5.5);
-      if (categoryLines[1]) p.write(categoryLines[1], courtX+3, y+17, 5.5);
+      if (model.fast8) categoryLines.forEach(function(line,index) {p.write(line,left+3,y+8+index*8,6.5);});
+      else {
+        if (categoryLines[0]) p.write(categoryLines[0], courtX+3, y+10, 5.5);
+        if (categoryLines[1]) p.write(categoryLines[1], courtX+3, y+17, 5.5);
+      }
       p.line(courtX+7, y+rowHeight-10, namesX-10, y+rowHeight-10, 0.55);
-      writeSide(p, m.team1, m.p1, namesX, y, sideWidth, portrait, false, dense, m.nextCourts1);
-      writeSide(p, m.team2, m.p2, secondX, y, sideWidth, portrait, true, dense, m.nextCourts2);
+      writeSide(p, model.fast8?'':m.team1, m.p1, namesX, y+layout.offset, sideWidth, portrait, false, dense, m.nextCourts1);
+      writeSide(p, model.fast8?'':m.team2, m.p2, secondX, y+layout.offset, sideWidth, portrait, true, dense, m.nextCourts2);
       var cellWidth = scoreWidth / slots;
       for (var s=0;s<slots;s++) {
         var sx = scoreX + s*cellWidth, bw = slots === 1 ? 22 : Math.max(7, Math.floor((cellWidth-12)/2));
@@ -993,14 +1029,6 @@
     var orientation = options.orientation === 'portrait' ? 'portrait' : 'landscape';
     var pages = [];
     function appendScorePages(dated, undated) {
-      if (model.fast8) {
-        var ordered=dated.concat(undated),chunks=balancedChunks(ordered,14);
-        chunks.forEach(function(chunk,index) {
-          pages.push(scorePage(model,chunk[0] && chunk[0].day || 'Data a definir','Fast 8 · sequência de chamadas',chunk,index+1,chunks.length,
-            chunk.length>12?'portrait':orientation,chunk.length>12));
-        });
-        return;
-      }
       var courts = Array.from(new Set(dated.map(function (m) {
         return m.court || 'Quadra a definir';
       }))).sort(function (a, b) {
@@ -1013,21 +1041,26 @@
           var matches = dated.filter(function (m) {
             return m.day === day && (m.court || 'Quadra a definir') === courtLabel;
           });
-          var chunks = matches.length ? balancedChunks(matches, 14) : [];
+          var sectionDense=model.fast8 && matches.length>12;
+          var sectionOrientation=sectionDense?'portrait':orientation;
+          var layout=model.fast8?scoreLayout(model,matches,sectionOrientation,sectionDense):null;
+          var chunks = matches.length ? balancedChunks(matches, layout?layout.capacity:14) : [];
           var total = chunks.length;
           for (var i=0;i<total;i++) {
-            var chunk = chunks[i], dense = chunk.length > 12;
+            var chunk = chunks[i], dense = model.fast8?sectionDense:chunk.length > 12;
             pages.push(scorePage(model, day, courtLabel, chunk,
-              i+1, total, dense ? 'portrait' : orientation, dense));
+              i+1, total, dense ? 'portrait' : orientation, dense,layout));
           }
         });
       });
       if (undated.length) {
-        var undatedChunks = balancedChunks(undated, 14), totalUndated = undatedChunks.length;
+        var undatedSectionDense=model.fast8 && undated.length>12;
+        var undatedLayout=model.fast8?scoreLayout(model,undated,undatedSectionDense?'portrait':orientation,undatedSectionDense):null;
+        var undatedChunks = balancedChunks(undated, undatedLayout?undatedLayout.capacity:14), totalUndated = undatedChunks.length;
         for (var u=0;u<totalUndated;u++) {
-          var undatedChunk = undatedChunks[u], undatedDense = undatedChunk.length > 12;
+          var undatedChunk = undatedChunks[u], undatedDense = model.fast8?undatedSectionDense:undatedChunk.length > 12;
           pages.push(scorePage(model, 'Data a definir', 'Quadra prevista no jogo; anote mudanças',
-            undatedChunk, u+1, totalUndated, undatedDense ? 'portrait' : orientation, undatedDense));
+            undatedChunk, u+1, totalUndated, undatedDense ? 'portrait' : orientation, undatedDense,undatedLayout));
         }
       }
     }

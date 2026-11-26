@@ -196,17 +196,17 @@
   function renderGroupPanels(root,state,visible,start,columns,numbers,examples) {
     if(state.plan.schema!==2) return;
     var body=root.querySelector('.phase-grid-body');
-    visualGroups(visible.filter(tile=>tile.day===dayOf(state).day)).forEach(function(group){
+    var MIN_GROUP_GAME_HEIGHT=54; // Número, confronto, padding e bordas do cartão compacto.
+    var candidates=visualGroups(visible.filter(tile=>tile.day===dayOf(state).day)).map(function(group){
       var first=group.tiles.slice().sort((a,b)=>a.round-b.round || a.court-b.court)[0];
-      // O cabeçalho ocupa96px: sem espaço para número e confronto, usar o box compacto.
-      if(examples[first.id] && first.duration*pixelsPerMinute<150) return;
       var finish=Math.max(...group.tiles.map(tile=>model.minutes(tile.startTime)+tile.duration));
       var panel=document.createElement('section'); panel.className='phase-grid-super-group';
       var alternated=first.assignment?.alternating===true, headerHeight=alternated?56:96;
       var totalRounds=Math.max(...state.tiles.filter(tile=>tile.phaseIndex===first.phaseIndex && tile.category===first.category && tile.groupNumber===first.groupNumber).map(tile=>tile.round));
       panel.style.cssText='top:'+((model.minutes(first.startTime)-start)*pixelsPerMinute)+'px;height:'+((finish-model.minutes(first.startTime))*pixelsPerMinute-3)+'px;left:calc(66px + (100% - 66px) * '+(group.courts[0]-1)+' / '+columns+');width:calc((100% - 66px) * 2 / '+columns+');';
       var heading=document.createElement('header');
-      heading.style.height=headerHeight+'px';
+      heading.style.height='auto';
+      heading.style.minHeight=headerHeight+'px';
       heading.innerHTML=alternated?'<strong>Grupo '+esc(first.assignment.label)+' · Rodada '+first.round+'/'+totalRounds+'</strong><span>'+esc(label(first))+'</span>':
         '<strong>'+esc(label(first))+'</strong><span>Grupo '+esc(first.assignment?.label || model.groupLabel(first))+'</span>';
       panel.appendChild(heading);
@@ -214,10 +214,25 @@
         panel.addEventListener('dragover',function(event){event.preventDefault();});
         panel.addEventListener('drop',function(event){var target=event.target.closest('[data-tile-id]');window._phaseGridDrop(event,Number(target?.dataset.court || group.courts[0]));});
       }
+      body.appendChild(panel);
+      return {group:group,first:first,panel:panel,heading:heading};
+    });
+    // Todos os cabeçalhos estão na largura real antes da leitura em lote.
+    candidates.forEach(function(candidate){
+      candidate.headerHeight=candidate.heading.offsetHeight;
+      candidate.panelHeight=candidate.panel.clientHeight;
+    });
+    candidates.forEach(function(candidate){
+      var group=candidate.group,first=candidate.first,panel=candidate.panel,headerHeight=candidate.headerHeight;
+      if(headerHeight<=0 || headerHeight+MIN_GROUP_GAME_HEIGHT>Math.min(first.duration*pixelsPerMinute-3,candidate.panelHeight)) {
+        panel.remove(); return; // Cartões continuam intactos nas lanes originais.
+      }
+      candidate.originals=[];
       group.tiles.forEach(function(tile){
         var el=Array.from(root.querySelectorAll('[data-tile-id]')).find(el=>el.dataset.tileId===String(tile.id));
         if(!el) return;
         var firstRound=tile.round===group.rounds[0], left=tile.court===group.courts[0];
+        candidate.originals.push({el:el,parent:el.parentNode,style:el.style.cssText,html:el.innerHTML});
         el.dataset.court=String(tile.court);
         el.style.top=((model.minutes(tile.startTime)-model.minutes(first.startTime))*pixelsPerMinute+(firstRound?headerHeight:0))+'px';
         el.style.height=(tile.duration*pixelsPerMinute-(firstRound?headerHeight:0)-3)+'px';
@@ -226,7 +241,14 @@
           illustrativeHtml(examples[tile.id])+'<span class="phase-grid-single" hidden>JOGO '+numbers[tile.id]+'</span>';
         panel.appendChild(el);
       });
-      body.appendChild(panel);
+    });
+    // Valida o conteúdo sem intercalar leituras com as escritas dos grupos.
+    var compact=candidates.filter(function(candidate){
+      return candidate.originals && candidate.originals.some(function(item){return item.el.scrollHeight>item.el.clientHeight+1;});
+    });
+    compact.forEach(function(candidate){
+      candidate.originals.forEach(function(item){item.el.style.cssText=item.style;item.el.innerHTML=item.html;item.parent.appendChild(item.el);});
+      candidate.panel.remove();
     });
   }
   function assignmentsCompatible(rows,jobs,courts) {

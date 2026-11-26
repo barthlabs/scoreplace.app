@@ -29,6 +29,7 @@ vm.runInContext(directBracketSource.slice(directBracketSource.indexOf('window._d
   directBracketSource.indexOf('// A mesma vaga pendente', directBracketSource.indexOf('window._directBracketSlotSource = function'))), context);
 const dashSource = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');
 vm.runInContext(dashSource.slice(dashSource.indexOf('window._dashboardNextMatchCompare = function'), dashSource.indexOf('// A tela só solicita o fecho')), context);
+vm.runInContext(fs.readFileSync(path.join(root, 'js/views/super-eight-core.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8'), context);
 window._isNeonTournament = tournament => tournament.id === 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
 
@@ -1027,6 +1028,11 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
     real.ScoreplaceGroupAlternation=window.ScoreplaceGroupAlternation;
     const fast=JSON.parse(JSON.stringify(super8));
     fast.phases[0].classification.rotationCategoryRules.forEach(rule=>rule.groupAlternation=true);
+    fast.matches.forEach(m=>{
+      const row=assignments.find(r=>r.label===m.scheduledGroupLabel);
+      m.scheduledGameNumber=(m.round-1)*12+(row.entry-1)*6+assignments.filter(r=>r.entry===row.entry).indexOf(row)*2+Number(m.id.slice(-1))+1;
+      m.scheduledAt=new Date(Date.parse('2026-10-22T21:00:00Z')+((m.round-1)*2+row.entry-1)*35*60000).toISOString();
+    });
     const released=fast.matches.find(m=>m.id==='C2-1-0');
     Object.assign(released,{winner:released.p1,scoreP1:7,scoreP2:0,resultAt:'2026-10-22T21:04:00Z'});
     Object.assign(fast.matches.find(m=>m.id==='B2-1-0'),{court:'Areia E',courtCalledAt:'2026-10-22T21:05:00Z'});

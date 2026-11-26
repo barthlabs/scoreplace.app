@@ -1613,7 +1613,7 @@ function _bracketOperationalDetailCard(root) {
   return card && !card.closest('#view-container') ? card : null;
 }
 
-// Só a fila secundária se move; o próximo imediato nunca entra no scroller.
+// A fila inteira ocupa uma janela vertical com a altura de um card.
 function _bracketFast8QueueScroll(surface, scroller) {
   if (!scroller || typeof requestAnimationFrame !== 'function') return;
   var frame = 0, last = 0, pauseUntil = 0, position = scroller.scrollTop, direction = 1, disposed = false;
@@ -3020,25 +3020,22 @@ window._bracketOperationsRefresh = function (t, root) {
     }, index === 0 ? nextLabel : 'PRÓXIMO JOGO · ' + (index + 1) + '/' + nextCards.length,
     availability, root, state.matches, 'next:' + String(m.id));
   });
-  var pinnedFast8 = !!state.fast8 && nextCardFragments.length > 0;
+  var fast8Queue = !!state.fast8 && nextCardFragments.length > 0;
   var nextCardsHtml = nextCardFragments.join('');
-  var nextContentHtml = pinnedFast8
-    ? '<div class="sp-operations-next-pinned" aria-label="Próximo jogo imediato">' + advancePhaseHtml + nextCardFragments[0] + '</div>' +
-      '<div class="sp-operations-next-scroll" aria-label="Demais jogos da próxima rodada">' + nextCardFragments.slice(1).join('') + '</div>'
-    : '<div class="sp-operations-next-scroll" aria-label="Próximos jogos">' + advancePhaseHtml +
+  var nextContentHtml = '<div class="sp-operations-next-scroll" aria-label="Próximos jogos">' + advancePhaseHtml +
       (nextCardsHtml || '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (categoryFilter ? 'Nenhum próximo jogo nesta categoria.' : state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
         'Nenhum jogo aguardando chamada') + '</div>') + '</div>';
   if (existing._spFast8QueueCleanup) { existing._spFast8QueueCleanup(); existing._spFast8QueueCleanup = null; }
   if (existing._spNextScrollRestoreObserver) { existing._spNextScrollRestoreObserver.disconnect(); existing._spNextScrollRestoreObserver = null; }
   if (existing._spSeriesLabelObserver) { existing._spSeriesLabelObserver.disconnect(); existing._spSeriesLabelObserver = null; }
-  existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next' + (pinnedFast8 ? ' sp-operations-next--fast8' : '') + '">' + nextContentHtml + '</div>' + (state.pending.some(categoryMatches) ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
+  existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next' + (fast8Queue ? ' sp-operations-next--fast8' : '') + '">' + nextContentHtml + '</div>' + (state.pending.some(categoryMatches) ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
     state.pending.filter(categoryMatches).map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false, pending: true, categoryFilter:categoryFilter }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
     '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><div class="sp-operations-courts-heading"><span class="sp-operations-section-title">EM QUADRA</span>' +
     (typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user) ?
       '<button type="button" class="sp-operations-simulate" data-operations-simulate="1" title="Registra placares simulados apenas nos jogos que estão em quadra agora"' +
       (state.active.some(function (m) { return m && categoryMatches(m) && !m.isTieBreak && !m.winner && !m.pendingResult; }) ? '' : ' disabled') + '>Simular</button>' : '') +
-    '</div><div class="sp-operations-court-track" data-hscroll="ops:track">' +
+    '<div class="sp-operations-scrollbar" role="scrollbar" tabindex="0" aria-label="Rolar jogos em quadra" aria-orientation="horizontal" aria-valuemin="0"><div class="sp-operations-scrollbar-thumb"></div></div></div><div class="sp-operations-court-track" data-hscroll="ops:track">' +
     state.courts.map(function (court) {
       var allCourtGames = state.active.filter(function (m) { return String(m.court) === court; });
       var games = allCourtGames.filter(categoryMatches).filter(function (game) {
@@ -3055,7 +3052,7 @@ window._bracketOperationsRefresh = function (t, root) {
           (freeCourts.includes(court) ? 'Livre' : allCourtGames.length ? 'Ocupada · outra categoria' : 'Ocupada') + '</span></div>') +
         '</div>';
     }).join('') +
-    '</div></div></div><div class="sp-operations-scrollbar" role="scrollbar" tabindex="0" aria-label="Rolar jogos em quadra" aria-orientation="horizontal" aria-valuemin="0"><div class="sp-operations-scrollbar-thumb"></div></div>';
+    '</div></div></div>';
   _bracketOperationsApplyCategoryFilter(root, existing, tournamentId);
   var courtEntryForMode = window._bracketCourtReleaseCache[String(t.id)] || {};
   if (courtEntryForMode.endCourtRestoreFocus && (!document.activeElement || document.activeElement === document.body)) {
@@ -3127,7 +3124,7 @@ window._bracketOperationsRefresh = function (t, root) {
         existing._spNextScrollRestoreObserver.observe(nextScroll);
       }
     }
-    if (pinnedFast8) _bracketFast8QueueScroll(existing, nextScroll);
+    if (fast8Queue) _bracketFast8QueueScroll(existing, nextScroll);
     var pendingScroll = existing.querySelector('.sp-operations-pending-track');
     if (pendingScroll) pendingScroll.scrollTop = pendingScrollTop;
     _bracketOperationsBindScrollbar(courtTrack, existing.querySelector('.sp-operations-scrollbar'));
@@ -11815,6 +11812,15 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     });
   }
   subgroups = _bracketGroupsInOrder(t, subgroups, _sgHasMe);
+  // Nas chaves completas, o rótulo global permite encontrar Grupo A, B, C...
+  var eightSlots=[],eightOrdered=[];
+  subgroups.forEach(function(group,index){if(group.superEightGroup){eightSlots.push(index);eightOrdered.push(group);}});
+  eightOrdered.sort(function(a,b){
+    var label=function(group){return String(group.label || '').replace(/^Grupo\s+/i,'').trim();};
+    return Number(a.phaseIndex || 0)-Number(b.phaseIndex || 0) || label(a).localeCompare(label(b),'pt-BR',{numeric:true,sensitivity:'base'}) ||
+      String(a.category || '').localeCompare(String(b.category || ''),'pt-BR') || Number(a.groupIdx || 0)-Number(b.groupIdx || 0);
+  });
+  eightSlots.forEach(function(index,i){subgroups[index]=eightOrdered[i];});
   // O CAMIS e outros torneios extensos podem ter dezenas de quartetos. Todos
   // continuam no HTML; só evitamos colocar várias categorias simultâneas no
   // layout inicial do navegador. Grupo misto ou sem categoria mantém o fluxo antigo.
@@ -11832,6 +11838,10 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
   var _useSetsMonarch = !!(t.scoring && t.scoring.type === 'gsm');
   var _isSuperEightMon = fullEightGroups.length > 0 || t.superEight === true || (t.phases || []).some(function(phase) { return phase && phase.superEight === true; });
   var _gamesPrimaryMonarch = t.rankingPrimary === 'games_diff';
+  var _gamesRateOf=window.ScoreplaceSuperEight?.gamesRate;
+  if(_isSuperEightMon && typeof _gamesRateOf!=='function') throw new Error('Atualize o aplicativo para ler o percentual de games.');
+  var _percentageTitle=_isSuperEightMon?'Aproveitamento informativo: games ganhos ÷ games disputados':'Aproveitamento informativo: vitórias ÷ partidas disputadas';
+  var _percentageExplanation=_isSuperEightMon?'Percentual de games ganhos sobre o total de games disputados. É informativo, não critério de desempate.':'Percentual de vitórias: vitórias divididas pelo total de partidas disputadas. É informativo, não critério de desempate.';
   var _superEightTieBreakers = _isSuperEightMon && _gamesPrimaryMonarch && Array.isArray(t.tiebreakers)
     ? t.tiebreakers.filter(function (key) {
       return typeof key === 'string' && key !== 'saldo_games' && key !== 'aproveitamento' &&
@@ -12021,14 +12031,14 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
             return /^saldo_/.test(key) && Number(value)>=0?'+'+value:value;
           }});
       });
-      if (!_compacta) _configuredColumns.push({key:'rate',label:'%',title:'Aproveitamento informativo: vitórias ÷ partidas disputadas',
-        value:s=>(s.played>0?Math.round(s.wins/s.played*100):0)+'%'});
+      if (!_compacta) _configuredColumns.push({key:'rate',label:'%',title:_percentageTitle,
+        value:s=>(_isSuperEightMon?Math.round(_gamesRateOf(s)*100):s.played>0?Math.round(s.wins/s.played*100):0)+'%'});
     }
     var standingsRows = standings.map(function(s, i) {
       var diff = _gamesPrimaryMonarch ? s.gamesWon - s.gamesLost : s.pointsFor - s.pointsAgainst;
       var setDiff = s.setsWon - s.setsLost;
       var gameDiff = s.gamesWon - s.gamesLost;
-      var winRatePct = s.played > 0 ? Math.round((s.wins / s.played) * 100) : 0;
+      var winRatePct = _isSuperEightMon ? Math.round(_gamesRateOf(s)*100) : s.played > 0 ? Math.round((s.wins / s.played) * 100) : 0;
       var bg = i < classified ? 'rgba(34,197,94,0.10)' : '';
       var clr = i < classified ? '#4ade80' : 'var(--text-muted)';
       var _presM = _monStPresente(s);
@@ -12095,7 +12105,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Pontos pró (cada ponto conta)">Pts</th>')) +
       ((_isSuperEightMon && _gamesPrimaryMonarch) ? '' : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="' + (_gamesPrimaryMonarch ? 'Saldo de games' : 'Saldo de pontos (pró − contra)') + '">' + (_gamesPrimaryMonarch ? 'Saldo games' : 'Saldo') + '</th>') +
       extraHeaders +
-      ((_compacta && !_isSuperEightMon) ? '' : '<th tabindex="0" data-explain-title="% — Aproveitamento" data-explain="Percentual de vitórias: vitórias divididas pelo total de partidas disputadas. É informativo, não critério de desempate." style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Aproveitamento informativo: vitórias ÷ partidas disputadas">%</th>'))) +
+      ((_compacta && !_isSuperEightMon) ? '' : '<th tabindex="0" data-explain-title="% — Aproveitamento" data-explain="' + _percentageExplanation + '" style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="' + _percentageTitle + '">%</th>'))) +
       '</tr></thead><tbody>' + standingsRows + '</tbody></table>';
 
     // Recibo de placar: refaz só a tabela derivada do grupo em um fragmento
@@ -12157,7 +12167,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       _eightLettersHtml +
       // v4.3.12 (pedido do dono): a tabela de classificação do grupo fica SEMPRE ACIMA das
       // chaves (mesmo padrão de renderGroupStage). Antes vinha depois dos cards de jogo.
-      (sg.superEightGroup ? '<h3 style="margin:0 0 .5rem">' + window._safeHtml(sg.label) + '</h3><p style="font-size:.75rem;margin:.25rem 0">Classificação parcial · faixa de avanço: ' + classified + '</p>' : '') +
+      (sg.superEightGroup ? '<h3 style="margin:0 0 .5rem">' + window._safeHtml(/^Grupo\s+/i.test(sg.label) ? sg.label : 'Grupo '+sg.label) + '</h3><p style="font-size:.75rem;margin:.25rem 0">Classificação parcial · faixa de avanço: ' + classified + '</p>' : '') +
       '<div class="standings-scroll">' + standingsTable + '</div>' +
       '<div style="display:grid;grid-template-columns:' + (_isSuperEightMon ? 'repeat(auto-fit,minmax(min(100%,320px),1fr))' : 'minmax(0,1fr)') + ';gap:12px;margin-top:1rem;align-items:start;">' + matchCards + '</div>' +
     '</div>';

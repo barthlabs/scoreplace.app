@@ -1,5 +1,13 @@
 /* Standings collapsible toggle (inside <details>) */
 [data-bracket-operations-strip] { scroll-margin-top:var(--scroll-anchor,120px);overflow-anchor:none; }
+.view-container:has(> [data-bracket-operations-strip]) { max-width:none; }
+.view-container > [data-bracket-operations-strip] {
+  --sp-operations-gutter:clamp(0px,calc(2.2vw - 8px),48px);
+  width:calc(100% + 2 * var(--sp-operations-gutter));
+  max-width:none;
+  margin-inline:calc(-1 * var(--sp-operations-gutter));
+  box-sizing:border-box;
+}
 .sp-operations-track {
   display: flex;
   align-items: stretch;
@@ -9,7 +17,7 @@
   min-width: 0;
   margin: 12px 0 4px;
   box-sizing: border-box;
-  padding: 4px;
+  padding: 0;
   overflow: clip;
   overflow-anchor: none;
   --sp-operations-card-width: 380px;
@@ -872,31 +880,10 @@ summary::-webkit-details-marker { display: none; }
 
 .sp-operations-series-position { display:block;font-size:.8rem;font-weight:800;line-height:1.2;text-align:center;color:var(--text-bright); }
 
-/* Fast 8: cabeça fora da janela rolante, sem cópias dos controles. */
-.sp-operations-next--fast8 {
-  display:flex;
-  flex-direction:column;
-  height:auto;
-  gap:8px;
-}
-.sp-operations-next-pinned {
-  position:relative;
-  z-index:2;
-  flex:none;
-  background:var(--bg-card);
-}
-.sp-operations-next--fast8 > .sp-operations-next-scroll {
-  position:relative;
-  height:clamp(180px, 24vh, 300px);
-  flex:none;
-  scroll-behavior:auto;
-}
-.sp-operations-next--fast8 > .sp-operations-next-scroll .sp-operations-replica {
-  grid-template-rows:auto auto auto;
-}
-.sp-operations-next--fast8 > .sp-operations-next-scroll .sp-operations-replica > .sp-match-card {
-  height:auto!important;
-  min-height:0;
+/* Fast 8 usa a mesma janela vertical de um card das demais filas. */
+.sp-operations-courts-heading .sp-operations-scrollbar { flex:1;min-width:0;height:16px;margin:0; }
+.sp-operations-courts-heading .sp-operations-scrollbar-thumb { top:2px;height:10px; }
+.sp-operations-next--fast8 > .sp-operations-next-scroll .sp-operations-replica:nth-child(n+2) > .sp-match-card {
   border-color:var(--border-color, #64748b)!important;
 }
 .sp-operations-next--fast8 > .sp-operations-next-scroll .sp-match-card[data-match-player-busy="1"] {

@@ -640,9 +640,10 @@ console.log('✅ Súmula por quadra e lista de chamada');
   const fast=core.collect(fastConfig,games);
   if(process.env.SP_SUMULA_FAST8_SAMPLE)fs.writeFileSync(process.env.SP_SUMULA_FAST8_SAMPLE,core.encodePdf(core.makePages(fast)));
   assert(fast.matches.every(m=>m.court && m.time),'Fast 8 mantém a quadra e o horário previstos na súmula');
-  assert.deepStrictEqual(fast.matches.find(m=>m.id==='a').nextCourts1,['','Q2']);
-  assert(core.makePages(fast).flatMap(p=>p.commands).join('\n').includes('Fast 8'),
-    'súmula Fast 8 comunica a sequência das chamadas');
+  assert(fast.matches.every(m=>!m.nextCourts1 && !m.nextCourts2),'alternado não imprime próxima quadra nos nomes');
+  const fastPages=core.makePages(fast);
+  assert(fastPages[0].commands.join('\n').includes('Quadra 1'),'primeira folha identifica a quadra 1');
+  assert(fastPages[1].commands.join('\n').includes('Quadra 2'),'segunda folha identifica a quadra 2');
 
   for(const orientation of ['landscape','portrait']) {
     const pages=core.makePages(model,{orientation});

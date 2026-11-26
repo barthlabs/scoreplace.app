@@ -69,10 +69,14 @@
   function compareQueue(a,b) {
     function at(m) {var time=Date.parse(m.scheduledAt || '');return Number.isFinite(time)?time:Infinity;}
     function number(m,key,fallback) {return Number(m[key] == null?fallback:m[key]) || 0;}
-    var left=[at(a),number(a,'phaseIndex',0),number(a,'round',1),String(a.category || ''),
-      number(a,'groupNumber',number(a,'groupIdx',-1)+1),number(a,'scheduledGameNumber',number(a,'sequence',0)),String(a.id)];
-    var right=[at(b),number(b,'phaseIndex',0),number(b,'round',1),String(b.category || ''),
-      number(b,'groupNumber',number(b,'groupIdx',-1)+1),number(b,'scheduledGameNumber',number(b,'sequence',0)),String(b.id)];
+    function officialNumber(m) {
+      var planned=Number(m.scheduledGameNumber), displayed=Number(m._gameNum);
+      return Number.isFinite(planned) && planned>0 ? planned : Number.isFinite(displayed) && displayed>0 ? displayed : Infinity;
+    }
+    var left=[at(a),officialNumber(a),number(a,'phaseIndex',0),number(a,'round',1),String(a.category || ''),
+      number(a,'groupNumber',number(a,'groupIdx',-1)+1),number(a,'sequence',0),String(a.id)];
+    var right=[at(b),officialNumber(b),number(b,'phaseIndex',0),number(b,'round',1),String(b.category || ''),
+      number(b,'groupNumber',number(b,'groupIdx',-1)+1),number(b,'sequence',0),String(b.id)];
     for (var i=0;i<left.length;i++) if (left[i]!==right[i]) return left[i]<right[i]?-1:1;
     return 0;
   }

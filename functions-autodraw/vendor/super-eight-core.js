@@ -153,7 +153,13 @@
     }
     return { rounds:rounds };
   }
-  var api = { rotationRoster:rotationRoster, categoryPopulation:categoryPopulation, build:build, buildWithRepeats:buildWithRepeats, groupError:groupError, formationError:formationError, buildGroups:buildGroups };
+  function gamesRate(row) {
+    var won=Number(row && row.gamesWon),lost=Number(row && row.gamesLost);
+    if(!Number.isFinite(won) || won<0) won=0;
+    if(!Number.isFinite(lost) || lost<0) lost=0;
+    return won+lost>0?won/(won+lost):0;
+  }
+  var api = { gamesRate:gamesRate, rotationRoster:rotationRoster, categoryPopulation:categoryPopulation, build:build, buildWithRepeats:buildWithRepeats, groupError:groupError, formationError:formationError, buildGroups:buildGroups };
   root.ScoreplaceSuperEight = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

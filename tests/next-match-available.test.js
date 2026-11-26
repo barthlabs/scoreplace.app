@@ -115,7 +115,8 @@ function fastFixture(rounds = 3) {
     const order=round===1?[0,1,2,3,4,5,6,7]:[0,4,1,5,2,6,3,7];
     const people=order.slice(lane*4,lane*4+4).map(n=>g.label+'-player-'+n);
     t.matches.push({id:g.label+'-'+round+'-'+lane,isMonarch:true,groupIdx:g.groupNumber-1,phaseIndex:0,category:g.category,
-      round,scheduledGroupLabel:g.label,_gameNum:t.matches.length+1,p1:people.slice(0,2).join(' / '),p2:people.slice(2).join(' / '),
+      round,scheduledGroupLabel:g.label,scheduledAt:new Date(Date.parse('2026-11-25T12:00:00Z')+((round-1)*2+g.entry-1)*35*60000).toISOString(),
+      _gameNum:(round-1)*12+(g.entry-1)*6+assignments.filter(row=>row.entry===g.entry).indexOf(g)*2+lane+1,p1:people.slice(0,2).join(' / '),p2:people.slice(2).join(' / '),
       team1:people.slice(0,2),team2:people.slice(2),team1Uids:people.slice(0,2),team2Uids:people.slice(2)});
   }
   t._nJogos=t.matches.length;return t;

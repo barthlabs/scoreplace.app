@@ -157,7 +157,7 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
  for(const duration of [22,23,24,25]) {
   await page.evaluate(duration=>{document.getElementById('tourn-game-duration').value=duration;document.getElementById('tourn-call-time').value=0;document.getElementById('tourn-warmup-time').value=0;_phaseGridRefreshDraft()},duration);
   assert.equal(await page.locator('.phase-grid-example').count(),84);
-  assert.equal(await page.locator('.phase-grid-super-group').count(),duration<25?0:6,'cabeçalho apenas se houver espaço');
+  assert.equal(await page.locator('.phase-grid-super-group').count(),0,'sem espaço medido para cabeçalho e confronto, mantém compacto');
   for(const el of await page.locator('.phase-grid-group').all())assert(await el.evaluate(e=>e.scrollHeight<=e.clientHeight+1),'sem corte em '+duration+'min sem preparação');
   if(duration===22)await page.screenshot({path:'/tmp/sp-2768-group-grid-22min.png'});
  }

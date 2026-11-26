@@ -1243,7 +1243,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           '<div style="font-size:.72rem;color:var(--text-muted)">'+_safe(status.eligible?
             '':status.reason)+'</div></div>';
       }
-      return html;
+      return '<div class="sp-category-partner-controls">'+html+'</div>';
     }
     var html = '<div data-rotation-phase="'+phase+'" style="min-width:0;max-width:860px;width:100%;color:var(--text-main)">';
     if (rules.length>1) {
@@ -1268,7 +1268,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if(mode.common && index) return;
       function slider(kind,label,value,shown,min,max,step,extraDisabled) {
         var id = _sliderId(kind,phase,index);
-        return '<div style="min-width:0"><label for="'+id+'" style="display:block;font-size:.82rem;margin-bottom:5px;color:var(--text-main)">'+label+
+        return '<div data-slider-kind="'+kind+'" style="min-width:0"><label for="'+id+'" style="display:block;font-size:.82rem;margin-bottom:5px;color:var(--text-main)">'+label+
           ' <output id="'+id+'-value" style="font-weight:700">'+shown+'</output></label>' +
           '<input id="'+id+'" type="range" min="'+min+'" max="'+max+'" step="'+(step || 1)+'" value="'+value+'" style="width:100%;min-width:0;box-sizing:border-box"'+disabled+(extraDisabled?' disabled':'')+
           ' oninput="window._f2RotationSlider('+phase+','+index+',\''+kind+'\',this.value)" onchange="window._f2RotationSliderDone()"></div>';

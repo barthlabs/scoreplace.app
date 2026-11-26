@@ -445,10 +445,10 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(scrollLayout.courtNames, ['Quadra 4', 'Quadra 6', 'Quadra 7', 'Quadra 8']);
     assert(scrollLayout.width > scrollLayout.viewport && scrollLayout.sticky && scrollLayout.scrollPreserved,
       'só as quadras rolam horizontalmente e a posição sobrevive à atualização: ' + JSON.stringify(scrollLayout));
-    assert(scrollLayout.scrollbarSize.visible && scrollLayout.scrollbarSize.height >= 22 &&
-      scrollLayout.scrollbarSize.thumbHeight >= 16 && scrollLayout.scrollbarSize.thumbWidth >= 72 &&
+    assert(scrollLayout.scrollbarSize.visible && scrollLayout.scrollbarSize.height >= 16 &&
+      scrollLayout.scrollbarSize.thumbHeight >= 10 && scrollLayout.scrollbarSize.thumbWidth >= 72 &&
       scrollLayout.keyboardEnd && scrollLayout.keyboardHome,
-    'a barra de rolagem deve ser alta, visível e operável por teclado: ' + JSON.stringify(scrollLayout));
+    'a barra no cabeçalho de Em quadra deve ser visível e operável por teclado: ' + JSON.stringify(scrollLayout));
     assert(scrollLayout.noVerticalClip && scrollLayout.aligned, 'a faixa não pode cortar ou desalinhavar os cards: ' + JSON.stringify(scrollLayout));
     await page.setViewportSize({ width: 600, height: 800 });
     await page.waitForTimeout(120);
@@ -1659,17 +1659,19 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       _bracketOperationsRefresh(t,root);
       await new Promise(resolve=>setTimeout(resolve,180));
       let strip=root._bracketOperationsStrip;
-      const head=strip.querySelector('.sp-operations-next-pinned');
+      const head=strip.querySelector('.sp-operations-next-scroll .sp-operations-replica');
       const tail=strip.querySelector('.sp-operations-next-scroll');
       if (!head || !tail) return {missing:true};
-      const initial=head.querySelector('[data-operations-base-match]').getAttribute('data-operations-base-match');
-      const before=head.getBoundingClientRect().top;
-      tail.scrollTop=130;
+      const initial=head.getAttribute('data-operations-base-match');
+      tail.dispatchEvent(new PointerEvent('pointerdown'));
+      const before=head.getBoundingClientRect().top, initialScroll=tail.scrollTop, panelHeight=tail.closest('.sp-operations-next').getBoundingClientRect().height;
+      tail.scrollTop=initialScroll+130;
       await new Promise(resolve=>requestAnimationFrame(resolve));
-      const stationary=Math.abs(head.getBoundingClientRect().top-before)<1 && tail.scrollTop>100;
+      const movedWithScroll=head.getBoundingClientRect().top<before-100 && tail.scrollTop>100 && Math.abs(tail.closest('.sp-operations-next').getBoundingClientRect().height-panelHeight)<1;
+      await new Promise(resolve=>setTimeout(resolve,5050));
       const autoBefore=tail.scrollTop;
       await new Promise(resolve=>setTimeout(resolve,240));
-      const autoAdvanced=tail.scrollTop>autoBefore+1 && Math.abs(head.getBoundingClientRect().top-before)<1;
+      const autoAdvanced=tail.scrollTop>autoBefore+1 && head.getBoundingClientRect().top<before-100;
       tail.dispatchEvent(new PointerEvent('pointerenter'));
       const pauseAt=tail.scrollTop;
       await new Promise(resolve=>setTimeout(resolve,120));
@@ -1683,17 +1685,17 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const m=t.matches.find(m=>m.id===initial);
       Object.assign(m,{court:'Quadra 1',courtCalledAt:'2026-11-25T12:00:00Z'});
       _bracketOperationsRefresh(t,root);
-      const next=strip.querySelector('.sp-operations-next-pinned [data-operations-base-match]').getAttribute('data-operations-base-match');
+      const next=strip.querySelector('.sp-operations-next-scroll [data-operations-base-match]').getAttribute('data-operations-base-match');
       const cleanupReplaced=cleanup!==strip._spFast8QueueCleanup;
       _bracketDisposeOperationalSurface(strip,root);
-      return {initial,next,stationary,autoAdvanced,paused,autoState:{hidden:document.hidden,hover:tail.matches(':hover'),focus:tail.contains(document.activeElement),reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,connected:tail.isConnected,before:autoBefore,after:pauseAt,max:tail.scrollHeight-tail.clientHeight},noDuplicates,allFirstRound,secondaryCount,cleanupReplaced,
+      return {initial,next,movedWithScroll,autoAdvanced,paused,autoState:{hidden:document.hidden,hover:tail.matches(':hover'),focus:tail.contains(document.activeElement),reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,connected:tail.isConnected,before:autoBefore,after:pauseAt,max:tail.scrollHeight-tail.clientHeight},noDuplicates,allFirstRound,secondaryCount,cleanupReplaced,
         disposed:strip._spFast8QueueCleanup===null&&!strip.isConnected};
     });
     assert.equal(fastPinned.initial,'A-1-0',JSON.stringify(fastPinned));
     assert.equal(fastPinned.next,'A-1-1',JSON.stringify(fastPinned));
-    assert(fastPinned.stationary && fastPinned.autoAdvanced && fastPinned.paused && fastPinned.noDuplicates && fastPinned.allFirstRound && fastPinned.secondaryCount>=11 &&
+    assert(fastPinned.movedWithScroll && fastPinned.autoAdvanced && fastPinned.paused && fastPinned.noDuplicates && fastPinned.allFirstRound && fastPinned.secondaryCount>=12 &&
       fastPinned.cleanupReplaced && fastPinned.disposed,JSON.stringify(fastPinned));
-    console.log('✓ Fast 8 mantém o próximo fixo, a rodada completa rolante e limpa a animação ao atualizar/sair');
+    console.log('✓ Fast 8 mantém janela vertical de um card, rodada completa e limpa a animação ao atualizar/sair');
     console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

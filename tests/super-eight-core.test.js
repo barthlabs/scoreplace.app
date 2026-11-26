@@ -42,3 +42,11 @@ assert.deepEqual(Array.from(appearances.values()), Array(8).fill(5));
 assert.equal(fiveRoundPartners.size, 20);
 console.log('✓ oito atletas, sete rodadas, 28 parcerias únicas e escolha de confrontos calculada');
 console.log('✓ cinco rodadas: todos jogam cinco vezes e nenhum parceiro se repete');
+
+assert.equal(core.gamesRate({gamesWon:4,gamesLost:3}),4/7);
+assert.equal(core.gamesRate({gamesWon:3,gamesLost:4}),3/7);
+assert.equal(core.gamesRate({gamesWon:7,gamesLost:0}),1);
+assert.equal(core.gamesRate({gamesWon:13,gamesLost:8}),13/21);
+assert.equal(core.gamesRate({gamesWon:0,gamesLost:0}),0);
+assert.equal(core.gamesRate({gamesWon:NaN,gamesLost:Infinity}),0);
+console.log('✓ percentual usa games ganhos sobre games disputados, inclusive placar zerado');

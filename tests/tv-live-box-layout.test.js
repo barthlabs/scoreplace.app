@@ -7,6 +7,7 @@ const { chromium } = require('@playwright/test');
 
 (async () => {
   const capture = path.join(os.tmpdir(), `scoreplace-tv-${process.pid}.html`);
+  const fast8Capture=path.join(os.tmpdir(),`scoreplace-tv-fast8-${process.pid}.html`);
   const customCapture = path.join(os.tmpdir(), `scoreplace-tv-custom-${process.pid}.html`);
   const camisCapture = path.join(os.tmpdir(), `scoreplace-tv-camis-${process.pid}.html`);
   const super8Idle=path.join(os.tmpdir(),`scoreplace-tv-super8-idle-${process.pid}.html`);
@@ -15,7 +16,7 @@ const { chromium } = require('@playwright/test');
   const super8Capture = path.join(os.tmpdir(), `scoreplace-tv-super8-${process.pid}.html`);
   try {
     execFileSync(process.execPath, [path.join(__dirname, 'tv-live-snapshot.test.js')], {
-      env: { ...process.env, SP_TV_CAPTURE: capture, SP_TV_CAPTURE_CUSTOM: customCapture,
+      env: { ...process.env, SP_TV_CAPTURE: capture, SP_TV_CAPTURE_FAST8:fast8Capture, SP_TV_CAPTURE_CUSTOM: customCapture,
         SP_TV_CAPTURE_CAMIS: camisCapture, SP_TV_CAPTURE_SUPER8: super8Capture, SP_TV_CAPTURE_SUPER8_IDLE:super8Idle, SP_TV_CAPTURE_SUPER8_SINGLE:super8Single, SP_TV_CAPTURE_SUPER8_ADVANCED:super8Advanced }, stdio: 'pipe'
     });
     const html = fs.readFileSync(capture, 'utf8').replace(/<script src="[^"]*match-timing[^>]*><\/script>/, '');
@@ -225,7 +226,24 @@ const { chromium } = require('@playwright/test');
         if(process.env.SP_TV_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SP_TV_SCREENSHOT_DIR,`super8-${viewport.width}.png`)});
         await page.close();
       }
+      for(const viewport of [{width:1920,height:1080},{width:3840,height:2160}]) {
+        const page=await browser.newPage({viewport});
+        await page.setContent(fs.readFileSync(fast8Capture,'utf8'),{waitUntil:'domcontentloaded'});
+        const geometry=await page.evaluate(()=>Array.from(document.querySelectorAll('.tv-fast8-court'),court=>{
+          const card=court.querySelector('.tv-fast8-game-card'),header=court.querySelector('header'),teams=card.querySelectorAll('.tv-series-side'),vs=card.querySelector('.tv-fast8-versus'),footer=card.querySelector('footer');
+          const r=n=>n.getBoundingClientRect();
+          return {outside:r(header).bottom<=r(card).top+1,stacked:teams.length===2&&r(teams[0]).bottom<=r(vs).top+1&&r(vs).bottom<=r(teams[1]).top+1,
+            footer:!!footer&&!!footer.querySelector('[data-tv-start]')&&r(footer).bottom<=r(card).bottom,
+            noOk:!card.textContent.includes('✓ OK'),noNext:!card.querySelector('.tv-fast8-next'),
+            fits:card.scrollHeight<=card.clientHeight+1,border:getComputedStyle(court).borderTopWidth,
+            ordinal:/JOGO .*\(\d+\/\d+\)/.test(card.querySelector('.tv-fast8-number').textContent)};
+        }));
+        assert.equal(geometry.length,6);assert(geometry.every(g=>g.outside&&g.stacked&&g.footer&&g.noOk&&g.noNext&&g.fits&&g.ordinal&&g.border==='0px'),JSON.stringify({viewport,geometry}));
+        assert.equal(await page.locator('.tv-fast8-standing tbody tr').count(),48);
+        if(process.env.SP_TV_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SP_TV_SCREENSHOT_DIR,`fast8-${viewport.width}.png`)});
+        await page.close();
+      }
     } finally { await browser.close(); }
     console.log('✓ TV: etiquetas, placares e próximo jogo contidos nos boxes');
-  } finally { try { fs.unlinkSync(capture); } catch (_) {} try { fs.unlinkSync(customCapture); } catch (_) {} try { fs.unlinkSync(camisCapture); } catch (_) {} try { fs.unlinkSync(super8Capture); } catch (_) {} try { fs.unlinkSync(super8Single); } catch (_) {} try { fs.unlinkSync(super8Idle); } catch (_) {} try { fs.unlinkSync(super8Advanced); } catch (_) {} }
+  } finally { try { fs.unlinkSync(fast8Capture); } catch (_) {} try { fs.unlinkSync(capture); } catch (_) {} try { fs.unlinkSync(customCapture); } catch (_) {} try { fs.unlinkSync(camisCapture); } catch (_) {} try { fs.unlinkSync(super8Capture); } catch (_) {} try { fs.unlinkSync(super8Single); } catch (_) {} try { fs.unlinkSync(super8Idle); } catch (_) {} try { fs.unlinkSync(super8Advanced); } catch (_) {} }
 })().catch(error => { console.error(error); process.exitCode = 1; });
