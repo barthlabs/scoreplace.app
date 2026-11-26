@@ -95,6 +95,53 @@ t6.matches[0].courtClockBaseAt = '2026-11-10T14:55:00.000Z';
 ok('FF/REW remoto muda a sig e atualiza a TV', sig(t6) !== c2, 'mudou');
 ok('eco idêntico do servidor não repinta novamente', sig(t6) === sig({ ...t6, matches: [{ ...t6.matches[0] }] }), 'igual');
 
+// Só o jogo da ação local pode dispensar os campos de quadra.
+const local = mk(), before = sig(local, false, {m1:true});
+local.matches[0].court='Q2';local.matches[0].courtCalledAt='2026-11-26T10:00:00Z';
+ok('máscara local ignora apenas quadra e relógio do ID indicado',sig(local,false,{m1:true})===before);
+local.matches.push({id:'m2',court:'Q3'});
+const otherBefore=sig(local,false,{m1:true});local.matches[1].court='Q4';
+ok('quadra de outro jogo continua detectável',sig(local,false,{m1:true})!==otherBefore);
+const resultBefore=sig(local,false,{m1:true});local.matches[0].resultAt='2026-11-26T10:10:00Z';
+ok('resultado do próprio jogo nunca é omitido',sig(local,false,{m1:true})!==resultBefore);
+local.matches[0].scoreP1=7;
+ok('placar continua detectável com máscara local',sig(local,false,{m1:true})!==before);
+
+// Reproduz concorrência e ecos sem renderizar dados de produção.
+{
+  const assert=require('node:assert/strict');
+  const bracket=fs.readFileSync(path.join(__dirname,'..','js/views/bracket.js'),'utf8');
+  const helper=bracket.slice(bracket.indexOf('function _courtOperationFields('),bracket.indexOf('// A confirmação grava quadra e instante'));
+  const w={location:{hash:'#tournaments/T1'},_collectAllMatches:g.window._collectAllMatches,_tournamentDetailSig:sig};
+  let current=mk(),refreshes=0;
+  w._findTournamentById=()=>current;w._softRefreshView=()=>refreshes++;
+  new Function('window',helper+';window.begin=_beginCourtOperation;')(w);
+  const button={isConnected:true,closest:()=>({})};
+  let a=w.begin(button,'T1','m1');
+  current.matches[0].court='Q1';current.matches[0].courtCalledAt='first';
+  assert(w._courtOperationEchoRefresh(),'eco antes da resposta fica retido');
+  assert(a.accept({court:'Q1',courtCalledAt:'first'}));a.finish();
+  assert.equal(refreshes,0);assert(w._courtOperationEchoRefresh(),'eco depois da resposta é reconhecido');assert.equal(w._courtOperationEcho,null);
+  // Duas ações concorrentes do mesmo jogo, com eco intermediário atrasado.
+  a=w.begin(button,'T1','m1');const b=w.begin(button,'T1','m1');
+  assert(a.accept({courtClockBaseAt:'one'}));current.matches[0].courtClockBaseAt='one';a.finish();
+  assert.equal(w._courtOperationEcho.pending,1);
+  assert(b.accept({courtClockBaseAt:'two'}));current.matches[0].courtClockBaseAt='two';b.finish();
+  current.matches[0].courtClockBaseAt='one';assert(w._courtOperationEchoRefresh());assert(w._courtOperationEcho);
+  current.matches[0].courtClockBaseAt='two';assert(w._courtOperationEchoRefresh());assert.equal(w._courtOperationEcho,null);
+  // Uma mudança remota desconhecida no próprio relógio não pode ser engolida.
+  a=w.begin(button,'T1','m1');current.matches[0].courtClockBaseAt='remote';
+  assert(!a.accept({courtClockBaseAt:'mine'}));a.finish();assert.equal(refreshes,1);
+  // Outro jogo muda durante o await: sua atualização precisa repintar.
+  current.matches.push({id:'m2',court:'Q2'});a=w.begin(button,'T1','m1');
+  current.matches[1].court='Q3';assert(!a.accept({courtClockBaseAt:'next'}));a.finish();assert.equal(refreshes,2);
+  // Falha libera guard; botão já desabilitado não cria ação no handler.
+  a=w.begin(button,'T1','m1');a.finish();a.finish();assert.equal(w._courtOperationEcho,null);assert.equal(refreshes,3);
+  a=w.begin(button,'T1','m1');w.location.hash='#bracket/other';assert(!w._courtOperationEchoRefresh());a.finish();assert.equal(w._courtOperationEcho,null);
+  w.location.hash='#bracket/T1';a=w.begin(button,'T1','m1');assert(a.accept({court:'Q4'}));current.matches[0].court='Q4';a.finish();assert(w._courtOperationEchoRefresh());assert.equal(w._tdetailSig,sig(current));
+  ok('ecos, concorrência, falha, outra rota e mudanças remotas preservados',true);
+}
+
 console.log('\n' + '═'.repeat(40));
 console.log((fail === 0 ? '✅' : '❌') + ' tournament-detail-sig: ' + pass + ' ok, ' + fail + ' falharam');
 console.log('═'.repeat(40));

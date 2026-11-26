@@ -1,3 +1,12 @@
+## 2.7.82 — 26/nov/2026 (chamada, painel e súmula)
+
+- No ar anuncia no máximo duas vezes o número de quadras físicas em próximos jogos, incluindo o primeiro fixado e contando cada partida das séries agrupadas. Sem bordas vermelhas de conflito no painel público; bloqueio operacional preservado.
+- Contador (n/7) abaixo do jogo, à esquerda, herdando cor e com fonte menor, também em quadra e placares pendentes. Contagem global da fila mantida por decisão do organizador. Todas as quadras ocupadas tem prioridade sobre o aviso de atleta; a borda fica vermelha por lotação física, e a liberação restaura a apresentação automaticamente.
+- OK e controles de relógio reconhecem o próprio recibo/eco sem reconstruir o detalhe. Guarda por rota, torneio e jogo, com conferência dos valores confirmados e dos demais campos; concorrência, falha e mudança remota continuam verificadas.
+- Saldo de games explicitado no Super 8/Fast 8; fallback independente da métrica principal. Percentual de games preservado; casos 7–0, 4–3 e acumulados conferidos sem alterar resultados reais.
+- Lista de chamada do PDF usa a ordem configurada das categorias, com normalização e fallback alfabético para categorias não configuradas. Quadras e jogos da grade não são reordenados.
+- Testes em navegador isolado, PDF fictício renderizado, painel Full HD/4K, assinatura do detalhe, bloqueio/liberação automática e fila manual.
+
 ## 2.7.81 — 26/nov/2026 (chamada sem rolagem automática)
 
 - Removida a animação automática da fila Próximo jogo a chamar no controle. A rolagem vertical manual e a restauração da posição nas atualizações permanecem.

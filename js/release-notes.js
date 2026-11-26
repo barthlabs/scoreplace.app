@@ -1,3 +1,4 @@
+// 2.7.82 — No ar limita próximos jogos a duas vezes as quadras, sem barras de conflito; rodada alinhada nos cards operacionais, recibos de quadra sem remontagem e categorias do PDF na ordem configurada. Saldo de games explícito.
 // 2.7.81 — Próximo jogo a chamar rola somente por ação manual e mantém a posição escolhida nas atualizações.
 // 2.7.80 — Fast 8 segue a grade aprovada; operação ocupa a largura útil com filas de um card e sliders alinhados. No ar usa duplas empilhadas e cronômetros no rodapé. Classificação mostra percentual de games; súmula identifica quadra, grupo e categoria completos.
 // 2.7.79 — Atualização consolidada de produção com as correções validadas desde a última publicação.
@@ -1940,6 +1941,13 @@ window._RELEASE_NOTES_HTML = (function () {
     // quem está com a 2.0.4 no iPhone lê um torneio que o banco não guarda mais desse jeito.
     // Mesma lição da 1.7.35: quando o formato do dado muda, a ida à loja É o conserto.
     // Os itens abaixo são consolidados por tema, como manda a convenção do arquivo.
+    // v2.7.82 — chamada, painel e súmula.
+    '<div style="margin-bottom:1rem;padding:14px 16px;">' +
+      '<div style="font-weight:800;margin-bottom:8px;">v2.7.82 — Chamada e painel do torneio</div>' +
+      '<p>No ar exibe até duas vezes o número de quadras em próximos jogos: seis quadras, doze jogos. No controle, Todas as quadras ocupadas tem prioridade quando não há quadra livre; o bloqueio por atleta ocupado continua ativo.</p>' +
+      '<p>A rodada (n/7) aparece abaixo do número do jogo, alinhada à esquerda, nos próximos jogos, em quadra e nos placares pendentes. A chamada e os avanços do relógio reconhecem a própria confirmação sem remontar a tela.</p>' +
+      '<p>Saldo de games fica explícito na classificação, preservando o percentual de games. A lista de chamada do PDF segue a ordem das categorias configuradas.</p>' +
+    '</div>' +
     // v2.7.81 — fila de chamada manual.
     '<div style="margin-bottom:1rem;padding:14px 16px;">' +
       '<div style="font-weight:800;margin-bottom:8px;">v2.7.81 — Rolagem manual da chamada</div>' +

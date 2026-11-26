@@ -672,3 +672,30 @@ console.log('✅ Súmula por quadra e lista de chamada');
  const noId=core.collect(cfg,[{...a,team1Uids:[null,null],team2Uids:[null,null]},{...b,team1Uids:[null,null],team2Uids:[null,null]}]);
  assert(noId.undated.every(m=>!m.nextCourts1?.some(Boolean)),'unresolved names do not guess next courts');
 }
+
+// Ordem das categorias é configurada, independente do nome comercial ou do grupo.
+{
+ const B='Retinol · Categoria B',C='Colágeno · Categoria C';
+ const config={name:'Categorias fictícias',combinedCategories:[C,B],categoryDefinitions:[{label:B},{label:C}],courtNames:['Quadra 1','Quadra 3']};
+ const fixture=[{id:'order-c',category:C,scheduledGroupLabel:'C',scheduledGameNumber:3,court:'Quadra 3',scheduledAt:at('2026-11-29','08:00'),p1:'Cora / Dora',p2:'Eva / Fabi'},
+  {id:'order-b',category:B,scheduledGroupLabel:'A',scheduledGameNumber:1,court:'Quadra 1',scheduledAt:at('2026-11-29','08:00'),p1:'Zara / Ana',p2:'Bia / Clara'}];
+ const model=core.collect(config,fixture),calls=core.callList(model);
+ assert.deepStrictEqual(calls.map(b=>b.category),[B,C]);
+ assert.deepStrictEqual(calls[0].athletes.map(a=>a.name),['Ana','Bia','Clara','Zara']);
+ assert(calls[0].athletes.every(a=>a.games[0].number===1));
+ const pages=core.makeCallListPages(model);
+ assert(pages[0].commands.join(' ').includes('Retinol'));assert(pages[1].commands.join(' ').includes('Col'));
+ const combined=core.collect({...config,categoryDefinitions:[],combinedCategories:[B,C,B]},fixture);
+ assert.deepStrictEqual(core.callList(combined).map(b=>b.category),[B,C]);assert.deepStrictEqual(combined.categoryOrder,[B,C]);
+ const varied=core.collect(config,fixture.map(m=>({...m,category:m.category===B?'retinol   · categoria b':'COLAGENO · CATEGORIA C'})));
+ assert(core.callList(varied)[0].category.startsWith('retinol'));
+ const extra=core.collect(config,[...fixture,{...fixture[0],id:'unknown-z',category:'Zulu extra'},
+  {...fixture[0],id:'unknown-a',category:'Alfa extra',p1:'A definir',p2:'Ana / Bia'}]);
+ assert.deepStrictEqual(core.callList(extra).map(b=>b.category),[B,C,'Alfa extra','Zulu extra']);
+ assert(core.callList(extra)[2].skipped.length===1);
+ const fallback={...model};delete fallback.categoryOrder;assert.deepStrictEqual(core.callList(fallback).map(b=>b.category),[C,B]);
+ const undated=core.collect(config,fixture.map(m=>({...m,scheduledAt:undefined})));
+ assert.deepStrictEqual(undated.undated.map(m=>m.category),[B,C]);
+ if(process.env.SP_SUMULA_CATEGORIES_SAMPLE)fs.writeFileSync(process.env.SP_SUMULA_CATEGORIES_SAMPLE,core.encodePdf(pages));
+ console.log('✓ PDF: categorias na ordem configurada, grupos independentes, fallback estável e primeiro jogo preservado');
+}

@@ -360,6 +360,7 @@ window._translations['pt'] = {
   'bracket.champion': 'Campeão',
   'bracket.runnerUp': 'Vice-campeão',
   'bracket.thirdPlaceLabel': '3º Lugar',
+  'bracket.allCourtsOccupied': 'Todas as quadras ocupadas',
   'bracket.playerInCourt': 'Atleta em quadra',
   'bracket.matchNum': 'Jogo {n}',
   'bracket.matchLabel': 'Partida',

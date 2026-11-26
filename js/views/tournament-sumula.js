@@ -3,6 +3,19 @@
   'use strict';
 
   function text(value) { return String(value == null ? '' : value).trim(); }
+  function categoryKey(value) {
+    return text(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').replace(/\s+/g,' ');
+  }
+  function categoryCompare(order) {
+    var ranks=new Map();
+    (Array.isArray(order)?order:[]).forEach(function(label) {
+      var key=categoryKey(label);if(key && !ranks.has(key)) ranks.set(key,ranks.size);
+    });
+    return function(a,b) {
+      var ak=categoryKey(a),bk=categoryKey(b),ar=ranks.has(ak)?ranks.get(ak):Infinity,br=ranks.has(bk)?ranks.get(bk):Infinity;
+      return ar<br?-1:ar>br?1:text(a).localeCompare(text(b),'pt-BR',{sensitivity:'base'});
+    };
+  }
   function timestamp(value) {
     if (value && typeof value.toMillis === 'function') return Number(value.toMillis());
     if (value && typeof value.seconds === 'number') return value.seconds * 1000 + Math.floor(Number(value.nanoseconds || 0) / 1000000);
@@ -138,6 +151,12 @@
     });
   }
   function collect(t, allMatches) {
+    var configuredCategories = Array.isArray(t.categoryDefinitions) && t.categoryDefinitions.length
+      ? t.categoryDefinitions.filter(function (def) { return def && def.enabled !== false; }).map(function (def) { return text(def.label); })
+      : (Array.isArray(t.combinedCategories) ? t.combinedCategories.map(text) : []);
+    var seenCategories=new Set();
+    configuredCategories=configuredCategories.filter(function(label) {var key=categoryKey(label);if(!key || seenCategories.has(key))return false;seenCategories.add(key);return true;});
+    var compareCategories=categoryCompare(configuredCategories);
     var fast8=!!(root.ScoreplaceGroupAlternation && root.ScoreplaceGroupAlternation.enabled(t));
     var alternateOrder=new Map(fast8 && root.ScoreplaceGroupAlternation ? root.ScoreplaceGroupAlternation.sequence(t,allMatches).map((entry,i)=>[text(entry.match.id),i]) : []);
     var seen = new Set();
@@ -182,7 +201,7 @@
       return a.at - b.at || a.court.localeCompare(b.court, 'pt-BR', { numeric:true }) || (a.number || 0) - (b.number || 0) || a.id.localeCompare(b.id);
     });
     var undated = real.filter(function (m) { return !m.day; }).sort(function (a, b) {
-      return a.phaseIndex - b.phaseIndex || a.category.localeCompare(b.category, 'pt-BR') ||
+      return a.phaseIndex - b.phaseIndex || compareCategories(a.category,b.category) ||
         Number(a.round || 0) - Number(b.round || 0) || (a.number || 0) - (b.number || 0);
     });
     var days = [];
@@ -227,14 +246,11 @@
           athletes:Array.isArray(names) ? names.map(text).filter(Boolean) : [] };
       }).filter(function (group) { return group.athletes.length === 4; });
     });
-    var configuredCategories = Array.isArray(t.categoryDefinitions) && t.categoryDefinitions.length
-      ? t.categoryDefinitions.filter(function (def) { return def && def.enabled !== false; }).map(function (def) { return text(def.label); })
-      : (Array.isArray(t.combinedCategories) ? t.combinedCategories.map(text) : []);
     var renderedCategories = configuredCategories.length ? configuredCategories
       : real.map(function (m) { return m.category || 'Sem categoria'; });
     var showCategories = new Set(renderedCategories.filter(Boolean)).size > 1;
     return { tournament: text(t.name || t.title || 'Torneio'), superEight:t.superEight === true,
-      fast8:fast8, showCategories:showCategories,
+      fast8:fast8, showCategories:showCategories, categoryOrder:configuredCategories,
       matches: matches, undated: undated,
       days: days, future:future, pending:pending, tiebreakGroups:tiebreakGroups,
       groupStandings:groupStandings,
@@ -558,6 +574,7 @@
     return p;
   }
   function callList(model) {
+    var compareCategories=categoryCompare(model.categoryOrder);
     var games = (model.matches || []).concat(model.undated || []);
     var knownIds = new Map(), entries = new Map(), skipped = new Map();
     function nameKey(category, name) {
@@ -618,7 +635,7 @@
     return Array.from(byCategory, function (pair) {
       pair[1].sort(function (a,b) { return a.name.localeCompare(b.name, 'pt-BR', { sensitivity:'base' }); });
       return { category:pair[0], athletes:pair[1], skipped:skipped.get(pair[0]) || [] };
-    }).sort(function (a,b) { return a.category.localeCompare(b.category, 'pt-BR', { sensitivity:'base' }); });
+    }).sort(function (a,b) { return compareCategories(a.category,b.category); });
   }
   function callListPage(model, category, rows, part, total, note) {
     var p = pdfPage(842, 595), x = [20, 160, 207, 303, 393, 530, 822];

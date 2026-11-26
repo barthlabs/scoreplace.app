@@ -878,7 +878,7 @@ summary::-webkit-details-marker { display: none; }
 .sp-draw-side { display: grid; gap: 3px; min-width: 0; }
 .sp-draw-player { overflow-wrap: anywhere; }
 
-.sp-operations-series-position { display:block;font-size:.8rem;font-weight:800;line-height:1.2;text-align:center;color:var(--text-bright); }
+.sp-operations-series-position { display:block;font-size:.85em;font-weight:inherit;line-height:1.2;text-align:left;color:inherit; }
 
 /* Fast 8 usa a mesma janela vertical de um card das demais filas. */
 .sp-operations-courts-heading .sp-operations-scrollbar { flex:1;min-width:0;height:16px;margin:0; }
@@ -889,3 +889,5 @@ summary::-webkit-details-marker { display: none; }
 .sp-operations-next--fast8 > .sp-operations-next-scroll .sp-match-card[data-match-player-busy="1"] {
   border-color:var(--sp-c-ef4444, #ef4444)!important;
 }
+
+.sp-operations-next .sp-match-card[data-match-courts-full="1"] { border:3px solid var(--sp-c-ef4444,#ef4444)!important; }

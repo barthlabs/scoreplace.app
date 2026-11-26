@@ -1038,6 +1038,15 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
     Object.assign(fast.matches.find(m=>m.id==='B2-1-0'),{court:'Areia E',courtCalledAt:'2026-10-22T21:05:00Z'});
     const board=window._tvLiveBuildSnapshot(fast,Date.parse('2026-10-22T21:06:00Z'));
     assert(!board.courts.some(c=>c.super8Group || c.super8GroupMember));
+    assert.equal(board.nextGames.length,12,'seis quadras anunciam doze jogos, incluindo o fixado');
+    assert.equal(board.nextGames[0].number,board.nextGame.number);
+    assert.equal(new Set(board.nextGames.map(g=>g.number)).size,12,'sem repetição na janela');
+    const twoCourts=window._tvLiveBuildSnapshot({...fast,courtCount:2,courtNames:fast.courtNames.slice(0,2)},Date.parse('2026-10-22T21:06:00Z'));
+    assert.equal(twoCourts.nextGames.length,4,'duas quadras anunciam quatro jogos');
+    assert.deepEqual(Array.from(twoCourts.nextGames,g=>g.number),Array.from(board.nextGames.slice(0,4),g=>g.number),'limite preserva ordem');
+    const few=JSON.parse(JSON.stringify(fast));few.matches=few.matches.filter(m=>m.courtCalledAt || m.id==='B2-1-1');
+    const fewBoard=window._tvLiveBuildSnapshot(few,Date.parse('2026-10-22T21:06:00Z'));
+    assert(fewBoard.nextGames.length<=1,'não inventa jogos para completar a janela');
     assert.equal(board.courts[4].fast8Group,'B2','primeira quadra livre recebe outro grupo sem prendê-lo ao par original');
     assert.equal(board.courts[0].fast8Groups.length,6);
     const counted=JSON.parse(JSON.stringify(fast));counted.maxParticipantsByCategory={};
@@ -1060,6 +1069,7 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
     assert.equal((html.match(/class="tv-fast8-player-name"/g)||[]).length,24,'os quatro atletas aparecem em cada uma das seis quadras');
     assert.doesNotMatch(html,/Areia A e Areia B/);
     assert.match(html,/tv-upcoming-pinned/);
+    assert.doesNotMatch(html,/tv-upcoming-blocked|tv-series-player-busy|tv-super8-busy-label/);
     assert.match(html,/Areia [A-F]/);
     assert.doesNotMatch(html,/Próxima quadra livre/);
     const hidden=JSON.parse(JSON.stringify(board));
@@ -1122,7 +1132,7 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
   assert.deepEqual(Array.from(groupSnapshot.courts.filter(c=>c.super8Group),c=>c.super8Group.label),['B1','C1','C2']);
   assert(groupSnapshot.courts.filter(c=>c.super8Group).every(c=>c.super8Group.games.length===14 && c.super8Group.rounds===7));
   assert(groupSnapshot.courts[0].super8Group.games.find(g=>g.round===2 && g.lane===0).blocked,'previsão da próxima rodada avisa atletas ainda em quadra');
-  assert.match(window._tvLiveBodyHtml(groupSnapshot),/tv-series-player-busy/);
+  assert.doesNotMatch(window._tvLiveBodyHtml(groupSnapshot),/tv-series-player-busy|tv-upcoming-blocked|tv-super8-busy-label/,'TV pública não sinaliza conflito operacional');
   const freedSnapshot=window._tvLiveBuildSnapshot(idle);
   assert(freedSnapshot.courts.filter(c=>c.super8Group).every(c=>c.super8Group.games.every(g=>!g.blocked)),'previsão volta ao normal sem ocupantes');
   let groupHtml=window._tvLiveBodyHtml(groupSnapshot);

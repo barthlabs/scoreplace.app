@@ -273,9 +273,9 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
   assert.match(render(),/Aproveitamento informativo: games ganhos ÷ games disputados/);
   t.rankingPrimary='wins';t.tiebreakers=['saldo_games','confronto_direto','sorteio'];
   const headings=html=>Array.from(html.matchAll(/<th\b[^>]*>(.*?)<\/th>/g),m=>m[1].replace(/<[^>]+>/g,''));
-  assert.deepEqual(headings(render()).slice(0,6),['#','Jogador','V','D','Saldo','%']);
+  assert.deepEqual(headings(render()).slice(0,6),['#','Jogador','V','D','Saldo de games','%']);
   t.scoring={type:'gsm'};t.advancedScoring={enabled:true};
-  assert.deepEqual(headings(render()).slice(0,6),['#','Jogador','V','D','Saldo','%']);
+  assert.deepEqual(headings(render()).slice(0,6),['#','Jogador','V','D','Saldo de games','%']);
   const html=render();
   for(const table of html.match(/<table\b[\s\S]*?<\/table>/g)||[]) {
     const count=headings(table).length;
@@ -320,10 +320,15 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
   let r=rows();assert.equal(r.length,8);assert.equal(r.filter(s=>s.wins===1&&s.gamesWon-s.gamesLost===7&&s.played===1).length,2);
   assert.equal(r.filter(s=>s.losses===1&&s.gamesWon-s.gamesLost===-7).length,2);assert.equal(r.filter(s=>s.played===0).length,4);
   assert.equal(r[0].wins,1);assert.equal(r[1].wins,1);
+  game.scoreP1=4;game.scoreP2=3;r=rows();
+  assert.equal(r.filter(s=>s.gamesWon-s.gamesLost===1&&s.wins===1).length,2,'4–3 dá saldo +1');
+  assert.equal(r.filter(s=>s.gamesWon-s.gamesLost===-1&&s.losses===1).length,2);
+  assert.equal(r.find(s=>s.wins===1).gamesWon,4,'percentual continua baseado nos games');
+  game.scoreP1=7;game.scoreP2=0;
   const later=t.matches[2];later.winner='p2';later.scoreP1=3;later.scoreP2=7;
   r=rows();assert.equal(r.reduce((n,s)=>n+s.wins,0),4);assert.equal(r.reduce((n,s)=>n+s.losses,0),4);
   assert.equal(r.reduce((n,s)=>n+s.gamesWon-s.gamesLost,0),0);
-  assert(r.some(s=>s.played===2&&s.wins===1&&s.losses===1),'mixed results accumulate for the same athlete');
+  assert(r.some(s=>s.played===2&&s.wins===1&&s.losses===1&&s.gamesWon-s.gamesLost!==0),'saldo acumulado de games difere de vitórias menos derrotas');
   assert(W._computeMonarchStandings(groups[1],t,categories[0]).every(s=>s.played===0),'other group untouched');
   game.scoreP1=6;game.scoreP2=4;r=rows();assert.equal(r.find(s=>s.manualParticipantId==='A-0').gamesWon,6,'score correction recomputes instead of adding');
   assert.equal(W._phaseClassifiedCount(t,8,categories[0],0),4);assert.equal(W._phaseClassifiedCount(t,8,categories[1],0),2);

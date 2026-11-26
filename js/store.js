@@ -4553,7 +4553,7 @@ window._participantsViewSig = function (t) {
 // CONTEÚDO dos jogos (vencedor/placar/adversário — pra resultado lançado / "a definir" preenchido
 // AINDA re-renderizar). Determinística → o pós-toggle in-place adianta window._tdetailSig e o eco vê
 // "igual". Fonte única (gate + pós-toggle). Espelha _participantsViewSig.
-window._tournamentDetailSig = function (t, withoutPresence) {
+window._tournamentDetailSig = function (t, withoutPresence, localCourtIds) {
   if (!t) return '';
   var _k = function (m) { return m ? Object.keys(m).sort().join(',') : ''; };
   var _all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t)
@@ -4587,8 +4587,10 @@ window._tournamentDetailSig = function (t, withoutPresence) {
     // Quadra e relógio são estado compartilhado do jogo. Sem estes campos,
     // o snapshot chegava à TV, mas o gate de repaint considerava o torneio
     // idêntico: FF/REW ficavam visíveis só no computador que clicou.
-    var _court = [m.court || '', m.courtCalledAt || '', m.courtClockBaseAt || '',
-      m.startedAt || '', m.resultAt || ''].join('/');
+    var _court = localCourtIds && localCourtIds[String(m.id)]
+      ? ['', '', '', '', m.resultAt || ''].join('/')
+      : [m.court || '', m.courtCalledAt || '', m.courtClockBaseAt || '',
+        m.startedAt || '', m.resultAt || ''].join('/');
     return (m.id || '') + ':' + (m.winner || '') + ':' +
       _s1 + '-' + _s2 + ':' +
       (m.p1 || '') + '/' + (m.p2 || '') + ':' + _prc + ':' + _court;
@@ -4696,6 +4698,8 @@ window._softRefreshView = function() {
   // close/redirect. Block entirely; user exits intentionally via Voltar/Salvar.
   var _currentView = (window.location.hash || '').replace('#', '').split('/')[0];
   if (_currentView === 'novo-torneio') return;
+  // O recibo local já atualizou os nós. Só ecos confirmados dispensam remontagem.
+  if (typeof window._courtOperationEchoRefresh === 'function' && window._courtOperationEchoRefresh()) return;
   // v4.4.112: #participantes ("+ Participante" / placeholders) é PÁGINA DE FORMULÁRIO —
   // não tem lista, só campos + botões. Um snapshot do Firestore (o próprio write echoa)
   // re-renderizava a página e RECRIAVA o botão azul ANTES do cinza "Adicionando…" pintar
@@ -4733,7 +4737,7 @@ window._softRefreshView = function() {
   // SEMPRE diferia (updatedAt local ≠ servidor) → re-render → PULO ao marcar presença de
   // dupla (a chamada de duplas vive nesta view). Agora usa _tournamentDetailSig (conteúdo
   // determinístico: presença + jogos + fase), adiantada no toggle in-place → o eco vê igual.
-  if (_currentView === 'tournaments') {
+  if (_currentView === 'tournaments' || _currentView === 'bracket') {
     try {
       var _tid = (window.location.hash || '').split('/')[1];
       if (_tid) {

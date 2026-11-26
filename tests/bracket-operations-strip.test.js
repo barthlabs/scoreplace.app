@@ -440,7 +440,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     });
     assert(scrollLayout.noPending && scrollLayout.withPending, 'o painel azul só aparece com placar pendente');
     assert.equal(scrollLayout.freeCount, '4 QUADRAS LIVRES');
-    assert.equal(scrollLayout.zero, '0 QUADRAS LIVRES');
+    assert.equal(scrollLayout.zero, 'Todas as quadras ocupadas');
     assert.equal(scrollLayout.one, '1 QUADRA LIVRE');
     assert.deepEqual(scrollLayout.courtNames, ['Quadra 4', 'Quadra 6', 'Quadra 7', 'Quadra 8']);
     assert(scrollLayout.width > scrollLayout.viewport && scrollLayout.sticky && scrollLayout.scrollPreserved,
@@ -892,7 +892,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       await real.addStyleTag({path:'css/bracket.css'});
       const conflicts = await real.evaluate(async () => {
         document.body.innerHTML = '<main id="view-container"><section id="tourn-grid-container"></section><nav data-bracket-tabs-root="1" data-tournament-id="sb_conflict"></nav></main>';
-        window._t = (key,params) => key === 'bracket.playerInCourt' ? 'Atleta em quadra' : key === 'bracket.matchNum' ? 'JOGO '+params.n : key;
+        window._t = (key,params) => key === 'bracket.allCourtsOccupied' ? 'Todas as quadras ocupadas' : key === 'bracket.playerInCourt' ? 'Atleta em quadra' : key === 'bracket.matchNum' ? 'JOGO '+params.n : key;
         window._bracketEnsureCourtReleaseListener = window._bracketEnsureCourtCapability = () => {};
         window._tournamentResultsComplete = () => false;
         window._resultEntryIncludes = () => false;
@@ -929,8 +929,27 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         window._bracketOperationsRefresh(t,root);
         const focusedReleased = read();
         focused.blur();
+        // Todos ocupados, sem nenhum dos quatro atletas da próxima partida.
+        const holders=t.courtNames.map((court,i)=>({id:'holder-'+i,p1:'Livre '+i+' A / Livre '+i+' B',p2:'Livre '+i+' C / Livre '+i+' D',court,courtCalledAt:new Date().toISOString(),_gameNum:10+i}));
+        t.matches.push(...holders);window._bracketOperationsRefresh(t,root);
+        const full=read();const initialFullHtml=window.renderMatchCard(target,true,t.id,2);
+        const focusFull=find().querySelector('select');focusFull.focus({preventScroll:true});
+        window._bracketCourtReleaseCache[t.id].released['holder-2']=new Date().toISOString();
+        window._bracketOperationsRefresh(t,root);const freedWithoutPlayer=read();
+        delete window._bracketCourtReleaseCache[t.id].released['holder-2'];
+        window._bracketOperationsRefresh(t,root);const fullAgain=read();
+        // Mesmo conflito real, aviso muda só conforme a ocupação física.
+        delete window._bracketCourtReleaseCache[t.id].released.occupied;
+        window._bracketOperationsRefresh(t,root);const fullWithPlayer=read();
+        const fullPlayerHtml=window.renderMatchCard(target,true,t.id,2);
+        window._bracketCourtReleaseCache[t.id].released['holder-2']=new Date().toISOString();
+        window._bracketOperationsRefresh(t,root);const freedWithPlayer=read();
+        const zeroCourts=_matchCourtsFull({...t,courtNames:[],courtCount:0},holders,target);
+        t.matches=t.matches.filter(m=>!holders.includes(m));
+        window._bracketCourtReleaseCache[t.id].released.occupied=new Date().toISOString();
+        focusFull.blur();window._bracketOperationsRefresh(t,root);
         await window._confirmMatchCourtCall(find().querySelector('.sp-match-confirm'),t.id,target.id);
-        return {initial,released,focusedBlocked,focusedReleased,sameSelect,blockedCalls,calls};
+        return {initial,released,focusedBlocked,focusedReleased,sameSelect,blockedCalls,calls,full,fullAgain,freedWithoutPlayer,fullWithPlayer,freedWithPlayer,zeroCourts,initialFullHtml,fullPlayerHtml};
       });
       assert.equal(conflicts.initial.border,'rgb(239, 68, 68)','vermelho prevalece sobre dourado do próximo jogo');
       assert(conflicts.initial.disabled && conflicts.initial.selectDisabled);
@@ -945,6 +964,15 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       assert.equal(conflicts.focusedBlocked.court,'Quadra 3','ocupação nova preserva escolha pendente de quadra livre');
       assert(conflicts.focusedBlocked.disabled && conflicts.sameSelect,'sincroniza sem recriar seletor focado');
       assert.equal(conflicts.calls,1,'após liberação a chamada pode chegar ao servidor');
+      for(const state of [conflicts.full,conflicts.fullAgain,conflicts.fullWithPlayer]) {
+        assert.equal(state.border,'rgb(239, 68, 68)');assert(state.disabled && state.selectDisabled,JSON.stringify(state));
+        assert.equal(state.warning,'Todas as quadras ocupadas');
+      }
+      assert(!conflicts.freedWithoutPlayer.disabled && conflicts.freedWithoutPlayer.border!=='rgb(239, 68, 68)');
+      assert(conflicts.freedWithPlayer.disabled && conflicts.freedWithPlayer.warning==='Atleta em quadra','quadra livre não libera atleta ocupado');
+      assert(!conflicts.zeroCourts,'sem quadras configuradas não inventa lotação');
+      for(const html of [conflicts.initialFullHtml,conflicts.fullPlayerHtml])assert.doesNotMatch(html,/class="sp-match-player-busy"/,'render inicial não duplica o motivo');
+
       await real.addScriptTag({content:source.slice(source.indexOf('window._super8StandingsGroups = function'),source.indexOf('// ── Rei/Rainha da Praia Rendering'))});
       const seriesPosition = await real.evaluate(() => {
         const category='A', matches=[];
@@ -961,20 +989,86 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         const root=document.querySelector('[data-bracket-tabs-root]');root.setAttribute('data-tournament-id',t.id);
         window._bracketCourtReleaseCache[t.id]={ready:true,revision:0,released:{},postponed:[],postponedReady:[]};
         const read=()=>[...root._bracketOperationsStrip.querySelectorAll('.sp-operations-next .sp-operations-series-position')].map(el=>({text:el.textContent,
-          parent:el.parentElement.textContent,below:el.getBoundingClientRect().top>el.parentElement.getBoundingClientRect().top}));
+          parent:el.parentElement.textContent,below:el.getBoundingClientRect().top>el.parentElement.getBoundingClientRect().top,aligned:Math.abs(el.getBoundingClientRect().left-el.parentElement.getBoundingClientRect().left)<1,color:getComputedStyle(el).color===getComputedStyle(el.parentElement).color,smaller:parseFloat(getComputedStyle(el).fontSize)<parseFloat(getComputedStyle(el.parentElement).fontSize)}));
         window._bracketOperationsRefresh(t,root);const first=read();
         const original=window.renderMatchCard(matches[0],false,t.id,100);
         matches.filter(m=>m.round===1).forEach(m=>{m.winner=m.p1;m.resultAt=new Date().toISOString();});
         window._bracketOperationsRefresh(t,root);const second=read();
+        const activeHtml=window._bracketOperationsReplica(matches[2],t,{active:true},'Em quadra','',root,matches,'counter-active');
+        const pendingHtml=window._bracketOperationsReplica(matches[2],t,{pending:true},'Pendentes','',root,matches,'counter-pending');
         const tie=window._bracketOperationsReplica({...matches[2],isTieBreak:true,tieSeries:[]},t,{readOnly:true},'Próximo','',root,matches,'counter-tie');
-        return {first,second,originalHasCounter:original.includes('sp-operations-series-position'),tieHasCounter:tie.includes('sp-operations-series-position')};
+        return {first,second,activeHtml,pendingHtml,originalHasCounter:original.includes('sp-operations-series-position'),tieHasCounter:tie.includes('sp-operations-series-position')};
       });
       assert(seriesPosition.first.length,JSON.stringify(seriesPosition));
       assert.equal(seriesPosition.first[0].text,'(1/7)');
       assert.match(seriesPosition.first[0].parent,/100/);
       assert(seriesPosition.first[0].below,'contador fica abaixo do número do jogo');
       assert.equal(seriesPosition.second[0].text,'(2/7)');
+      assert(seriesPosition.second[0].aligned && seriesPosition.second[0].color && seriesPosition.second[0].smaller,'contador à esquerda, mesma cor e fonte menor');
+      for(const html of [seriesPosition.activeHtml,seriesPosition.pendingHtml]) assert.match(html,/sp-operations-series-position[^>]*>\(2\/7\)/,'ativos e pendentes mostram rodada');
       assert(!seriesPosition.originalHasCounter && !seriesPosition.tieHasCounter,'sem duplicar contador no card original nem no desempate');
+      const storeSource=fs.readFileSync('js/store.js','utf8');
+      await real.addScriptTag({content:storeSource.match(/window\._tournamentDetailSig = function[\s\S]*?\n};/)[0]});
+      await real.addScriptTag({content:storeSource.match(/window\._softRefreshView = function[\s\S]*?\n};/)[0]});
+      const steady=await real.evaluate(async()=>{
+        const t=window._findTournamentById();Object.assign(t,{callTime:5,warmupTime:5,gameDuration:25});window.__currentT=t;
+        window._findTournamentById=()=>window.__currentT;
+        window.AppStore.tournaments=[t];window.AppStore.publicDiscovery=[];
+        location.hash='#tournaments/'+t.id;
+        window._tdetailSig=window._tournamentDetailSig(t);
+        window._suppressSoftRefresh=false;window._lastSoftRefresh=0;
+        window.__routes=0;window.initRouter=()=>window.__routes++;
+        const root=document.querySelector('[data-bracket-tabs-root]');window._bracketOperationsRefresh(t,root);
+        const fresh=()=>window.__currentT;
+        const echo=patch=>{
+          window.__currentT=JSON.parse(JSON.stringify(fresh()));
+          Object.assign(window.__currentT.matches.find(m=>m.id===patch.id),patch);
+          window.AppStore.tournaments=[fresh()];window._softRefreshView();
+        };
+        let call=0, delayed=[];
+        window._callCF=async(_name,p)=>{
+          const base=new Date(Date.now()-(p.clockAction?(++call)*5*60000:0)).toISOString();
+          const patch=p.clockAction?{id:p.matchId,courtClockBaseAt:base}:{id:p.matchId,court:p.court,courtCalledAt:base};
+          if(call%2===0)echo(patch); else delayed.push(()=>echo(patch));
+          await new Promise(r=>setTimeout(r,40));
+          return {data:{ok:true,...patch}};
+        };
+        const strip=root._bracketOperationsStrip;
+        const spacer=document.createElement('div');spacer.style.height='600px';document.body.prepend(spacer);
+        const tail=document.createElement('div');tail.style.height='1800px';document.body.append(tail);
+        window.scrollTo(0,120);await new Promise(r=>requestAnimationFrame(r));
+        const frames=[];let track=true;
+        const positions=()=>({y:scrollY,left:strip.querySelector('.sp-operations-court-track').scrollLeft,next:strip.querySelector('.sp-operations-next-scroll').scrollTop});
+        const tick=()=>{if(track){frames.push(positions());requestAnimationFrame(tick);}};tick();
+        const button=strip.querySelector('.sp-operations-next .sp-match-confirm');
+        const id=button.closest('[data-operations-match]').getAttribute('data-operations-match');
+        await window._confirmMatchCourtCall(button,t.id,id);
+        delayed.splice(0).forEach(fn=>fn());
+        // Os ecos anteriores e posteriores à resposta deixam o mesmo DOM montado.
+        for(let i=0;i<2;i++){
+          const active=strip.querySelector('[data-operations-match="'+id+'"]');
+          const next=active.querySelector('.sp-match-clock-next');
+          if(!next)throw new Error('relógio sem botão de avanço');
+          const select=active.querySelector('select');if(select)select.focus({preventScroll:true});
+          await window._adjustMatchCourtClock(next,t.id,id,'next');
+          delayed.splice(0).forEach(fn=>fn());
+        }
+        await new Promise(r=>setTimeout(r,120));track=false;
+        const stable=frames.every(f=>f.y===frames[0].y&&f.left===frames[0].left&&f.next===frames[0].next);
+        const routed=window.__routes;
+        // Sem eco a autorização não bloqueia uma alteração remota relevante.
+        const next=strip.querySelector('[data-operations-match="'+id+'"] .sp-match-clock-action');
+        window._callCF=async()=>({data:{ok:true,courtClockBaseAt:new Date(Date.now()-300000).toISOString()}});
+        await window._adjustMatchCourtClock(next,t.id,id,'restart');
+        const noEchoHeld=!!window._courtOperationEcho;
+        document.activeElement.blur();
+        echo({id,scoreP1:7,resultAt:new Date().toISOString()});
+        await new Promise(r=>setTimeout(r,850));
+        return {stable,routed,y:frames[0].y,positions:frames.filter((f,i,a)=>!i||JSON.stringify(f)!==JSON.stringify(a[i-1])),frames:frames.length,noEchoHeld,remoteRoutes:window.__routes,guard:window._courtOperationEcho};
+      });
+      assert(steady.stable && steady.y===120 && steady.frames>3,JSON.stringify(steady));
+      assert.equal(steady.routed,0,'OK e dois avanços não remontam o detalhe por eco do servidor');
+      assert(steady.noEchoHeld && !steady.guard && steady.remoteRoutes>0,'sem eco pendente não esconde resultado remoto');
     } finally { await real.close(); }
     const scoringPage = await browser.newPage();
     try {

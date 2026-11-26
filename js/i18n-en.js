@@ -359,6 +359,7 @@ window._translations['en'] = {
   'bracket.champion': 'Champion',
   'bracket.runnerUp': 'Runner-up',
   'bracket.thirdPlaceLabel': '3rd Place',
+  'bracket.allCourtsOccupied': 'All courts occupied',
   'bracket.playerInCourt': 'Player on court',
   'bracket.matchNum': 'Game {n}',
   'bracket.matchLabel': 'Match',
