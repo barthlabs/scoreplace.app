@@ -61,7 +61,7 @@ const limit=Buffer.alloc(LIMIT);pdf.copy(limit);assert.equal(readFile(payload(li
   const bucket={iam:{getPolicy:async()=>[{bindings:[]}]},file:()=>({download:async()=>[good],delete:async()=>{writes++}})};
   const admin={initializeApp:()=>initialized++,firestore:()=>db,storage:()=>({bucket:()=>bucket})};
   function requireStub(name){
-   if(name==='node:fs')return {readFileSync:(f)=>{if(String(f).endsWith('.manifest.json'))return JSON.stringify({pdfSha256:exact});if(!files.has(f))throw Error('unexpected read '+f);return files.get(f)},writeFileSync:(f,v)=>files.set(f,v)};
+   if(name==='node:fs')return {readFileSync:(f)=>{if(String(f).endsWith('.manifest.json'))return JSON.stringify({pdfSha256:options.manifestSha||exact});if(!files.has(f))throw Error('unexpected read '+f);return files.get(f)},writeFileSync:(f,v)=>files.set(f,v)};
    if(name==='node:path')return path;if(name==='node:crypto')return crypto;
    if(name==='node:module')return {createRequire:()=>()=>({HttpsError:E})};
    if(name.includes('firebase-admin'))return admin;
@@ -74,6 +74,8 @@ const limit=Buffer.alloc(LIMIT);pdf.copy(limit);assert.equal(readFile(payload(li
   return {initialized,published,writes,files,logs,errors,planPath,active};
  }
  const malformed=await cli((f,p)=>['--preview',f,p,'--sha256=bad']);assert.equal(malformed.initialized,0);assert.match(malformed.errors[0],/Pin inválido/);
+ const differentManifest=await cli((f,p)=>['--preview',f,p],{manifestSha:'0'.repeat(64)});assert.equal(differentManifest.published,0);assert.match(differentManifest.errors[0],/PDF diferente/);
+ const matchingWrongManifest=await cli((f,p)=>['--preview',f,p,'--sha256='+'0'.repeat(64)],{manifestSha:'0'.repeat(64)});assert.equal(matchingWrongManifest.published,0);assert.match(matchingWrongManifest.errors[0],/PDF diferente/);
  const wrong=await cli((f,p)=>['--preview',f,p,'--sha256='+'0'.repeat(64)]);assert.equal(wrong.initialized,0);assert.match(wrong.errors[0],/PDF diferente/);
  for(const override of [{approvedSha256:undefined},{approvedSha256:'0'.repeat(64)},{fileName:'different.pdf'}]){
   const r=await cli((f,p)=>['--apply',f,p,'--sha256='+exact],{plan:override});assert.equal(r.published,0);assert(r.errors.length);

@@ -1070,6 +1070,8 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
       if(m.scheduledGameNumber===7)Object.assign(m,{court:grade.courtNames[0],courtCalledAt:'2026-10-22T21:05:00Z'});
     });
     const savedHelpers=Object.fromEntries(['_bracketOperationsSelect','_bracketCourtReleased','_bracketCourtReleaseCache','_bracketCourtPostponed','_bracketCourtPostponedReady','_bracketPostponedOrder'].map(k=>[k,window[k]]));
+    const savedContext=Object.fromEntries(['_bracketOperationsGroup','_matchCardTimestamp'].map(k=>[k,{own:Object.prototype.hasOwnProperty.call(context,k),value:context[k]}]));
+    try {
     const gradeReleased=Object.fromEntries(grade.matches.filter(m=>m.courtReleasedAt).map(m=>[m.id,m.courtReleasedAt]));
     window._bracketCourtReleased=()=>gradeReleased;window._bracketCourtReleaseCache={[grade.id]:{released:gradeReleased,lastReleasedByCourt:{[grade.courtNames[4]]:{releasedAt:'2026-10-22T21:04:00Z'}}}};
     delete window._bracketOperationsSelect;
@@ -1083,7 +1085,10 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
     assert.equal(window._bracketOperationsSelect(grade).next.scheduledGameNumber,8,'seletor real segue grade');
     assert.deepEqual(numbers(readForward(grade)),numbers(gradeFallback),'controle real e fallback anunciam os mesmos doze jogos');
     assert.equal(JSON.stringify(grade),gradeBefore);
+    } finally {
     for(const [key,value] of Object.entries(savedHelpers)){if(value===undefined)delete window[key];else window[key]=value;}
+    for(const [key,state] of Object.entries(savedContext)){if(state.own)context[key]=state.value;else delete context[key];}
+    }
 
     assert.deepEqual(numbers(readForward(normal)),Array.from({length:12},(_,i)=>i+12),'12 seguido de 13–23, sem reanunciar os ativos');
     // Os jogos antigos já saíram da quadra e aguardam placar, não nova chamada.

@@ -215,9 +215,10 @@ async function driver() {
   const visibleIds = visible.map((user) => user._docId);
   for (const id of [linkedUid, 'mutual-import', 'venue-import', 'shared-import']) assert(visibleIds.includes(id), id + ' é descobrível');
   assert(!visibleIds.includes('hidden-import'), 'pessoa sem relação não aparece');
-  assert(visible.every((user) => (user.preferredLocations || []).every(location =>
-    Object.keys(location).length === 1 && typeof location.label === 'string' && !/rua|são paulo|—|,/i.test(location.label))),
-    'a descoberta expõe só a chave pública do clube, sem endereço ou campos privados');
+  for (const user of visible) {
+    assert.deepStrictEqual(user.preferredLocations, user._docId === 'venue-import' ? [{ label: 'clube x' }] : [],
+      'a descoberta expõe exatamente a chave pública do clube da fixture, sem endereço ou campos privados');
+  }
   {
   // Individual preliminary workbook, using the real callable and canonical writes.
   const individualTid='test-import-individual-emulator',individualRef=db.doc('tournaments/'+individualTid);
