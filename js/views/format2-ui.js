@@ -1241,7 +1241,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           _sliderToggle(_sliderId('alternation',phase,index),'Alternar grupos',rule.groupAlternation===true,
             'window._f2CategoryAlternation('+index+',this.checked)',!!disabled)+
           '<div style="font-size:.72rem;color:var(--text-muted)">'+_safe(status.eligible?
-            'Intercala as rodadas dos grupos desta categoria. Segue a fila da súmula em cada quadra; a organização pode remanejar a chamada.':status.reason)+'</div></div>';
+            '':status.reason)+'</div></div>';
       }
       return html;
     }
