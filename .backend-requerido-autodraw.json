@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "095f5954b313f1ddb5b0ab737fa5b6301b86c486",
-  "scopeNote": "Preserva as 34 portas exigidas. Corrige salvamento atômico de novos eixos com combinação zerada; mantém proteções de inscrições, reservas, preços e sorteio. Recibos centrais e oito portas end-court precisam refletir fonte real antes do Hosting.",
+  "backendCommit": "6410b40509a3dfa235f67d26a349c1429da8c998",
+  "scopeNote": "Mantém as 34 portas e exige também resetTournamentToEnrollment: captura pós-sorteio, bloqueio de reset destrutivo e projeção canônica de vagas. Exige recibos reais centrais, oito portas end-court e legacy6/4 antes do Hosting.",
   "functions": [
     "createTournament",
     "updateTournamentConfiguration",
@@ -36,6 +36,7 @@
     "tournamentSummaryRegistration",
     "tournamentSummaryLegacyGroup",
     "setDrawBalanceChoice",
-    "splitLatePair"
+    "splitLatePair",
+    "resetTournamentToEnrollment"
   ]
 }
