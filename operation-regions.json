@@ -39,13 +39,13 @@
       }
     },
     "sp-op-end-court-v2": {
-      "digest": "e92f6aaa52e5a5ae41ab1b42d59415fbb8b3a79ba9c529dbcaa79a54863189c2",
+      "digest": "ead9296c5e195a01f7c2626bb9da9439e34f8e66d9b1f2c1ce2e6eb996e7fb0b",
       "urls": {
         "us-east1": "https://sp-op-end-court-v2-4f45krjr3a-ue.a.run.app",
         "us-east4": "https://sp-op-end-court-v2-4f45krjr3a-uk.a.run.app",
         "us-south1": "https://sp-op-end-court-v2-4f45krjr3a-vp.a.run.app"
       },
-      "centralSourceDigest": "908efc81283cf39c061648f7ba59deffa028b60464f5dd3da4ec5d56b84f4884"
+      "centralSourceDigest": "c7e6f74f652ea207d6336c40da1caac2ea6f01ad44118634c6edf3a333ee474c"
     },
     "sp-op-control-v2": {
       "digest": "a16c2df4aaa6c4243ea300c9a73b17e07e157053f0db604f5b9c5ff525bd6d6e",
