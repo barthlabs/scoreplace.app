@@ -3790,7 +3790,7 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 .sp-category-controls > * { min-width:0; }
 .sp-category-partner-controls { display:grid; align-content:start; align-self:center; gap:5px; min-width:0; }
 .sp-category-partner-controls > label, .sp-category-partner-controls [data-category-alternation] > label { margin:0 !important; min-height:20px; }
-.sp-category-controls [data-slider-kind="qualifiers"] > input { height:1.307rem; min-height:20px; display:block; }
+.sp-category-controls [data-slider-kind="games"] > input, .sp-category-controls [data-slider-kind="qualifiers"] > input { height:1.307rem; min-height:20px; display:block; }
 .sp-capacity-integrated { display:none !important; }
 .sp-capacity-cell { padding:0 !important; border:0 !important; margin:0; }
 .sp-capacity-excluded { display:flex; flex-wrap:wrap; gap:12px; }
@@ -3799,8 +3799,8 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 .sp-phase-setup { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)) auto; gap:12px; align-items:center; padding:8px 10px; border:1px solid var(--sp-b-255-255-255-02); border-radius:8px; background:var(--sp-g-255-255-255-005); }
 @media (max-width:700px) {
   .sp-category-controls { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .sp-category-controls [data-slider-kind="qualifiers"] > label { min-height:44px; display:flex !important; align-items:center; gap:4px; }
-  .sp-category-controls [data-slider-kind="qualifiers"] > input { height:44px; }
+  .sp-category-controls [data-slider-kind="games"] > label, .sp-category-controls [data-slider-kind="qualifiers"] > label { min-height:44px; display:flex !important; align-items:center; gap:4px; }
+  .sp-category-controls [data-slider-kind="games"] > input, .sp-category-controls [data-slider-kind="qualifiers"] > input { height:44px; }
   .sp-phase-timing { grid-template-columns:minmax(0,1fr); }
   .sp-phase-setup { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .sp-phase-setup > label:last-child { grid-column:1 / -1; }

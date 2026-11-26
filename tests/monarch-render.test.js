@@ -268,8 +268,9 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
   const t=hydrateMonarchGroups(buildViaDraw('Liga',8,{ligaRoundFormat:'rei_rainha',drawMode:'rei_rainha',drawManual:true}));
   t.superEight=true;t.rankingPrimary='games_diff';t.tiebreakers=['saldo_games','vitorias','confronto_direto'];
   const render=()=>W._renderMonarchStage(t,false,false,{standingsOnly:true});
-  // Baseline captured before changing bracket.js, from the same deterministic fixture.
-  assert.equal(crypto.createHash('sha256').update(render()).digest('hex'),'bf42195cbeff08bc3fd1f9ba6ecdbff89775b6364872565226cc454f7f646203');
+  // Baseline Super 8: os títulos informam percentual de games; estrutura e colunas permanecem verificadas.
+  assert.equal(crypto.createHash('sha256').update(render()).digest('hex'),'47fd08f8232d40dc467ba7aba5560db050adfd0af71eac6e468c3e0f21e845f4');
+  assert.match(render(),/Aproveitamento informativo: games ganhos ÷ games disputados/);
   t.rankingPrimary='wins';t.tiebreakers=['saldo_games','confronto_direto','sorteio'];
   const headings=html=>Array.from(html.matchAll(/<th\b[^>]*>(.*?)<\/th>/g),m=>m[1].replace(/<[^>]+>/g,''));
   assert.deepEqual(headings(render()).slice(0,6),['#','Jogador','V','D','Saldo','%']);
@@ -340,7 +341,7 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
   assert(!/>Pts<|>PA</.test(html));assert(html.includes('faixa de avanço: 4')&&html.includes('faixa de avanço: 2'));
   const interleaved=Object.assign({},t,{_phaseMaterialized:1});
   const interleavedHtml=W._renderMonarchStage(interleaved,false,false);
-  assert(interleavedHtml.includes('title="Derrotas"')&&interleavedHtml.includes('title="Aproveitamento informativo: vitórias ÷ partidas disputadas"'),'Super8 keeps all live metrics after a following phase is materialized');
+  assert(interleavedHtml.includes('title="Derrotas"')&&interleavedHtml.includes('title="Aproveitamento informativo: games ganhos ÷ games disputados"'),'Super8 keeps all live metrics after a following phase is materialized');
   const phase1=JSON.parse(JSON.stringify(t));phase1.currentPhaseIndex=1;phase1.phases.unshift({kind:'classification'});phase1.matches.forEach(m=>m.phaseIndex=1);
   assert.equal((W._renderPhaseBracket(phase1,false,'',1).match(/sp-monarch-standings-name/g)||[]).length,48,'later phases retain eight-player groups');
   assert.equal((W.renderStandings(phase1,false,false,'','').match(/sp-monarch-standings-name/g)||[]).length,48,'later-phase standings route also retains eight-player groups');
