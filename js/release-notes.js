@@ -1,3 +1,4 @@
+// 2.7.81 — Próximo jogo a chamar rola somente por ação manual e mantém a posição escolhida nas atualizações.
 // 2.7.80 — Fast 8 segue a grade aprovada; operação ocupa a largura útil com filas de um card e sliders alinhados. No ar usa duplas empilhadas e cronômetros no rodapé. Classificação mostra percentual de games; súmula identifica quadra, grupo e categoria completos.
 // 2.7.79 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.78 — Fast 8 permite alternar os grupos por rodada e usar a primeira quadra livre após a entrada inicial. O próximo jogo imediato fica fixo no topo; os demais jogos da rodada rolam abaixo, com bloqueio de chamada para atletas ocupados. No ar separa as quadras e mantém a classificação dos oito atletas de cada grupo. Súmulas seguem a alternância sem prever quadras futuras. Super 8 e Fast 8 permitem desativar a disputa de terceiro lugar; 3º e 4º seguem os critérios de classificação configurados.
@@ -1939,6 +1940,11 @@ window._RELEASE_NOTES_HTML = (function () {
     // quem está com a 2.0.4 no iPhone lê um torneio que o banco não guarda mais desse jeito.
     // Mesma lição da 1.7.35: quando o formato do dado muda, a ida à loja É o conserto.
     // Os itens abaixo são consolidados por tema, como manda a convenção do arquivo.
+    // v2.7.81 — fila de chamada manual.
+    '<div style="margin-bottom:1rem;padding:14px 16px;">' +
+      '<div style="font-weight:800;margin-bottom:8px;">v2.7.81 — Rolagem manual da chamada</div>' +
+      '<p>Próximo jogo a chamar só rola quando você movimenta a lista. A posição escolhida é preservada nas atualizações.</p>' +
+    '</div>' +
     // v2.7.80 — operação e apresentação do Fast 8.
     '<div style="margin-bottom:1rem;border:2px solid #75c7e7;border-radius:12px;padding:14px 16px;">' +
       '<div style="font-weight:800;margin-bottom:8px;">v2.7.80 — Operação do Fast 8</div>' +

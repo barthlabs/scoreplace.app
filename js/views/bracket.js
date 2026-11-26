@@ -1613,38 +1613,6 @@ function _bracketOperationalDetailCard(root) {
   return card && !card.closest('#view-container') ? card : null;
 }
 
-// A fila inteira ocupa uma janela vertical com a altura de um card.
-function _bracketFast8QueueScroll(surface, scroller) {
-  if (!scroller || typeof requestAnimationFrame !== 'function') return;
-  var frame = 0, last = 0, pauseUntil = 0, position = scroller.scrollTop, direction = 1, disposed = false;
-  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
-  function pause() { pauseUntil = Date.now() + 5000; last = 0; position = scroller.scrollTop; }
-  var events = ['pointerenter', 'pointerdown', 'wheel', 'touchstart', 'keydown', 'focusin'];
-  events.forEach(function (event) { scroller.addEventListener(event, pause, { passive:true }); });
-  function tick(now) {
-    if (disposed || !surface.isConnected || !scroller.isConnected) { cleanup(); return; }
-    var focused = scroller.contains(document.activeElement);
-    var hovering = typeof scroller.matches === 'function' && scroller.matches(':hover');
-    var max = scroller.scrollHeight - scroller.clientHeight;
-    if (!document.hidden && !(reduced && reduced.matches) && !focused && !hovering && Date.now() >= pauseUntil && max > 1) {
-      if (last) {
-        position = Math.max(0, Math.min(max, position + direction * Math.min(50, now - last) * .018));
-        scroller.scrollTop = position;
-        if (position === max || position === 0) { direction *= -1; pauseUntil = Date.now() + 2000; }
-      } else position = scroller.scrollTop;
-      last = now;
-    } else last = 0;
-    frame = requestAnimationFrame(tick);
-  }
-  function cleanup() {
-    disposed = true;
-    cancelAnimationFrame(frame);
-    events.forEach(function (event) { scroller.removeEventListener(event, pause); });
-  }
-  surface._spFast8QueueCleanup = cleanup;
-  frame = requestAnimationFrame(tick);
-}
-
 function _bracketDisposeOperationalSurface(surface, root) {
   if (!surface) return;
   var owner = surface._bracketOperationsOwner;
@@ -1652,8 +1620,6 @@ function _bracketDisposeOperationalSurface(surface, root) {
   if (surface._spOperationsOnResize) window.removeEventListener('resize', surface._spOperationsOnResize);
   clearTimeout(surface._spOperationsResizeTimer);
   surface._spOperationsResizeTimer = null;
-  if (surface._spFast8QueueCleanup) surface._spFast8QueueCleanup();
-  surface._spFast8QueueCleanup = null;
   if (surface._spNextScrollRestoreObserver) surface._spNextScrollRestoreObserver.disconnect();
   if (surface._spSeriesLabelObserver) surface._spSeriesLabelObserver.disconnect();
   surface._spNextScrollRestoreObserver = null;
@@ -3026,7 +2992,6 @@ window._bracketOperationsRefresh = function (t, root) {
       (nextCardsHtml || '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (categoryFilter ? 'Nenhum próximo jogo nesta categoria.' : state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
         'Nenhum jogo aguardando chamada') + '</div>') + '</div>';
-  if (existing._spFast8QueueCleanup) { existing._spFast8QueueCleanup(); existing._spFast8QueueCleanup = null; }
   if (existing._spNextScrollRestoreObserver) { existing._spNextScrollRestoreObserver.disconnect(); existing._spNextScrollRestoreObserver = null; }
   if (existing._spSeriesLabelObserver) { existing._spSeriesLabelObserver.disconnect(); existing._spSeriesLabelObserver = null; }
   existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next' + (fast8Queue ? ' sp-operations-next--fast8' : '') + '">' + nextContentHtml + '</div>' + (state.pending.some(categoryMatches) ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
@@ -3124,7 +3089,6 @@ window._bracketOperationsRefresh = function (t, root) {
         existing._spNextScrollRestoreObserver.observe(nextScroll);
       }
     }
-    if (fast8Queue) _bracketFast8QueueScroll(existing, nextScroll);
     var pendingScroll = existing.querySelector('.sp-operations-pending-track');
     if (pendingScroll) pendingScroll.scrollTop = pendingScrollTop;
     _bracketOperationsBindScrollbar(courtTrack, existing.querySelector('.sp-operations-scrollbar'));

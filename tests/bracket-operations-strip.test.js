@@ -1663,39 +1663,39 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const tail=strip.querySelector('.sp-operations-next-scroll');
       if (!head || !tail) return {missing:true};
       const initial=head.getAttribute('data-operations-base-match');
-      tail.dispatchEvent(new PointerEvent('pointerdown'));
+      const initialPosition=tail.scrollTop;
+      await new Promise(resolve=>setTimeout(resolve,350));
+      const stationaryAtStart=tail.scrollTop===initialPosition;
       const before=head.getBoundingClientRect().top, initialScroll=tail.scrollTop, panelHeight=tail.closest('.sp-operations-next').getBoundingClientRect().height;
       tail.scrollTop=initialScroll+130;
       await new Promise(resolve=>requestAnimationFrame(resolve));
       const movedWithScroll=head.getBoundingClientRect().top<before-100 && tail.scrollTop>100 && Math.abs(tail.closest('.sp-operations-next').getBoundingClientRect().height-panelHeight)<1;
-      await new Promise(resolve=>setTimeout(resolve,5050));
-      const autoBefore=tail.scrollTop;
-      await new Promise(resolve=>setTimeout(resolve,240));
-      const autoAdvanced=tail.scrollTop>autoBefore+1 && head.getBoundingClientRect().top<before-100;
-      tail.dispatchEvent(new PointerEvent('pointerenter'));
-      const pauseAt=tail.scrollTop;
-      await new Promise(resolve=>setTimeout(resolve,120));
-      const paused=tail.scrollTop===pauseAt;
+      const manualPosition=tail.scrollTop;
+      await new Promise(resolve=>setTimeout(resolve,5300));
+      const manualPositionStable=tail.scrollTop===manualPosition;
+      const unpausedConditions=!document.hidden&&!tail.matches(':hover')&&!tail.contains(document.activeElement)&&!matchMedia('(prefers-reduced-motion: reduce)').matches;
+      _bracketOperationsRefresh(t,root);
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const refreshedScroll=strip.querySelector('.sp-operations-next-scroll');
+      const refreshPreserved=Math.abs(refreshedScroll.scrollTop-manualPosition)<1;
 
       const unique=Array.from(strip.querySelectorAll('[id]')).map(node=>node.id);
       const noDuplicates=new Set(unique).size===unique.length;
       const allFirstRound=assignments.every(g=>[0,1].every(lane=>strip.querySelector('[data-operations-base-match="'+g.label+'-1-'+lane+'"]')));
       const secondaryCount=tail.querySelectorAll('.sp-operations-replica').length;
-      const cleanup=strip._spFast8QueueCleanup;
       const m=t.matches.find(m=>m.id===initial);
       Object.assign(m,{court:'Quadra 1',courtCalledAt:'2026-11-25T12:00:00Z'});
       _bracketOperationsRefresh(t,root);
       const next=strip.querySelector('.sp-operations-next-scroll [data-operations-base-match]').getAttribute('data-operations-base-match');
-      const cleanupReplaced=cleanup!==strip._spFast8QueueCleanup;
       _bracketDisposeOperationalSurface(strip,root);
-      return {initial,next,movedWithScroll,autoAdvanced,paused,autoState:{hidden:document.hidden,hover:tail.matches(':hover'),focus:tail.contains(document.activeElement),reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,connected:tail.isConnected,before:autoBefore,after:pauseAt,max:tail.scrollHeight-tail.clientHeight},noDuplicates,allFirstRound,secondaryCount,cleanupReplaced,
-        disposed:strip._spFast8QueueCleanup===null&&!strip.isConnected};
+      return {initial,next,movedWithScroll,stationaryAtStart,manualPositionStable,unpausedConditions,refreshPreserved,noDuplicates,allFirstRound,secondaryCount,
+        disposed:strip._spNextScrollRestoreObserver===null&&!strip.isConnected};
     });
     assert.equal(fastPinned.initial,'A-1-0',JSON.stringify(fastPinned));
     assert.equal(fastPinned.next,'A-1-1',JSON.stringify(fastPinned));
-    assert(fastPinned.movedWithScroll && fastPinned.autoAdvanced && fastPinned.paused && fastPinned.noDuplicates && fastPinned.allFirstRound && fastPinned.secondaryCount>=12 &&
-      fastPinned.cleanupReplaced && fastPinned.disposed,JSON.stringify(fastPinned));
-    console.log('✓ Fast 8 mantém janela vertical de um card, rodada completa e limpa a animação ao atualizar/sair');
+    assert(fastPinned.movedWithScroll && fastPinned.stationaryAtStart && fastPinned.manualPositionStable && fastPinned.unpausedConditions && fastPinned.refreshPreserved && fastPinned.noDuplicates && fastPinned.allFirstRound && fastPinned.secondaryCount>=12 &&
+      fastPinned.disposed,JSON.stringify(fastPinned));
+    console.log('✓ Fast 8 só rola manualmente, conserva a posição ao atualizar e descarta a superfície ao sair');
     console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

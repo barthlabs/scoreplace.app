@@ -1,3 +1,8 @@
+## 2.7.81 — 26/nov/2026 (chamada sem rolagem automática)
+
+- Removida a animação automática da fila Próximo jogo a chamar no controle. A rolagem vertical manual e a restauração da posição nas atualizações permanecem.
+- O teste de navegador verifica imobilidade sem hover/foco/movimento reduzido, rolagem manual, posição estável após cinco segundos e após refresh, ordem da fila e descarte da superfície.
+
 ## 2.7.80 — 26/nov/2026 (operação e apresentação do Fast 8)
 
 - Chamada sugerida pela grade aprovada e fila de cada quadra; chaves em ordem alfabética com o prefixo Grupo.
