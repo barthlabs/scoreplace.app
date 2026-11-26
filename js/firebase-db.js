@@ -478,7 +478,7 @@ window.FirestoreDB = {
 
   async loadTournamentRegulation(tournamentId) {
     if (!this.db) throw new Error('Banco de dados indisponível.');
-    var snap = await this._tDoc(String(tournamentId)).collection('regulations').doc('current').get();
+    var snap = await this._tRef(String(tournamentId)).collection('regulations').doc('current').get();
     return snap.exists ? snap.data() : null;
   },
 

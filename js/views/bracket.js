@@ -5681,7 +5681,7 @@ function renderBracket(container, tournamentId, isInline) {
 
   // Action buttons — ordered: Regulamento/Regras, Inscritos, Imprimir, Exportar CSV
   // On mobile: 2-column grid; on desktop: flex wrap
-  const rulesActionLabel = (window._isNeonTournament && window._isNeonTournament(t)) ? 'Regulamento' : 'Regras';
+  const rulesActionLabel = _t('org.rules');
   const actionBtnsHtml = `
     <div class="bracket-action-btns" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <a href="#rules/${t.id}" class="btn btn-secondary btn-sm hover-lift" style="text-align:center;text-decoration:none;">📋 ${rulesActionLabel}</a>

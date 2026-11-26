@@ -409,5 +409,20 @@ console.log('\n== Contraste nos DOIS temas ==');
   }
 })();
 
+// Previsão na ficha também recebe capa clara sem foto de local/data-vphoto-on.
+(() => {
+ const surface=components.match(/\.sp-tournament-weather \.weather-box \{([^}]+)\}/);
+ const light=components.match(/\[data-theme="light"\] \.sp-tournament-weather \.weather-box \{([^}]+)\}/);
+ const text=components.match(/\.sp-tournament-weather \.weather-box div,[\s\S]*?\{\s*color:\s*(#[0-9a-f]+) !important;/);
+ ok(!!surface && !!light && !!text,'previsão da ficha tem superfície e fontes próprias nos dois temas');
+ if(surface && light && text) {
+  for(const [theme,block] of [['dark',surface[1]],['light',light[1]]]) {
+   const rgba=block.match(/rgba\((\d+),(\d+),(\d+),([\d.]+)\)/).slice(1).map(Number);
+   const composite={r:rgba[0]*rgba[3]+255*(1-rgba[3]),g:rgba[1]*rgba[3]+255*(1-rgba[3]),b:rgba[2]*rgba[3]+255*(1-rgba[3])};
+   ok(contraste(composite,hex(text[1]))>=4.5,theme+': texto da previsão legível mesmo sobre capa branca');
+  }
+ }
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

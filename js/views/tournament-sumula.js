@@ -725,6 +725,13 @@
           /^JOGO /i.test(refs[m.id]) ? 'Perdedor do ' + refs[m.id] : 'Perdedor de ' + refs[m.id];
       }
     });
+    function printedOrigin(value, fromMatch) {
+      if (fromMatch) return fromMatch;
+      var label=text(value).replace(/^R\d+\s+/i,'');
+      if (label && bucket.winnerGroupSources && !/^(?:Vencedor|Perdedor|Repescado|Classificado)\b/i.test(label))
+        return 'Vencedor do Grupo '+label.replace(/^Grupo\s+/i,'');
+      return label;
+    }
     return matches.map(function (m) {
       var source = incoming[m.id] || {};
       (m.repFill || []).forEach(function (rep) {
@@ -737,7 +744,9 @@
         p1:m.p1 && m.p1 !== 'A definir' ? m.p1 : '',
         p2:m.p2 && m.p2 !== 'A definir' ? m.p2 : '',
         source1:source.p1 || originLabel(m.source1),
-        source2:source.p2 || originLabel(m.source2) };
+        source2:source.p2 || originLabel(m.source2),
+        printedSource1:printedOrigin(m.source1,source.p1),
+        printedSource2:printedOrigin(m.source2,source.p2) };
     });
   }
   // A primeira coluna identifica os jogos; as seguintes recebem só o atleta/dupla
@@ -792,8 +801,9 @@
       var gap = 10, colWidth = (right-left-gap*(rounds.length-1))/rounds.length;
       var positions = {};
       var firstCount = byRound[0].length;
-      var firstHeight = Math.min(72,
-        (yBottom-yTop-5*Math.max(0,firstCount-1))/Math.max(1,firstCount));
+      // minimumSections reserva 72 pontos por confronto, também nas folhas
+      // de continuação. As legendas das semifinais precisam dessa altura.
+      var firstHeight = 72;
       var laterHeight = firstHeight;
       byRound.forEach(function (group, col) {
         var x = left + col*(colWidth+gap);
@@ -838,7 +848,7 @@
         p.write(fitLabel(row.final ? 'FINAL' : row.ref, colWidth-8, 6.7, true), x+4, y+9, 6.7, true);
         if (row.final || group.length === 2) {
           var boxSize=14, scoreX=x+colWidth-boxSize-5;
-          var baselines=[y+Math.max(23,h*.42),y+h-8];
+          var baselines=[y+Math.max(23,h*.42),y+h-(row.final?8:14)];
           [0,1].forEach(function(side) {
             var yy=baselines[side];
             if(!row.final) {
@@ -847,6 +857,15 @@
             }
             p.line(x+4,yy,x+colWidth-boxSize-10,yy,0.65);
             p.box(scoreX,yy-11,boxSize,boxSize);
+            if(!row.final) {
+              var origin=side?row.printedSource2:row.printedSource1;
+              if(origin) {
+                var originWidth=colWidth-boxSize-18,size=5.5,lines=sideLines(origin,originWidth,size,false);
+                if(!lines) {size=5;lines=sideLines(origin,originWidth,size,false);}
+                if(!lines) throw new Error('A origem da semifinal é extensa demais para a área de impressão: '+origin);
+                lines.forEach(function(label,index) {p.write(label,x+4,yy+6+index*6,size,false);});
+              }
+            }
           });
           if(!row.final) p.write('X',scoreX+4.4,(baselines[0]+baselines[1])/2-1,6,true);
         } else if (!col) {
@@ -1098,7 +1117,7 @@
       var byBracket = new Map();
       bucket.matches.forEach(function (m) {
         var key = m.bracket || 'main';
-        if (!byBracket.has(key)) byBracket.set(key, { category:bucket.category, bracket:key, partial:bucket.partial, matches:[] });
+        if (!byBracket.has(key)) byBracket.set(key, { category:bucket.category, bracket:key, partial:bucket.partial, winnerGroupSources:model.future.source==='official-plan', matches:[] });
         byBracket.get(key).matches.push(m);
       });
       byBracket.forEach(function (part) {

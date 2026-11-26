@@ -3816,3 +3816,21 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
   .sp-match-card:has(.sp-athlete-edit):not(:has(.sp-set-grid input)) .sp-set-col{max-width:28px;flex-basis:28px;}
   .sp-match-card:has(.sp-athlete-edit):not(:has(.sp-set-grid input)) .sp-set-grid[data-sp-best-of="3"]{min-width:94px!important;}
 }
+
+/* A capa do torneio também pode ser clara sem data-vphoto-on. A previsão
+   usa a mesma tarja da configuração, com texto claro nos dois temas. */
+.sp-tournament-weather .weather-box {
+  background: var(--sp-leitura2,rgba(0,0,0,0.60)) !important;
+  border-color: rgba(255,255,255,0.20) !important;
+  --text-bright: #f8fafc;
+  --text-main: #e2e8f0;
+  --text-muted: #e2e8f0;
+  color: #e2e8f0 !important;
+}
+[data-theme="light"] .sp-tournament-weather .weather-box {
+  background: var(--sp-tarja,rgba(30,41,59,0.85)) !important;
+}
+.sp-tournament-weather .weather-box div,
+.sp-tournament-weather .weather-box span {
+  color: #e2e8f0 !important;
+}

@@ -1,3 +1,4 @@
+// 2.7.83 — Fila no ar segue o próximo jogo operacional; súmula identifica origens das semifinais; Regulamento abre e permite envio; configuração no rodapé e previsão legível.
 // 2.7.82 — No ar limita próximos jogos a duas vezes as quadras, sem barras de conflito; rodada alinhada nos cards operacionais, recibos de quadra sem remontagem e categorias do PDF na ordem configurada. Saldo de games explícito.
 // 2.7.81 — Próximo jogo a chamar rola somente por ação manual e mantém a posição escolhida nas atualizações.
 // 2.7.80 — Fast 8 segue a grade aprovada; operação ocupa a largura útil com filas de um card e sliders alinhados. No ar usa duplas empilhadas e cronômetros no rodapé. Classificação mostra percentual de games; súmula identifica quadra, grupo e categoria completos.
@@ -1941,6 +1942,14 @@ window._RELEASE_NOTES_HTML = (function () {
     // quem está com a 2.0.4 no iPhone lê um torneio que o banco não guarda mais desse jeito.
     // Mesma lição da 1.7.35: quando o formato do dado muda, a ida à loja É o conserto.
     // Os itens abaixo são consolidados por tema, como manda a convenção do arquivo.
+    // v2.7.83 — fila, súmula e ficha do torneio.
+    '<div style="margin-bottom:1rem;padding:14px 16px;">' +
+      '<div style="font-weight:800;margin-bottom:8px;">v2.7.83 — Fila, súmula e regulamento</div>' +
+      '<p>Próximos jogos no ar começa pelo mesmo próximo jogo a chamar do operador e segue adiante na grade, até duas vezes o número de quadras.</p>' +
+      '<p>A súmula indica sob as linhas das semifinais de qual grupo ou confronto vem cada vaga, respeitando os cruzamentos do torneio.</p>' +
+      '<p>O botão Regulamento abre o documento do torneio. A organização encontra Enviar regulamento nessa página, com nova tentativa se a leitura falhar.</p>' +
+      '<p>Configuração fica no pé do card, abaixo da previsão do tempo. A previsão recebe fundo escuro e texto claro para facilitar a leitura.</p>' +
+    '</div>' +
     // v2.7.82 — chamada, painel e súmula.
     '<div style="margin-bottom:1rem;padding:14px 16px;">' +
       '<div style="font-weight:800;margin-bottom:8px;">v2.7.82 — Chamada e painel do torneio</div>' +

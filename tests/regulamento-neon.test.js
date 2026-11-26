@@ -65,9 +65,9 @@ assert(other.includes('rules.title'), 'outro torneio mantém a página existente
 
 assert.strictEqual((tournaments.match(/\$\{rulesActionLabel\}<\/button>/g) || []).length, 5,
   'cinco rótulos do detalhe usam o helper');
-assert(tournaments.includes("window._isNeonTournament(t)) ? 'Regulamento' : 'Regras'"));
+assert(tournaments.includes("const rulesActionLabel = _t('org.rules');"));
 assert.strictEqual((bracket.match(/\$\{rulesActionLabel\}<\/a>/g) || []).length, 1,
   'rótulo das chaves usa o helper');
-assert(bracket.includes("window._isNeonTournament(t)) ? 'Regulamento' : 'Regras'"));
+assert(bracket.includes("const rulesActionLabel = _t('org.rules');"));
 
 console.log('✓ Regulamento Neon: PDF original idêntico, sem transcrição divergente, e rótulos canônicos');

@@ -426,9 +426,8 @@ for (const orientation of ['landscape','portrait']) {
   assert(futureCommands.includes('(A1)') && futureCommands.includes('(H1)') &&
     !futureCommands.includes('Classificados do Grupo'),
     'a primeira rodada mostra só o código dos dois grupos de origem');
-  assert(!futureCommands.includes('Vencedor de A1') &&
-    !futureCommands.includes('Vencedor do confronto C1') && futureCommands.includes('___ x ___'),
-    'rodadas seguintes reservam só o nome de quem avança e o placar');
+  assert(futureCommands.includes('Vencedor de A1') && futureCommands.includes('___ x ___'),
+    'semifinais indicam o vencedor do confronto de origem sob a linha');
   const printable = Buffer.from(core.encodePdf(pages)).toString('latin1');
   if (process.env.SP_SUMULA_FUTURE_SAMPLE && orientation === 'landscape')
     fs.writeFileSync(process.env.SP_SUMULA_FUTURE_SAMPLE, core.encodePdf(pages));
@@ -698,4 +697,60 @@ console.log('✅ Súmula por quadra e lista de chamada');
  assert.deepStrictEqual(undated.undated.map(m=>m.category),[B,C]);
  if(process.env.SP_SUMULA_CATEGORIES_SAMPLE)fs.writeFileSync(process.env.SP_SUMULA_CATEGORIES_SAMPLE,core.encodePdf(pages));
  console.log('✓ PDF: categorias na ordem configurada, grupos independentes, fallback estável e primeiro jogo preservado');
+}
+
+// Origem impressa acompanha a vaga canônica, mesmo com ordem e slots trocados.
+const sourceModel={...realized,matches:[],undated:[],tiebreakGroups:[],groupStandings:[],future:{source:'official-plan',categories:[{category:'Retinol',matches:[
+ {id:'s1',round:1,source1:'D',source2:'A',nextMatchId:'f',nextSlot:'p2'},
+ {id:'s2',round:1,source1:'B',source2:'C',nextMatchId:'f',nextSlot:'p1'},
+ {id:'f',round:2}
+]}]}};
+for(const orientation of ['portrait','landscape']){
+ const pages=core.makePages(sourceModel,{orientation});
+ const sheet=pages.find(p=>p.commands.some(c=>c.includes('ROTEIRO DA')));
+ const commands=sheet.commands;
+ for(const group of ['D','A','B','C']){
+  const label=commands.findIndex(c=>c.includes('(Vencedor do Grupo '+group+')'));
+  assert(label>=0,'origem oficial de '+group+' fica explícita');
+  const line=commands[label-2],score=commands[label-1];
+  assert(line.endsWith(' l S')&&/14 14 re S$/.test(score),'origem imediatamente sob a linha e o placar da mesma vaga');
+  const lineY=Number(line.match(/ ([\d.]+) m /)[1]);
+  const labelY=Number(commands[label].match(/ ([\d.]+) Tm /)[1]);
+  assert(Math.abs(lineY-labelY-6)<.02,'legenda 6 pontos abaixo da linha');
+ }
+ const first=commands.findIndex(c=>c.includes('(Vencedor do Grupo D)'));
+ assert(commands[first+3].includes('Vencedor do Grupo A'),'o mesmo jogo mantém D contra A');
+ const final=commands.findLastIndex(c=>c.includes(' Tm (FINAL) Tj'));
+ assert.equal(commands.slice(final+1,final+5).filter(c=>c.endsWith(' l S')).length,2);
+ assert(!commands.slice(final+1,final+5).some(c=>c.includes(' Tj ')),'final permanece sem origens nem nomes');
+ if(process.env.SP_SUMULA_ORIGIN_SAMPLE)fs.writeFileSync(process.env.SP_SUMULA_ORIGIN_SAMPLE.replace('.pdf','-'+orientation+'.pdf'),core.encodePdf(pages));
+ const ambiguous=JSON.parse(JSON.stringify(sourceModel));ambiguous.future.source='geometry';ambiguous.future.categories[0].matches[0].source1='A2';
+ const literal=core.makePages(ambiguous,{orientation}).flatMap(p=>p.commands).join('\n');
+ assert(literal.includes('(A2)')&&!literal.includes('Vencedor do Grupo A2'),'código ambíguo nunca vira vencedor inventado');
+}
+
+const longOrigin=JSON.parse(JSON.stringify(sourceModel));
+longOrigin.future.categories[0].matches[0].source1='Grupo Retinol Feminino Intermediario Principal';
+for(const orientation of ['portrait','landscape']) {
+ const pages=core.makePages(longOrigin,{orientation});
+ const labels=pages.flatMap(p=>p.commands).filter(c=>/\/F1 (?:5|5\.5) Tf/.test(c));
+ assert(labels.some(c=>c.includes('Vencedor do Grupo Retinol')),'origem longa preserva identificação sem reticências');
+ assert(labels.some(c=>c.includes('Principal')),'a segunda linha mantém o final da origem');
+ assert(!labels.some(c=>c.includes('...')),'legendas nunca cortam a identidade');
+}
+const impossible=JSON.parse(JSON.stringify(sourceModel));impossible.future.categories[0].matches[0].source1='W'.repeat(600);
+assert.throws(()=>core.makePages(impossible),/origem da semifinal é extensa/,'limite físico gera erro explícito, nunca origem cortada');
+const manyOrigins=JSON.parse(JSON.stringify(sourceModel));manyOrigins.future.categories[0].matches=[];
+for(let round=1,count=32;count>=1;round++,count/=2)for(let i=0;i<count;i++)manyOrigins.future.categories[0].matches.push({
+ id:'round'+round+'-'+i,round,source1:'A'+i,source2:'B'+i,
+ ...(count>1?{nextMatchId:'round'+(round+1)+'-'+Math.floor(i/2),nextSlot:i%2?'p2':'p1'}:{})
+});
+for(const orientation of ['portrait','landscape']){
+ const pages=core.makePages(manyOrigins,{orientation});
+ assert(pages.length>1,'chave grande mantém paginação');
+ assert(pages.flatMap(p=>p.commands).some(c=>c.includes('Vencedor')),'continuações preservam origem da semifinal');
+ for(const page of pages)for(const command of page.commands){
+  const text=command.match(/ ([\d.-]+) ([\d.-]+) Tm /);
+  if(text)assert(Number(text[1])>=0&&Number(text[1])<=page.width&&Number(text[2])>=0&&Number(text[2])<=page.height,'texto dentro da página A4');
+ }
 }

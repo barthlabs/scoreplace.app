@@ -299,7 +299,7 @@ window._translations['pt'] = {
   'org.addParticipant': 'Adicionar Participante',
   'org.addTeam': 'Adicionar Time',
   'org.addBot': 'Add Bot',
-  'org.rules': 'Regras',
+  'org.rules': 'Regulamento',
   'org.registered': 'Inscritos',
 
   // Bracket
@@ -821,7 +821,7 @@ window._translations['pt'] = {
   'rules.notFound': 'Torneio não encontrado',
   'rules.selectTournament': 'Selecione um torneio para ver suas regras.',
   'rules.back': 'Voltar',
-  'rules.title': 'Regras e Transparência',
+  'rules.title': 'Regulamento do torneio',
   'rules.subtitle': 'Todas as decisões do organizador, visíveis a todos os participantes.',
   'rules.currentParams': 'Parâmetros Atuais do Torneio',
   'rules.transparencyLog': 'Log de Transparência',

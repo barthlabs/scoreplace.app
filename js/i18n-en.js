@@ -299,7 +299,7 @@ window._translations['en'] = {
   'org.addParticipant': 'Add Participant',
   'org.addTeam': 'Add Team',
   'org.addBot': 'Add Bot',
-  'org.rules': 'Rules',
+  'org.rules': 'Regulations',
   'org.registered': 'Registered',
 
   // Bracket
@@ -805,7 +805,7 @@ window._translations['en'] = {
   'rules.notFound': 'Tournament not found',
   'rules.selectTournament': 'Select a tournament to view its rules.',
   'rules.back': 'Back',
-  'rules.title': 'Rules & Transparency',
+  'rules.title': 'Tournament regulations',
   'rules.subtitle': 'All organizer decisions, visible to all participants.',
   'rules.currentParams': 'Current Tournament Parameters',
   'rules.transparencyLog': 'Transparency Log',

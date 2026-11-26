@@ -512,8 +512,11 @@
       if (nextMatch) nextQueue = [nextMatch].concat(nextQueue.filter(function (m) { return String(m.id) !== String(nextMatch.id); }));
     }
     if (fast8) {
-      nextMatch=fast8.next;
-      nextQueue=[nextMatch].concat(fast8.waiting).filter((m,i,all)=>m && all.findIndex(other=>other && String(other.id)===String(m.id))===i);
+      if (!(nextSelection && nextSelection.fast8)) {
+        nextMatch=fast8.next;
+        nextQueue=fast8.waiting.slice();
+      }
+      nextQueue=nextMatch ? [nextMatch].concat(nextQueue).filter((m,i,all)=>m && all.findIndex(other=>other && String(other.id)===String(m.id))===i) : [];
     }
     var nextGame = nextMatch ? {
       number: nextMatch._gameNum || nextMatch.scheduledGameNumber || nextMatch.matchNumber || '',
@@ -590,6 +593,19 @@
     nextQueue = (nextMatch ? [nextMatch] : []).concat(publishedElimination, nextQueue, futureGroups).filter(function (m, index, list) {
       return m && list.findIndex(function (other) { return other && String(other.id) === String(m.id); }) === index;
     });
+    // A previsão pública continua depois da âncora do controle, sem voltar
+    // ao início da fila de outra quadra nem reanunciar jogos já chamados.
+    var forwardCompare = window.ScoreplaceGroupAlternation && window.ScoreplaceGroupAlternation.compareQueue;
+    if (fast8 && nextMatch && !nextMatch.isTieBreak && !tieOverride && typeof forwardCompare === 'function') {
+      var operationalIssued = new Set([].concat(nextSelection && nextSelection.active || [], nextSelection && nextSelection.pending || [])
+        .filter(Boolean).map(function (m) { return String(m.id); }));
+      nextQueue = [nextMatch].concat(nextQueue.filter(function (m) {
+        return m && String(m.id) !== String(nextMatch.id) && !operationalIssued.has(String(m.id)) &&
+          !released[String(m.id)] && !m.courtReleasedAt && !occupancy.isFinished(m) &&
+          !m.courtCalledAt && !m.startedAt && !(occupancy.occupiesCourt && occupancy.occupiesCourt(m)) &&
+          forwardCompare(m,nextMatch)>0;
+      }).sort(forwardCompare));
+    } else if (fast8 && !nextMatch && !tieOverride) nextQueue = [];
     var nextGames = nextQueue.filter(function (m) {
       if (fast8) return m && (!nextMatch || String(m.id)!==String(nextMatch.id));
       if (!m || (!tieOverride && nextMatch && String(m.id) === String(nextMatch.id))) return false;

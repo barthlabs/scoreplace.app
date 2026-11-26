@@ -4244,7 +4244,7 @@ function renderTournaments(container, tournamentId = null) {
             const editModalHtml = '';
 
             const tournamentStarted = !!t.tournamentStarted;
-            const rulesActionLabel = (window._isNeonTournament && window._isNeonTournament(t)) ? 'Regulamento' : 'Regras';
+            const rulesActionLabel = _t('org.rules');
 
             if (isOrg) {
                 // Botão "Iniciar Torneio" — SÓ aparece após sorteio realizado, antes de iniciar
@@ -4522,11 +4522,6 @@ function renderTournaments(container, tournamentId = null) {
               ${!tournamentId && !dateCardHtml && t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
             </div>
             <div class="sp-overview-stats">${_statsSummaryHtml}</div>
-            <div class="sp-tournament-config-overview">
-              ${(typeof window._buildTournamentConfigBox === 'function')
-                ? window._buildTournamentConfigBox(t, { bg: _pReadBg || '', open: !!tournamentId })
-                : ''}
-            </div>
             ${t.venue ? `
             <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: 8px; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:8px 11px;' : 'opacity: 0.65;'}">
                ${t.venueLat && t.venueLon ? '<a href="' + (t.venuePlaceId ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(t.venue) + '&query_place_id=' + t.venuePlaceId : 'https://www.google.com/maps/search/?api=1&query=' + t.venueLat + ',' + t.venueLon) + '" target="_blank" title="Ver no mapa" style="font-size:1.15rem; flex-shrink:0; line-height:1; text-decoration:none;">🗺️</a>' : '<span style="font-size: 1rem; flex-shrink:0;">📍</span>'}
@@ -4792,7 +4787,14 @@ function renderTournaments(container, tournamentId = null) {
                   ficando no pé do card. */ ''}
             ${tournamentId && isFinished && window.AppStore.currentUser && !t.isSandbox ? `<div style="margin-top:10px;"><button class="btn btn-outline hover-lift" onclick="event.stopPropagation();window._openHistoricalAthleteClaims('${_escAttr(t.id)}')">Reconhecer minha participação</button></div>` : ''}
             ${actionsHtml}
+            <div class="sp-tournament-weather">
             ${(typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'lg') : ''}
+            </div>
+            <div class="sp-tournament-config-overview">
+              ${(typeof window._buildTournamentConfigBox === 'function')
+                ? window._buildTournamentConfigBox(t, { bg: _pReadBg || '', open: !!tournamentId })
+                : ''}
+            </div>
 
           </div>
           ${isOrg ? `<div style="position:absolute;bottom:6px;right:8px;opacity:0.9;pointer-events:none;" title="Organizador">

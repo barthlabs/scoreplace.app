@@ -130,7 +130,15 @@ function renderRules(container, tournamentId, regulationState) {
     }).catch(() => {
       if (container._regulationEpoch !== epoch || !container.querySelector('[data-regulation-loading]')) return;
       container.innerHTML = window._renderBackHeader({ href: '#tournaments/' + t.id, label: _t('rules.back') }) +
-        '<p role="alert">Não foi possível carregar o regulamento. Reabra esta página para tentar novamente.</p>';
+        '<p role="alert">Não foi possível carregar o regulamento.</p>' +
+        '<button class="btn btn-secondary" type="button" data-regulation-retry>Tentar novamente</button>' +
+        window._regulationControls(t, null);
+      // Sem a revisão atual não é seguro iniciar uma substituição do arquivo.
+      const upload = container.querySelector('[data-regulation-upload]');
+      const input = container.querySelector('[data-regulation-input]');
+      if (upload) upload.disabled = true;
+      if (input) input.disabled = true;
+      container.querySelector('[data-regulation-retry]').onclick = () => renderRules(container, t.id);
     });
     return;
   }
