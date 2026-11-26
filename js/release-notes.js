@@ -1,3 +1,4 @@
+// 2.7.85 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.84 — Chamada e painel seguem a grade sem promover jogos de outra quadra; combinação com zero salva junto dos novos níveis sem alterar as outras vagas e regras.
 // 2.7.83 — Fila no ar segue o próximo jogo operacional; súmula identifica origens das semifinais; Regulamento abre e permite envio; configuração no rodapé e previsão legível.
 // 2.7.82 — No ar limita próximos jogos a duas vezes as quadras, sem barras de conflito; rodada alinhada nos cards operacionais, recibos de quadra sem remontagem e categorias do PDF na ordem configurada. Saldo de games explícito.
