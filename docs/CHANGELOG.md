@@ -4,7 +4,7 @@
 - Súmula imprime origens canônicas sob as linhas das semifinais: vencedores de grupos explícitos ou confrontos anteriores pelas arestas. Códigos ambíguos não viram vencedores inferidos. Final continua em branco; legendas completas, sem reticências, com erro controlado se excederem o limite físico.
 - Regulamento passa a ser o rótulo de todos os acessos. Leitura usa a referência existente do documento na coleção correta, corrigindo chamada a helper inexistente. Falha oferece nova tentativa e mantém os controles do organizador visíveis e desabilitados até recuperar a revisão atual. Upload, CAS, original PDF/JPEG e autorização preservados.
 - Configuração/ver mais movida para o último bloco do card, depois da previsão; previsão usa a mesma tarja da configuração e texto claro, inclusive sobre capa clara sem foto do local. Contraste mínimo medido de 4,65:1 no pior fundo branco.
-- Testes de fila 12..23/seleção operacional, PDF em ambas as orientações, origens longas e paginação, módulo real de leitura produção/sandbox, retry no navegador e contraste nos dois temas. Vendor sincronizado mecanicamente pelo script oficial, sem alteração esportiva no servidor.
+- Testes de fila 12..23/seleção operacional, PDF em ambas as orientações, origens longas e paginação, módulo real de leitura produção/sandbox, retry no navegador e contraste nos dois temas. Vendor sincronizado mecanicamente pelo script oficial, sem alteração esportiva no servidor; mesmo piso de 34 funções e oito portas end-court republicadas pelos publicadores oficiais para corresponder ao corte compartilhado.
 
 ## 2.7.82 — 26/nov/2026 (chamada, painel e súmula)
 

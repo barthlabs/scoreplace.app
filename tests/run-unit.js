@@ -129,6 +129,7 @@ const SUITES = [
   'tests/regulamento-neon.test.js',
   'tests/regulamento-cult.test.js',
   'tests/tournament-regulation-core.test.js',
+  'tests/tournament-regulation-db.test.js',
   'tests/tournament-regulation-emulator.test.js',
   'tests/tournament-regulation-browser.test.js',
   'tests/neon-sequencia-fotos.test.js',
