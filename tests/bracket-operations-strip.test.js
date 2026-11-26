@@ -1069,6 +1069,29 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       assert(steady.stable && steady.y===120 && steady.frames>3,JSON.stringify(steady));
       assert.equal(steady.routed,0,'OK e dois avanços não remontam o detalhe por eco do servidor');
       assert(steady.noEchoHeld && !steady.guard && steady.remoteRoutes>0,'sem eco pendente não esconde resultado remoto');
+      const synchronous=await real.evaluate(async()=>{
+        const t={id:'sb_court_sync_failure',creatorUid:'org',format:'Liga',scoring:{type:'simple'},callTime:5,warmupTime:5,gameDuration:25,
+          courtNames:['Quadra 1','Quadra 2'],matches:[{id:'sync',_gameNum:1,p1:'Ana / Bia',p2:'Cris / Dani',scheduledAt:new Date().toISOString()}]};
+        window.__currentT=t;window._findTournamentById=()=>t;window.AppStore.tournaments=[t];
+        location.hash='#tournaments/'+t.id;
+        window._tdetailSig=window._tournamentDetailSig(t);window.__routes=0;
+        const root=document.querySelector('[data-bracket-tabs-root]');root.setAttribute('data-tournament-id',t.id);
+        window._bracketCourtReleaseCache[t.id]={ready:true,revision:0,released:{},postponed:[],postponedReady:[]};
+        window._bracketOperationsRefresh(t,root);
+        const pendingDuring=[];
+        window._callCF=()=>{pendingDuring.push(window._courtOperationEcho && window._courtOperationEcho.pending);throw new Error('falha síncrona fictícia');};
+        const confirm=root._bracketOperationsStrip.querySelector('.sp-match-confirm');
+        await window._confirmMatchCourtCall(confirm,t.id,'sync');
+        const confirmCleared=!window._courtOperationEcho && !_matchCourtEdits.get(_matchCourtKey(t.id,'sync')) && !confirm.disabled;
+        Object.assign(t.matches[0],{court:'Quadra 1',courtCalledAt:new Date().toISOString()});
+        window._tdetailSig=window._tournamentDetailSig(t);window._bracketOperationsRefresh(t,root);
+        const clock=root._bracketOperationsStrip.querySelector('.sp-match-clock-next');
+        await window._adjustMatchCourtClock(clock,t.id,'sync','next');
+        return {pendingDuring,confirmCleared,clockCleared:!window._courtOperationEcho&&!clock.disabled,routes:window.__routes};
+      });
+      assert.deepEqual(synchronous.pendingDuring,[1,1],'erro síncrono acontece com guard real ativo nas duas portas');
+      assert(synchronous.confirmCleared&&synchronous.clockCleared,'erro síncrono libera contador, edit e botões');
+      assert.equal(synchronous.routes,0,'erro não remonta o detalhe');
     } finally { await real.close(); }
     const scoringPage = await browser.newPage();
     try {
