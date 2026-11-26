@@ -16435,7 +16435,7 @@ window._categoryFinalPlacements = function (t) {
     }); });
     var placed = window._classifEntriesFromMatches(t, lm);
     if (window.ScoreplaceGroupAlternation && !window.ScoreplaceGroupAlternation.thirdPlace(phase) &&
-        window._phasesEngine.combinedPairMetrics) {
+        (!phase.elimination || phase.elimination.bracketType === 'single') && window._phasesEngine.combinedPairMetrics) {
       var losers=placed.filter(function(pair) {return pair.pos===3 || pair.pos===4;});
       if (losers.length===2) {
         var metrics=losers.map(function(pair) {

@@ -199,5 +199,10 @@ console.log('✅ classificação completa por categoria e posições progressiva
     'melhor saldo combinado da classificatória define o terceiro sem criar outro jogo');
   assert(section.entries.filter(e=>field.pairs[1].people.includes(e.name)).every(e=>e.pos===4),JSON.stringify(section.displayEntries));
   assert(!noThird.matches.some(m=>m.isThirdPlace));
+  const double={...noThird,phases:[noThird.phases[0],{...noThird.phases[1],elimination:{bracketType:'double'}}]};
+  const natural={...double,phases:[double.phases[0],{...double.phases[1],thirdPlacePolicy:undefined}]};
+  assert.deepEqual(W._categoryFinalPlacements(double)[0].entries,W._categoryFinalPlacements(natural)[0].entries,
+    'a ordem esportiva da dupla eliminatória continua derivada da chave inferior');
+
   console.log('✓ terceiro opcional: mérito combinado define 3º/4º e empate exato preserva empate');
 }
