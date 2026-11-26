@@ -334,7 +334,7 @@ const edit = new Function('onCall', 'HttpsError', 'db', 'drawWindow', '_leTornei
 
 // A terceira entrada de fmt2 é a ficha geral. Extrair o handler literalmente
 // evita testar apenas o validador puro e deixar a porta transacional descoberta.
-const configStart = server.indexOf('exports.updateTournamentConfiguration = onCall(async (request) => {');
+const configStart = server.indexOf('exports.updateTournamentConfiguration = onCall(');
 const configEnd = server.indexOf('\n// ─── Ciclo presencial:', configStart);
 assert(configStart >= 0 && configEnd > configStart, 'handler real da ficha encontrado');
 const configSource = server.slice(configStart, configEnd);
@@ -372,9 +372,9 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   '_isTournamentAdmin', '_drawFail', 'hasDrawnBracket', '_configAtiva', '_antesDoMotor',
   '_gravaTorneio', '_fasesDeConfiguracaoAtualizaveis', 'drawWindow', 'require',
   '_assertCategoryConfigBeforeDraw', '_categoryDefinitionsForLabels', '_phaseTieCore', 'createHash',
-  '_writeCategoryRemoval', '_phaseCallOrder', '_phaseGridPlan',
+  '_writeCategoryRemoval', '_phaseCallOrder', '_phaseGridPlan', '_drawCheckpoint',
   'const exports = {};\n' + configSource + '\nreturn exports.updateTournamentConfiguration;')(
-  fn => fn, HttpsError, configDb, new Set(['fmt2', 'phases', 'name', 'teamSize', 'gruposClassified', 'politicaDaChave', 'genderCategories', 'combinedCategories', 'gameTypes', 'scheduleWindow', 'isPublic', 'membersOnly', 'organizerOnly', 'courtCount', 'gameDuration', 'callTime', 'warmupTime', 'maxParticipantsPerCategory', 'rankingPrimary', 'advancedScoring', 'tiebreakers', 'tiebreakersExcluded']), new Set(['fmt2', 'phases', 'teamSize', 'gruposClassified', 'politicaDaChave', 'gameTypes']), cloneConfig,
+  (...args) => args.at(-1), HttpsError, configDb, new Set(['fmt2', 'phases', 'name', 'teamSize', 'gruposClassified', 'politicaDaChave', 'genderCategories', 'combinedCategories', 'gameTypes', 'scheduleWindow', 'isPublic', 'membersOnly', 'organizerOnly', 'courtCount', 'gameDuration', 'callTime', 'warmupTime', 'maxParticipantsPerCategory', 'rankingPrimary', 'advancedScoring', 'tiebreakers', 'tiebreakersExcluded']), new Set(['fmt2', 'phases', 'teamSize', 'gruposClassified', 'politicaDaChave', 'gameTypes']), cloneConfig,
   async () => {}, async () => configTournament, () => true,
   (code, message) => new HttpsError(code, message), t => Array.isArray(t.matches) && t.matches.length > 0,
   require('../functions-autodraw/config-ativa-core'), () => ({}),
@@ -387,7 +387,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   (_tx, _ref, _t, removal, reservations) => {
     assert.ok(removal == null, 'edição de formato não remove inscrições de categoria');
     assert.ok(reservations == null, 'edição de formato não altera vagas reservadas');
-  }, require('../js/domain/phase-call-order.js'), require('../js/domain/phase-grid-plan.js')
+  }, require('../js/domain/phase-call-order.js'), require('../js/domain/phase-grid-plan.js'), require('../functions-autodraw/tournament-draw-checkpoint.js')
 );
 
 (async () => {

@@ -97,6 +97,7 @@ const win = {
   _hasAnyMatchResult: () => true
 };
 const context = {
+  _drawCheckpoint: require('../functions-autodraw/tournament-draw-checkpoint.js'),
   exports: {}, onCall: (_options, fn) => fn, HttpsError: class extends Error {},
   TEST_DEVELOPER_UID: developerUid, drawWindow: win,
   _rehearsal: { makeService: () => ({ restore: () => { throw Error('rehearsal'); } }) },

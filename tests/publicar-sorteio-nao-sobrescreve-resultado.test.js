@@ -29,7 +29,10 @@ vm.runInContext(src.slice(helperStart, helperEnd) + '\n' + src.slice(start, end)
   ok(command && command.name === 'resolvePendingDraw' && command.payload.action === 'publish',
     'envia a publicação à CF canônica');
   const cf = fs.readFileSync('functions-autodraw/index.js', 'utf8');
-  const body = cf.slice(cf.indexOf('exports.resolvePendingDraw'), cf.indexOf('exports.resolvePendingDraw') + 5000);
+  const bodyStart=cf.indexOf('exports.resolvePendingDraw = onCall(');
+  const bodyEnd=cf.indexOf('\nexports.',bodyStart+1);
+  if(bodyStart<0||bodyEnd<=bodyStart)throw Error('handler completo da publicação não encontrado');
+  const body=cf.slice(bodyStart,bodyEnd);
   ok(/runTransaction/.test(body) && /_gravaTorneio/.test(body), 'a CF publica o documento fresco transacionalmente');
   ok(/pendingDraw/.test(body) && /result/.test(cf), 'a CF preserva o domínio de resultados fora da cópia cliente');
   ok(notification && notification[0] === '🚀 Chave publicada!' && /horários estimados/.test(notification[1]), 'torneio público só notifica depois da gravação confirmada e informa que horários são estimados');

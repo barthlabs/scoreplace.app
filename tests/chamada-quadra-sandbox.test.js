@@ -20,6 +20,7 @@ const deleted = Symbol('delete-field');
 let autoId = 0;
 let tournament, ownerProfile = null, isAdmin = true;
 const context = {
+  _drawCheckpoint: require('../functions-autodraw/tournament-draw-checkpoint.js'),
   exports: {}, onCall: (...args) => args.at(-1), HttpsError,
   db: {
     collection: collection => ({ doc: id => { const path = collection + '/' + id; const ref = {
