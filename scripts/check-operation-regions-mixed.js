@@ -27,11 +27,11 @@ function validateRows(rows, version, options) {
   // SHA fixado para este corte; no próximo release regional, atualizar junto com
   // sync-operation-regions-current.js e os manifestos, antes de abrir o Hosting.
   const releaseCommit = '470c6c972130c2d4225952f214755d622595e0a6';
-  const scoreRefreshCommit = '7354301727569c6406b233eed0d86971dc31f757';
+  const scoreRefreshCommit = 'ba65b1b0de7d71969312bea998fc30a3803d9f7e';
   // O manifesto registra a revisão efetivamente publicada para chamada e controle.
   // Mudanças em outros arquivos de functions-autodraw (por exemplo, um vendor usado
   // no sorteio) não alteram a imagem desses dois serviços na malha regional.
-  const courtControlRefreshCommit = '7354301727569c6406b233eed0d86971dc31f757';
+  const courtControlRefreshCommit = 'ba65b1b0de7d71969312bea998fc30a3803d9f7e';
   const regions = version === 'v2'
     ? ['us-east1', 'us-east4', 'us-south1']
     : ['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1'];
