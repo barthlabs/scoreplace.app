@@ -1038,13 +1038,14 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
     assert.equal((html.match(/class="tv-fast8-court tv-fast8-active/g)||[]).length,6);
     assert.equal((html.match(/class="tv-fast8-standing"/g)||[]).length,6);
     assert.match(html,/Areia E · Grupo B2/);
+    assert.equal((html.match(/class="tv-fast8-player-name"/g)||[]).length,24,'os quatro atletas aparecem em cada uma das seis quadras');
     assert.doesNotMatch(html,/Areia A e Areia B/);
     assert.match(html,/tv-upcoming-pinned/);
     assert.match(html,/Próxima quadra livre/);
     const hidden=JSON.parse(JSON.stringify(board));
     Object.assign(hidden.tvLayout.card,{court:false,number:false,category:false,players:false,score:false,timer:false});
     const hiddenHtml=window._tvLiveBodyHtml(hidden).split('<div class="tv-fast8-courts">')[1].split('<div class="tv-fast8-rankings">')[0];
-    assert.doesNotMatch(hiddenHtml,/<h2>[^<]*Areia|>JOGO |class="tv-series-players"|<strong>/,'Fast 8 preserva as opções de visibilidade dos cards');
+    assert.doesNotMatch(hiddenHtml,/<h2>[^<]*Areia|>JOGO |class="tv-fast8-players"|<strong>/,'Fast 8 preserva as opções de visibilidade dos cards');
 
     assert.equal(board.nextGame.number,fast.matches.find(m=>m.id==='B2-1-1').scheduledGameNumber);
     if (process.env.SP_TV_CAPTURE_FAST8) fs.writeFileSync(process.env.SP_TV_CAPTURE_FAST8,
