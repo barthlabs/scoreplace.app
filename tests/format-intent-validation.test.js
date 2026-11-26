@@ -299,7 +299,7 @@ const wideHistorical = FORMAT2.normalize({ grupos: 20, classificationPairing: { 
 assert.equal(wideHistorical.grupos, 20);
 assert.doesNotThrow(() => validateNewFormatIntent(wideHistorical, HttpsError), 'normalizado histórico com mais de 16 grupos segue editável');
 assert.match(server, /validateIntent: require\('\.\/format-intent-validation-core'\)\.validateNewFormatIntent/);
-assert.match(server, /const fmt2Clone = _clonaConfigDeclarativa\(fmt2, 0, \['fmt2'\]\);\s*require\('\.\/format-intent-validation-core'\)\.validateNewFormatIntent\(fmt2Clone, HttpsError, t, t\.teamSize\)/);
+assert.match(server, /let fmt2Clone = _clonaConfigDeclarativa\(fmt2, 0, \['fmt2'\]\);\s*require\('\.\/format-intent-validation-core'\)\.validateNewFormatIntent\(fmt2Clone, HttpsError, t, t\.teamSize\)/);
 
 // Executa o handler exportado, extraído literalmente do módulo de produção.
 // A transação fake contabiliza qualquer escrita, inclusive se uma futura mudança
