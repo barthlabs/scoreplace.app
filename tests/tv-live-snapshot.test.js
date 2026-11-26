@@ -1041,6 +1041,11 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
     assert.doesNotMatch(html,/Areia A e Areia B/);
     assert.match(html,/tv-upcoming-pinned/);
     assert.match(html,/Próxima quadra livre/);
+    const hidden=JSON.parse(JSON.stringify(board));
+    Object.assign(hidden.tvLayout.card,{court:false,number:false,category:false,players:false,score:false,timer:false});
+    const hiddenHtml=window._tvLiveBodyHtml(hidden).split('<div class="tv-fast8-courts">')[1].split('<div class="tv-fast8-rankings">')[0];
+    assert.doesNotMatch(hiddenHtml,/<h2>[^<]*Areia|>JOGO |class="tv-series-players"|<strong>/,'Fast 8 preserva as opções de visibilidade dos cards');
+
     assert.equal(board.nextGame.number,fast.matches.find(m=>m.id==='B2-1-1').scheduledGameNumber);
     if (process.env.SP_TV_CAPTURE_FAST8) fs.writeFileSync(process.env.SP_TV_CAPTURE_FAST8,
       popupHtml.replace('<div id="tv-root"></div>','<div id="tv-root">'+html+'</div>'));

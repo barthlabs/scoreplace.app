@@ -814,17 +814,18 @@
   function fast8CourtsHtml(cards,options) {
     options=options || {court:true,number:true,category:true,players:true,score:true,timer:true};
     function side(name,uids,score,right) {
-      return '<div class="tv-series-side'+(right?' tv-series-right':'')+'"><div class="tv-series-players">'+
-        playerRows(name,uids,true)+'</div><strong>'+esc(score)+'</strong></div>';
+      return '<div class="tv-series-side'+(right?' tv-series-right':'')+'">'+
+        (options.players?'<div class="tv-series-players">'+playerRows(name,uids,true)+'</div>':'')+
+        (options.score?'<strong>'+esc(score)+'</strong>':'')+'</div>';
     }
     function game(card) {
       var identity=' data-tv-court="'+esc(card.name)+'" data-court-occurrence="'+(card.nameOccurrence || 0)+'"';
       var active=!!(card.number || card.a || card.b);
       return '<article class="tv-fast8-court'+(active?' tv-fast8-active':'')+(card.latest?' tv-court-latest':'')+'"'+identity+'>'+
-        '<header><h2>'+esc(card.name)+(card.fast8Group?' · Grupo '+esc(card.fast8Group):'')+'</h2>'+
+        '<header><h2>'+(options.court?esc(card.name):'')+(card.fast8Group?(options.court?' · ':'')+'Grupo '+esc(card.fast8Group):'')+'</h2>'+
         (active && options.timer?'<strong data-tv-start="'+card.timerStart+'">00:00:00</strong>':'')+'</header>'+
-        (active?'<small>'+esc(card.category)+'</small><b class="tv-fast8-number">JOGO '+esc(card.number)+
-          (card.rounds?' <span>('+card.round+'/'+card.rounds+')</span>':'')+'</b><div class="tv-fast8-match">'+
+        (active?(options.category?'<small>'+esc(card.category)+'</small>':'')+(options.number?'<b class="tv-fast8-number">JOGO '+esc(card.number)+
+          (card.rounds?' <span>('+card.round+'/'+card.rounds+')</span>':'')+'</b>':'')+'<div class="tv-fast8-match">'+
           side(card.a,card.aUids,card.scoreA,false)+'<span>×</span>'+side(card.b,card.bUids,card.scoreB,true)+'</div>':
           '<p>Livre</p>')+'</article>';
     }
