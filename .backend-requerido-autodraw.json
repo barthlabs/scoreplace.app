@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "7354301727569c6406b233eed0d86971dc31f757",
-  "scopeNote": "Fast 8 autorizado: fila global de alternância, bloqueio atômico de chamada e terceiro lugar opcional no Super 8/Fast 8. Mantém as 34 portas declaradas; exige recibos centrais e atualização verificada das malhas de placar, chamada/controle e encerramento antes do Hosting.",
+  "backendCommit": "ba65b1b0de7d71969312bea998fc30a3803d9f7e",
+  "scopeNote": "Fast 8 por categoria: fila sugerida da súmula em cada quadra, remanejamento manual com bloqueio atômico de atletas ocupados e terceiro lugar opcional. Preserva as 34 portas declaradas e exige atualização verificada das malhas de placar, chamada/controle e encerramento antes do Hosting.",
   "functions": [
     "createTournament",
     "updateTournamentConfiguration",
