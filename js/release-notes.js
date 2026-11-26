@@ -1946,7 +1946,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '<div style="font-weight:800;margin-bottom:8px;">v2.7.82 — Chamada e painel do torneio</div>' +
       '<p>No ar exibe até duas vezes o número de quadras em próximos jogos: seis quadras, doze jogos. No controle, Todas as quadras ocupadas tem prioridade quando não há quadra livre; o bloqueio por atleta ocupado continua ativo.</p>' +
       '<p>A rodada (n/7) aparece abaixo do número do jogo, alinhada à esquerda, nos próximos jogos, em quadra e nos placares pendentes. A chamada e os avanços do relógio reconhecem a própria confirmação sem remontar a tela.</p>' +
-      '<p>Saldo de games fica explícito na classificação, preservando o percentual de games. A lista de chamada do PDF segue a ordem das categorias configuradas.</p>' +
+      '<p>Saldo de games fica explícito na classificação, com cabeçalho em duas linhas no painel para preservar o espaço do percentual. A lista de chamada do PDF segue a ordem das categorias configuradas.</p>' +
     '</div>' +
     // v2.7.81 — fila de chamada manual.
     '<div style="margin-bottom:1rem;padding:14px 16px;">' +

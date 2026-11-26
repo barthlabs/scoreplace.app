@@ -859,7 +859,7 @@
     return '<style>'+fast8Styles+'</style><div class="tv-fast8-board"><div class="tv-fast8-courts">'+cards.map(game).join('')+
       '</div><div class="tv-fast8-rankings">'+cards[0].fast8Groups.map(function(group) {
         return '<section class="tv-fast8-standing"><header class="tv-fast8-standing-heading"><h3>Grupo '+esc(String(group.label).replace(/^Grupo\s+/i,''))+'</h3><small>· '+esc(group.category)+'</small></header>'+
-          '<table><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>D</th><th>Saldo de games</th><th>%</th></tr></thead><tbody>'+
+          '<table><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>D</th><th title="Saldo de games">Saldo<br>games</th><th>%</th></tr></thead><tbody>'+
           group.standings.map(function(row,index) {
             var diff=Number(row.gamesWon || 0)-Number(row.gamesLost || 0),rate=gamesPercent(row);
             return '<tr'+(index<group.cutoff?' class="tv-fast8-qualifying"':'')+'><td>'+(index+1)+'º</td><td>'+esc(row.name)+
@@ -903,7 +903,7 @@
           group.courts.map((court,lane)=>active[lane]?gameHtml(active[lane]):'<p class="tv-super8-free-label">'+esc(court.active?waitingLabel:'Livre')+'</p>').join('')+'</div>'+
         '<div class="tv-super8-round tv-super8-next">'+next.map(game=>'<div class="tv-super8-next-slot"><span class="tv-super8-next-label">Próximo</span>'+gameHtml(game)+'</div>').join('')+'</div>'+
         '</div></div></div><section class="tv-super8-standing" aria-label="Classificação do grupo '+esc(group.label)+'">'+
-        '<h3>Classificação parcial · Grupo '+esc(group.label)+'</h3><table><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>D</th><th>Saldo de games</th><th>%</th></tr></thead><tbody>'+
+        '<h3>Classificação parcial · Grupo '+esc(group.label)+'</h3><table><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>D</th><th title="Saldo de games">Saldo<br>games</th><th>%</th></tr></thead><tbody>'+
         (group.standings || []).map(function(r,index) {
           var diff=Number(r.gamesWon || 0)-Number(r.gamesLost || 0), rate=gamesPercent(r);
           return '<tr'+(index<group.cutoff?' class="tv-super8-qualifying"':'')+'><td>'+(index+1)+'º</td><td>'+esc(r.name)+'</td><td>'+r.wins+'</td><td>'+r.losses+'</td><td>'+(diff>=0?'+':'')+diff+'</td><td>'+rate+'%</td></tr>';

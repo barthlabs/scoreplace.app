@@ -240,6 +240,15 @@ const { chromium } = require('@playwright/test');
         }));
         assert.equal(geometry.length,6);assert(geometry.every(g=>g.outside&&g.stacked&&g.footer&&g.noOk&&g.noNext&&g.fits&&g.ordinal&&g.border==='0px'),JSON.stringify({viewport,geometry}));
         assert.equal(await page.locator('.tv-fast8-standing tbody tr').count(),48);
+        const headingsFit=await page.evaluate(()=>Array.from(document.querySelectorAll('.tv-fast8-standing th'),cell=>{
+          const box=cell.getBoundingClientRect();
+          return Array.from(cell.childNodes).filter(n=>n.nodeType===Node.TEXT_NODE&&n.textContent.trim()).every(n=>{
+            const range=document.createRange();range.selectNodeContents(n);
+            return Array.from(range.getClientRects()).every(r=>r.left>=box.left-1&&r.right<=box.right+1);
+          });
+        }).every(Boolean));
+        assert(headingsFit,'cabeçalhos de saldo e percentual não se sobrepõem em '+viewport.width);
+
         if(process.env.SP_TV_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SP_TV_SCREENSHOT_DIR,`fast8-${viewport.width}.png`)});
         await page.close();
       }
