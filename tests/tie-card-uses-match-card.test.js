@@ -10,6 +10,7 @@ const { chromium } = require('playwright');
     await page.addStyleTag({ path: 'css/style.css' });
     await page.addStyleTag({ path: 'css/components.css' });
     await page.addStyleTag({ path: 'css/bracket.css' });
+    await page.addScriptTag({ path: 'js/domain/court-occupancy.js' });
     await page.addScriptTag({ path: 'js/views/bracket.js' });
     const cards = await page.evaluate(async () => {
       const t = { id:'sb_tie_card', isSandbox:true, courtCount:8,
@@ -24,7 +25,6 @@ const { chromium } = require('playwright');
       window._souOrganizador = () => false;
       window._isConcentratedTournament = () => true;
       window._spCourtClockHtml = () => '<span class="sp-match-court-clock">Chamado</span>';
-      window.ScoreplaceCourtOccupancy = { occupiesCourt:() => false, isFinished:() => false };
       window._cardNomeGeo = () => ({ avatar:'26px', maxRem:.94, minRem:.5,
         oneLineBoxH:1.1, twoLineBoxH:2.1, twoLineMaxRem:.8 });
       const tie = { id:'tie-3a', isTieBreak:true, decisionId:'group-0:1:2', _gameNum:'3A',
