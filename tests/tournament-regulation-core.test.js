@@ -55,7 +55,7 @@ const limit=Buffer.alloc(LIMIT);pdf.copy(limit);assert.equal(readFile(payload(li
   let active={revision:'old',fileName:'Old.pdf'},good=pdf;
   const plan={version:1,tournamentId:scriptTid,filePath:file,fileName:readFile({fileName:path.basename(file),dataUrl:'data:application/pdf;base64,'+pdf.toString('base64')},E).fileName,approvedSha256:exact,sha256:exact,sizeBytes:pdf.length,creatorUid:'org',reason:'explicit-user-request',requestId:'00000000-0000-4000-8000-000000000001',expectedRevision:'old',previous:{revision:'old',fileName:'Old.pdf'},...options.plan};
   files.set(planPath,JSON.stringify(plan));
-  const parent={get:async()=>({exists:true,data:()=>({creatorUid:'org'}),updateTime:{toDate:()=>new Date(0)}}),collection:name=>({doc:()=>name==='regulations'?current:{}})};
+  const parent={get:async()=>({exists:true,data:()=>({creatorUid:'org',testModeEnabled:options.testModeEnabled!==false}),updateTime:{toDate:()=>new Date(0)}}),collection:name=>({doc:()=>name==='regulations'?current:{}})};
   const current={get:async()=>({exists:true,data:()=>active})};
   const db={collection:()=>({doc:()=>parent}),runTransaction:async fn=>fn({get:async()=>({exists:true,data:()=>active}),set:(_r,v)=>{active=v;writes++},delete:()=>{writes++}})};
   const bucket={iam:{getPolicy:async()=>[{bindings:[]}]},file:()=>({download:async()=>[good],delete:async()=>{writes++}})};
@@ -79,6 +79,7 @@ const limit=Buffer.alloc(LIMIT);pdf.copy(limit);assert.equal(readFile(payload(li
   const r=await cli((f,p)=>['--apply',f,p,'--sha256='+exact],{plan:override});assert.equal(r.published,0);assert(r.errors.length);
  }
  const preview=await cli((f,p)=>['--preview',f,p]);assert.deepEqual(preview.errors,[]);const recorded=JSON.parse(preview.files.get(preview.planPath));assert.equal(recorded.approvedSha256,exact);assert.equal(recorded.fileName,'Novo regulamento á ..pdf');assert(preview.files.has(preview.planPath+'.backup.json'));assert.equal(preview.published,0);
+ for(const mode of ['--preview','--apply']){const off=await cli((f,p)=>[mode,f,p,'--sha256='+exact],{testModeEnabled:false});assert.equal(off.published,0);assert.match(off.errors[0],/modo de teste/);}
  const applied=await cli((f,p)=>['--apply',f,p,'--sha256='+exact]);assert.deepEqual(applied.errors,[]);assert.equal(applied.published,1);assert(applied.files.has(applied.planPath+'.receipt.json'));
  const rollback=await cli((f,p)=>['--apply',f,p,'--sha256='+exact],{badDownload:true});assert.equal(rollback.active.revision,'old');assert(rollback.writes>=2);assert(rollback.errors.length);
  console.log('PASS uploader CULT: pin explícito/default, flag inválida, plano antigo recusado, filename, preview+backup, apply e rollback.');

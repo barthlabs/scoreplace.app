@@ -26,6 +26,7 @@ admin.initializeApp({projectId:'scoreplace-app',storageBucket:'scoreplace-app.fi
 const db=admin.firestore(),parent=db.collection('tournaments').doc(tid),current=parent.collection('regulations').doc('current');
 
 (async()=>{const [snapshot,active]=await Promise.all([parent.get(),current.get()]);if(!snapshot.exists)throw Error('CULT não encontrado.');
+ if(snapshot.data().testModeEnabled!==true)throw Error('CULT deve permanecer em modo de teste nesta operação.');
  if(mode==='--preview'){
   const [policy]=await admin.storage().bucket().iam.getPolicy();
   if((policy.bindings||[]).some(binding=>(binding.members||[]).some(member=>['allUsers','allAuthenticatedUsers'].includes(member))))throw Error('Bucket com acesso IAM público; operação recusada.');
@@ -36,7 +37,7 @@ const db=admin.firestore(),parent=db.collection('tournaments').doc(tid),current=
  }
  const plan=JSON.parse(fs.readFileSync(planPath,'utf8'));
  if(plan.approvedSha256!==approvedSha256||plan.fileName!==checked.fileName||plan.tournamentId!==tid||plan.filePath!==filePath||plan.sha256!==checked.sha256||plan.sizeBytes!==bytes.length||plan.creatorUid!==snapshot.data().creatorUid||plan.reason!=='explicit-user-request')throw Error('Arquivo ou torneio diverge da prévia.');
- const service=makeService({db,storage:admin.storage(),HttpsError,authorizeAdministrative:(t,id,actor)=>id===tid&&t.creatorUid===plan.creatorUid&&actor.uid===identity.client_email&&actor.reason===plan.reason});
+ const service=makeService({db,storage:admin.storage(),HttpsError,authorizeAdministrative:(t,id,actor)=>id===tid&&t.testModeEnabled===true&&t.creatorUid===plan.creatorUid&&actor.uid===identity.client_email&&actor.reason===plan.reason});
  const result=await service.publish({...payload,tournamentId:tid,sandbox:false,requestId:plan.requestId,expectedRevision:plan.expectedRevision},{kind:'administrative',uid:identity.client_email,reason:plan.reason});
  if(result.superseded)throw Error('A revisão já foi substituída; não houve reinstalação.');
  try{
