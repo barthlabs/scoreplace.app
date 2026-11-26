@@ -8,6 +8,9 @@ const source = fs.readFileSync('js/views/bracket.js', 'utf8');
 const begin = source.indexOf('function _syncMatchCourtCopies(');
 const end = source.indexOf('window._adjustMatchCourtClock = function', begin);
 assert.ok(begin > 0 && end > begin, 'handler real localizado');
+const helpersBegin=source.indexOf('function _matchAllCourtsOccupiedLabel(');
+const helpersEnd=source.indexOf('function _bracketOperationsReplica(',helpersBegin);
+assert.ok(helpersBegin>0 && helpersEnd>helpersBegin,'dependências reais de ocupação localizadas');
 
 function card(id) {
   return { id: 'card-' + id, style: { border: '1px solid gray' }, attrs: {},
@@ -40,7 +43,8 @@ async function scenario({ response, matchExtra, route = '#tournaments/sb_tour_1'
     _spCourtClockHtml: () => '<span>relógio</span>',
     _tvLiveRefresh: () => { tvRefreshes++; }
   }, showNotification() {} };
-  vm.runInNewContext(source.slice(begin, end), context);
+  vm.runInNewContext(fs.readFileSync('js/domain/court-occupancy.js','utf8'),context);
+  vm.runInNewContext(source.slice(helpersBegin,helpersEnd)+'\n'+source.slice(begin, end), context);
   await context.window._confirmMatchCourtCall(button, tournament.id, match.id);
   return { match, first, second, dashboard, neighbor, originalOrder, selector,
     clockInsertions, tvRefreshes, button };
