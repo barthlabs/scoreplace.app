@@ -182,8 +182,10 @@ ok(semTerceiroPorEstrutura === 30,
  * carrega `thirdPlace: false`. Ele não pode desligar nada. */
 const pe = fs.readFileSync(path.join(ROOT, 'js/views/phases-engine.js'), 'utf8');
 const peCodigo = pe.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
-ok(!/cfg\.thirdPlace/.test(peCodigo),
-  '⑤ ⛔⛔ o gerador NÃO lê mais `thirdPlace` do documento da fase — campo morto não manda no desenho');
+ok(!/cfg\.thirdPlace\b/.test(peCodigo),
+  '⑤ o gerador não usa thirdPlace legado diretamente; thirdPlacePolicy não é o campo legado');
+ok(/return policy \? policy\.thirdPlace\(cfg\) : true;/.test(peCodigo),
+  '⑤ terceiro opcional passa pela política canônica; ausência da política mantém a disputa');
 ok(/_terceiroNestaChave/.test(peCodigo),
   '⑤ ⭐ a geometria da convergência tem nome próprio, que não se confunde com opcionalidade');
 const ad = fs.readFileSync(path.join(ROOT, 'js/views/chaves-adapter.js'), 'utf8');
