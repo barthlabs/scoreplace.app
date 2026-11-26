@@ -1,5 +1,12 @@
 // ─── English translations ───────────────────────────────────────────────────
 window._translations['en'] = {
+  "athleteEditor.prompt": "Enter the athlete’s name.",
+  "athleteEditor.name": "Athlete name",
+  "athleteEditor.accounts": "Accounts found",
+  "athleteEditor.ambiguous": "More than one account has this name. Enter a more complete name or keep the manual entry.",
+  "athleteEditor.invalid": "Enter a valid name.",
+  "athleteEditor.checkFailed": "Could not verify the selected account. Try again.",
+  "athleteEditor.unavailable": "The selected account is unavailable. Search by name again.",
   "import.account": "Scoreplace account",
   "import.empty": "To be filled",
   "import.edit": "Edit",

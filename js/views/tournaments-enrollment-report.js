@@ -1339,23 +1339,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
   function _erShowReplacementDialog(t, row, after) {
     if (!t || !row || !(row.uid || row.manualId) || !window._souOrganizador(t)) return;
-    showInputDialog('Editar atleta', 'Digite o nome ou UID do atleta.', function () {},
-      { defaultValue:_esc(row.name), placeholder:'Nome ou UID', okText:'Confirmar' });
+    function text(key, fallback) { var value=window._t && window._t(key); return value && value!==key ? value : fallback; }
+    showInputDialog('Editar atleta', text('athleteEditor.prompt','Digite o nome do atleta.'), function () {},
+      { defaultValue:_esc(row.name), placeholder:text('athleteEditor.name','Nome do atleta'), okText:'Confirmar' });
     var dialog=document.getElementById('custom-input-dialog');
     if (!dialog) return;
     var input=dialog.querySelector('#input-dialog-value'), ok=dialog.querySelector('#input-ok-btn');
-    input.setAttribute('aria-label','Nome ou UID do atleta');
-    input.setAttribute('list','athlete-account-options'); input.maxLength=128;
+    input.setAttribute('aria-label',text('athleteEditor.name','Nome do atleta'));
+    input.setAttribute('aria-controls','athlete-account-options'); input.setAttribute('aria-expanded','false'); input.maxLength=128;
     var extra=document.createElement('div');
-    extra.innerHTML='<datalist id="athlete-account-options"></datalist><label id="athlete-points-label" hidden style="display:none;margin-top:12px">Pontuação da vaga<select id="athlete-points" class="form-control" style="display:block;margin-top:6px"><option value="">Escolha a pontuação</option><option value="inherit">Manter pontuação da vaga</option><option value="reset">Começar do zero</option></select></label><div id="athlete-edit-error" role="alert" style="margin-top:8px"></div>';
+    extra.innerHTML='<div id="athlete-account-options" class="sp-athlete-account-options" role="group" aria-live="polite" aria-label="'+_esc(text('athleteEditor.accounts','Contas encontradas'))+'" hidden></div><label id="athlete-points-label" hidden style="display:none;margin-top:12px">Pontuação da vaga<select id="athlete-points" class="form-control" style="display:block;margin-top:6px"><option value="">Escolha a pontuação</option><option value="inherit">Manter pontuação da vaga</option><option value="reset">Começar do zero</option></select></label><div id="athlete-edit-error" role="alert" style="margin-top:8px"></div>';
     input.after(extra);
-    var list=extra.querySelector('datalist'), policy=extra.querySelector('select'), policyLabel=extra.querySelector('label');
-    var message=extra.querySelector('[role="alert"]'), busy=false, searchId=0, timer, policyMode=null;
-    function target(value) {
-      var explicit=/^uid:/i.test(value);
-      return explicit ? value.slice(4).trim() : /^[A-Za-z0-9]{28}$/.test(value) ? value : '';
-    }
-    function changed() {
+    var list=extra.querySelector('#athlete-account-options'), policy=extra.querySelector('select'), policyLabel=extra.querySelector('label');
+    var message=extra.querySelector('[role="alert"]'), busy=false, searchId=0, timer, policyMode=null, selectedAccount=null;
+    function target(value) { return selectedAccount && value===selectedAccount.name ? selectedAccount.uid : ''; }
+    function hideOptions() { list.replaceChildren();list.hidden=true;input.setAttribute('aria-expanded','false'); }
+    function changed(preserveSelection) {
+      if(preserveSelection!==true) selectedAccount=null;
       var value=input.value.trim(), uid=target(value);
       var manual=!row.uid && !uid;
       var mode=manual?'correction':uid?'account':'manual';
@@ -1364,44 +1364,58 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         policyLabel.firstChild.textContent=manual?'Ao confirmar':'Pontuação da vaga';
         policy.innerHTML=manual ? '<option value="">Escolha correção ou troca</option><option value="rename">Corrigir nome da mesma pessoa</option><option value="inherit">Trocar atleta e manter pontuação</option><option value="reset">Trocar atleta e começar do zero</option>' : '<option value="">Escolha a pontuação</option><option value="inherit">Manter pontuação da vaga</option><option value="reset">Começar do zero</option>';
       }
-      var changedName=value!==row.name;
+      var changedName=value!==row.name || !!(uid && uid!==row.uid);
       policyLabel.hidden=!changedName; policyLabel.style.display=changedName?'block':'none';
       message.textContent='';
-      clearTimeout(timer); var request=++searchId;
-      if (value.length<2 || uid) { list.replaceChildren(); return; }
+      clearTimeout(timer); var request=++searchId;hideOptions();
+      if (value.length<2 || uid) return;
       timer=setTimeout(function () {
-        var db=window.FirestoreDB?.db; if(!db || !dialog.isConnected) return;
+        var db=window.FirestoreDB?.db; if(!db || !dialog.isConnected || busy) return;
         // user-vivo:isento — lista de candidatas; servidor revalida a conta escolhida.
         db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic')
           .where('displayName_lower','>=',value.toLowerCase())
           .where('displayName_lower','<',value.toLowerCase()+'\uf8ff').limit(20).get()
           .then(function(snap) {
-            if(request!==searchId || !dialog.isConnected) return;
-            list.replaceChildren();
+            if(request!==searchId || !dialog.isConnected || busy) return;
+            hideOptions();var accounts=[];
             snap.forEach(function(doc) { var profile=doc.data() || {};
               if(profile.mergedInto || !profile.displayName) return;
-              var option=document.createElement('option'); option.value='uid:'+doc.id; option.label=profile.displayName; list.appendChild(option);
+              var photo='';try{var url=new URL(profile.photoURL||'');if(['http:','https:'].includes(url.protocol))photo=url.href;}catch(_){}
+              accounts.push({uid:doc.id,name:profile.displayName,city:String(profile.city||'').trim(),photo:photo});
             });
-          }).catch(function(){ if(request===searchId && dialog.isConnected) list.replaceChildren(); });
+            var blocked=false;
+            accounts.forEach(function(account) {
+              var homonyms=accounts.filter(function(other){return other.name.toLocaleLowerCase()===account.name.toLocaleLowerCase();});
+              if(homonyms.length>1 && !homonyms.every(function(other){return other.uid===account.uid ||
+                account.city && other.city && account.city!==other.city || account.photo && other.photo && account.photo!==other.photo;})) {blocked=true;return;}
+              var button=document.createElement('button');button.type='button';button.className='btn btn-outline btn-sm sp-athlete-account-option';
+              if(account.photo){var image=document.createElement('img');image.src=account.photo;image.alt='';button.appendChild(image);}
+              var label=document.createElement('span');label.textContent=account.name+(homonyms.length>1 && account.city?' — '+account.city:'');button.appendChild(label);
+              button.addEventListener('click',function(event){event.preventDefault();if(busy || request!==searchId || !dialog.isConnected)return;
+                selectedAccount={uid:account.uid,name:account.name};input.value=account.name;changed(true);input.focus({preventScroll:true});});
+              list.appendChild(button);
+            });
+            if(blocked){var note=document.createElement('p');note.textContent=text('athleteEditor.ambiguous','Há mais de uma conta com este nome. Use um nome mais completo ou mantenha o cadastro manual.');list.appendChild(note);}
+            list.hidden=!list.childNodes.length;input.setAttribute('aria-expanded',String(!list.hidden));
+          }).catch(function(){if(request===searchId && dialog.isConnected){selectedAccount=null;hideOptions();}});
       },250);
     }
     async function confirm(event) {
       event.preventDefault(); event.stopImmediatePropagation();
       if(busy) return;
       var value=input.value.trim();
-      if(value===row.name){dialog.remove();return;}
-      if(value.length<2 || value.length>128){message.textContent='Digite um nome ou UID válido.';return;}
+      if(value===row.name && !target(value)){dialog.remove();return;}
+      if(value.length<2 || value.length>128){message.textContent=text('athleteEditor.invalid','Digite um nome válido.');return;}
       busy=true; ok.disabled=true; input.disabled=true;
       var saved=false;
       try {
-        var targetUid=target(value), explicit=/^uid:/i.test(value);
+        var targetUid=target(value);hideOptions();clearTimeout(timer);++searchId;
         if(targetUid) {
           var db=window.FirestoreDB?.db;
-          if(!db) throw new Error('Não foi possível verificar o UID. Tente novamente.');
+          if(!db) throw new Error(text('athleteEditor.checkFailed','Não foi possível verificar a conta selecionada. Tente novamente.'));
           var snap=await db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').doc(targetUid).get();
           var profile=snap.exists ? snap.data() || {} : null;
-          if(!profile && !explicit) targetUid='';
-          else if(!profile || profile.mergedInto || !profile.displayName) throw new Error('UID indisponível. Confira a conta.');
+          if(!profile || profile.mergedInto || !profile.displayName) {changed();throw new Error(text('athleteEditor.unavailable','A conta selecionada não está disponível. Pesquise novamente pelo nome.'));}
         }
         if(!row.uid && !targetUid && !['rename','inherit','reset'].includes(policy.value)) {policy.focus({preventScroll:true});throw new Error('Escolha corrigir o nome ou trocar a pessoa.');}
         var replacement=!!row.uid || !!targetUid || ['inherit','reset'].includes(policy.value);
@@ -1445,13 +1459,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         showNotification('Atleta atualizado','A alteração foi salva.','success');
       } catch(error) {
         if(saved) showNotification('Atleta salvo','Atualize a página para conferir o elenco.','warning');
-        else if(dialog.isConnected) message.textContent=error.message || 'Não foi possível salvar. Tente novamente.';
+        else if(dialog.isConnected) {
+          var safeMessage=String(error.message || 'Não foi possível salvar. Tente novamente.').replace(/\bUID\b/gi,'conta');
+          [row.uid,selectedAccount && selectedAccount.uid].filter(Boolean).forEach(function(id){safeMessage=safeMessage.split(id).join('conta selecionada');});
+          message.textContent=safeMessage;
+        }
       } finally {busy=false;ok.disabled=false;input.disabled=false;}
     }
     ok.addEventListener('click',confirm,true);
     input.addEventListener('keypress',function(event){if(event.key==='Enter') confirm(event);},true);
     input.addEventListener('input',changed);
-    dialog.addEventListener('keydown',function(event){if(event.key==='Escape' && !busy) dialog.remove();});
+    dialog.addEventListener('keydown',function(event){if(event.key==='Escape' && !busy){selectedAccount=null;clearTimeout(timer);++searchId;dialog.remove();}});
+    dialog.querySelector('#input-cancel-btn')?.addEventListener('click',function(){selectedAccount=null;clearTimeout(timer);++searchId;});
   }
   window._erEditPairMember = function (order) {
     if (!_liveState || !_liveState.isOrg || _liveState.t.status === 'finished' ||

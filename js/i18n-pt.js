@@ -1,5 +1,12 @@
 // ─── Portuguese (pt-BR) translations ────────────────────────────────────────
 window._translations['pt'] = {
+  "athleteEditor.prompt": "Digite o nome do atleta.",
+  "athleteEditor.name": "Nome do atleta",
+  "athleteEditor.accounts": "Contas encontradas",
+  "athleteEditor.ambiguous": "Há mais de uma conta com este nome. Use um nome mais completo ou mantenha o cadastro manual.",
+  "athleteEditor.invalid": "Digite um nome válido.",
+  "athleteEditor.checkFailed": "Não foi possível verificar a conta selecionada. Tente novamente.",
+  "athleteEditor.unavailable": "A conta selecionada não está disponível. Pesquise novamente pelo nome.",
   "import.account": "Conta Scoreplace",
   "import.empty": "A preencher",
   "import.edit": "Editar",

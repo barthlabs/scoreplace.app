@@ -3851,3 +3851,10 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 .sp-import-roster-row button[data-act="remove"] { float:right; min-height:28px; min-width:28px; padding:2px 6px; margin-left:6px; }
 .sp-import-account { display:inline-block; margin-left:6px; color:var(--success,#15803d); font-weight:800; }
 .sp-import-partner { color:var(--text-secondary); }
+
+.sp-athlete-account-options:not([hidden]) { display:grid; gap:6px; margin:8px 0; max-height:12rem; overflow-y:auto; }
+.sp-athlete-account-option { display:flex; align-items:center; gap:8px; text-align:left; color:var(--text-main); }
+.sp-athlete-account-option img { width:32px; height:32px; border-radius:50%; object-fit:cover; }
+.sp-athlete-account-options p { color:var(--text-secondary); font-size:.85rem; }
+
+.sp-athlete-account-option span { min-width:0; white-space:normal; overflow-wrap:anywhere; }
