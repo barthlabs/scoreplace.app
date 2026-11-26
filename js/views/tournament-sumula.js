@@ -434,7 +434,7 @@
   function scoreCategory(model,m) {
     var group=text(m.groupLabel);
     if (group && !/^Grupo\s+/i.test(group)) group='Grupo '+group;
-    return [group,model.showCategories?(m.category || 'Sem categoria'):''].filter(Boolean).join(' · ');
+    return [group,(model.fast8 || model.showCategories)?(m.category || 'Sem categoria'):''].filter(Boolean).join(' · ');
   }
   function scoreLayout(model,matches,orientation,dense) {
     var portrait=orientation==='portrait',width=portrait?595:842,height=portrait?842:595;

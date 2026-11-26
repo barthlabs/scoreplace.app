@@ -639,6 +639,7 @@ console.log('✅ Súmula por quadra e lista de chamada');
   const fastConfig=structuredClone(tournament);fastConfig.phases[0].classification.rotationCategoryRules[0].groupAlternation=true;
   const fast=core.collect(fastConfig,games);
   if(process.env.SP_SUMULA_FAST8_SAMPLE)fs.writeFileSync(process.env.SP_SUMULA_FAST8_SAMPLE,core.encodePdf(core.makePages(fast)));
+  assert(Buffer.from(core.encodePdf(core.makePages(fast))).toString('latin1').includes(String.raw`Grupo C1 \267 C`),'Fast 8 imprime grupo e categoria mesmo com uma categoria única');
   assert(fast.matches.every(m=>m.court && m.time),'Fast 8 mantém a quadra e o horário previstos na súmula');
   assert(fast.matches.every(m=>!m.nextCourts1 && !m.nextCourts2),'alternado não imprime próxima quadra nos nomes');
   const fastPages=core.makePages(fast);
