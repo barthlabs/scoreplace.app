@@ -199,7 +199,6 @@ const TABELA = [
   { nome: "requestParticipantMerge", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "requestSecondaryEmail", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "requestTournamentPair", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
-  { nome: "searchTournamentImportCandidates", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "resetTournamentCheckIn", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "resetTournamentToEnrollment", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "resolveLoginRedirect", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
