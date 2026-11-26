@@ -1,3 +1,11 @@
+## 2.7.80 — 26/nov/2026 (operação e apresentação do Fast 8)
+
+- Chamada sugerida pela grade aprovada e fila de cada quadra; chaves em ordem alfabética com o prefixo Grupo.
+- Operação em largura útil e altura de um card, filas de próximos e placares pendentes verticais e quadras horizontais. Toggles por categoria alinhados com classificados por grupo.
+- No ar com cabeçalho externo, duplas empilhadas, posição da série e cronômetro de fase no rodapé; próximos somente na lateral, sem quadra prevista. Percentual informativo de games ganhos e saldo de games.
+- Súmula separada por quadra, identificação completa de grupo e categoria em linha própria e sem próxima quadra no Fast 8. Grade sem sobreposição de cabeçalhos. Novas propostas alternadas contabilizam preparação em cada entrada; planos aprovados anteriores permanecem intactos.
+- Verificação focada em Chromium isolado, Full HD e 4K, PDF fictício renderizado, fila, duração e cálculos compartilhados; publicação exige o fluxo integral do projeto.
+
 ## 2.7.69 — 25/nov/2026 (regulamento original por torneio)
 
 - Upload genérico PDF/JPEG pela organização, com visualização do arquivo original e substituição/correção por nova versão. Metadata em regulations/current; arquivo imutável no Storage e histórico server-only. Sem IDs de torneio no render.

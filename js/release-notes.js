@@ -1,4 +1,4 @@
-// 2.7.80 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.7.80 — Fast 8 segue a grade aprovada; operação ocupa a largura útil com filas de um card. No ar usa duplas empilhadas e cronômetros no rodapé. Classificação mostra percentual de games; súmula identifica quadra, grupo e categoria completos.
 // 2.7.79 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.78 — Fast 8 permite alternar os grupos por rodada e usar a primeira quadra livre após a entrada inicial. O próximo jogo imediato fica fixo no topo; os demais jogos da rodada rolam abaixo, com bloqueio de chamada para atletas ocupados. No ar separa as quadras e mantém a classificação dos oito atletas de cada grupo. Súmulas seguem a alternância sem prever quadras futuras. Super 8 e Fast 8 permitem desativar a disputa de terceiro lugar; 3º e 4º seguem os critérios de classificação configurados.
 // 2.7.77 — Próximos jogos ficam vermelhos e com a chamada bloqueada quando qualquer atleta já está em quadra, inclusive em desempates. O aviso e os controles voltam automaticamente ao normal após a liberação. No Super 8, a previsão do próximo jogo sinaliza o conflito sem ocupar a quadra; o próximo jogo a chamar mostra (1/7), (2/7) e a rodada correspondente abaixo do número do jogo.
@@ -1939,6 +1939,17 @@ window._RELEASE_NOTES_HTML = (function () {
     // quem está com a 2.0.4 no iPhone lê um torneio que o banco não guarda mais desse jeito.
     // Mesma lição da 1.7.35: quando o formato do dado muda, a ida à loja É o conserto.
     // Os itens abaixo são consolidados por tema, como manda a convenção do arquivo.
+    // v2.7.80 — operação e apresentação do Fast 8.
+    '<div style="margin-bottom:1rem;border:2px solid #75c7e7;border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800;margin-bottom:8px;">v2.7.80 — Operação do Fast 8</div>' +
+      '<ul style="margin:0;padding-left:1.1rem;line-height:1.5;">' +
+        '<li>A chamada sugerida segue a grade aprovada e a fila de cada quadra. As chaves abaixo aparecem como Grupo A, Grupo B, Grupo C e assim por diante.</li>' +
+        '<li>A operação usa a largura disponível e a altura de um card: próximos jogos e placares pendentes rolam na vertical; jogos em quadra, na horizontal.</li>' +
+        '<li>No ar mostra quadra e grupo acima do card, duplas empilhadas, JOGO X (n/7) e cronômetro de chamada, aquecimento, jogo ou atraso no rodapé. Os próximos jogos ficam na seção lateral, sem prever a quadra.</li>' +
+        '<li>A classificação usa saldo de games e percentual de games ganhos. A súmula é separada por quadra, mostra grupo e categoria completos e omite a próxima quadra no Fast 8.</li>' +
+        '<li>Alternar grupos fica abaixo de Não repetir parceiro em cada categoria. Novas grades alternadas incluem chamada e aquecimento em cada entrada; grades já aprovadas são preservadas.</li>' +
+      '</ul>' +
+    '</div>' +
     // v2.7.5 — histórico completo da classificatória Rei/Rainha.
     '<div style="margin-bottom:1rem;border:2px solid #75c7e7;border-radius:12px;padding:14px 16px;background:rgba(117,199,231,0.10);">' +
       '<div style="font-weight:800;color:var(--text-bright);font-size:1rem;margin-bottom:8px;">📋 v2.7.5 — Conferência da fase anterior</div>' +
