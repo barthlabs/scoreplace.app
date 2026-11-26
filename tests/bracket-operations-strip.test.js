@@ -1087,10 +1087,28 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         window._tdetailSig=window._tournamentDetailSig(t);window._bracketOperationsRefresh(t,root);
         const clock=root._bracketOperationsStrip.querySelector('.sp-match-clock-next');
         await window._adjustMatchCourtClock(clock,t.id,'sync','next');
-        return {pendingDuring,confirmCleared,clockCleared:!window._courtOperationEcho&&!clock.disabled,routes:window.__routes};
+        const clockCleared=!window._courtOperationEcho&&!clock.disabled;
+        delete t.matches[0].courtCalledAt;window._tdetailSig=window._tournamentDetailSig(t);window._bracketOperationsRefresh(t,root);
+        const prepare=root._bracketOperationsStrip.querySelector('.sp-operations-next .sp-match-confirm');
+        let setterPending=0,preparationRejected=false;
+        Object.defineProperty(prepare,'disabled',{configurable:true,get:()=>false,set:()=>{setterPending=window._courtOperationEcho&&window._courtOperationEcho.pending;throw new Error('preparo fictício do botão');}});
+        try {await window._confirmMatchCourtCall(prepare,t.id,'sync').catch(()=>{preparationRejected=true;});}
+        finally {delete prepare.disabled;}
+        const preparationCleared=!window._courtOperationEcho&&!_matchCourtEdits.get(_matchCourtKey(t.id,'sync'));
+        const prior={requested:'Quadra 2',persisted:'Quadra 1',pending:Promise.resolve()};
+        _matchCourtEdits.set(_matchCourtKey(t.id,'sync'),prior);
+        Object.defineProperty(prepare,'disabled',{configurable:true,get:()=>false,set:()=>{throw new Error('preparo com seleção pendente');}});
+        let previousSelectionPreserved=false;
+        try {
+          await window._confirmMatchCourtCall(prepare,t.id,'sync').catch(()=>{});
+          previousSelectionPreserved=_matchCourtEdits.get(_matchCourtKey(t.id,'sync'))===prior&&prior.requested==='Quadra 2'&&!prior.calling&&!window._courtOperationEcho;
+        } finally {delete prepare.disabled;_matchCourtEdits.delete(_matchCourtKey(t.id,'sync'));}
+        return {previousSelectionPreserved,pendingDuring,confirmCleared,clockCleared,setterPending,preparationRejected,preparationCleared,routes:window.__routes};
       });
       assert.deepEqual(synchronous.pendingDuring,[1,1],'erro síncrono acontece com guard real ativo nas duas portas');
       assert(synchronous.confirmCleared&&synchronous.clockCleared,'erro síncrono libera contador, edit e botões');
+      assert(synchronous.setterPending===1&&synchronous.preparationRejected&&synchronous.preparationCleared,'preparo síncrono também libera guard e Map sem enviar CF');
+      assert(synchronous.previousSelectionPreserved,'falha de preparo preserva a seleção pendente anterior');
       assert.equal(synchronous.routes,0,'erro não remonta o detalhe');
     } finally { await real.close(); }
     const scoringPage = await browser.newPage();

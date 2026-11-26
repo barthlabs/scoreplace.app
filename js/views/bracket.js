@@ -6702,9 +6702,18 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
   }
   if (typeof window._callCF !== 'function') return;
   var operation = _beginCourtOperation(button, tId, matchId);
-  if (!edit) { edit = {}; _matchCourtEdits.set(key, edit); }
-  edit.calling = true;
-  button.disabled = true;
+  var createdEdit = !edit;
+  try {
+    if (!edit) { edit = {}; _matchCourtEdits.set(key, edit); }
+    edit.calling = true;
+    button.disabled = true;
+  } catch (error) {
+    try {
+      if (edit) edit.calling = false;
+      if (createdEdit) _matchCourtEdits.delete(key);
+    } finally { operation.finish(); }
+    return Promise.reject(error);
+  }
   var blocked = false;
   return Promise.resolve(edit.pending).then(function () {
     _syncMatchCourtCopies(tId, matchId, court);
