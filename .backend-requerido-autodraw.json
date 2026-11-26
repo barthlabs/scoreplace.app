@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "22cd3d4e43ccee060d3ab5481b66d778bc66d833",
-  "scopeNote": "Preserva as 34 portas já exigidas. Sincronização mecânica do vendor compartilhado para rótulo Regulamento e rodapé da ficha; nenhuma alteração esportiva. Recibos centrais e oito portas end-court devem ser verificados antes do Hosting.",
+  "backendCommit": "095f5954b313f1ddb5b0ab737fa5b6301b86c486",
+  "scopeNote": "Preserva as 34 portas exigidas. Corrige salvamento atômico de novos eixos com combinação zerada; mantém proteções de inscrições, reservas, preços e sorteio. Recibos centrais e oito portas end-court precisam refletir fonte real antes do Hosting.",
   "functions": [
     "createTournament",
     "updateTournamentConfiguration",
