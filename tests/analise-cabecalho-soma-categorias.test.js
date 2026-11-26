@@ -41,3 +41,33 @@ assert.match(matrix, /var genderMatches = _erPairPlacementGender\(members, t\) =
 assert.match(matrix, /pairFemTotal = pairGroups\.reduce[^\n]+_erPairPlacementGender\(members, t\)/, 'cabeçalho feminino usa o mesmo resolvedor');
 assert.match(matrix, /pairMascTotal = pairGroups\.reduce[^\n]+_erPairPlacementGender\(members, t\)/, 'cabeçalho masculino usa o mesmo resolvedor');
 console.log('✅ Cabeçalhos da Análise somam as categorias: 8 verificações');
+
+// Individual rotating groups: category placement is independent of personal gender.
+{
+  const W = {_souOrganizador:()=>true,_spCor:value=>value,
+    _getTournamentCategories:t=>(t.categoryDefinitions||[]).map(c=>c.label),
+    _initialMonarchIndividualEnrollment:()=>false};
+  const instrumented=source.replace(/\n\}\)\(\);\s*$/, '\nwindow.__placementTest={build:_buildRows,matrix:_matrixInner,gender:_erIndividualPlacementGender,skill:_mxSkillOf,layout:_erIndividualCategoryLayout,edit:(order,edit)=>{_pendingEdits[order]=edit;}};\n})();');
+  vm.runInNewContext(instrumented,{window:W,document:{getElementById:()=>null},console,setTimeout,clearTimeout});
+  const labels=['Fem A','Fem B','Fem C','Masc A','Masc B','Masc C','Masc PROFESSORES'];
+  const definitions=labels.map((label,i)=>({id:'category-'+i,label,enabled:true}));
+  const t={id:'individual-analysis',sport:'Beach Tennis',enrollmentMode:'individual',fmt2:{parceria:'rotation_groups'},
+    canonicalRegistrationMigration:{fingerprint:'synthetic',registrationCount:80},categoryDefinitions:definitions,
+    customCategories:['A','B','C','PROFESSORES'],combinedCategories:labels,excludedCategories:['Fem PROFESSORES'],maxParticipantsByCategory:Object.fromEntries(labels.map((l,i)=>[l,i<3?16:8]))};
+  const parts=definitions.flatMap((d,i)=>Array.from({length:i<3?16:8},(_,j)=>({manualParticipantId:'slot-'+i+'-'+j,
+    categoryId:d.id,categories:[d.label],displayName:'Pessoa '+i+' '+j,gender:i%2?'feminino':null})));
+  const before=JSON.stringify(parts),api=W.__placementTest,rows=api.build(t,parts,{byUid:{}});
+  assert.equal(rows.length,80);assert.equal(api.layout(t),true);
+  assert.equal(rows.filter(r=>api.gender(r,t)==='feminino').length,48);
+  assert.equal(rows.filter(r=>api.gender(r,t)==='masculino').length,32);
+  const html=api.matrix(rows,t);
+  for(const [i,label] of labels.entries())assert(new RegExp(label+' <span[^>]*>\\('+ (i<3?16:8) +'\\)</span>').test(html),'summary category count '+label);
+  assert(!html.includes('? Sem gênero'));assert(!html.includes('placeholder-pair:'));
+  for(const r of rows)assert.equal((html.match(new RegExp('data-er-person="'+r.name+'"','g'))||[]).length,1,'each individual appears once');
+  assert(!/data-er-gender="feminino" data-er-skill="PROFESSORES"/.test(html));
+  api.edit(rows[0].order,{category:'Masc B'});assert.equal(api.gender(rows[0],t),'masculino');assert.equal(api.skill(rows[0],t),'B');
+  api.edit(rows[0].order,{category:''});assert.equal(api.gender(rows[0],t),null,'explicitly cleared category falls back to personal gender');
+  assert.equal(api.layout({...t,currentPhaseIndex:1}),false,'later phase keeps pair workflow');
+  assert.equal(JSON.stringify(parts),before,'analysis never writes profile gender or registrations');
+  console.log('✓ análise individual:80pessoas/48Fem/32Masc,7categorias,professoresapenasMasc,semduplicação,staging e perfil preservados');
+}

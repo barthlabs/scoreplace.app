@@ -11,7 +11,6 @@
     var result;
     if (name === 'previewTournamentImport') result = window._callCF('previewTournamentImport', data, authMessage);
     else if (name === 'extractTournamentImportImage') result = window._callCF('extractTournamentImportImage', data, authMessage);
-    else if (name === 'searchTournamentImportCandidates') result = window._callCF('searchTournamentImportCandidates', data, authMessage);
     else if (name === 'applyTournamentImportBlock') result = window._callCF('applyTournamentImportBlock', data, authMessage);
     else return Promise.reject(new Error('Porta de importação desconhecida'));
     return result.then(function (response) { return response.data; });
@@ -22,38 +21,41 @@
     }).filter(function (item) { return item.id; });
   }
   function report(message) { if (state) { state.message = message; render(); } }
+  function tr(key, fallback, values) {
+    var value = typeof window._t === 'function' ? window._t(key, values) : fallback;
+    if (!value || value === key) value = fallback;
+    return String(value).replace(/\{(\w+)\}/g, function (_, k) { return values && values[k] !== undefined ? values[k] : _; });
+  }
   function rowMarkup(row, idx, plan) {
     var disabled = row.saved || state.busy ? ' disabled' : '';
-    var category = state.categories.find(function (item) { return item.id === row.categoryId; });
     var people = row.people.map(function (person, side) {
-      var hasCandidates = (person.candidates || []).length > 0;
-      var decision = person.uid ? '✓ Conta vinculada: ' + (person.chosenName || person.uid)
-        : person.uid === null ? 'Sem conta vinculada — vínculo só após aceite da pessoa'
-          : person.lookupStatus === 'loading' ? 'Buscando conta…'
-            : person.lookupStatus === 'error' ? 'Busca falhou — tente novamente'
-              : hasCandidates ? 'Conta provável — confirme uma opção'
-                : person.lookupStatus === 'invalid' ? 'Digite pelo menos 3 letras para buscar' : 'Nenhuma conta provável';
-      var hits = (person.candidates || []).map(function (candidate, candidateIndex) {
-        return '<button type="button" class="sp-import-candidate" data-act="choose" data-row="' + idx + '" data-side="' + side + '" data-token="' + esc(person.lookupToken) + '" data-candidate="' + candidateIndex + '"' + disabled + '>' + esc(candidate.name) + '</button>';
-      }).join('');
-      return '<div class="sp-import-person' + (hasCandidates && person.uid === undefined ? ' sp-import-person-match' : '') + '" data-person="' + row.viewKey + '-' + side + '" tabindex="-1">' +
-        '<div class="sp-import-person-name">' + esc(person.name || (row.placeholder ? 'Vaga sem nome' : '')) + '</div>' +
-        '<div class="sp-import-decision">' + esc(decision) + '</div>' +
-        (!row.saved && !state.busy && person.uid === undefined && hasCandidates ? '<div class="sp-import-candidates">' + hits + '<button type="button" data-act="none" data-row="' + idx + '" data-side="' + side + '">Nenhum destes</button></div>' : '') +
-        (!row.saved && !state.busy ? '<details class="sp-import-edit" data-edit-key="' + row.viewKey + '-' + side + '"><summary>Corrigir nome</summary>' +
-          '<label class="sp-import-field">Nome<input data-act="name" data-row="' + idx + '" data-side="' + side + '" value="' + esc(person.name) + '"></label></details>' : '') +
-      '</div>';
-    }).join('');
-    return '<section class="sp-import-pair">' +
-      '<div class="sp-import-pair-head"><strong>' + (row.kind==='individual'?'Posição ':'Dupla ') + esc(row.ordinal || idx + 1) + '</strong>' +
-      '<span class="sp-import-category">' + esc(category ? category.label : 'Categoria não identificada') + '</span>' +
-      (row.saved ? '<span class="sp-import-saved">✓ Gravada</span>' : '<button type="button" data-act="remove" data-row="' + idx + '"' + disabled + '>Remover</button>') + '</div>' +
-      '<div class="sp-import-people">' + people + '</div>' +
+      // Only an already verified UID can carry an account indicator. Names never link accounts.
+      var account = person.uid && person.confirmedAccountUid === person.uid
+        ? '<span class="sp-import-account" aria-label="' + esc(tr('import.account', 'Conta Scoreplace')) + '">✓</span>' : '';
+      return '<span class="sp-import-name" data-person="' + row.viewKey + '-' + side + '" tabindex="-1">' +
+        '<span class="sp-import-person-name">' + esc(person.name || tr('import.empty', 'A preencher')) + '</span>' + account +
+        (!row.saved && !state.busy ? '<details class="sp-import-edit" data-edit-key="' + row.viewKey + '-' + side + '"><summary>' + tr('import.edit', 'Editar') + '</summary>' +
+          '<label class="sp-import-field">' + tr('import.name', 'Nome') + '<input data-act="name" data-row="' + idx + '" data-side="' + side + '" value="' + esc(person.name) + '"></label></details>' : '') + '</span>';
+    }).join('<span class="sp-import-partner"> / </span>');
+    return '<li class="sp-import-roster-row" value="' + esc(row.ordinal || idx + 1) + '">' + people +
+      (row.saved ? '<span class="sp-import-saved">✓</span>' : '<button type="button" data-act="remove" data-row="' + idx + '"' + disabled + ' aria-label="' + esc(tr('import.remove', 'Remover esta posição')) + '">×</button>') +
       (plan && plan.error ? '<p class="sp-import-error" role="alert">' + esc(plan.error) + '</p>' : '') +
-      (plan && plan.message ? '<p class="sp-import-destination">'+esc(plan.message)+'</p>' : '') +
-      (plan && plan.slot && row.kind!=='individual' ? '<div class="sp-import-destination">Vaga ' + esc(plan.slot.members.map(function (m) { return m.name; }).sort(function (a, b) {
-        return window.TournamentImportAllocation.playerNumber(a) - window.TournamentImportAllocation.playerNumber(b);
-      }).join(' + ')) + '</div>' : '') + '</section>';
+      (plan && plan.message ? '<p class="sp-import-destination">' + esc(plan.message) + '</p>' : '') + '</li>';
+  }
+  function groupsMarkup(plans) {
+    var groups = new Map();
+    state.rows.forEach(function (row, idx) {
+      var key = row.categoryId || '';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ row: row, index: idx });
+    });
+    return Array.from(groups.entries()).map(function (entry) {
+      var category = state.categories.find(function (c) { return c.id === entry[0]; });
+      var count = entry[1].reduce(function (n, item) { return n + item.row.people.length; }, 0);
+      return '<section class="sp-import-category-group" data-import-category="' + esc(entry[0]) + '"><h3>' +
+        esc(category ? category.label : tr('import.unknown', 'Categoria não identificada')) + ' <span>(' + count + ')</span></h3><ol class="sp-import-roster">' +
+        entry[1].map(function (item) { return rowMarkup(item.row, item.index, plans[item.index]); }).join('') + '</ol></section>';
+    }).join('');
   }
   function render() {
     var box = el(); if (!box || !state) return;
@@ -73,24 +75,21 @@
       personKey: focused.closest && focused.closest('[data-person]') && focused.closest('[data-person]').dataset.person,
     } : null;
     var resetScroll = state.resetScroll || state.renderedPage !== state.page;
-    var start = state.page * 8, visible = state.rows.slice(start, start + 8);
     var plans = state.preview ? window.TournamentImportAllocation.allocate(state.rows, state.preview.slots, state.preview) : [];
     var content = !state.preview ? '<p class="sp-import-lead">Consultando vagas atuais…</p>' :
       (state.preview.individualImportError?'<p class="sp-import-error">'+esc(state.preview.individualImportError)+'</p>':'') +
       '<div class="sp-import-summary"><span><strong>' + state.preview.count + '</strong> inscritos</span><span><strong>' + (state.preview.mode==='individual'?state.rows.filter(function(r){return r.placeholder;}).length:state.preview.slots.length) + '</strong> '+(state.preview.mode==='individual'?'vagas sem nome':'duplas para preencher')+'</span></div>' +
-      '<p class="sp-import-lead">'+(state.preview.mode==='individual'?'Envie a planilha. Confira pessoas, categorias, vagas sem nome e substituições antes de gravar.':'Envie fotos ou planilhas. Confira cada dupla antes de gravar.')+'</p>' +
+      '<p class="sp-import-lead">'+tr('import.instructions', 'Selecione o arquivo e confira os nomes em cada categoria antes de confirmar.')+'</p>' +
       '<div class="sp-import-upload-area">' +
         '<input id="tournament-import-files" class="sr-only" type="file" multiple accept="' + (state.preview.photoImportEnabled ? 'image/jpeg,image/png,image/webp,' : '') + '.csv,.tsv,.xls,.xlsx" aria-label="Fotos ou planilhas de inscritos">' +
         '<label class="sp-import-upload" for="tournament-import-files">📄 Selecionar arquivos</label>' +
         '<p class="sp-import-disclosure">' + (state.preview.photoImportEnabled
           ? 'Fotos são enviadas ao Google Cloud Vision somente após sua confirmação. Planilhas são lidas neste dispositivo.'
-          : 'Fotos indisponíveis no momento. Planilhas são lidas neste dispositivo.') + '</p>' +
+          : 'Planilhas são lidas neste dispositivo.') + '</p>' +
       '</div>' +
-      '<details class="sp-import-help"><summary>Como funciona</summary><p>'+(state.preview.mode==='individual'?'Cada posição da planilha pertence a uma categoria. Uma posição numerada sem nome reserva a vaga; uma versão posterior conserva a identidade da posição e mostra as substituições para revisão.':'As duplas seguem a ordem do arquivo e ocupam as vagas da mesma categoria automaticamente.')+' A importação não vincula contas. Nada é gravado antes da sua confirmação.</p></details>' +
-      '<div class="sp-import-toolbar"><span>' + state.rows.length + ' na prévia · ' + state.rows.filter(function (r) { return r.saved; }).length + ' gravadas</span></div>' +
-      visible.map(function (row, i) { return rowMarkup(row, start + i, plans[start + i]); }).join('') +
-      (state.rows.length > 8 ? '<div class="sp-import-pagination"><button type="button" data-act="prev"' + (state.page === 0 ? ' disabled' : '') + '>Anterior</button><span>Página ' + (state.page + 1) + ' de ' + Math.ceil(state.rows.length / 8) + '</span><button type="button" data-act="next"' + (start + 8 >= state.rows.length ? ' disabled' : '') + '>Próxima</button></div>' : '') +
-      '<button type="button" class="sp-import-save" data-act="save"' + (state.busy || !state.rows.some(function (r) { return !r.saved; }) ? ' disabled' : '') + '>'+(state.preview.mode==='individual'?'Gravar pessoas e vagas revisadas':'Gravar duplas revisadas')+'</button>';
+      '<div class="sp-import-toolbar"><span>' + state.rows.length + ' ' + tr('import.preview', 'posições na prévia') + '</span></div>' +
+      '<div class="sp-import-category-list">' + groupsMarkup(plans) + '</div>' +
+      '<button type="button" class="sp-import-save" data-act="save"' + (state.busy || !state.rows.some(function (r) { return !r.saved; }) ? ' disabled' : '') + '>'+tr('import.confirm', 'Confirmar importação')+'</button>';
     box.innerHTML = '<div class="sp-import-panel">' +
       '<div class="sp-import-header"><h2 id="tournament-import-title">Importar inscritos</h2><button type="button" data-act="close" aria-label="Fechar"' + (state.saving ? ' disabled' : '') + '>×</button></div>' +
       (state.message ? '<p role="status" class="sp-import-status">' + esc(state.message) + '</p>' : '') + content + '</div>';
@@ -183,7 +182,7 @@
         imported.push.apply(imported, parsed.rows);
         added += parsed.rows.length; ignored += parsed.ignored.length;
       }
-      state.message = added + (state.preview.mode==='individual'?' posições individuais na ordem da planilha, incluindo '+state.rows.filter(function(row){return row.placeholder;}).length+' vagas sem nome. Confira as categorias e os nomes.':' duplas na ordem dos arquivos, sem vincular contas. Confira os nomes antes de gravar.') +
+      state.message = added + (state.preview.mode==='individual'?' posições individuais na ordem da planilha, incluindo '+state.rows.filter(function(row){return row.placeholder;}).length+' vagas sem nome. Confira as categorias e os nomes.':' duplas encontradas. Confira as categorias e os nomes.') +
         (ignored ? ' ' + ignored + ' linha(s) não interpretada(s).' : '');
       state.page = 0;
       state.resetScroll = true;
@@ -191,50 +190,6 @@
     } catch (error) { if (state === session) state.message = error.message + '. Nenhuma inscrição foi gravada.'; }
     if (state !== session) return;
     state.busy = false; render();
-  }
-  async function searchPerson(row, side) {
-    var person = row.people[side];
-    if (person.uid === null && person.autoNoAccount) { person.uid = undefined; person.autoNoAccount = false; }
-    var query = String(person.query || person.name || '').trim();
-    var token = (person.lookupToken || 0) + 1;
-    person.lookupToken = token;
-    if (query.length < 3 || query.length > 80) { person.candidates = []; person.lookupStatus = 'invalid'; if (!state.busy) render(); return; }
-    var key = state.tournamentId + '|' + query.toLocaleLowerCase('pt-BR');
-    var cache = state.candidateCache;
-    person.lookupStatus = 'loading'; if (!state.busy) render();
-    try {
-      if (!cache.has(key)) cache.set(key,
-        callable('searchTournamentImportCandidates', { tournamentId: state.tournamentId, query: query })
-          .catch(function (error) { cache.delete(key); throw error; }));
-      var result = await cache.get(key);
-      if (!state || !state.rows.includes(row) || row.people[side] !== person || person.lookupToken !== token) return;
-      if (!result || typeof result !== 'object' || !Array.isArray(result.candidates)) {
-        cache.delete(key);
-        person.candidates = []; person.lookupStatus = 'error'; if (!state.busy) render(); return;
-      }
-      person.candidates = result.candidates;
-      if (person.candidates.length && person.uid === null) { person.uid = undefined; person.autoNoAccount = false; }
-      if (!person.candidates.length && person.uid === undefined) { person.uid = null; person.autoNoAccount = true; }
-      person.lookupStatus = 'done'; if (!state.busy) render();
-    } catch (error) {
-      if (!state || !state.rows.includes(row) || row.people[side] !== person || person.lookupToken !== token) return;
-      person.candidates = []; person.lookupStatus = 'error'; if (!state.busy) render();
-    }
-  }
-  async function discoverCandidates(rows) {
-    var jobs = rows.flatMap(function (row) { return [0, 1].map(function (side) { return { row: row, side: side }; }); });
-    var next = 0;
-    await Promise.all([0, 1, 2].map(async function () {
-      while (next < jobs.length) {
-        var job = jobs[next++];
-        if (!state || !state.rows.includes(job.row)) continue;
-        await searchPerson(job.row, job.side);
-      }
-    }));
-  }
-  function search(rowIndex, side) {
-    var row = state.rows[rowIndex];
-    if (row && !row.saved) searchPerson(row, side);
   }
   async function save() {
     var plans = window.TournamentImportAllocation.allocate(state.rows, state.preview.slots, state.preview);
@@ -249,10 +204,7 @@
     if (window.TournamentImportAllocation.repeatedUid(state.rows)) {
       report('A mesma conta foi escolhida para duas pessoas. Corrija antes de gravar.'); return;
     }
-    var withoutAccount = pending.flatMap(function (entry) { return entry.row.people.filter(function (p) { return p.uid === null; }).map(function (p) { return p.name; }); });
-    if (!window.confirm('Gravar ' + pending.length + (state.preview.mode==='individual'?' posição(ões) individuais revisadas, incluindo as substituições mostradas na prévia?\n':' dupla(s) revisadas nas vagas de suas categorias?\n') +
-      withoutAccount.length + ' pessoa(s) ficarão sem conta vinculada' + (withoutAccount.length ? ': ' + withoutAccount.join(', ') : '.') +
-      '\nCada bloco salvo é definitivo; arquivos e OCR não serão armazenados.')) return;
+    if (!window.confirm(tr('import.confirmPrompt', 'Confirmar a importação de {count} posições nas categorias mostradas?', { count: pending.length }))) return;
     state.busy = true; state.saving = true; render();
     try {
       for (var i = 0; i < pending.length; i += 8) {
@@ -305,40 +257,21 @@
   document.addEventListener('input', function (event) {
     if (!state || !el() || !el().contains(event.target)) return;
     var action = event.target.dataset.act;
-    if (action !== 'name' && action !== 'query') return;
+    if (action !== 'name') return;
     var row = state.rows[Number(event.target.dataset.row)]; if (!row || row.saved) return;
     var person = row.people[Number(event.target.dataset.side)]; if (!person) return;
-    if (action === 'query') {
-      person.query = event.target.value.trim();
-      person.lookupToken = (person.lookupToken || 0) + 1;
-      person.candidates = []; person.lookupStatus = '';
-      if (person.uid === null && person.autoNoAccount) { person.uid = undefined; person.autoNoAccount = false; }
-    } else {
-      person.name = event.target.value.trim(); person.query = person.name;
-      if(row.kind==='individual')row.placeholder=!person.name;
-      person.uid = null; person.chosenName = ''; person.autoNoAccount = false;
-      person.candidates = []; person.lookupStatus = '';
-      person.lookupToken = (person.lookupToken || 0) + 1;
-      var queryInput = event.target.closest('.sp-import-person').querySelector('[data-act="query"]');
-      if (queryInput) queryInput.value = person.query;
-      var nameNode = event.target.closest('.sp-import-person').querySelector('.sp-import-person-name');
-      if (nameNode) nameNode.textContent = person.name;
-    }
-    var card = event.target.closest('.sp-import-person');
-    if (card) {
-      var decisionNode = card.querySelector('.sp-import-decision');
-      if (decisionNode && person.uid === undefined) decisionNode.textContent = 'Conta a revisar — use Buscar';
-      var candidatesNode = card.querySelector('.sp-import-candidates');
-      if (candidatesNode) candidatesNode.remove();
-    }
-  });
-  document.addEventListener('keydown', function (event) {
-    if (event.key !== 'Enter' || !state || !el() || !el().contains(event.target) || event.target.dataset.act !== 'query') return;
-    event.preventDefault();
-    if (!state.busy) search(Number(event.target.dataset.row), Number(event.target.dataset.side));
+    person.name = event.target.value.trim();
+    if (row.kind === 'individual') row.placeholder = !person.name;
+    person.uid = null; person.confirmedAccountUid = null;
+    var parent = event.target.closest('.sp-import-name');
+    var nameNode = parent && parent.querySelector('.sp-import-person-name');
+    if (nameNode) nameNode.textContent = person.name || tr('import.empty', 'A preencher');
+    var accountNode = parent && parent.querySelector('.sp-import-account');
+    if (accountNode) accountNode.remove();
   });
   document.addEventListener('change', function (event) {
     if (!state || !el() || !el().contains(event.target)) return;
+    if (event.target.dataset && event.target.dataset.act === 'name') { render(); return; }
     if (event.target.id === 'tournament-import-files') { processFiles(Array.from(event.target.files || [])); return; }
   });
   document.addEventListener('click', function (event) {
@@ -347,21 +280,11 @@
     var action = button.dataset.act, index = Number(button.dataset.row), side = Number(button.dataset.side);
     if (action === 'close' && !state.saving) { el().remove(); state = null; return; }
     if (state.busy) return;
-    if (action === 'prev') { state.page--; state.resetScroll = true; render(); return; }
-    if (action === 'next') { state.page++; state.resetScroll = true; render(); return; }
     if (action === 'remove') { if (!state.rows[index] || state.rows[index].saved) return;
       state.rows.splice(index, 1); state.page = Math.min(state.page, Math.max(0, Math.ceil(state.rows.length / 8) - 1));
       var nextRow = state.rows[Math.min(index, state.rows.length - 1)];
       state.focusPersonKey = nextRow ? nextRow.viewKey + '-0' : '';
       render(); return; }
-    if (action === 'search') { search(index, side); return; }
-    if (action === 'none') { if (!state.rows[index] || state.rows[index].saved) return;
-      state.rows[index].people[side].uid = null; state.rows[index].people[side].autoNoAccount = false; state.rows[index].people[side].chosenName = ''; render(); return; }
-    if (action === 'choose') { if (!state.rows[index] || state.rows[index].saved) return;
-      var person = state.rows[index].people[side];
-      if (String(person.lookupToken) !== button.dataset.token) return;
-      var selected = person.candidates[Number(button.dataset.candidate)]; if (!selected) return;
-      person.uid = selected.uid; person.autoNoAccount = false; person.chosenName = selected.name; render(); return; }
     if (action === 'save') save();
   });
 })();

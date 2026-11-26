@@ -227,9 +227,9 @@ assert(view.includes('Fotos são enviadas ao Google Cloud Vision somente após s
 assert(view.includes("window.confirm('Enviar a foto"), 'cada foto continua exigindo consentimento');
 assert(!view.includes('data-act="add-row"') && !view.includes('data-act="category"') && !view.includes('data-act="slot"'),
   'organizador não escolhe vaga ou categoria final neste fluxo');
-assert(view.includes('data-act="save"') && view.includes('data-act="none"'), 'decisão humana e gravação continuam disponíveis');
+assert(view.includes('data-act="save"') && view.includes('sp-import-category-group'), 'decisão humana e gravação continuam disponíveis');
 assert(view.includes('state.page = 0;') && view.includes('p.uid = null'), 'prévia abre na primeira dupla sem vincular contas');
-assert(view.includes('repeatedUid(state.rows)') && view.indexOf('repeatedUid(state.rows)') < view.indexOf('window.confirm(\'Gravar '),
+assert(view.includes('repeatedUid(state.rows)') && view.indexOf('repeatedUid(state.rows)') < view.indexOf("window.confirm(tr('import.confirmPrompt'"),
   'UID duplicado em toda a importação é barrado antes da primeira gravação');
 assert(view.includes('if (!state.rows[index] || state.rows[index].saved) return;'), 'linha gravada não pode ser removida');
 assert(view.includes('entry.plan.slot.categoryId'), 'a categoria enviada é sempre a categoria da vaga mapeada');
@@ -279,7 +279,7 @@ async function testVisibleFlow() {
   listeners.change({ target: { id: 'tournament-import-files', files: [
     { name: 'foto.png', type: 'image/png', size: 100 },
   ] } });
-  for (let i = 0; i < 20 && !dialog.innerHTML.includes('duplas na ordem dos arquivos'); i++) await new Promise((resolve) => setTimeout(resolve, 0));
+  for (let i = 0; i < 20 && !dialog.innerHTML.includes('duplas encontradas'); i++) await new Promise((resolve) => setTimeout(resolve, 0));
   assert(dialog.innerHTML.indexOf('Ana Souza') < dialog.innerHTML.indexOf('Carla Souza') &&
     dialog.innerHTML.indexOf('Carla Souza') < dialog.innerHTML.indexOf('Eduardo Lima'),
     'cards seguem a ordem da foto');

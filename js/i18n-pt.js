@@ -1,5 +1,15 @@
 // ─── Portuguese (pt-BR) translations ────────────────────────────────────────
 window._translations['pt'] = {
+  "import.account": "Conta Scoreplace",
+  "import.empty": "A preencher",
+  "import.edit": "Editar",
+  "import.name": "Nome",
+  "import.remove": "Remover esta posição",
+  "import.unknown": "Categoria não identificada",
+  "import.preview": "posições na prévia",
+  "import.confirm": "Confirmar importação",
+  "import.instructions": "Selecione o arquivo e confira os nomes em cada categoria antes de confirmar.",
+  "import.confirmPrompt": "Confirmar a importação de {count} posições nas categorias mostradas?",
   'tv.super8.loadingGames': 'Carregando jogos',
   'tv.super8.awaitingDraw': 'Aguardando sorteio',
   'phaseGrid.distribute': 'Distribuir grupos nas quadras',

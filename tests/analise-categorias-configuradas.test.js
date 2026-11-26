@@ -28,8 +28,8 @@ ok(source.includes('function _erHasFinePointer()') && source.includes("'(pointer
 ok(source.includes('ev.metaKey || ev.ctrlKey') && source.includes('ev.shiftKey'), 'Cmd/Ctrl seleciona vários e Shift seleciona uma faixa');
 ok(source.includes('O primeiro clique já inicia a seleção visível') && source.includes('ev.detail >= 2'), 'clique simples inicia a seleção e duplo clique preserva o acesso à ficha com UID');
 ok(source.includes('var selectionClick = !canOpen ?') && source.includes('window._erMxPairClick') && source.includes('_erPairOrdersFrom'), 'cards manuais e cards de dupla entram na mesma seleção visual por Cmd/Ctrl e Shift');
-ok(source.includes("var soloGrid = (femTotal || mascTotal) ?"), 'colunas Feminino/Masculino vazias não ocupam espaço entre os destinos e os inscritos sem gênero');
-ok(source.includes("var assigned = Object.prototype.hasOwnProperty.call(pe, 'category')") && source.includes('var actual = _decomposeCat(assigned, t)'), 'contador superior usa a categoria atribuída efetiva — inclusive para duplas/importados sem gênero individual');
+ok(source.includes("var soloGrid = !individualLayout && (femTotal || mascTotal) ?"), 'colunas Feminino/Masculino vazias não ocupam espaço entre os destinos e os inscritos sem gênero');
+ok(source.includes('var assigned = _erIndividualPlacementCategory(r, t);') && source.includes('var actual = _decomposeCat(assigned, t)'), 'contador superior usa a categoria atribuída efetiva — inclusive para duplas/importados sem gênero individual');
 ok(source.includes('application/x-scoreplace-orders') && source.includes('orders.forEach(function (order)'), 'arrastar a seleção aplica a atribuição staged a todos os selecionados');
 ok(!source.includes('window._erFormSelectedPair') && !source.includes('window._erSplitSelectedPair'), 'análise não forma nem desfaz duplas — ela só atribui gênero e categoria');
 ok(!source.includes('FirestoreDB.formPair(_liveState.t.id') && !source.includes('FirestoreDB.splitPair(_liveState.t.id'), 'a análise não chama o fluxo de dupla por acidente');

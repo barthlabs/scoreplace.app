@@ -3834,3 +3834,20 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 .sp-tournament-weather .weather-box span {
   color: #e2e8f0 !important;
 }
+
+/* Spreadsheet preview: categories and their roster, without account workflow cards. */
+.sp-import-category-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr)); gap:16px; }
+.sp-import-category-group { min-width:0; border:1px solid var(--border-color); border-radius:12px; padding:14px; background:var(--bg-card); color:var(--text-main); }
+.sp-import-category-group h3 { margin:0 0 10px; font-size:1rem; color:var(--text-main); }
+.sp-import-category-group h3 span { font-weight:400; color:var(--text-secondary); }
+.sp-import-roster { margin:0; padding-left:24px; }
+.sp-import-roster-row { padding:7px 0; border-bottom:1px solid var(--border-color); overflow-wrap:anywhere; }
+.sp-import-roster-row:last-child { border-bottom:0; }
+.sp-import-name { min-width:0; }
+.sp-import-name .sp-import-person-name { display:inline; font-size:.9rem; font-weight:500; }
+.sp-import-name .sp-import-edit { display:inline-block; margin:0 0 0 7px; vertical-align:baseline; }
+.sp-import-name .sp-import-edit summary { color:var(--text-secondary); font-size:.75rem; }
+.sp-import-name .sp-import-edit[open] { display:block; margin:8px 0; }
+.sp-import-roster-row button[data-act="remove"] { float:right; min-height:28px; min-width:28px; padding:2px 6px; margin-left:6px; }
+.sp-import-account { display:inline-block; margin-left:6px; color:var(--success,#15803d); font-weight:800; }
+.sp-import-partner { color:var(--text-secondary); }

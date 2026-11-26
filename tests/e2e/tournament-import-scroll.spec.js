@@ -1,9 +1,9 @@
 const { test, expect } = require('@playwright/test');
 const path = require('path');
 
-test('confirmar contas na importação mantém a rolagem do modal', async ({ page }) => {
+test('prévia por categoria permite editar nomes sem mudar a rolagem', async ({ page }) => {
   await page.setViewportSize({ width: 440, height: 640 });
-  await page.setContent('<main>Prévia isolada</main>');
+  await page.setContent('<meta name="viewport" content="width=device-width, initial-scale=1"><main>Prévia isolada</main>');
   await page.addStyleTag({ path: path.join(__dirname, '..', '..', 'css', 'components.css') });
   await page.evaluate(() => {
     Object.defineProperty(window.crypto, 'randomUUID', { value: () => '12345678-1234-4234-8234-123456789abc' });
@@ -35,18 +35,19 @@ test('confirmar contas na importação mantém a rolagem do modal', async ({ pag
   await page.locator('#tournament-import-files').setInputFiles({
     name: 'foto.png', mimeType: 'image/png', buffer: Buffer.from([1, 2, 3]),
   });
-  await expect(page.locator('.sp-import-pair')).toHaveCount(8);
-  await expect(page.locator('.sp-import-candidate')).toHaveCount(16);
+  await expect(page.locator('.sp-import-category-group')).toHaveCount(1);
+  await expect(page.locator('.sp-import-roster-row')).toHaveCount(8);
+  await expect(page.locator('.sp-import-account')).toHaveCount(0);
+  await expect(page.locator('.sp-import-panel')).not.toContainText('conta vinculada');
   const panel = page.locator('.sp-import-panel');
-  const candidate = page.locator('.sp-import-pair').nth(5).locator('.sp-import-candidate').first();
-  await candidate.scrollIntoViewIfNeeded();
-  const before = await panel.evaluate((node) => node.scrollTop);
-  expect(before).toBeGreaterThan(0);
-  await candidate.click();
-  const after = await panel.evaluate((node) => node.scrollTop);
-  expect(Math.abs(after - before)).toBeLessThan(8);
-  await expect(page.locator('.sp-import-pair').nth(5)).toContainText('Conta vinculada');
-  await expect(page.locator('.sp-import-pair').nth(6)).toBeVisible();
+  const edit = page.locator('.sp-import-roster-row').nth(5).locator('summary').first();
+  await edit.scrollIntoViewIfNeeded();await edit.click();
+  const input=page.locator('.sp-import-roster-row').nth(5).locator('input').first();
+  await input.focus();const before=await panel.evaluate(node=>node.scrollTop);expect(before).toBeGreaterThan(0);
+  await input.fill('Nome corrigido');await input.dispatchEvent('change');
+  expect(Math.abs(await panel.evaluate(node=>node.scrollTop)-before)).toBeLessThan(8);
+  await expect(page.locator('.sp-import-roster-row').nth(5)).toContainText('Nome corrigido');
+
 });
 
 test('planilha individual separa 80 posições e grava somente após confirmação',async({page})=>{
@@ -78,13 +79,16 @@ test('planilha individual separa 80 posições e grava somente após confirmaç�
  await page.evaluate(()=>_openTournamentImport('individual-browser'));
  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(matrix),'Inscritos');
  await page.locator('#tournament-import-files').setInputFiles({name:'inscricoes-preliminares.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(XLSX.write(book,{type:'buffer',bookType:'xlsx'}))});
- await expect(page.locator('.sp-import-toolbar')).toContainText('80 na prévia');
+ await expect(page.locator('.sp-import-toolbar')).toContainText('80 posições na prévia');
  await expect(page.locator('.sp-import-summary')).toContainText('3 vagas sem nome');
- await expect(page.locator('.sp-import-pair').first()).toContainText('Fem A');
- await expect(page.locator('.sp-import-pair').first()).not.toContainText('MASCULINA');
+ await expect(page.locator('.sp-import-category-group').first()).toContainText('Fem A');
+ await expect(page.locator('.sp-import-category-group').first()).not.toContainText('MASCULINA');
  expect(applied).toBe(0);
- await page.locator('[data-act="next"]').click();
- await expect(page.locator('.sp-import-person-name').filter({hasText:'Vaga sem nome'})).toHaveCount(2);
+ await expect(page.locator('.sp-import-category-group')).toHaveCount(7);
+ await expect(page.locator('.sp-import-roster-row')).toHaveCount(80);
+ await expect(page.locator('.sp-import-person-name').filter({hasText:'A preencher'})).toHaveCount(3);
+ await expect(page.locator('.sp-import-pagination')).toHaveCount(0);
+ await expect(page.locator('.sp-import-account')).toHaveCount(0);
  await page.locator('[data-act="save"]').click();
  expect(applied).toBe(0);
  await page.evaluate(()=>window.allowSave=true);
@@ -92,5 +96,5 @@ test('planilha individual separa 80 posições e grava somente após confirmaç�
  await expect.poll(()=>applied).toBe(10);
  expect(registrations).toHaveLength(80);expect(registrations.filter(r=>r.isPlaceholder)).toHaveLength(3);
  expect(registrations.every(r=>!r.participantUid&&!r.fixedPairId)).toBe(true);
- expect(await page.evaluate(()=>window.confirmation)).toContain('substituições mostradas');
+ expect(await page.evaluate(()=>window.confirmation)).toContain('80 posições nas categorias mostradas');
 });

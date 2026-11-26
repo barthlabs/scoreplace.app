@@ -3157,6 +3157,25 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // PINTADOS pela verificação letzplay. Arrastar → atribui gênero; soltar numa
   // categoria → gênero + categoria. Reusa _pendingEdits + save.
   var _GENMAP = { feminino: 'Fem', masculino: 'Masc' };
+  function _erIndividualCategoryLayout(t) {
+    if (!t || t.enrollmentMode !== 'individual' || Number(t.currentPhaseIndex || 0) !== 0) return false;
+    var phase = (t.phases || [])[0] || {}, classification = phase.classification || {};
+    return !!(window._initialMonarchIndividualEnrollment && window._initialMonarchIndividualEnrollment(t)) ||
+      classification.partnerRotation === 'groups' || classification.rotationPartners === true ||
+      ['rotation_groups', 'rotation_groups_8', 'rei_rainha'].indexOf(t.fmt2 && t.fmt2.parceria) !== -1;
+  }
+  function _erIndividualPlacementCategory(r, t) {
+    var edit = _pendingEdits[r.order] || {};
+    if (Object.prototype.hasOwnProperty.call(edit, 'category')) return edit.category || '';
+    var definition = (t.categoryDefinitions || []).find(function (c) { return c.id === r.categoryId; });
+    return definition ? definition.label || definition.name || '' : (r.assigned && r.assigned[0]) || '';
+  }
+  function _erIndividualPlacementGender(r, t) {
+    var category = _erIndividualPlacementCategory(r, t), d = _decomposeCat(category, t);
+    if (d.gender === 'Fem') return 'feminino';
+    if (d.gender === 'Masc') return 'masculino';
+    return _mxGenderOf(r);
+  }
   function _mxGenderOf(r) {
     var pe = _pendingEdits[r.order] || {};
     var g = (pe.gender != null) ? pe.gender : (r.gender || '');
@@ -3183,6 +3202,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _mxSkillOf(r, t) {
     var pe = _pendingEdits[r.order] || {};
     if (pe.category != null) { if (!pe.category) return null; var d = _decomposeCat(pe.category, t); return d.skill || null; }
+    var assignedCategory = _erIndividualPlacementCategory(r, t);
+    if (assignedCategory) { var assignedParts = _decomposeCat(assignedCategory, t); if (assignedParts.skill) return assignedParts.skill; }
     if (r.effectiveSkills && r.effectiveSkills.length) return r.effectiveSkills[0];
     if (r._lzSkill) return r._lzSkill; // org buscou no letzplay mas a pessoa ainda não logou
     return null;
@@ -3289,7 +3310,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // como se não existissem. Reconstitui apenas essa projeção visual pela
     // ordem de inscrição (97/98, 99/100, ...); a identidade manual permanece
     // nos próprios rows e é usada na gravação.
-    if (window._initialMonarchIndividualEnrollment && window._initialMonarchIndividualEnrollment(t)) {
+    if (window._initialMonarchIndividualEnrollment && window._initialMonarchIndividualEnrollment(t) || _erIndividualCategoryLayout(t)) {
       // O mesmo array pode ser reutilizado ao mudar de fase. Remova só pares
       // fictícios da apresentação; preserve os pares confirmados pelo servidor.
       (rows || []).forEach(function (r) {
@@ -3321,7 +3342,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var individualRows = enrolledRows.filter(function (r) { return !pairedOrders[r.order]; });
     var fem = emptyBox(), masc = emptyBox(), semG = emptyBox();
     individualRows.forEach(function (r) {
-      var g = _mxGenderOf(r), sk = _mxSkillOf(r, t);
+      var g = _erIndividualPlacementGender(r, t), sk = _mxSkillOf(r, t);
       var key = (sk && groups.indexOf(sk) !== -1) ? sk : '__none__';
       (g === 'feminino' ? fem : g === 'masculino' ? masc : semG)[key].push(r);
     });
@@ -3363,8 +3384,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         // pode ser vazio, mas `assigned[0]` já é, por exemplo, “Fem Light”.
         // É a mesma fonte que o box da categoria usa para renderizar a dupla.
         var pe = _pendingEdits[r.order] || {};
-        var assigned = Object.prototype.hasOwnProperty.call(pe, 'category')
-          ? pe.category : ((r.assigned && r.assigned[0]) || '');
+        var assigned = _erIndividualPlacementCategory(r, t);
         if (!assigned) return;
         var actual = _decomposeCat(assigned, t);
         var genderOk = !d.gender || d.gender === actual.gender;
@@ -3433,7 +3453,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // v1.7.55: `data-er-person` é o que a barra de busca varre. Nome VIVO (o mesmo que o
       // card mostra) — indexar rótulo velho faz a busca achar quem a tela não mostra, que
       // foi exatamente o defeito da busca da chave na 1.7.47.
-      return '<div draggable="true" data-er-order="' + r.order + '" data-er-person="' + _esc(r.name || '') + '" data-er-gender="' + (_mxGenderOf(r) || '') + '" data-er-skill="' + _esc(_mxSkillOf(r, t) || '') + '" ondragstart="window._erMxDragStart(event,' + r.order + ')" ondragover="window._erMxOver(event)" ondrop="window._erMxDropOnSolo(event,' + r.order + ')"' + click + selectionClick + ' ' +
+      return '<div draggable="true" data-er-order="' + r.order + '" data-er-person="' + _esc(r.name || '') + '" data-er-gender="' + (_erIndividualPlacementGender(r, t) || '') + '" data-er-skill="' + _esc(_mxSkillOf(r, t) || '') + '" ondragstart="window._erMxDragStart(event,' + r.order + ')" ondragover="window._erMxOver(event)" ondrop="window._erMxDropOnSolo(event,' + r.order + ')"' + click + selectionClick + ' ' +
         'aria-pressed="' + (selected ? 'true' : 'false') + '" style="cursor:' + (canOpen ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:' + (selected ? 'rgba(14,165,233,0.20)' : 'var(--bg-card,rgba(0,0,0,0.25))') + ';color:' + window._spCor(nameCol, 'color') + ';border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + window._spCor(border, 'borda'))) + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '"><button type="button" onclick="event.stopPropagation();window._erOpenParticipantFicha(' + r.order + ')" style="background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;max-width:100%;overflow:hidden;text-overflow:ellipsis;">' + _esc(r.name || '(sem nome)') + '</button></div>';
     }
     function cardGrid(arr, pairs) {
@@ -3490,8 +3510,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var pairFemTotal = pairGroups.reduce(function (n, members) { return n + (_erPairPlacementGender(members, t) === 'feminino' ? 2 : 0); }, 0);
     var pairMascTotal = pairGroups.reduce(function (n, members) { return n + (_erPairPlacementGender(members, t) === 'masculino' ? 2 : 0); }, 0);
     var gridRows = ghead('♀', 'feminino', 'Feminino', femCol, femTotal + pairFemTotal) + ghead('♂', 'masculino', 'Masculino', mascCol, mascTotal + pairMascTotal);
+    var individualLayout = _erIndividualCategoryLayout(t);
+    var configuredCategories = (t.categoryDefinitions || []).filter(function (c) {
+      var label = c.label || c.name || '';
+      return c.enabled !== false && (t.excludedCategories || []).indexOf(label) === -1 &&
+        !(Object.prototype.hasOwnProperty.call(t.maxParticipantsByCategory || {}, label) && Number(t.maxParticipantsByCategory[label]) === 0);
+    });
+    function configuredBox(gender, sk, bucket, color, tint) {
+      var configured = !t.canonicalRegistrationMigration || !t.canonicalRegistrationMigration.fingerprint || configuredCategories.some(function (c) {
+        var d = _decomposeCat(c.label || c.name || '', t);
+        return d.gender === (gender === 'feminino' ? 'Fem' : 'Masc') && (sk === '__none__' ? !d.skill : d.skill === sk);
+      });
+      var members = individualLayout ? bucket[sk] : [];
+      if (!configured && !members.length && !pairsForBox(gender, sk).length) return '<div aria-hidden="true"></div>';
+      return catBox(gender, sk, members, color, tint);
+    }
     groups.forEach(function (sk) {
-      gridRows += catBox('feminino', sk, [], femCol, femTint) + catBox('masculino', sk, [], mascCol, mascTint);
+      gridRows += configuredBox('feminino', sk, fem, femCol, femTint) + configuredBox('masculino', sk, masc, mascCol, mascTint);
     });
     var categoryGrid = '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 8px;align-items:stretch;">' + gridRows + '</div>';
     // BOX MISTO acima do grid (pedido do dono, 23/jul): NÃO é uma coluna — só indica
@@ -3540,7 +3575,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }).join('');
       return '<div style="min-width:0;border-top:2px solid ' + color + ';padding-top:7px;"><div style="font-size:17px;font-weight:850;color:' + color + ';">' + title + '</div>' + inner + '</div>';
     }
-    var soloGrid = (femTotal || mascTotal) ? ('<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 14px;">' +
+    var soloGrid = !individualLayout && (femTotal || mascTotal) ? ('<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 14px;">' +
       soloColumn('♀ Feminino', femCol, fem) + soloColumn('♂ Masculino', mascCol, masc) + '</div>') : '';
     // Ordem deliberada e visível: categorias reais (destinos) → duplas já
     // formadas sem categoria → individuais que ainda podem formar dupla.

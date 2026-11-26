@@ -1,5 +1,15 @@
 // ─── English translations ───────────────────────────────────────────────────
 window._translations['en'] = {
+  "import.account": "Scoreplace account",
+  "import.empty": "To be filled",
+  "import.edit": "Edit",
+  "import.name": "Name",
+  "import.remove": "Remove this entry",
+  "import.unknown": "Unknown category",
+  "import.preview": "entries in preview",
+  "import.confirm": "Confirm import",
+  "import.instructions": "Select the file and check the names in each category before confirming.",
+  "import.confirmPrompt": "Confirm importing {count} entries into the categories shown?",
   'tv.super8.loadingGames': 'Loading matches',
   'tv.super8.awaitingDraw': 'Awaiting draw',
   'phaseGrid.distribute': 'Assign groups to courts',
