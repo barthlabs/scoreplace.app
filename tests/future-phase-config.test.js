@@ -36,6 +36,7 @@ console.log('future-phase-config: OK');
   const {w,G,scenario,D}=require('./universal-phase-grid.test');
   const core=require('../functions-autodraw/fast8-configuration-core');
   const draft=scenario(['Divisão B','Divisão C'],[16,32],[8,8],[7,7],[4,2]);
+  draft.fmt2.rotationCategoryRules.forEach(rule=>rule.groupAlternation=true);
   const compiled=F.compileToPhases(draft.fmt2,{sport:draft.sport,categories:draft.combinedCategories});
   const original=Object.assign({},draft,{fmt2:compiled.cfg,phases:compiled.phases,rulesContractVersion:2,
     currentPhaseIndex:0,status:'active',matches:[{id:'synthetic-played',phaseIndex:0,winner:'A'}]});
@@ -43,8 +44,8 @@ console.log('future-phase-config: OK');
   assert(!proposal.error,proposal.error);
   original.scheduleWindow={mode:'organizer',days:D,interleavedPlan:proposal.plan};
   const before=structuredClone(original);
-  const changed=core.plan(original,{groupAlternation:true,thirdPlaceEnabled:false},w,FormatError,true);
-  assert(changed.after.scheduleWindow.groupAlternation);
+  const changed=core.plan(original,{thirdPlaceEnabled:false},w,FormatError,true);
+  assert(changed.after.fmt2.rotationCategoryRules.every(rule=>rule.groupAlternation===true));
   assert.equal(changed.after.fmt2.eliminatoria.thirdPlaceEnabled,false);
   assert.equal(changed.after.phases[1].thirdPlace,false);
   assert.equal(changed.after.phases[1].thirdPlacePolicy,'optional_super8');
@@ -60,8 +61,11 @@ console.log('future-phase-config: OK');
   delete oldClient.eliminatoria.thirdPlaceEnabled;oldClient.eliminatoria.terceiro=true;
   const keep=core.prepare(changed.after,{fmt2:oldClient},w,FormatError,true);
   assert.equal(keep.patch.fmt2.eliminatoria.thirdPlaceEnabled,false,'cliente antigo não religa o terceiro');
-  const leaving=F.defaultConfig('Beach Tennis');leaving.parceria='fixa';
-  const outside=core.prepare(changed.after,{fmt2:leaving,scheduleWindow:{groupAlternation:false}},w,FormatError,false);
+  const leaving=F.defaultConfig('Beach Tennis');leaving.parceria='fixa';leaving.rotationCategoryRules=null;
+  const undrawn=structuredClone(changed.after);undrawn.matches=[];delete undrawn.scheduleWindow.interleavedPlan;
+  leaving.qualificationCategoryRules=structuredClone(undrawn.fmt2.qualificationCategoryRules || []);
+  leaving.eliminatoria.formationQualificationCategoryRules=structuredClone(undrawn.fmt2.eliminatoria.formationQualificationCategoryRules || []);
+  const outside=core.prepare(undrawn,{fmt2:leaving},w,FormatError,false);
   assert.equal(outside.patch.fmt2.eliminatoria.thirdPlaceEnabled,undefined,
     'sair do formato de oito não herda uma opção incompatível');
 

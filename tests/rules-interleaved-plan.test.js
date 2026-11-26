@@ -43,6 +43,13 @@ async function req(uid,fields,mask){const r=await fetch(url+(mask?'?updateMask.f
       phaseBracketPlanV1:M({schema:I(1),fromPhaseIndex:I(0),phaseIndex:I(2),matches:A([])}),
       phaseBracketPlanVersion:I(2),matches:A([M({id:S('jogo-1'),scheduledGameNumber:I(1)})])}})});
   out.officialPlanFullSet=fullSet.status;
+  const categoryRules=A([M({category:S('Sintética'),groupAlternation:{booleanValue:true}})]);
+  await req('root',{creatorUid:S(uid),name:S('Categoria sintética'),status:S('open'),scheduleWindow:M({}),matches:A([]),fmt2:M({rotationCategoryRules:categoryRules}),
+    phases:A([M({classification:M({rotationCategoryRules:categoryRules})})])});
+  out.categoryName=await req(uid,{name:S('Mudança permitida')},'name');
+  out.categoryFlag=await req(uid,{fmt2:M({rotationCategoryRules:A([M({category:S('Sintética'),groupAlternation:{booleanValue:false}})])})},'fmt2');
+  out.categoryOmitted=await req(uid,{fmt2:M({rotationCategoryRules:A([M({category:S('Sintética')})])})},'fmt2');
+  out.phaseCategoryFlag=await req(uid,{phases:A([M({classification:M({rotationCategoryRules:A([])})})])},'phases');
   console.log('__JSON__'+JSON.stringify(out));
 })().catch(e=>{console.error(e.stack);process.exit(1)});
 `;
@@ -63,6 +70,7 @@ try {
   const expected = { setup:200, name:200, classification:200, tvLayout:403,
     tvRotation:403, tvScreens:403, tvActiveScreen:403, matches:403, plan:403,
     phases:403, fmt2:403, tiebreakers:403, marker:403 };
+  expected.categoryName=200;expected.categoryFlag=403;expected.categoryOmitted=403;expected.phaseCategoryFlag=403;
   expected.officialPlan=403;
   expected.officialPlanVersion=403;
   expected.officialPlanFullSet=403;

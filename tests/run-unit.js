@@ -1497,6 +1497,7 @@ const SUITES = [
   'tests/operation-gate-check-live.test.js',
   'tests/verify-function-source.test.js',
   'tests/next-match-available.test.js',
+  'tests/fast8-category-court-queue.test.js',
   'tests/interleaved-capacity-result.test.js',
   'tests/placar-sandbox-isolado.test.js',
   'tests/publicar-sorteio-nao-sobrescreve-resultado.test.js',

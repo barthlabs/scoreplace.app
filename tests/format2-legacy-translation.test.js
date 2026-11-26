@@ -19,7 +19,7 @@ const uiSource = fs.readFileSync(path.join(root, 'js/views/format2-ui.js'), 'utf
 assert.match(formSource, /initCfg = JSON\.parse\(JSON\.stringify\(tourn\.fmt2\)\)/);
 assert.match(formSource, /window\._f2MountInForm\(mount, sport, initCfg, tourn\)/);
 assert.match(formSource, /tourData\.fmt2 = _f2cfg/);
-assert.match(uiSource, /window\._f2GetConfig = function \(\) \{ return \(S && S\.mode === 'form'\) \? window\.FORMAT2\.normalize\(S\.cfg, S\.sport\)/);
+assert.match(uiSource, /window\._f2GetConfig = function \(\) \{ return \(S && S\.mode === 'form'\) \? window\.FORMAT2\.normalize\(S\.cfg, S\.sport,category=>_sliderPopulation\(category,false\)\)/);
 
 function fixture(sport, teamSize) {
   const cfg = F.defaultConfig(sport);

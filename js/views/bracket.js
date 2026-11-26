@@ -1325,6 +1325,7 @@ window._bracketReloadCourtState = function (tId, entry) {
     .collection('courtState').doc('main').get({ source: 'server' }).then(function (snap) {
       var data = snap.exists ? snap.data() || {} : {};
       entry.released = data.released && typeof data.released === 'object' ? data.released : {};
+      entry.lastReleasedByCourt = data.lastReleasedByCourt || {};
       entry.blockCourt = data.blockCourt && typeof data.blockCourt === 'object' ? data.blockCourt : {};
       entry.monarchEndWholeBlock = data.monarchEndWholeBlock === true;
       entry.monarchEndWholeBlockByMatch = data.monarchEndWholeBlockByMatch && typeof data.monarchEndWholeBlockByMatch === 'object'
@@ -1352,6 +1353,7 @@ window._bracketEnsureCourtReleaseListener = function (tId) {
     .doc(id).collection('courtState').doc('main').onSnapshot(function (snap) {
       var data = snap.exists ? snap.data() || {} : {};
       entry.released = data.released && typeof data.released === 'object' ? data.released : {};
+      entry.lastReleasedByCourt = data.lastReleasedByCourt || {};
       entry.blockCourt = data.blockCourt && typeof data.blockCourt === 'object' ? data.blockCourt : {};
       entry.monarchEndWholeBlock = data.monarchEndWholeBlock === true;
       entry.monarchEndWholeBlockByMatch = data.monarchEndWholeBlockByMatch && typeof data.monarchEndWholeBlockByMatch === 'object'
@@ -1496,7 +1498,7 @@ window._bracketOperationsSelect = function (t) {
   }
   var ordered = window._bracketPostponedOrder(candidates, postponed, ready);
   var fast8 = window.ScoreplaceGroupAlternation && window.ScoreplaceGroupAlternation.enabled(t)
-    ? window.ScoreplaceGroupAlternation.selection(t, matches, released) : null;
+    ? window.ScoreplaceGroupAlternation.selection(t, matches, released,{lastReleasedByCourt:(window._bracketCourtReleaseCache[String(t.id)] || {}).lastReleasedByCourt}) : null;
   if (fast8 && fast8.waiting.length) {
     var fastIds = new Set(fast8.waiting.map(function (m) { return String(m.id); }));
     ordered = [fast8.next].concat(fast8.waiting, ordered.filter(function (m) { return !fastIds.has(String(m.id)); }))
@@ -2978,10 +2980,6 @@ window._bracketOperationsRefresh = function (t, root) {
   var nextCards = (state.queue || []).concat(state.future || []).filter(categoryMatches).filter(function (m, index, list) {
     return m && list.findIndex(function (item) { return item && String(item.id) === String(m.id); }) === index;
   });
-  if (state.fast8 && nextCards[0] && state.fast8.groupFor(nextCards[0])) {
-    var nextRound=Number(nextCards[0].round || 1), nextPhase=Number(nextCards[0].phaseIndex || 0);
-    nextCards=nextCards.filter(function(m) {return state.fast8.groupFor(m) && Number(m.phaseIndex || 0)===nextPhase && Number(m.round || 1)===nextRound;});
-  }
   var readyIds = new Set((state.queue || []).map(function (m) { return String(m.id); }));
   var releasedMatches = window._bracketCourtReleased(t.id);
   var estimates = _bracketOperationsFutureEstimates(state, t);
@@ -6523,7 +6521,7 @@ window._cancelCourtAction = function (tId, matchId, action, button) {
   });
 };
 function _fast8MatchCheck(t, m, matches, court) {
-  if (!t || !t.scheduleWindow || t.scheduleWindow.groupAlternation !== true || !m || !m.isMonarch || m.isTieBreak || m.courtCalledAt) return {ok:true};
+  if (!t || !window.ScoreplaceGroupAlternation || !window.ScoreplaceGroupAlternation.enabled(t) || !m || !m.isMonarch || m.isTieBreak || m.courtCalledAt) return {ok:true};
   var core = window.ScoreplaceGroupAlternation;
   if (!core) return {ok:false,reason:'fast8-incomplete-draw',message:'Atualize o aplicativo para usar o Fast 8.'};
   return core.selection(t,matches,window._bracketCourtReleased(t.id)).check(m,court);
@@ -6540,7 +6538,7 @@ function _syncMatchCourtCopies(tId, matchId, value, persisted) {
   var m = allMatches.find(function (item) { return String(item.id) === String(matchId); });
   var occupancy = window.ScoreplaceCourtOccupancy;
   var active = occupancy ? occupancy.activeMatches(allMatches, released, t) : [];
-  var fastGate = t && t.scheduleWindow && t.scheduleWindow.groupAlternation === true ? _fast8MatchCheck(t,m,allMatches) : null;
+  var fastGate = t && window.ScoreplaceGroupAlternation && window.ScoreplaceGroupAlternation.enabled(t) ? _fast8MatchCheck(t,m,allMatches) : null;
   var playerBusy = !!(m && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(m, active)) || !!(fastGate && fastGate.reason === 'fast8-player-busy');
   Array.prototype.forEach.call(document.querySelectorAll('.sp-match-card[data-match-player-id]'), function (card) {
     if (card.getAttribute('data-match-player-id') !== String(matchId)) return;
@@ -6670,7 +6668,7 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
     if (occupancy && occupancy.occupant(active, court, matchId)) throw new Error('A quadra escolhida já está ocupada.');
     if (window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(candidate, active))
       throw new Error('Uma das duplas já está em outra quadra. Chame outro jogo.');
-    if (current && current.scheduleWindow && current.scheduleWindow.groupAlternation === true) {
+    if (current && window.ScoreplaceGroupAlternation && window.ScoreplaceGroupAlternation.enabled(current)) {
       var fastCheck = _fast8MatchCheck(current,candidate,all,court);
       if (!fastCheck.ok) throw new Error(fastCheck.message);
     }
@@ -10932,7 +10930,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     var _activeForCard = window.ScoreplaceCourtOccupancy.activeMatches(window._collectAllMatches(t), _releasedForCard, t);
     _playerInAnotherCourt = window.ScoreplaceNextMatch.conflictsWithActive(m, _activeForCard);
   }
-  var _fast8CardGate = _isConcentratedEvent && t && t.scheduleWindow && t.scheduleWindow.groupAlternation === true
+  var _fast8CardGate = _isConcentratedEvent && t && window.ScoreplaceGroupAlternation && window.ScoreplaceGroupAlternation.enabled(t)
     ? _fast8MatchCheck(t,m,window._collectAllMatches(t)) : null;
   if (_fast8CardGate && _fast8CardGate.reason === 'fast8-player-busy') _playerInAnotherCourt = true;
   var _courtCardHtml = '';
@@ -11740,8 +11738,9 @@ window._super8StandingsGroups = function (t, sourceMatches) {
       if (assigned.length===1) groupIndex=Number(assigned[0].groupNumber)-1;
     }
     if (groupIndex==null || !Number.isInteger(Number(groupIndex)) || Number(groupIndex)<0) return;
-    if (phase?.kind !== 'classification' || !classic && (phase.classification?.partnerRotation !== 'groups' ||
-        rule?.groupFormation?.mode !== 'size' || Number(rule.groupFormation.value) !== 8)) return;
+    var eight=rule?.groupFormation?.mode==='size' && Number(rule.groupFormation.value)===8 ||
+      window.ScoreplaceGroupAlternation?.phaseEight(t,{phaseIndex:phaseIndex,category:category});
+    if (phase?.kind !== 'classification' || !classic && (phase.classification?.partnerRotation !== 'groups' || !eight)) return;
     var key = JSON.stringify([phaseIndex, category, Number(groupIndex)]);
     var id = m.id == null ? m : String(m.id);
     if (seen.has(id)) return;

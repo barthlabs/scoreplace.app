@@ -146,12 +146,13 @@ for (const version of ['v2', 'v3']) {
     // nos manifestos operacionais; o backend central em us-central1 tem recibo
     // separado e mais recente. Usar HEAD aqui atestaria uma implantação
     // regional que ainda não ocorreu.
-    const recordedScoreCommit = 'c7d0a3a669dba8651f1fb5727e3bcc0eded1da46';
+    const publishedPins=fs.readFileSync(script,'utf8');
+    const recordedScoreCommit = /const scoreRefreshCommit = '([a-f0-9]{40})'/.exec(publishedPins)[1];
     const recordedScoreDigest = sourceDigest('applyMatchResult', recordedScoreCommit,
       sourceDescriptor('functions-autodraw', recordedScoreCommit, true));
     const scoreFresh = original.filter(row => row.name === `sp-op-score-${version}`)
       .every(row => row.commit === recordedScoreCommit && row.sourceDigest === recordedScoreDigest);
-    const recordedCourtCommit = 'a389c8807a6bf861beab4e4b1b14262767f667ae';
+    const recordedCourtCommit = /const courtControlRefreshCommit = '([a-f0-9]{40})'/.exec(publishedPins)[1];
     const courtSources = sourceDescriptor('functions-autodraw', recordedCourtCommit, true);
     const courtFresh = original.filter(row => [`sp-op-court-${version}`, `sp-op-control-${version}`].includes(row.name))
       .every(row => row.commit === recordedCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedCourtCommit, courtSources));
@@ -185,7 +186,7 @@ for (const version of ['v2', 'v3']) {
     assert.notEqual(run(original, true, {}, false, true).status, 0, 'flags incompatíveis são recusadas');
     assert.notEqual(run(original, false, {}, true, true).status, 0, 'dois modos obrigatórios são recusados');
     const wrongOther = structuredClone(original);
-    const staleCourtCommit = recordedEndCourtCommit;
+    const staleCourtCommit = '470c6c972130c2d4225952f214755d622595e0a6';
     const courtDigest = sourceDigest('assignMatchCourt', staleCourtCommit,
       sourceDescriptor('functions-autodraw', staleCourtCommit, true));
     for (const row of wrongOther.filter(row => row.name === `sp-op-court-${version}`)) {

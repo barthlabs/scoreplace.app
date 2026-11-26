@@ -1962,7 +1962,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         m.scheduledAt = s.iso;
         m.scheduledBy = '';
         m.scheduledKind = 'estimate';
-        m.scheduledGameNumber = s.scheduledGameNumber;
+        m.scheduledGameNumber = s.scheduledGameNumber; m.scheduledCourt = s.court;
         if (s.groupAssignment) {
           m.scheduledGroupLabel=s.groupAssignment.label;
           m.scheduledGroupEntry=s.groupAssignment.entry;

@@ -484,9 +484,9 @@ function regrasSemTrava() {
     if (old === antes) throw new Error('controle: não achei ' + nome + ' em firestore.rules');
   };
   troca(`&& ((resetDeFaseCandidato() && ehResetOk())
-          || (faseIntacta() && planoIntercaladoIntacto()))`,
+          || (faseIntacta() && planoIntercaladoIntacto() && categoryAlternationIntact()))`,
     `&& ((resetDeFaseCandidato() && ehResetOk())
-          || (faseIntacta() && planoIntercaladoIntacto()) || true)`, 'a trava do update');
+          || (faseIntacta() && planoIntercaladoIntacto() && categoryAlternationIntact()) || true)`, 'a trava do update');
   /* ⛔ A trava do ELENCO sai por `|| true` também — apagar a chamada deixaria `elencoIntacto()`
    * órfã e as Rules NÃO COMPILARIAM: o controle morreria por compilação e mediria nada. */
   troca('&& elencoIntacto()', '&& (elencoIntacto() || true)', 'a trava do elenco');

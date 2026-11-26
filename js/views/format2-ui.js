@@ -18,7 +18,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   var _safe = function (s) { return (window._safeHtml || function (x) { return x; })(s == null ? '' : String(s)); };
 
   function _tid() { var h = (location.hash || '').replace(/^#/, '').split('/'); return h[1] || ''; }
-  function _norm() { if (S) S.cfg = window.FORMAT2.normalize(S.cfg, S.sport); }
+  function _norm() { if (S) S.cfg = window.FORMAT2.normalize(S.cfg, S.sport,category=>_sliderPopulation(category,false)); }
   function _faseLockState(state) {
     var t = state && state.t, cfg = state && state.cfg;
     var p0Drawn = !!(t && ((Array.isArray(t.matches) && t.matches.some(function (m) { return (m.phaseIndex || 0) === 0; })) ||
@@ -1153,6 +1153,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         rounds = Math.max(1, Math.floor(groupSize / (pairs ? 2 : 1)) - 1);
       }
       return {category:category,groupFormation:formation,rounds:rounds || 7,
+        ...(!phase && sport==='rotation' ? {groupAlternation:row?.groupAlternation===true} : {}),
         perGroup:quotas?.find(q=>q.category===category)?.perGroup || cfg.classificados || 2,
         allowRepeatPartners:sport === 'rotation' ? row?.allowRepeatPartners ?? (!queen && cfg.rotationAllowRepeatPartners === true)
           : sport !== 'team' && (ordinary?.allowRepeat ?? cfg.classificationSchedule?.allowRepeat ?? false),
@@ -1198,7 +1199,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     var preview = error || (name+' · '+(people ? count+(count===1?' grupo':' grupos')+' · '+sizeText+' pessoas por grupo · '+matches+' jogos'
       : 'A divisão final depende do elenco da categoria')+' · '+rule.rounds+' jogos por jogador');
-    return {num:count,size:size,sizeText:sizeText,people:people,error:error,preview:preview,unit:unit,minimum:minimum,
+    return {num:count,size:size,sizes:sizes,sizeText:sizeText,people:people,error:error,preview:preview,unit:unit,minimum:minimum,
       qualifierLimit:sizes.length?Math.floor(Math.min.apply(null,sizes)/unit):128,
       maxGames:Math.max(rule.rounds,rule.allowRepeatPartners ? 128 : Math.max(1,Math.floor((size || 128)/unit)-1))};
   }
@@ -1229,6 +1230,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _rotationSliderCards(phase) {
     var disabled = _hasDrawnGames() ? ' disabled' : '', rules = _sliderRules(phase), sport = _sliderSport(phase);
     var mode = _sliderMode(phase,rules);
+    function partnerControls(rule,index,data) {
+      if(sport==='team') return '<div style="font-size:.75rem">Cada jogador mantém sua dupla. A grade por times usa adversários distintos.</div>';
+      var html=_sliderToggle(_sliderId('partners',phase,index),sport==='rotation'?'Não repetir parceiro':'Não repetir adversário',!rule.allowRepeatPartners,
+        'window._f2RotationSlider('+phase+','+index+',\'partners\',!this.checked);window._f2RotationSliderDone()',!!disabled);
+      var core=window.ScoreplaceGroupAlternation;
+      if(!phase && sport==='rotation' && core) {
+        var status=core.categoryEligibility(rule,data.sizes);
+        if(status.eligible || rule.groupAlternation) html+='<div data-category-alternation="'+_safe(rule.category)+'">'+
+          _sliderToggle(_sliderId('alternation',phase,index),'Alternar grupos',rule.groupAlternation===true,
+            'window._f2CategoryAlternation('+index+',this.checked)',!!disabled)+
+          '<div style="font-size:.72rem;color:var(--text-muted)">'+_safe(status.eligible?
+            'Intercala as rodadas dos grupos desta categoria. Segue a fila da súmula em cada quadra; a organização pode remanejar a chamada.':status.reason)+'</div></div>';
+      }
+      return html;
+    }
     var html = '<div data-rotation-phase="'+phase+'" style="min-width:0;max-width:860px;width:100%;color:var(--text-main)">';
     if (rules.length>1) {
       html += _sliderToggle('f2-slider-common-'+phase,'Personalizar por categoria',!mode.common,
@@ -1267,13 +1283,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         slider('size','Pessoas por grupo',Math.max(data.minimum,data.size),data.sizeText,data.minimum,Math.max(data.minimum,data.size,Math.min(128*data.unit,data.people || 128*data.unit)),data.unit)+
         slider('games','Jogos por jogador',rule.rounds,rule.rounds,1,data.maxGames)+
         slider('qualifiers',sport==='pairs'?'Duplas classificadas por grupo':'Classificados por grupo',rule.perGroup,rule.perGroup,1,maxQual,1,!eligible)+
-        (sport==='team' ? '<div style="font-size:.75rem">Cada jogador mantém sua dupla. A grade por times usa adversários distintos.</div>' :
-        _sliderToggle(_sliderId('partners',phase,index),sport==='rotation'?'Não repetir parceiro':'Não repetir adversário',!rule.allowRepeatPartners,
-          'window._f2RotationSlider('+phase+','+index+',\'partners\',!this.checked);window._f2RotationSliderDone()',!!disabled))+'</div>'+
+        (mode.common && rules.length>1 && !phase && sport==='rotation'?'':partnerControls(rule,index,data))+'</div>'+
         (!eligible?'<div style="font-size:.75rem;color:var(--text-muted);margin-top:8px">Sem próxima fase para esta categoria.</div>':'')+
         (mode.common?'':preview(rule,index,data))+'</fieldset>';
     });
-    if(mode.common) rules.forEach((rule,index)=>{html+=preview(rule,index,_sliderData(rule,phase));});
+    if(mode.common) rules.forEach(function(rule,index) {
+      var data=_sliderData(rule,phase);
+      html+=!phase && sport==='rotation' && rules.length>1 ?
+        '<fieldset data-category-controls="'+_safe(rule.category)+'" style="margin:8px 0;padding:10px;border:1px solid var(--border-color);border-radius:10px"><legend>'+_safe(rule.category || 'Classificação geral')+'</legend>'+preview(rule,index,data)+partnerControls(rule,index,data)+'</fieldset>':preview(rule,index,data);
+    });
     if(!phase) html+='<div data-capacity-excluded data-slider-capacity class="sp-capacity-excluded"></div>';
     var quotas=phase?S.cfg.eliminatoria.formationQualificationCategoryRules:S.cfg.qualificationCategoryRules;
     if(!quotas && S.cfg.eliminatoria.ativa && (S.cfg.eliminatoria.qualifyAll || S.cfg.classifScope==='overall'))
@@ -1355,6 +1373,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     else if (kind==='groups') rule.groupFormation={mode:'count',value:number};
     else return;
     if (mode.common) rules=rules.map(r=>_copySliderValues(r,rule));
+    if(!phase && rules.some(function(r) {return r.groupAlternation && !window.ScoreplaceGroupAlternation.categoryEligibility(r,_sliderData(r,phase).sizes).eligible;})) {
+      if(window.showNotification) window.showNotification('Alternar grupos','Desative Alternar grupos antes de reduzir para um único grupo ou alterar o tamanho dos grupos.','warning');
+      _rerender();return;
+    }
     _storeSliderRules(phase,rules,kind==='qualifiers');
     rules.forEach(function (r,i) {
       if (i!==index && !mode.common) return;
@@ -1367,6 +1389,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var preview=document.getElementById(_sliderId('preview',phase,i)); if (preview) preview.textContent=data.preview;
     });
   };
+  window._f2CategoryAlternation=function(index,value) {
+    if(!S || _hasDrawnGames()) return;
+    var rules=_sliderRules(0), rule=rules[index], core=window.ScoreplaceGroupAlternation;
+    if(!rule || !core) return;
+    var status=core.categoryEligibility(rule,_sliderData(rule,0).sizes);
+    if(value && !status.eligible) {
+      if(window.showNotification) window.showNotification('Alternar grupos',status.reason,'warning');
+      _rerender();return;
+    }
+    rule.groupAlternation=value===true;
+    _storeSliderRules(0,rules);window._f2RotationSliderDone();
+    if(window._phaseGridCategoryAlternationChanged) window._phaseGridCategoryAlternationChanged();
+  };
   window._f2RotationSliderDone=function () { if (S) { _norm(); _rerender(); if(typeof window._renderPhaseEstimate==='function') window._renderPhaseEstimate(); } };
   window._f2RotationConfigError=function () {
     if (!S) return '';
@@ -1378,7 +1413,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           typeof cfg.classificationSchedule?.allowRepeat==='boolean') rules=_sliderRules(0);
       if (!rules?.length) continue;
       if (rules.length!==names.length || rules.some(r=>!names.includes(r.category))) return 'Ajuste as regras às categorias atuais antes de salvar.';
-      for (var r of rules) { var data=_sliderData(r,phase); if (data.error) return (r.category ? r.category+' · ' : '')+data.error; }
+      for (var r of rules) { var data=_sliderData(r,phase); if (data.error) return (r.category ? r.category+' · ' : '')+data.error;
+        if(!phase && r.groupAlternation && !window.ScoreplaceGroupAlternation.categoryEligibility(r,data.sizes).eligible)
+          return (r.category ? r.category+' · ' : '')+'Desative Alternar grupos antes de reduzir para um único grupo ou alterar o tamanho dos grupos.';
+      }
     }
     return window.FORMAT2.qualificationError ? window.FORMAT2.qualificationError(S.cfg,_sliderCategories(),category=>_sliderPopulation(category,0),S.sport) : '';
   };
@@ -1977,7 +2015,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }).join('');
       eb += _sec('Destino por categoria', '<div id="f2-rotation-destinations">'+destinations+'</div>');
     }
-    if (window.ScoreplaceGroupAlternation && window.ScoreplaceGroupAlternation.eightConfig(cfg)) {
+    if (window.ScoreplaceGroupAlternation && window.ScoreplaceGroupAlternation.eightConfig(cfg,category=>_sliderPopulation(category,false))) {
       eb += '<div style="margin-top:14px;">' + _toggleRight('Disputa de terceiro lugar',
         e.thirdPlaceEnabled !== false, 'window._f2ThirdPlaceEnabled(this.checked)', _elimLocked) + '</div>';
     }
@@ -2836,7 +2874,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     e.semeadura=v; _norm(); _rerender();
   };
   window._f2ThirdPlaceEnabled = function (value) {
-    if (!S || !window.ScoreplaceGroupAlternation || !window.ScoreplaceGroupAlternation.eightConfig(S.cfg)) return;
+    if (!S || !window.ScoreplaceGroupAlternation || !window.ScoreplaceGroupAlternation.eightConfig(S.cfg,category=>_sliderPopulation(category,false))) return;
     if (_faseLockState(S).elimLocked) return;
     S.cfg.eliminatoria.thirdPlaceEnabled = value === true;
     _norm(); _rerender();
@@ -2876,7 +2914,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2MountInForm = function (container, sport, initialCfg, tournament) {
     sport = sport || 'Beach Tennis';
     var cfg = (initialCfg && typeof initialCfg === 'object')
-      ? window.FORMAT2.normalize(initialCfg, sport)
+      ? window.FORMAT2.normalize(initialCfg, sport,category=>window.ScoreplaceGroupAlternation?.population(tournament || {},category))
       : ((tournament && typeof window.FORMAT2.configFromTournament === 'function')
         ? window.FORMAT2.configFromTournament(tournament, sport)
         : window.FORMAT2.defaultConfig(sport));
@@ -2890,7 +2928,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (container) { container.innerHTML = _bodyControls(); _placeExt(); _mountElimRoundBounds(); _renderTieResolution(); }
   };
   // Config atual (pro save do form). null se não montado em modo form.
-  window._f2GetConfig = function () { return (S && S.mode === 'form') ? window.FORMAT2.normalize(S.cfg, S.sport) : null; };
+  window._f2GetConfig = function () { return (S && S.mode === 'form') ? window.FORMAT2.normalize(S.cfg, S.sport,category=>_sliderPopulation(category,false)) : null; };
   // ── MODO PAGE (legado): página #formato/:tId ──
   window.renderFormatoPage = function (container) {
     var tId = _tid();
@@ -2901,7 +2939,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var sport = t.sport || 'Beach Tennis';
     if (!S || S.mode !== 'page' || S.tId !== tId) {
       var init = (t.fmt2 && typeof t.fmt2 === 'object')
-        ? window.FORMAT2.normalize(t.fmt2, sport)
+        ? window.FORMAT2.normalize(t.fmt2, sport,category=>window.ScoreplaceGroupAlternation?.population(t,category))
         : (typeof window.FORMAT2.configFromTournament === 'function'
           ? window.FORMAT2.configFromTournament(t, sport)
           : window.FORMAT2.defaultConfig(sport));

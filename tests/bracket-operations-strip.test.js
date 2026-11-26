@@ -1645,8 +1645,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         ({label,category,groupNumber,entry,courts,phaseIndex:0}));
       Object.assign(t, {courtCount:6,courtNames:Array.from({length:6},(_,i)=>'Quadra '+(i+1)),currentPhaseIndex:0,
         phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:
-          ['B','C'].map(category=>({category,rounds:2,groupFormation:{mode:'size',value:8}}))}}],
-        scheduleWindow:{groupAlternation:true,interleavedPlan:{schema:2,groupAssignments:assignments}},
+          ['B','C'].map(category=>({category,rounds:2,groupFormation:{mode:'size',value:8},groupAlternation:true}))}}],
+        scheduleWindow:{interleavedPlan:{schema:2,groupAssignments:assignments}},
         rounds:[],phaseRounds:{},matches:[]});
       for (const g of assignments) for (let round=1;round<=2;round++) for (let lane=0;lane<2;lane++) {
         const players = Array.from({length:4},(_,n)=>g.label+'-player-'+(lane*4+n));

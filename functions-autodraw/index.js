@@ -3233,6 +3233,10 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       return { ok:false, reason:'category-bracket-already-published',
         message:'A eliminatória desta categoria já foi publicada. Corrija a chave antes de reabrir a classificatória.' };
     }
+    const _occupiedCourtBefore = _courtSourceBefore && _courtSourceBefore.court &&
+      (_courtSourceBefore.courtCalledAt || _courtSourceBefore.startedAt) && !_courtStateData.released?.[String(matchId)] &&
+      !_courtOccupancy.isFinished(_courtSourceBefore)
+      ? String(_courtSourceBefore.court || '') : '';
     const _courtSeriesEligible = _courtSourceBefore && _courtSourceBefore.isMonarch === true &&
       _courtSourceBefore.court && _courtSourceBefore.courtCalledAt &&
       !_courtOccupancy.isFinished(_courtSourceBefore);
@@ -3268,8 +3272,11 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       ? _courtStateData.blockCourt : {};
     const _needsCourtCleanup = Object.prototype.hasOwnProperty.call(_releasedCourts, String(matchId)) ||
       Object.prototype.hasOwnProperty.call(_blockCourtMap, String(matchId));
-    if (_courtAdvance || _needsCourtCleanup) {
+    const _freedByResult = _occupiedCourtBefore && _courtOccupancy.isFinished(drawWindow._findMatch(t,matchId));
+    if (_courtAdvance || _needsCourtCleanup || _freedByResult) {
       const _courtPatch = { revision: FieldValue.increment(1) };
+      if (_freedByResult) _courtPatch.lastReleasedByCourt=Object.assign({},_courtStateData.lastReleasedByCourt || {},
+        {[_occupiedCourtBefore]:{matchId:String(matchId),releasedAt:_agoraIsoTx}});
       if (_needsCourtCleanup) {
         const _nextReleased = Object.assign({}, _releasedCourts);
         const _nextBlockCourt = Object.assign({}, _blockCourtMap);
@@ -3896,6 +3903,20 @@ function uniqueWoMembers(entries) {
   });
 }
 
+function _courtReleaseEventsAfterResult(tx,ref,state,before,after,agoraIso) {
+  const previous=drawWindow._collectAllMatches(before), current=new Map(drawWindow._collectAllMatches(after).map(m=>[String(m.id),m]));
+  const events=Object.assign({},state.lastReleasedByCourt || {});
+  let changed=false;
+  previous.forEach(m=>{
+    if(!m.court || !(m.courtCalledAt || m.startedAt) || state.released?.[String(m.id)] || _courtOccupancy.isFinished(m)) return;
+    const result=current.get(String(m.id));
+    if(result && _courtOccupancy.isFinished(result)) {
+      events[String(m.court)]={matchId:String(m.id),releasedAt:agoraIso};changed=true;
+    }
+  });
+  if(changed) tx.set(ref.collection('courtState').doc('main'),{lastReleasedByCourt:events,revision:FieldValue.increment(1)},{merge:true});
+}
+
 exports.manageWOClaim = onCall(async request => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};
@@ -3923,6 +3944,9 @@ exports.manageWOClaim = onCall(async request => {
         })) {
       throw _drawFail('failed-precondition', 'A eliminatória desta categoria já foi publicada; W.O. da classificatória bloqueado.', { tId, action });
     }
+    const courtTracked=drawWindow._collectAllMatches(t).some(item=>item.court && (item.courtCalledAt || item.startedAt));
+    const courtStateSnap=courtTracked?await tx.get(ref.collection('courtState').doc('main')):null;
+    const courtState=courtStateSnap?.exists?courtStateSnap.data() || {}:{};
     const before = _antesDoMotor(t);
     const step = _woClaimCore.transition(t, {
       action, uid, isAdmin: _isTournamentAdmin(t, uid), context: ctx,
@@ -3965,6 +3989,7 @@ exports.manageWOClaim = onCall(async request => {
         _materializeInterleavedReadyCategories(t, tId, agoraIso);
       }
     }
+    if(courtTracked) _courtReleaseEventsAfterResult(tx,ref,courtState,before,t,agoraIso);
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
     return { ok: true, changed: !!step.changed || !!step.apply, claim: step.claim, outcome: motor, tournament: boundary.clean,
       requiresGroupReplacement: !!(motor && motor.outcome === 'ligaDelegated') };
@@ -4043,6 +4068,9 @@ exports.applyTournamentWO = onCall(async (request) => {
       throw _drawFail('failed-precondition', 'Este jogo não está mais disponível para W.O.', { tId, matchId });
     }
 
+    const courtTracked=drawWindow._collectAllMatches(t).some(item=>item.court && (item.courtCalledAt || item.startedAt));
+    const courtStateSnap=courtTracked?await tx.get(ref.collection('courtState').doc('main')):null;
+    const courtState=courtStateSnap?.exists?courtStateSnap.data() || {}:{};
     let canonicalName;
     let targetUids;
     let result;
@@ -4183,6 +4211,7 @@ exports.applyTournamentWO = onCall(async (request) => {
     if (t.scheduleWindow && t.scheduleWindow.interleavedPlan) {
       _materializeInterleavedReadyCategories(t, tId, agoraIso);
     }
+    if(courtTracked) _courtReleaseEventsAfterResult(tx,ref,courtState,before,t,agoraIso);
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso, woRepescagemPermits });
     /* ⛔ Um toast de substituição é uma afirmação forte: cada jogo que o motor diz
      * ter trocado PRECISA estar na escrita da subcoleção `matches` desta mesma txn.
@@ -4970,7 +4999,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (!Array.isArray(all)) throw _drawFail('internal', 'Não foi possível conferir a ocupação das quadras.', { tId, matchId });
       const activeTies = _courtOccupancy.activeMatches([], released, t);
       const activeCandidates = all.filter(item => item && !released[String(item.id)]).concat(activeTies);
-      if (confirmCall && t.scheduleWindow?.groupAlternation === true && m.isMonarch === true && !m.isTieBreak) {
+      if (confirmCall && drawWindow.ScoreplaceGroupAlternation?.enabled(t) && m.isMonarch === true && !m.isTieBreak) {
         const fast = drawWindow.ScoreplaceGroupAlternation;
         if (!fast) throw _drawFail('failed-precondition','Atualize o aplicativo para usar o Fast 8.',{reason:'fast8-incomplete-draw'});
         if (m.courtCalledAt && court !== atual) throw _drawFail('failed-precondition','Este jogo já foi chamado em outra quadra. Atualize a ficha.',{reason:'fast8-turn'});
@@ -5022,7 +5051,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       }
       if (atual === court && (!confirmCall || m.courtCalledAt)) return commitReply({ ok: true, changed: false, courtCalledAt: m.courtCalledAt || null });
       const reassigned = [];
-      if (t.scheduleWindow?.groupAlternation !== true && court && m.scheduledAt && (court !== atual || (confirmCall && !m.courtCalledAt))) {
+      if (!drawWindow.ScoreplaceGroupAlternation?.enabled(t) && court && m.scheduledAt && (court !== atual || (confirmCall && !m.courtCalledAt))) {
         // A troca vale só para o mesmo horário. Jogos de rodadas posteriores
         // podem usar a mesma quadra; jogos já chamados ou iniciados são intocáveis.
         const slot = Date.parse(String(m.scheduledAt));
@@ -5043,6 +5072,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
           reassigned.push({ matchId: String(other.id), court: replacement });
         }
       }
+      if (!m.scheduledCourt && m.scheduledAt && m.court) m.scheduledCourt = m.court;
       if (court) m.court = court; else delete m.court;
       // Mudar/remover a quadra desfaz a chamada anterior. Confirmar em outra
       // quadra cria uma chamada nova; repetir na mesma conserva o instante.
@@ -5309,12 +5339,14 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
         const nextReleased = { ...released };
         const blockCourt = Object.assign({}, state.blockCourt || {});
         const audits = [];
+        const lastReleasedByCourt=Object.assign({},state.lastReleasedByCourt || {});
         const eligibleIds = new Set(eligible.map(item => String(item.id)));
         const keepQueued = queue => (Array.isArray(queue) ? queue : []).map(String).filter(id => !eligibleIds.has(id)).slice(-all.length);
         eligible.forEach(item => {
           const id = String(item.id);
           blockCourt[id] = item.court == null ? null : String(item.court);
           nextReleased[id] = agoraIso;
+          if(item.court && (item.courtCalledAt || item.startedAt)) lastReleasedByCourt[String(item.court)]={matchId:id,releasedAt:agoraIso};
           audits.push({ matchId: id, court: item.court == null ? null : String(item.court), releasedAt: agoraIso,
             releasedBy: uid, block: true, group: item.monarchGroup == null ? null : String(item.monarchGroup) });
         });
@@ -5322,7 +5354,7 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
         const estimatedDurationMs = eligible.length === 3 && eligible.every(item => item.courtCalledAt)
           ? _monarchCourtSeries.estimateLegacyDurations(t, eligible, agoraIso, _matchTiming) : null;
         _gravaTorneio(tx, ref, t, before, { agoraIso });
-        tx.set(stateRef, { revision: FieldValue.increment(1), released: nextReleased, blockCourt,
+        tx.set(stateRef, { revision: FieldValue.increment(1), released: nextReleased, blockCourt, lastReleasedByCourt,
           postponed: keepQueued(state.postponed), postponedReady: keepQueued(state.postponedReady) }, { merge: true });
         audits.forEach(audit => tx.create(ref.collection('courtReleases').doc(), audit));
         return commitReply({ ok: true, changed: true, releasedAt: agoraIso, releasedMatchIds: eligible.map(item => String(item.id)),
@@ -5351,6 +5383,7 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
       const nextReleased = { ...released, [matchId]: agoraIso };
       const courtPatch = {
         revision: FieldValue.increment(1), released: nextReleased,
+        lastReleasedByCourt:Object.assign({},state.lastReleasedByCourt || {},{[String(m.court)]:{matchId,releasedAt:agoraIso}}),
         postponed: (Array.isArray(state.postponed) ? state.postponed : []).map(String).filter(id => id !== matchId),
         postponedReady: (Array.isArray(state.postponedReady) ? state.postponedReady : []).map(String).filter(id => id !== matchId)
       };
@@ -5438,7 +5471,8 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
     delete m.startedAt;
     delete m.courtClockBaseAt;
     _gravaTorneio(tx, ref, t, before, { agoraIso });
-    tx.set(stateRef, { revision: FieldValue.increment(1) }, { merge: true });
+    tx.set(stateRef, { revision: FieldValue.increment(1),
+      lastReleasedByCourt:Object.assign({},state.lastReleasedByCourt || {},m.court?{[String(m.court)]:{matchId,releasedAt:agoraIso}}:{}) }, { merge: true });
     return commitReply({ ok: true, changed: true });
   });
 });
@@ -6839,7 +6873,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       const intent = patch.fmt2 || t.fmt2;
       if (!intent) throw new HttpsError('invalid-argument', 'As regras de rodízio exigem a configuração de formato.');
       const projected = drawWindow.FORMAT2.compileToPhases(intent, { sport:patch.sport || t.sport,
-        categories:nextCategories, resultEntry:patch.resultEntry || t.resultEntry,
+        categories:nextCategories, population:category=>drawWindow.ScoreplaceSuperEight.categoryPopulation(Object.assign({},t,patch),category), resultEntry:patch.resultEntry || t.resultEntry,
         lateEnrollment:patch.lateEnrollment || t.lateEnrollment, newMatchups:patch.newMatchups ?? t.newMatchups });
       if (quotaIntent && patch.phases && [1,2].some(i=>!_configAtiva.igual(projected.phases[i]?.source?.qualificationCategoryRules || [],
           patch.phases[i]?.source?.qualificationCategoryRules || [])))
@@ -7231,13 +7265,16 @@ exports.applyTournamentFormat = onCall(async (request) => {
     if (hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'already-drawn', { tId });
     // A terceira porta de gravação recebe fmt2 cru; clonar e validar ANTES de
     // compilar impede a normalização tolerante de esconder uma escolha inválida.
-    const fmt2Clone = _clonaConfigDeclarativa(fmt2, 0, ['fmt2']);
+    let fmt2Clone = _clonaConfigDeclarativa(fmt2, 0, ['fmt2']);
     require('./format-intent-validation-core').validateNewFormatIntent(fmt2Clone, HttpsError, t, t.teamSize);
     require('./elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy(fmt2Clone, HttpsError);
+    const fastPrepared=require('./fast8-configuration-core').prepare(t,{fmt2:fmt2Clone},drawWindow,HttpsError,false);
+    fmt2Clone=fastPrepared.patch.fmt2;
     let out;
     try {
       out = drawWindow.FORMAT2.compileToPhases(fmt2Clone, {
         categories: t.combinedCategories || [],
+        population: category=>drawWindow.ScoreplaceSuperEight.categoryPopulation(t,category),
         sport: t.sport,
         resultEntry: t.resultEntry || ['organizer'],
         lateEnrollment: t.lateEnrollment,
@@ -7246,8 +7283,9 @@ exports.applyTournamentFormat = onCall(async (request) => {
     } catch (e) {
       throw new HttpsError('invalid-argument', 'Não foi possível compilar o formato: ' + String((e && e.message) || e).slice(0, 180));
     }
-    if (t.scheduleWindow?.interleavedPlan?.schema===2) {
-      try { _phaseGridPlan.assertPlan(Object.assign({},t,out.topLevel,{fmt2:out.cfg,phases:out.phases}),t.scheduleWindow.interleavedPlan,t.scheduleWindow.days,drawWindow); }
+    const effectiveSchedule=fastPrepared.patch.scheduleWindow || t.scheduleWindow;
+    if (effectiveSchedule?.interleavedPlan?.schema===2) {
+      try { _phaseGridPlan.assertPlan(Object.assign({},t,out.topLevel,{fmt2:out.cfg,phases:out.phases,scheduleWindow:effectiveSchedule}),effectiveSchedule.interleavedPlan,effectiveSchedule.days,drawWindow); }
       catch(error) {throw new HttpsError('invalid-argument',error.message);}
     }
     if (fmt2Clone.historicalSinglesOverride === true && out.topLevel.teamSize !== 1) {
@@ -7260,6 +7298,7 @@ exports.applyTournamentFormat = onCall(async (request) => {
     }
     const antes = _antesDoMotor(t);
     Object.assign(t, out.topLevel);
+    if(fastPrepared.patch.scheduleWindow) t.scheduleWindow=fastPrepared.patch.scheduleWindow;
     t.phases = out.phases;
     t.fmt2 = out.cfg;
     if (t.rulesContractVersion >= 2) t.rulesContractVersion = 2;
@@ -7275,6 +7314,7 @@ exports.applyTournamentFormat = onCall(async (request) => {
     t.groups = [];
     t.standings = [];
     t.thirdPlaceMatch = null;
+    require('./fast8-configuration-core').validateIntent(t,HttpsError);
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok: true, changed: true, summary: drawWindow.FORMAT2.summary(out.cfg), tournament: b.clean };
   });
@@ -8216,6 +8256,7 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
       match.scheduleLocked = item.scheduleLocked === true;
       match.scheduleSource = item.scheduleLocked === true ? 'organizer' : 'estimate';
       match.scheduledGameNumber = scheduledGameNumber.get(item.matchId);
+      match.scheduledCourt = item.court;
     });
     pd.scheduleRevision = Number(pd.scheduleRevision || 0) + 1;
     pd.scheduleUpdatedAt = agoraIso;

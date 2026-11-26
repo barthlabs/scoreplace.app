@@ -92,11 +92,16 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, ca
   }
   if (fmt2.thirdPlacePolicy !== undefined || fmt2.eliminatoria && fmt2.eliminatoria.thirdPlacePolicy !== undefined)
     throw new HttpsError('invalid-argument','A política de terceiro lugar é compilada pelo servidor.');
+  population = population || (category => stored ? require('./vendor/super-eight-core').categoryPopulation(stored, category) : 0);
   const third = fmt2.eliminatoria?.thirdPlaceEnabled;
-  if (third !== undefined && (typeof third !== 'boolean' || !require('./vendor/group-alternation').eightConfig(fmt2))) {
+  if (third !== undefined && (typeof third !== 'boolean' || !require('./vendor/group-alternation').eightConfig(fmt2,population))) {
     throw new HttpsError('invalid-argument', 'A opção de terceiro lugar é exclusiva do Super 8 e do Fast 8.');
   }
   const prev = stored?.fmt2;
+  if(Array.isArray(fmt2.rotationCategoryRules)) fmt2.rotationCategoryRules.forEach(rule=>{
+    const old=prev?.rotationCategoryRules?.find(row=>row.category===rule.category);
+    if(old && Object.hasOwn(old,'groupAlternation') && !Object.hasOwn(rule,'groupAlternation')) rule.groupAlternation=old.groupAlternation;
+  });
   if(prev?.eliminatoria?.semeadura==='grupos' && fmt2.eliminatoria?.semeadura!=='grupos' &&
       fmt2.eliminatoria?.groupCrossChangeConfirmed!==true)
     throw new HttpsError('failed-precondition','Atualize o aplicativo e escolha explicitamente a semeadura para alterar o cruzamento por grupos.');
@@ -209,6 +214,7 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, ca
     const seen = new Set();
     for (const rule of rules) {
       const keys = generic ? ['category','groupFormation','rounds','destination','allowRepeatPartners'] : ['category','rounds','destination'];
+      if(!second) keys.push('groupAlternation');
       const formation = rule?.groupFormation;
       if (generic && (!formation || Object.keys(formation).some(k => !['mode','value'].includes(k)) ||
           !['count','size'].includes(formation.mode) || !Number.isInteger(formation.value) ||
@@ -222,6 +228,13 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize, ca
         throw new HttpsError('invalid-argument', 'Categoria, número de partidas ou destino do rodízio inválido.');
       }
       seen.add(rule.category);
+      if(rule.groupAlternation!==undefined && typeof rule.groupAlternation!=='boolean')
+        throw new HttpsError('invalid-argument','Alternar grupos deve ser ativado ou desativado por categoria.');
+      if(rule.groupAlternation===true) {
+        const sizes=require('./draw-core')._window.FORMAT2.resolveGroupFormation(formation || {mode:'size',value:8},population(rule.category),1).sizes;
+        const status=require('./vendor/group-alternation').categoryEligibility(rule,sizes);
+        if(!status.eligible) throw new HttpsError('invalid-argument',(rule.category?rule.category+' · ':'')+status.reason);
+      }
       if (generic) {
         const error = require('./vendor/super-eight-core').formationError(rule, second ? 0 : population?.(rule.category) || 0);
         if (error) throw new HttpsError('invalid-argument', (rule.category ? rule.category + ' · ' : '') + error);

@@ -84,6 +84,7 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         (typeof config.coverGradientBlend !== 'number' || !Number.isFinite(config.coverGradientBlend) || config.coverGradientBlend < 0 || config.coverGradientBlend > 100)) {
       fail('invalid-argument', 'Largura da mistura inválida.');
     }
+    if(config.scheduleWindow) delete config.scheduleWindow.groupAlternation;
     require('./category-window-core').validate(config, HttpsError);
     if ((config.phases || []).some(phase=>phase && phase.thirdPlacePolicy !== undefined))
       require('./fast8-configuration-core').validateIntent(Object.assign({},config,{scheduleWindow:{groupAlternation:false}}),HttpsError);
@@ -158,7 +159,7 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         }
       }
       if (config.fmt2) {
-        const out = compile(config.fmt2, { sport: t.sport, categories: config.combinedCategories || [], resultEntry: t.resultEntry || ['organizer'], lateEnrollment: t.lateEnrollment, newMatchups: t.newMatchups });
+        const out = compile(config.fmt2, { sport: t.sport, categories: config.combinedCategories || [], population:category=>require('./vendor/super-eight-core').categoryPopulation(t,category), resultEntry: t.resultEntry || ['organizer'], lateEnrollment: t.lateEnrollment, newMatchups: t.newMatchups });
         Object.assign(t, out.topLevel);
         t.phases = out.phases; t.fmt2 = out.cfg;
         if(t.fmt2.eliminatoria) delete t.fmt2.eliminatoria.groupCrossChangeConfirmed;

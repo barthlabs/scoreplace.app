@@ -1024,8 +1024,9 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
   const idle={...super8,matches:super8.matches.map(({court,courtCalledAt,startedAt,...game})=>game)};
   {
     vm.runInContext(fs.readFileSync(path.join(root,'js/domain/group-alternation.js'),'utf8'),context);
+    real.ScoreplaceGroupAlternation=window.ScoreplaceGroupAlternation;
     const fast=JSON.parse(JSON.stringify(super8));
-    fast.scheduleWindow.groupAlternation=true;
+    fast.phases[0].classification.rotationCategoryRules.forEach(rule=>rule.groupAlternation=true);
     const released=fast.matches.find(m=>m.id==='C2-1-0');
     Object.assign(released,{winner:released.p1,scoreP1:7,scoreP2:0,resultAt:'2026-10-22T21:04:00Z'});
     Object.assign(fast.matches.find(m=>m.id==='B2-1-0'),{court:'Areia E',courtCalledAt:'2026-10-22T21:05:00Z'});
@@ -1033,6 +1034,18 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
     assert(!board.courts.some(c=>c.super8Group || c.super8GroupMember));
     assert.equal(board.courts[4].fast8Group,'B2','primeira quadra livre recebe outro grupo sem prendê-lo ao par original');
     assert.equal(board.courts[0].fast8Groups.length,6);
+    const counted=JSON.parse(JSON.stringify(fast));counted.maxParticipantsByCategory={};
+    counted.phases[0].classification.rotationCategoryRules.forEach(rule=>{
+      const count=counted.scheduleWindow.interleavedPlan.groupAssignments.filter(row=>row.category===rule.category).length;
+      rule.groupFormation={mode:'count',value:count};counted.maxParticipantsByCategory[rule.category]=count*8;
+    });
+    const countBoard=window._tvLiveBuildSnapshot(counted,Date.parse('2026-10-22T21:06:00Z'));
+    assert.equal(countBoard.courts[0].fast8Groups.length,6,'quantidade de grupos mantém o painel e as classificações');
+    assert(countBoard.courts[0].fast8Groups.every(g=>g.standings.length===8));
+    const mixed=JSON.parse(JSON.stringify(fast));mixed.phases[0].classification.rotationCategoryRules[1].groupAlternation=false;
+    const mixedBoard=window._tvLiveBuildSnapshot(mixed,Date.parse('2026-10-22T21:06:00Z'));
+    assert.equal(mixedBoard.courts[0].fast8Groups.length,6,'categoria normal mantém todos os grupos e classificações no painel misto');
+    assert(mixedBoard.courts.some(c=>c.fast8Group==='C1'),'quadra da categoria normal mostra seu grupo atual');
     assert(board.courts[0].fast8Groups.every(g=>g.standings.length===8),'todas as classificações exibem oito atletas próprios');
     const html=window._tvLiveBodyHtml(board);
     assert.equal((html.match(/class="tv-fast8-court tv-fast8-active/g)||[]).length,6);
@@ -1041,7 +1054,8 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
     assert.equal((html.match(/class="tv-fast8-player-name"/g)||[]).length,24,'os quatro atletas aparecem em cada uma das seis quadras');
     assert.doesNotMatch(html,/Areia A e Areia B/);
     assert.match(html,/tv-upcoming-pinned/);
-    assert.match(html,/Próxima quadra livre/);
+    assert.match(html,/Areia [A-F]/);
+    assert.doesNotMatch(html,/Próxima quadra livre/);
     const hidden=JSON.parse(JSON.stringify(board));
     Object.assign(hidden.tvLayout.card,{court:false,number:false,category:false,players:false,score:false,timer:false});
     const hiddenHtml=window._tvLiveBodyHtml(hidden).split('<div class="tv-fast8-courts">')[1].split('<div class="tv-fast8-rankings">')[0];

@@ -82,7 +82,6 @@
   }
   // A court hint is schedule data, never an account-link requirement.
   function nextCourtHints(t, real, originals) {
-    if (t.scheduleWindow && t.scheduleWindow.groupAlternation === true) return;
     var rows=t.scheduleWindow?.interleavedPlan?.groupAssignments || [];
     var roster=new Map();
     var identitySlots=root._identitySlotsForEntry || root.ScoreplaceParticipantIdentity?.participantSlots;
@@ -111,7 +110,7 @@
         return Number(row.phaseIndex)===m.phaseIndex && row.category===m.category &&
           (source.groupIdx!=null?Number(source.groupIdx)+1===row.groupNumber:m.groupLabel===row.label) &&
           phase?.kind==='classification' && phase.classification?.partnerRotation==='groups' &&
-          rule?.groupFormation?.mode==='size' && Number(rule.groupFormation.value)===8 &&
+          (rule?.groupFormation?.mode==='size' && Number(rule.groupFormation.value)===8 || root.ScoreplaceGroupAlternation?.phaseEight(t,row)) &&
           row.courts?.length===2 && row.courts.every(c=>Number.isInteger(c)&&c>0) && row.courts[0]!==row.courts[1] && !m.elimination;
       });
       return eligible.length===1?eligible[0]:null;
@@ -138,7 +137,7 @@
     });
   }
   function collect(t, allMatches) {
-    var fast8=!!(t.scheduleWindow && t.scheduleWindow.groupAlternation === true);
+    var fast8=!!(root.ScoreplaceGroupAlternation && root.ScoreplaceGroupAlternation.enabled(t));
     var alternateOrder=new Map(fast8 && root.ScoreplaceGroupAlternation ? root.ScoreplaceGroupAlternation.sequence(t,allMatches).map((entry,i)=>[text(entry.match.id),i]) : []);
     var seen = new Set();
     var plannedCourts = {}, plannedNumbers = {};
@@ -161,9 +160,9 @@
     }).map(function (m) {
       var dated = !!(m.scheduledAt && localDay(m.scheduledAt));
       return {
-        id: text(m.id), day: dated ? localDay(m.scheduledAt) : '', time: dated && !fast8 ? localTime(m.scheduledAt) : '',
+        id: text(m.id), day: dated ? localDay(m.scheduledAt) : '', time: dated ? localTime(m.scheduledAt) : '',
         at: dated ? timestamp(m.scheduledAt) : NaN, phaseIndex:Number(m.phaseIndex) || 0,
-        court: fast8 ? (m.courtCalledAt || m.startedAt ? text(m.court) : '') : text(m.court) || plannedCourts[text(m.id)] || '',
+        court: text(m.scheduledCourt) || text(m.court) || plannedCourts[text(m.id)] || '',
         number:Number(m.scheduledGameNumber) || plannedNumbers[text(m.id)] || matchNumber(m), category: text(m.category || m.categoryName),
         groupLabel:text(m.scheduledGroupLabel || (t.scheduleWindow?.interleavedPlan?.groupAssignments?.length && m.groupName) || ''),
         round: m.round == null ? '' : String(m.round), bracket:text(m.bracket || 'main'),
@@ -496,7 +495,7 @@
       if (labels[1]) p.write(labels[1], divider+12, y+7, portrait ? 6 : 6.4, false, limit);
       p.line(divider + (portrait ? 106 : 141), y+3, right-3, y+3, 0.45);
     });
-    p.write(model.fast8 ? 'Fast 8 | Quadra anunciada no painel e pelo microfone. Após o placar, cada atleta assina uma vez.' : 'scoreplace.app  |  Quadra prevista; anote mudança na coluna. Após o placar, cada atleta assina uma vez.',
+    p.write(model.fast8 ? 'Fast 8 | Fila prevista por quadra; a organização pode remanejar. Após o placar, cada atleta assina uma vez.' : 'scoreplace.app  |  Quadra prevista; anote mudança na coluna. Após o placar, cada atleta assina uma vez.',
       left, p.height-24, portrait ? 6 : 7);
     return p;
   }

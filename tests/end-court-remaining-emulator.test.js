@@ -172,14 +172,17 @@ async function run() {
   const fastParts=backend('./vendor/tournament-split-core.js').dividir({matches:fastGames},['matches']);
   const fw=db.batch();fw.set(fastRef,{creatorUid:'owner',name:'Fast8 synthetic',status:'active',courtCount:6,
     courtNames:Array.from({length:6},(_,i)=>'Quadra '+(i+1)),currentPhaseIndex:0,_nJogos:fastGames.length,_nPartes:{matches:fastGames.length},matches:[],participants:[],
-    phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:['B','C'].map(category=>({category,rounds:2,groupFormation:{mode:'size',value:8}}))}}],
-    scheduleWindow:{groupAlternation:true,interleavedPlan:{schema:2,groupAssignments:rows}}});
+    phases:[{kind:'classification',classification:{partnerRotation:'groups',rotationCategoryRules:['B','C'].map(category=>({category,rounds:2,groupFormation:{mode:'size',value:8},groupAlternation:true}))}}],
+    scheduleWindow:{interleavedPlan:{schema:2,groupAssignments:rows}}});
   fastParts.matches.forEach(record=>fw.set(fastRef.collection('matches').doc(record._chave),record));await fw.commit();
   const fc=(matchId,court)=>functions.assignMatchCourt.run({auth:{uid:'owner',token:{uid:'owner'}},data:{tournamentId:fastRef.id,matchId,court,confirmCall:true,operationId:randomUUID()},rawRequest:{headers:{}}});
   const fe=matchId=>functions.endMatchOnCourt.run({auth:{uid:'owner',token:{uid:'owner'}},data:{tournamentId:fastRef.id,matchId,action:'release',operationId:randomUUID()},rawRequest:{headers:{}}});
-  await assert.rejects(fc('B-1-0','Quadra 5'),/entrada atual/,'não começa a segunda entrada antes de chamar a primeira');
+  assert((await fc('B-1-0','Quadra 5')).ok,'organizador pode remanejar um jogo disponível fora da sugestão');
+  await functions.endMatchOnCourt.run({auth:{uid:'owner',token:{uid:'owner'}},data:{tournamentId:fastRef.id,matchId:'B-1-0',action:'cancel-call',operationId:randomUUID()},rawRequest:{headers:{}}});
   for(const row of rows.filter(r=>r.entry===1))for(let lane=0;lane<2;lane++)assert((await fc(row.label+'-1-'+lane,'Quadra '+row.courts[lane])).ok);
   await fe('D-1-0');
+  const freed=(await fastRef.collection('courtState').doc('main').get()).data().lastReleasedByCourt['Quadra 5'];
+  assert.equal(freed.matchId,'D-1-0');assert(Number.isFinite(Date.parse(freed.releasedAt)));
   assert((await fc('B-1-0','Quadra 5')).ok,'a CF real chama B na quadra 5 que vagou primeiro');
   await fe('D-1-1');await fe('A-1-0');
   const races=await Promise.allSettled([fc('B-1-1','Quadra 6'),fc('B-1-1','Quadra 1')]);
@@ -188,8 +191,13 @@ async function run() {
   const persisted=(await fastRef.collection('matches').doc('B-1-1').get()).data().jogo;
   assert(['Quadra 1','Quadra 6'].includes(persisted.court));
   assert.equal((await fc('B-1-1',persisted.court)).ok,true,'replay na mesma quadra é idempotente');
-  await assert.rejects(fc('A-2-0',persisted.court==='Quadra 1'?'Quadra 6':'Quadra 1'),/entrada atual/,'rodada seguinte não fura E/F ainda não chamados');
-  console.log('✓ Fast8 real: entrada A/C/D, B na quadra 5, corrida de chamada e ordem global');
+  await assert.rejects(fc('A-2-0',persisted.court==='Quadra 1'?'Quadra 6':'Quadra 1'),/rodada anterior/,'rodada seguinte aguarda os dois jogos do próprio grupo');
+  const wo=await functions.applyTournamentWO.run({auth:{uid:'owner',token:{uid:'owner'}},data:{tournamentId:fastRef.id,
+    matchId:'B-1-1',forceTeamWO:true,teamUids:fastGames.find(m=>m.id==='B-1-1').team1Uids},rawRequest:{headers:{}}});
+  assert.equal(wo.ok,true);
+  const freedByWO=(await fastRef.collection('courtState').doc('main').get()).data().lastReleasedByCourt[persisted.court];
+  assert.equal(freedByWO.matchId,'B-1-1');assert(Number.isFinite(Date.parse(freedByWO.releasedAt)));
+  console.log('✓ Fast8 real: remanejamento manual, corrida de chamada, W.O. libera a fila e barreira do próprio grupo');
   console.log('end-court physical: OK');
 }
 run().then(() => console.log('✓ callable real e documentos físicos de quadra')).catch(error => {

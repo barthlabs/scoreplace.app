@@ -559,7 +559,7 @@
       cfg.eliminatoria.ativa = true;
       cfg.eliminatoria.dupla = !!(first.elimination && first.elimination.bracketType === 'double');
       cfg.eliminatoria.politicaDaChave = first.politicaDaChave || cfg.eliminatoria.politicaDaChave;
-      return normalize(cfg, sport || tournament.sport);
+      return normalize(cfg, sport || tournament.sport,category=>window.ScoreplaceGroupAlternation?.population(tournament,category));
     }
 
     cfg.classifAtiva = true;
@@ -603,7 +603,7 @@
     // A fase can carry the effective team controls even when the historical
     // fmt2 snapshot is absent or stale. The editor must show the saved motor
     // configuration, never the default for a new tournament.
-    return normalize(cfg, sport || tournament.sport);
+    return normalize(cfg, sport || tournament.sport,category=>window.ScoreplaceGroupAlternation?.population(tournament,category));
   }
 
   // ── FORMATO DA PARTIDA (GSM) DE UMA FASE ─────────────────────────────────────
@@ -645,7 +645,7 @@
     return out;
   }
 
-  function normalize(cfg, sport) {
+  function normalize(cfg, sport, populationFor) {
     cfg = cfg || {};
     var out = JSON.parse(JSON.stringify(cfg));
 
@@ -877,7 +877,7 @@
     // A intenção nova é exclusiva dos grupos de oito. Falsos legados continuam
     // sem efeito nos demais formatos, inclusive thirdPlace:false em fases antigas.
     var eightPolicy = window.ScoreplaceGroupAlternation;
-    var optionalThird = eightPolicy && eightPolicy.eightConfig(out);
+    var optionalThird = eightPolicy && eightPolicy.eightConfig(out,populationFor);
     if (!optionalThird) delete e.thirdPlaceEnabled;
     e.terceiro = !(optionalThird && e.thirdPlaceEnabled === false);
     // v4.4.33: fase classificatória on/off. Ao menos UMA fase ativa: sem classificatória ⇒
@@ -1135,7 +1135,7 @@
     var cuts = [cfg && cfg.qualificationCategoryRules, cfg && cfg.eliminatoria && cfg.eliminatoria.formationQualificationCategoryRules];
     result.phases.forEach(function (phase, index) {
       if (phase.kind === 'elimination' && window.ScoreplaceGroupAlternation &&
-          window.ScoreplaceGroupAlternation.eightConfig(result.cfg)) {
+          window.ScoreplaceGroupAlternation.eightConfig(result.cfg,opts && opts.population)) {
         phase.thirdPlacePolicy = 'optional_super8';
         phase.thirdPlace = result.cfg.eliminatoria.thirdPlaceEnabled !== false;
       }
@@ -1213,7 +1213,7 @@
   }
   function compileBasePhases(cfg, opts) {
     opts = opts || {};
-    cfg = normalize(cfg, opts.sport);
+    cfg = normalize(cfg, opts.sport,opts.population);
     var isDupla = cfg.disputa === 'dupla';
     var teamSize = teamSizeFor(cfg.disputa);
     var rotationCategories = Array.isArray(opts.categories) ? opts.categories : [];
@@ -1602,6 +1602,7 @@
     });
     var derived = compileToPhases(cfg, {
       categories: t.combinedCategories || [],
+      population: category=>window.ScoreplaceGroupAlternation?.population(t,category),
       sport: sport,
       resultEntry: t.resultEntry,
       lateEnrollment: t.lateEnrollment,

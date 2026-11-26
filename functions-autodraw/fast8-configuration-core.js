@@ -6,11 +6,11 @@ const equal = (a,b) => JSON.stringify(a) === JSON.stringify(b);
 
 function validateIntent(t, ErrorType, existingPhases) {
   const cfg=t && t.fmt2, value=cfg?.eliminatoria?.thirdPlaceEnabled;
-  if (value !== undefined && (typeof value !== 'boolean' || !alternation.eightConfig(cfg)))
+  if (value !== undefined && (typeof value !== 'boolean' || !alternation.eightConfig(cfg,category=>alternation.population(t,category))))
     throw new ErrorType('invalid-argument','A opção de terceiro lugar é exclusiva do Super 8 e do Fast 8.');
   for (const phase of existingPhases ? [] : t.phases || []) {
     if (phase && phase.thirdPlacePolicy !== undefined &&
-        (phase.thirdPlacePolicy !== 'optional_super8' || phase.kind !== 'elimination' || !alternation.eightConfig(cfg) ||
+        (phase.thirdPlacePolicy !== 'optional_super8' || phase.kind !== 'elimination' || !alternation.eightConfig(cfg,category=>alternation.population(t,category)) ||
           phase.thirdPlace !== (value !== false)))
       throw new ErrorType('invalid-argument','A política de terceiro lugar deve corresponder ao formato compilado.');
   }
@@ -26,14 +26,45 @@ function validateIntent(t, ErrorType, existingPhases) {
 // autorizada: nenhuma identidade fictícia e nenhuma escrita em jogos.
 function prepare(before, incoming, context, ErrorType, drawn) {
   const patch=copy(incoming);
+  if(patch.scheduleWindow) delete patch.scheduleWindow.groupAlternation;
+  if(patch.fmt2 && Array.isArray(patch.fmt2.rotationCategoryRules)) patch.fmt2.rotationCategoryRules.forEach(rule=>{
+    const old=before.fmt2?.rotationCategoryRules?.find(row=>row.category===rule.category);
+    if(old && Object.hasOwn(old,'groupAlternation') && !Object.hasOwn(rule,'groupAlternation')) rule.groupAlternation=old.groupAlternation;
+  });
+  const flags=cfg=>(cfg?.rotationCategoryRules || []).filter(rule=>rule.groupAlternation===true).map(rule=>String(rule.category)).sort();
+  const modeChanged=patch.fmt2 && !equal(flags(before.fmt2),flags(patch.fmt2));
+  if(modeChanged && drawn) throw new ErrorType('failed-precondition','Altere a alternância antes de gerar os jogos da classificação.');
+  if(modeChanged) {
+    const target=Object.assign({},before,patch);
+    require('./format-intent-validation-core').validateNewFormatIntent(patch.fmt2,ErrorType,before,before.teamSize,target.combinedCategories,
+      category=>alternation.population(target,category));
+    const compiled=context.FORMAT2.compileToPhases(patch.fmt2,{sport:target.sport,categories:target.combinedCategories || [],
+      population:category=>alternation.population(target,category)});
+    patch.fmt2=compiled.cfg;
+    patch.phases=compiled.phases.map((phase,index)=>{
+      const merged=Object.assign({},before.phases?.[index] || {},phase);
+      if(!Object.hasOwn(phase,'thirdPlacePolicy')) delete merged.thirdPlacePolicy;
+      return merged;
+    });
+    const schedule=Object.assign({},before.scheduleWindow || {},patch.scheduleWindow || {});
+    delete schedule.groupAlternation;
+    if(schedule.interleavedPlan) {
+      const effective=Object.assign({},before,patch,{scheduleWindow:schedule});
+      const proposed=context.ScoreplacePhaseGridPlan.suggestProjected(effective,schedule.days,context);
+      if(proposed.error) throw new ErrorType('failed-precondition',proposed.error);
+      schedule.interleavedPlan=proposed.plan;
+    }
+    patch.scheduleWindow=schedule;
+  }
   const previous=before.fmt2 && before.fmt2.eliminatoria;
-  if (patch.fmt2 && alternation.eightConfig(patch.fmt2) && previous && Object.hasOwn(previous,'thirdPlaceEnabled') &&
+  if (patch.fmt2 && alternation.eightConfig(patch.fmt2,category=>alternation.population(Object.assign({},before,patch),category)) && previous && Object.hasOwn(previous,'thirdPlaceEnabled') &&
       patch.fmt2.eliminatoria && !Object.hasOwn(patch.fmt2.eliminatoria,'thirdPlaceEnabled'))
     patch.fmt2.eliminatoria.thirdPlaceEnabled=previous.thirdPlaceEnabled;
   const next=patch.fmt2 && patch.fmt2.eliminatoria;
-  if (next && Object.hasOwn(next,'thirdPlaceEnabled') && alternation.eightConfig(patch.fmt2)) next.terceiro=next.thirdPlaceEnabled!==false;
-  const changed=!!next && alternation.eightConfig(patch.fmt2) && (next.thirdPlaceEnabled !== false) !== (!previous || previous.thirdPlaceEnabled !== false);
+  if (next && Object.hasOwn(next,'thirdPlaceEnabled') && alternation.eightConfig(patch.fmt2,category=>alternation.population(Object.assign({},before,patch),category))) next.terceiro=next.thirdPlaceEnabled!==false;
+  const changed=!!next && alternation.eightConfig(patch.fmt2,category=>alternation.population(Object.assign({},before,patch),category)) && (next.thirdPlaceEnabled !== false) !== (!previous || previous.thirdPlaceEnabled !== false);
   const effective=Object.assign({},before,patch,{scheduleWindow:Object.assign({},before.scheduleWindow || {},patch.scheduleWindow || {})});
+  if(modeChanged) delete effective.scheduleWindow.groupAlternation;
   // Fases existentes são recompiladas abaixo quando a intenção muda. Somente
   // fases fornecidas pelo cliente são validadas nesta etapa.
   validateIntent(effective,ErrorType,!patch.phases);
@@ -45,7 +76,7 @@ function prepare(before, incoming, context, ErrorType, drawn) {
       require('./format-intent-validation-core').validateNewFormatIntent,ErrorType);
     else {
       require('./format-intent-validation-core').validateNewFormatIntent(patch.fmt2,ErrorType,before,before.teamSize);
-      const compiled=context.FORMAT2.compileToPhases(patch.fmt2,{sport:before.sport,categories:before.combinedCategories || []});
+      const compiled=context.FORMAT2.compileToPhases(patch.fmt2,{sport:before.sport,categories:before.combinedCategories || [],population:category=>alternation.population(Object.assign({},before,patch),category)});
       future={fmt2:compiled.cfg,phases:compiled.phases.slice(1),gruposClassified:compiled.topLevel.gruposClassified,politicaDaChave:compiled.topLevel.politicaDaChave};
     }
     if (!future) throw new ErrorType('failed-precondition','A disputa de terceiro lugar só pode mudar antes de gerar a eliminatória.');
@@ -71,10 +102,18 @@ function plan(before, intent, context, ErrorType, drawn) {
   const fmt2=copy(before.fmt2);
   if (Object.hasOwn(intent,'thirdPlaceEnabled')) fmt2.eliminatoria.thirdPlaceEnabled=intent.thirdPlaceEnabled;
   const incoming={fmt2};
-  if (Object.hasOwn(intent,'groupAlternation')) incoming.scheduleWindow={groupAlternation:intent.groupAlternation};
+  if (Object.hasOwn(intent,'groupAlternation')) {
+    if(drawn) throw new ErrorType('failed-precondition','Migre a alternância antes de gerar os jogos.');
+    const rules=fmt2.rotationCategoryRules;
+    if(!Array.isArray(rules) || !rules.length) throw new ErrorType('failed-precondition','Confira as categorias dos grupos.');
+    rules.forEach(rule=>{rule.groupAlternation=intent.groupAlternation===true;});
+    incoming.scheduleWindow=copy(before.scheduleWindow || {});
+    delete incoming.scheduleWindow.groupAlternation;
+  }
   const prepared=prepare(before,incoming,context,ErrorType,drawn);
   const after=Object.assign({},copy(before),prepared.patch,
     {scheduleWindow:Object.assign({},before.scheduleWindow || {},prepared.patch.scheduleWindow || {})});
+  if(Object.hasOwn(intent,'groupAlternation')) delete after.scheduleWindow.groupAlternation;
   if (prepared.future) after.phases=[before.phases[0]].concat(prepared.future.phases);
   validateIntent(after,ErrorType);
   return {after,patch:prepared.patch,future:prepared.future};

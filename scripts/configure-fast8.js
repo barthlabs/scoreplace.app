@@ -70,7 +70,7 @@ async function main() {
       phaseMaterialized:t._phaseMaterialized || 0,matchCountsByPhase:(t.matches || []).reduce((o,m)=>{o[m.phaseIndex || 0]=(o[m.phaseIndex || 0] || 0)+1;return o;},{}),
       tieDecisionCount:Object.keys((t.phaseTieDecisions || {})['0'] || {}).length,
       groups:context.ScoreplaceGroupAlternation.config(t).groups.map(g=>({label:g.label,entry:g.entry})),
-      alternation:t.scheduleWindow?.groupAlternation===true,thirdPlace:t.fmt2?.eliminatoria?.thirdPlaceEnabled!==false}));
+      alternation:context.ScoreplaceGroupAlternation.enabled(t),thirdPlace:t.fmt2?.eliminatoria?.thirdPlaceEnabled!==false}));
     return;
   }
   const intent=manifest?.intent || {groupAlternation:true,thirdPlaceEnabled:false};

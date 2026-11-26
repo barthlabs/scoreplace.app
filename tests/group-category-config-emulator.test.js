@@ -118,12 +118,22 @@ async function run() {
     const {w,G,scenario,D}=require('./universal-phase-grid.test');
     const draft=scenario(['Divisão B','Divisão C'],[16,32],[8,8],[7,7],[4,2]);
     draft.maxParticipants=48;
+    draft.fmt2.rotationCategoryRules.forEach(rule=>rule.groupAlternation=true);
     const rules=fmt.compileToPhases(draft.fmt2,{sport:draft.sport,categories:draft.combinedCategories});
     const plan=G.suggestProjected({...draft,phases:rules.phases,fmt2:rules.cfg},D,w).plan;
     const fastId='tour_'+Date.now()+'_'+require('node:crypto').randomBytes(16).toString('hex');
     await invoke('createTournament',{tournamentId:fastId,config:{...draft,fmt2:rules.cfg,name:'Fast 8 sintético',
       startDate:'2026-12-01',endDate:'2026-12-01',scheduleWindow:{mode:'organizer',version:1,days:D,interleavedPlan:plan}}});
     const fastRef=db.collection('tournaments').doc(fastId);
+    const switched=structuredClone(rules.cfg);switched.rotationCategoryRules[0].groupAlternation=false;
+    await invoke('updateTournamentConfiguration',{tournamentId:fastId,patch:{fmt2:switched}});
+    let policy=(await fastRef.get()).data();
+    assert.equal(policy.fmt2.rotationCategoryRules[0].groupAlternation,false);
+    assert.equal(policy.fmt2.rotationCategoryRules[1].groupAlternation,true);
+    assert.deepEqual(policy.scheduleWindow.interleavedPlan.alternatingCategories,[{phaseIndex:0,category:'Divisão C'}]);
+    await invoke('applyTournamentFormat',{tournamentId:fastId,fmt2:rules.cfg});
+    policy=(await fastRef.get()).data();
+    assert.equal(policy.scheduleWindow.interleavedPlan.alternatingCategories.length,2);
     const forged=structuredClone(cfg);forged.eliminatoria.thirdPlaceEnabled=false;
     const pristine=(await fastRef.get()).data();
     await assert.rejects(invoke('applyTournamentFormat',{tournamentId:fastId,fmt2:forged}),{code:'invalid-argument'});
@@ -137,10 +147,13 @@ async function run() {
     await fastRef.collection('matches').doc(part._chave).set(part);
     await fastRef.update({_nJogos:1,_nPartes:{matches:1},matches:[],status:'active'});
     const prior=(await fastRef.get()).data(),next=structuredClone(prior.fmt2);
+    const afterDrawMode=structuredClone(prior.fmt2);afterDrawMode.rotationCategoryRules[0].groupAlternation=false;
+    await assert.rejects(invoke('applyTournamentFormat',{tournamentId:fastId,fmt2:afterDrawMode}),{code:'failed-precondition'});
+    assert.deepEqual((await fastRef.get()).data(),prior);
     next.eliminatoria.thirdPlaceEnabled=false;
     await invoke('updateTournamentConfiguration',{tournamentId:fastId,patch:{fmt2:next,scheduleWindow:{groupAlternation:true}}});
     const after=(await fastRef.get()).data();
-    assert(after.scheduleWindow.groupAlternation);
+    assert(after.fmt2.rotationCategoryRules.every(rule=>rule.groupAlternation===true));
     assert.equal(after.fmt2.eliminatoria.thirdPlaceEnabled,false);
     assert.equal(after.phases[1].thirdPlace,false);
     assert.deepEqual(after.phases[0],prior.phases[0]);

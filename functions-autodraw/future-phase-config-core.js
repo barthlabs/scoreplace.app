@@ -23,7 +23,7 @@ function plan(t, proposed, compile, validate, ErrorType) {
   if (!merged.ok) return null;
   validate(merged.valor, ErrorType, t, t.teamSize);
   require('./elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy(merged.valor, ErrorType);
-  const compiled = compile(merged.valor, { sport: t.sport, categories:t.combinedCategories || [], resultEntry: t.resultEntry || ['organizer'],
+  const compiled = compile(merged.valor, { sport: t.sport, categories:t.combinedCategories || [], population:category=>require('./vendor/super-eight-core').categoryPopulation(t,category), resultEntry: t.resultEntry || ['organizer'],
     lateEnrollment: t.lateEnrollment, newMatchups: t.newMatchups });
   if (!compiled || !Array.isArray(compiled.phases) || compiled.phases.length < 2 ||
       !compiled.phases[0] || compiled.phases[0].kind !== 'classification' ||

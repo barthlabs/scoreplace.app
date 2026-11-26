@@ -711,6 +711,21 @@ service cloud.firestore {
           && (!dividido() || (igual('_nJogos') && igual('_nPartes') && igual('_nGrupos')))
           && (!divideParte('matches') || listaVazia('matches'));
       }
+      function rotationRulesOf(data) {
+        let cfg=data.get('fmt2', {});
+        return cfg is map && cfg.get('rotationCategoryRules', []) is list ? cfg.get('rotationCategoryRules', []) : [];
+      }
+      function firstPhaseRotationRulesOf(data) {
+        let phases=data.get('phases', []);
+        let phase=phases is list && phases.size()>0 && phases[0] is map ? phases[0] : {};
+        let classification=phase.get('classification', {});
+        return classification is map && classification.get('rotationCategoryRules', []) is list ? classification.get('rotationCategoryRules', []) : [];
+      }
+      function categoryAlternationIntact() {
+        return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['fmt2','phases'])
+          || (rotationRulesOf(resource.data)==rotationRulesOf(request.resource.data)
+            && firstPhaseRotationRulesOf(resource.data)==firstPhaseRotationRulesOf(request.resource.data));
+      }
       function planoIntercaladoIntacto() {
         let windowConfig = d0().get('scheduleWindow', {});
         return !(windowConfig is map && windowConfig.get('interleavedPlan', null) != null)
@@ -921,7 +936,7 @@ service cloud.firestore {
                   || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pairRequests'])))
         )
         && ((resetDeFaseCandidato() && ehResetOk())
-          || (faseIntacta() && planoIntercaladoIntacto()))
+          || (faseIntacta() && planoIntercaladoIntacto() && categoryAlternationIntact()))
         && elencoIntacto()
         // Campos do servidor reunidos numa única diferença. Além de impedir
         // falsificação, evita exceder o teto de expressões no reset completo.

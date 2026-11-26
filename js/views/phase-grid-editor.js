@@ -126,7 +126,7 @@
   function visualGroups(tiles) {
     var buckets=new Map(), result=[];
     tiles.filter(tile=>tile.kind==='groups' && tile.games===1).forEach(function(tile){
-      var key=JSON.stringify([tile.phaseIndex,tile.category,tile.groupNumber,tile.day]);
+      var key=JSON.stringify([tile.phaseIndex,tile.category,tile.groupNumber,tile.day,tile.assignment?.alternating?tile.round:null]);
       if(!buckets.has(key)) buckets.set(key,[]); buckets.get(key).push(tile);
     });
     buckets.forEach(function(items){
@@ -202,9 +202,13 @@
       if(examples[first.id] && first.duration*pixelsPerMinute<150) return;
       var finish=Math.max(...group.tiles.map(tile=>model.minutes(tile.startTime)+tile.duration));
       var panel=document.createElement('section'); panel.className='phase-grid-super-group';
+      var alternated=first.assignment?.alternating===true, headerHeight=alternated?56:96;
+      var totalRounds=Math.max(...state.tiles.filter(tile=>tile.phaseIndex===first.phaseIndex && tile.category===first.category && tile.groupNumber===first.groupNumber).map(tile=>tile.round));
       panel.style.cssText='top:'+((model.minutes(first.startTime)-start)*pixelsPerMinute)+'px;height:'+((finish-model.minutes(first.startTime))*pixelsPerMinute-3)+'px;left:calc(66px + (100% - 66px) * '+(group.courts[0]-1)+' / '+columns+');width:calc((100% - 66px) * 2 / '+columns+');';
       var heading=document.createElement('header');
-      heading.innerHTML='<strong>'+esc(label(first))+'</strong><span>Grupo '+esc(first.assignment?.label || model.groupLabel(first))+'</span>';
+      heading.style.height=headerHeight+'px';
+      heading.innerHTML=alternated?'<strong>Grupo '+esc(first.assignment.label)+' · Rodada '+first.round+'/'+totalRounds+'</strong><span>'+esc(label(first))+'</span>':
+        '<strong>'+esc(label(first))+'</strong><span>Grupo '+esc(first.assignment?.label || model.groupLabel(first))+'</span>';
       panel.appendChild(heading);
       if(!state.locked) {
         panel.addEventListener('dragover',function(event){event.preventDefault();});
@@ -215,8 +219,8 @@
         if(!el) return;
         var firstRound=tile.round===group.rounds[0], left=tile.court===group.courts[0];
         el.dataset.court=String(tile.court);
-        el.style.top=((model.minutes(tile.startTime)-model.minutes(first.startTime))*pixelsPerMinute+(firstRound?96:0))+'px';
-        el.style.height=(tile.duration*pixelsPerMinute-(firstRound?96:0)-3)+'px';
+        el.style.top=((model.minutes(tile.startTime)-model.minutes(first.startTime))*pixelsPerMinute+(firstRound?headerHeight:0))+'px';
+        el.style.height=(tile.duration*pixelsPerMinute-(firstRound?headerHeight:0)-3)+'px';
         el.style.left=left?'3px':'calc(50% + 3px)';el.style.right=left?'calc(50% + 3px)':'3px';
         el.innerHTML='<b class="phase-grid-group-game">Jogo '+numbers[tile.id]+'</b>'+
           illustrativeHtml(examples[tile.id])+'<span class="phase-grid-single" hidden>JOGO '+numbers[tile.id]+'</span>';
@@ -231,36 +235,7 @@
       row.courts?.length && row.courts.every(c=>Number.isInteger(c) && c>=1 && c<=courts));
   }
   window._phaseGridAssignmentsCompatible=assignmentsCompatible;
-  function renderFast8Options() {
-    var mount=document.getElementById('fast8-options'), state=window._phaseCallOrderState,
-      form=window._estimatedGameHoursState, core=window.ScoreplaceGroupAlternation;
-    if (!mount || !form || !core) return;
-    if (state && state.preDrawId) { mount.innerHTML=''; return; }
-    var t=Object.assign({},window._editingTournament || {},state && state.tournament || {});
-    t.scheduleWindow=Object.assign({},t.scheduleWindow || {},form.saved || {},
-      state && state.plan ? {interleavedPlan:state.plan} : {});
-    if (form.fast8Value === undefined) form.fast8Value=t.scheduleWindow.groupAlternation===true;
-    var settings=core.config(t), disabled=!settings.eligible && !form.fast8Value || t.status==='finished';
-    var waves=settings.eligible ? Array.from(new Set(settings.groups.map(g=>g.entry))).sort((a,b)=>a-b).map(function (entry) {
-      return settings.groups.filter(g=>g.entry===entry).map(g=>g.label || 'Grupo '+g.groupNumber).join(', ');
-    }).join(' → ') : settings.reason;
-    mount.innerHTML='<section class="phase-grid-editor"><label><input type="checkbox" role="switch" id="fast8-enabled" '+
-      (form.fast8Value?'checked ':'')+(disabled?'disabled ':'')+'onchange="window._setFast8Enabled(this.checked)"> '+
-      '<strong>Fast 8 · alternar grupos</strong></label><p>'+esc(waves)+
-      (settings.eligible?'. Após a entrada inicial, cada próximo jogo pode ocupar a primeira quadra livre.':'')+'</p></section>';
-  }
-  window._setFast8Enabled=function(value) {
-    var form=window._estimatedGameHoursState;
-    if (!form) return;
-    form.fast8Value=value===true; form.fast8Touched=true;
-    renderFast8Options();
-  };
-  window._readFast8Options=function() {
-    var form=window._estimatedGameHoursState;
-    return form && form.fast8Touched ? {groupAlternation:form.fast8Value===true} : null;
-  };
   function redraw(keepScroll) {
-    renderFast8Options();
     var mount = section(), state = window._phaseCallOrderState;
     if (!mount) { if (overlayOpen) window._closePhaseGridEditor(); return; }
     if (overlayOpen && !overlay()) {
@@ -345,6 +320,7 @@
       '<button type="button" class="btn btn-secondary" onclick="window._phaseGridPreset(\'spread\')">Espalhar ao longo do torneio</button></div>' + assignmentPanel(state) +
       '<p class="phase-grid-drag-help">Arraste sobre outro bloco para trocar posições; solte numa vaga livre para mover.</p>') + '</div>' +
       (Object.keys(examples).length?'<p class="phase-grid-example-help">Exemplo de rodízio · J1, J2… são atletas hipotéticos.</p>':'')+
+      (state.plan.alternatingCategories?.length?'<p class="phase-grid-example-help">Fast 8 · grupos alternados entre as rodadas. Os horários são uma previsão; a chamada segue a fila de cada quadra na súmula, com remanejamento manual pela organização.</p>':'')+
       '<p id="phase-grid-message" class="phase-grid-error" role="alert" hidden></p>' +
       '<div class="phase-grid-viewport"><div class="phase-grid-head" style="--phase-grid-courts:' + columns + '"><span>Hora</span>' +
       Array.from({ length:columns }, function (_, i) { return '<span>' + esc((state.tournament.courtNames || [])[i] || ('Quadra ' + (i + 1))) + '</span>'; }).join('') +
@@ -363,7 +339,8 @@
             var title = tile.kind === 'groups' ? label(tile) : eliminationNames[tile.id]+' · '+tile.category;
             var matchup=model.matchupLabel?.(tile,state.tiles,state.plan) || '';
             var series = tile.kind === 'groups' && (state.plan.schema === 1 || tile.games === 3);
-            var short = tile.kind==='groups' ? 'Grupo '+(tile.assignment?.label || groupName)+(series?' · 3 jogos':'') : '';
+            var short = tile.kind==='groups' ? 'Grupo '+(tile.assignment?.label || groupName)+(series?' · 3 jogos':'')+
+              (tile.assignment?.alternating?' · Rodada '+tile.round:'') : '';
 
             var accent = 'phase-grid-cat-' + (categories.indexOf(tile.category) % 6);
             var overflow = carry || model.outsideWindow(tile, day), collision = overlapping.has(tile.id);
@@ -480,6 +457,21 @@
     redraw(!!options.quiet);
     if(!options.quiet) window._openPhaseGridEditor();
     return result;
+  };
+  window._phaseGridCategoryAlternationChanged=function() {
+    var state=window._phaseCallOrderState;
+    if(!state?.locked) return window._phaseGridRefreshDraft(true);
+    if(state.preDrawId || state.tournament?.sorteioDrawId || window._tournamentHasDraw?.(state.tournament)) return null;
+    var t=state.tournament, limits=t.maxParticipantsByCategory || {};
+    var projection=window._f2ProjectCurrentPhases?.(limits);
+    if(!projection) return null;
+    var effective=Object.assign({},t,{fmt2:projection.cfg || projection.tournament.fmt2,phases:projection.phases});
+    var result=model.suggestProjected(effective,daysOf(state),window);
+    if(result.error) {showError(result.error);return result;}
+    state.tournament=effective;state.plan=result.plan;state.tiles=result.tiles;
+    // A mudança de modo é salva pelo endpoint; os controles de geometria continuam bloqueados.
+    state.touched=false;
+    redraw(true);return result;
   };
   window._phaseGridRefreshDraft=function(force) {
     var state=window._phaseCallOrderState;

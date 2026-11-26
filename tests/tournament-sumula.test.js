@@ -5,6 +5,7 @@ process.env.TZ = 'America/Sao_Paulo';
 const assert = require('assert');
 const fs = require('fs');
 const crypto = require('crypto');
+require('../js/domain/group-alternation.js');
 require('../js/views/tournament-sumula.js');
 const sumulaSource = fs.readFileSync('js/views/tournament-sumula.js', 'utf8');
 const officialSvg = fs.readFileSync('icons/logo-podium-print.svg');
@@ -635,10 +636,11 @@ console.log('✅ Súmula por quadra e lista de chamada');
   const model=core.collect(tournament,games),first=model.matches.find(m=>m.id==='a');
   assert.deepStrictEqual(first.nextCourts1,['','Q2']);assert.deepStrictEqual(first.nextCourts2,['','Q2']);
   assert.deepStrictEqual(model.matches.find(m=>m.id==='d').nextCourts1,['','']);
-  const fast=core.collect({...tournament,scheduleWindow:{...tournament.scheduleWindow,groupAlternation:true}},games);
+  const fastConfig=structuredClone(tournament);fastConfig.phases[0].classification.rotationCategoryRules[0].groupAlternation=true;
+  const fast=core.collect(fastConfig,games);
   if(process.env.SP_SUMULA_FAST8_SAMPLE)fs.writeFileSync(process.env.SP_SUMULA_FAST8_SAMPLE,core.encodePdf(core.makePages(fast)));
-  assert(fast.matches.every(m=>!m.nextCourts1 && !m.nextCourts2 && !m.court && !m.time),
-    'Fast 8 omite previsões de horário e quadra futura, inclusive setas de próxima rodada');
+  assert(fast.matches.every(m=>m.court && m.time),'Fast 8 mantém a quadra e o horário previstos na súmula');
+  assert.deepStrictEqual(fast.matches.find(m=>m.id==='a').nextCourts1,['','Q2']);
   assert(core.makePages(fast).flatMap(p=>p.commands).join('\n').includes('Fast 8'),
     'súmula Fast 8 comunica a sequência das chamadas');
 

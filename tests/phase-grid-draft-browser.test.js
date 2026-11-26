@@ -199,21 +199,26 @@ const root=process.env.SP_ARTIFACT_ROOT || path.resolve(__dirname,'..');
   return {auto,refresh,touchedAuto,organizer,untouched:!_phaseCallOrderState.touched,unchanged:before===JSON.stringify(_phaseCallOrderState.plan)};
  },frozen);
  assert.deepEqual(untouched,{auto:null,refresh:null,touchedAuto:null,organizer:null,untouched:true,unchanged:true},'modo automático não bloqueia salvar, e grade v1 não tocada permanece intacta');
- const fast8Form=await page.evaluate(({t,plan,D})=>{
-  var projection=ScoreplacePhaseGridPlan.project(t,window),saved={...t,phases:projection.phases,fmt2:projection.cfg || t.fmt2,
-    scheduleWindow:{mode:'organizer',days:D,interleavedPlan:plan}};
-  _phaseCallOrderState={tournament:saved,plan,tiles:ScoreplacePhaseGridPlan.expand(plan,saved),locked:true};
-  _estimatedGameHoursState={mode:'organizer',saved:saved.scheduleWindow,locked:true};
-  _renderPhaseGridEditor();
-  var toggle=document.getElementById('fast8-enabled'),before=JSON.stringify(plan);
-  var enabled=!!toggle && !toggle.disabled;
-  if(toggle){toggle.click();}
-  return {enabled,value:_readFast8Options(),unchanged:JSON.stringify(_phaseCallOrderState.plan)===before,
-    gradeLocked:_phaseCallOrderState.locked,readGrade:_readPhaseGridPlan()};
- },{t:{...t,gameDuration:25},plan,D});
- assert.deepEqual(fast8Form,{enabled:true,value:{groupAlternation:true},unchanged:true,gradeLocked:true,readGrade:null},
-   'organizador ativa alternância com grade bloqueada sem replanejar quadras/horários');
+ const fast8Form=await page.evaluate(()=>({global:!!document.getElementById('fast8-enabled'),legacy:typeof window._readFast8Options}));
+ assert.deepEqual(fast8Form,{global:false,legacy:'undefined'},'alternância pertence à categoria, não ao editor global da grade');
  await page.addScriptTag({path:root+'/js/views/format2-ui.js'});
+ const categoryToggles=await page.evaluate(t=>{
+  var mount=document.createElement('section');document.body.appendChild(mount);
+  _f2MountInForm(mount,t.sport,t.fmt2,t);
+  var toggles=mount.querySelectorAll('[data-category-alternation]');
+  var count=toggles.length,order=Array.from(toggles).every(box=>box.previousElementSibling?.textContent.includes('Não repetir parceiro'));
+  _f2CategoryAlternation(0,true);
+  var first=_f2GetConfig().rotationCategoryRules.map(r=>r.groupAlternation===true);
+  _f2SliderCommon(0,true);
+  var common=mount.querySelectorAll('[data-category-alternation]').length;
+  _f2RotationSlider(0,0,'games',6);_f2RotationSliderDone();
+  var independent=_f2GetConfig().rotationCategoryRules.map(r=>r.groupAlternation===true);
+  _f2CategoryAlternation(0,false);
+  var disabled=_f2GetConfig().rotationCategoryRules.map(r=>r.groupAlternation===true);
+  mount.remove();return {count,order,first,common,independent,disabled};
+ },t);
+ assert.deepEqual(categoryToggles,{count:2,order:true,first:[true,false],common:2,independent:[true,false],disabled:[false,false]},
+   'toggles abaixo de não repetir parceiro, independentes inclusive com parâmetros numéricos comuns');
  const thirdToggle=await page.evaluate(t=>{
   var mount=document.createElement('section');document.body.appendChild(mount);
   var compiled=FORMAT2.compileToPhases(t.fmt2,{sport:t.sport,categories:t.combinedCategories});

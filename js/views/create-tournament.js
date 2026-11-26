@@ -870,7 +870,6 @@ function setupCreateTournamentModal() {
                   <div id="estimated-games-window-days" style="margin-top:8px"></div>
                 </div>
                 <div id="phase-call-order-editor" style="margin-top:12px"></div>
-                <div id="fast8-options" style="margin-top:12px"></div>
                 <!-- ⏱️ 2.1.98 — DIVISÃO DAS RODADAS (slider de stops).
                      Pedido do dono: "um slider com x stops. em cada stop a data dd/mm e entre
                      os stops y dias… o organizador pode esticar umas rodadas e reduzir outras
@@ -7144,7 +7143,6 @@ window._saveTournamentClickHandler = async function(event) {
           : (endDateRaw && window._estimatedGameHoursState && window._estimatedGameHoursState.mode === 'organizer'
             ? endDateRaw + 'T23:59' : endDateRaw);
         const estimatedGameHours = window._readEstimatedGameHours();
-        const fast8Options = typeof window._readFast8Options === 'function' ? window._readFast8Options() : null;
         const phaseCallOrder = window._readPhaseCallOrder();
         const phaseGridPlan = typeof window._readPhaseGridPlan === 'function' ? window._readPhaseGridPlan() : null;
         if (estimatedGameHours && estimatedGameHours.error) {
@@ -7310,8 +7308,8 @@ window._saveTournamentClickHandler = async function(event) {
           startDate: startDateVal,
           endDate: endDateVal,
           endTimeEstimated,
-          ...((estimatedGameHours || phaseCallOrder || phaseGridPlan || fast8Options) ? { scheduleWindow:Object.assign({},
-            window._editingTournament && window._editingTournament.scheduleWindow || {}, estimatedGameHours || {}, fast8Options || {},
+          ...((estimatedGameHours || phaseCallOrder || phaseGridPlan) ? { scheduleWindow:Object.assign({},
+            window._editingTournament && window._editingTournament.scheduleWindow || {}, estimatedGameHours || {},
             phaseCallOrder ? { phaseCallOrder:phaseCallOrder } : {},
             phaseGridPlan ? Object.assign({interleavedPlan:phaseGridPlan},phaseGridPlan.categoryPlacement==='grid'?{categoryWindows:[]}:{} ) : {}) } : {}),
           /* ⏱️ 2.1.98 — a divisão das rodadas que o organizador arrastou (N-1 datas).
@@ -7604,7 +7602,7 @@ window._saveTournamentClickHandler = async function(event) {
         try {
           var _f2sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || tourData.sport;
           var _f2categories = (window._getCreateFormCategoryData && window._getCreateFormCategoryData().combinedCategories) || tourData.combinedCategories || [];
-          var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, categories: _f2categories, resultEntry: tourData.resultEntry, lateEnrollment: tourData.lateEnrollment, newMatchups: tourData.newMatchups });
+          var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, categories: _f2categories, population:category=>window.ScoreplaceGroupAlternation.population(tourData,category), resultEntry: tourData.resultEntry, lateEnrollment: tourData.lateEnrollment, newMatchups: tourData.newMatchups });
           /* ⛔ A TRAVA DE "não muda depois do sorteio" MORA NO SERVIDOR, não aqui.
            * Eu a tinha escrito neste ponto, lendo `tourData` — que é o objeto NOVO do formulário, não
            * o torneio gravado. Ela nunca via que já existia chave, e ainda seria contornável: trava de
