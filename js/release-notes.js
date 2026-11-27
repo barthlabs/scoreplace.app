@@ -1,3 +1,4 @@
+// 2.7.87 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.86 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.85 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.84 — Chamada e painel seguem a grade sem promover jogos de outra quadra; combinação com zero salva junto dos novos níveis sem alterar as outras vagas e regras.
