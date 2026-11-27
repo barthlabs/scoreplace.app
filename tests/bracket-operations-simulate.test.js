@@ -56,6 +56,13 @@ vm.runInContext(source.slice(start, end), context);
   assert.equal(await context.window._bracketOperationsSimulate('t1'), true);
   assert.deepEqual(calls.slice(beforeDuplicate).map(c => c[1]), ['c1'],
     'mesmo se dois jogos aparecerem na mesma quadra, só um entra na leva');
+  tournament.scoring = { type:'sets', fixedSet:true, fixedSetGames:7, gamesPerSet:7 };
+  games.push({ id:'fixed7', p1:'E / F', p2:'G / H', court:'Quadra 4', courtCalledAt:1 });
+  const beforeFixed = calls.length;
+  assert.equal(await context.window._bracketOperationsSimulate('t1'), true);
+  const fixedScore = calls.slice(beforeFixed).find(c => c[1] === 'fixed7')[2];
+  assert.equal(fixedScore.s1 + fixedScore.s2, 7, 'sete games no total, nunca 7 a 3');
+  assert.notEqual(fixedScore.s1, fixedScore.s2, 'a simulação define vencedor');
   context.window.AppStore.currentUser = { uid:'other' };
   assert.equal(await context.window._bracketOperationsSimulate('t1'), false);
   console.log('Simular registra só a leva atual, avança 3 jogos por quadra e exige organizador.');

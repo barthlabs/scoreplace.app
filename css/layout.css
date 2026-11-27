@@ -224,6 +224,7 @@ html.sp-native .modal-overlay.active .modal-header {
 }
 
 .view-container {
+  --sp-view-gutter: 2rem;
   flex: 1;
   min-width: 0;
   padding: 2rem;
@@ -243,6 +244,7 @@ html.sp-native .modal-overlay.active .modal-header {
   }
 
   .view-container {
+    --sp-view-gutter: 1.5rem;
     padding: 1.5rem;
   }
 }
@@ -262,6 +264,7 @@ html.sp-native .modal-overlay.active .modal-header {
   }
 
   .view-container {
+    --sp-view-gutter: 1rem;
     padding: 1rem;
   }
 }

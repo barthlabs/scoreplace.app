@@ -118,7 +118,7 @@ const monarchTv = { ...t, id: 'monarch-tv', courtNames: ['Quadra 1'], teamCompet
 const monarchSnapshot = window._tvLiveBuildSnapshot(monarchTv, Date.parse('2026-10-22T21:03:00Z'));
 const assignedSnapshot = window._tvLiveBuildSnapshot({...monarchTv,matches:monarchTv.matches.map(m=>({...m,scheduledGroupLabel:'B1'}))}, Date.parse('2026-10-22T21:03:00Z'));
 assert.equal(assignedSnapshot.courts[0].phase,'Classificatória · B1');
-assert.equal(assignedSnapshot.results[0].groupName,'B1');
+assert.equal(assignedSnapshot.results[0].groupName,'Grupo B1');
 assert.equal(monarchSnapshot.courts[0].phase, 'Classificatória · Grupo A1', 'quadra da TV identifica o grupo');
 assert.equal(monarchSnapshot.results[0].seriesPosition, '1 de 3');
 assert.equal(monarchSnapshot.results[0].groupName, 'Grupo A1');
@@ -169,6 +169,30 @@ assert.equal(window._tvLiveBuildSnapshot(queue).nextGame.number, 20,
   'após retomar o segundo dia, exclui jogo chamado, finalizado e adversário indefinido; desempata por número');
 const emptyQueue = { ...queue, matches: queue.matches.slice(0, 3) };
 assert.equal(window._tvLiveBuildSnapshot(emptyQueue).nextGame, null, 'sem jogo elegível após recarregar não inventa confronto');
+{
+  const {G,scenario,D,w,F}=require('./universal-phase-grid.test');
+  const projected=scenario(['Categoria B','Categoria C'],[16,32],[8,8],[7,7],[4,2]);
+  const proposal=G.suggestProjected(projected,D,w);
+  assert.equal(proposal.plan.totalGames,92);
+  projected.id='planned-elimination-tv';projected.courtNames=Array.from({length:6},(_,i)=>'Quadra '+(i+1));
+  projected.phases=F.compileToPhases(projected.fmt2,{sport:projected.sport,categories:projected.combinedCategories}).phases;
+  projected.currentPhaseIndex=0;
+  projected.scheduleWindow={days:D,interleavedPlan:proposal.plan};
+  projected.matches=Array.from({length:84},(_,i)=>({id:'group-'+(i+1),phaseIndex:0,
+    scheduledGameNumber:i+1,category:i<28?'Categoria B':'Categoria C',
+    p1:'Dupla A '+i,p2:'Dupla B '+i,scheduledAt:'2026-12-01T18:00:00Z',
+    ...(i<78?{winner:'p1',scoreP1:7,scoreP2:0,resultAt:'2026-12-01T09:00:00Z'}:{})}));
+  window.ScoreplacePhaseGridPlan={...G,describeProjectedTiles:(t,tiles)=>G.describeProjectedTiles(t,tiles,w)};
+  try {
+    const preview=window._tvLiveBuildSnapshot(projected);
+    assert.deepEqual(Array.from(preview.nextGames,g=>g.number),Array.from({length:12},(_,i)=>i+79),
+      'depois dos jogos 79 a 84, a TV já mostra semifinais 85 a 90');
+    assert.equal(preview.nextGames[6].stage,'Semifinal');
+    assert.equal(preview.nextGames[6].a,'Vencedor do Grupo B1');
+    assert.equal(preview.nextGames[6].b,'3º/4º do Grupo B2');
+    assert.match(window._tvLiveBodyHtml(preview),/JOGO 85[\s\S]*Vencedor do Grupo B1/);
+  } finally { delete window.ScoreplacePhaseGridPlan; }
+}
 const pendingTie = { ...emptyQueue, phaseTieDecisions: { 0: { 'group-0:1:2': {
   status: 'pending', matches: [{ displayGameNumber: '93A', p1: { name: 'Atleta B' }, p2: { name: 'Atleta C' }, winnerKey: null }]
 } } } };
@@ -1054,6 +1078,14 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
     assert(fewBoard.nextGames.length<=1,'não inventa jogos para completar a janela');
     assert.equal(board.courts[4].fast8Group,'B2','primeira quadra livre recebe outro grupo sem prendê-lo ao par original');
     assert.equal(board.courts[0].fast8Groups.length,6);
+    const roundProgress=JSON.parse(JSON.stringify(fast));
+    roundProgress.matches.filter(m=>m.scheduledGroupLabel==='B1' && (m.round<=2 || (m.round===3 && m.id.endsWith('-0'))))
+      .forEach(m=>Object.assign(m,{winner:m.p1,scoreP1:7,scoreP2:0,resultAt:'2026-10-22T21:04:00Z'}));
+    const progressSnapshot=window._tvLiveBuildSnapshot(roundProgress,Date.parse('2026-10-22T21:06:00Z'));
+    const progressGroups=progressSnapshot.courts[0].fast8Groups;
+    assert.equal(progressGroups.find(g=>g.label==='B1').completedRound,2,'jogo isolado da rodada 3 não conclui a rodada');
+    assert.equal(progressGroups.find(g=>g.label==='B2').completedRound,0,'cada grupo conta apenas os próprios resultados');
+    assert.match(window._tvLiveBodyHtml(progressSnapshot),/Grupo B1<\/h3><small>· Categoria B \(2\/7\)<\/small>/);
     // Próximo 12: a cauda nunca volta aos jogos 7–11 de outras quadras.
     const forward=JSON.parse(JSON.stringify(fast));forward.id='forward-tv-window';
     forward.matches.forEach(m=>{for(const key of ['winner','resultAt','court','courtCalledAt','startedAt','courtClockBaseAt','scoreP1','scoreP2'])delete m[key];

@@ -265,6 +265,39 @@
       return { row:row, games:games, complete:complete };
     }).filter(Boolean);
   }
+  function completedGroupRounds(games, totalRounds, occupancy) {
+    var completed = 0;
+    for (var round = 1; round <= totalRounds; round++) {
+      var roundGames = games.filter(function (game) { return Number(game.round) === round; });
+      if (roundGames.length !== 2 || !roundGames.every(function (game) { return occupancy.isFinished(game); })) break;
+      completed = round;
+    }
+    return completed;
+  }
+  function scheduledEliminationPreview(t, matches, announced) {
+    var model = window.ScoreplacePhaseGridPlan, plan = t.scheduleWindow?.interleavedPlan;
+    if (plan?.schema !== 2 || !model || typeof model.describeProjectedTiles !== 'function') return [];
+    try {
+      var tiles = model.describeProjectedTiles(t, model.expand(plan, t), window);
+      var numbers = model.numbered(tiles, plan), stages = model.eliminationLabels(tiles);
+      var knownNumbers = new Set((matches || []).concat(announced || []).map(function (m) {
+        return Number(m.scheduledGameNumber || m._gameNum || m.number) || 0;
+      }));
+      return tiles.filter(function (tile) {
+        return tile.kind === 'elimination' && Number(tile.phaseIndex || 0) > Number(t.currentPhaseIndex || 0) &&
+          !knownNumbers.has(Number(numbers[tile.id]));
+      }).map(function (tile) {
+        var matchup = model.matchupLabel(tile, tiles, plan).replace(/\bgrupo\b/gi, 'Grupo').split(' × ');
+        if (matchup.length !== 2 || !matchup[0] || !matchup[1]) return null;
+        return { number:numbers[tile.id], category:String(tile.category || ''),
+          stage:String(stages[tile.id] || 'Eliminatória').replace(/^Semifinais$/, 'Semifinal'),
+          a:matchup[0], b:matchup[1], ta:{name:'',color:'#94a3b8'}, tb:{name:'',color:'#94a3b8'} };
+      }).filter(Boolean).sort(function (a, b) { return Number(a.number) - Number(b.number); });
+    } catch (error) {
+      if (window._warn) window._warn('Prévia da próxima fase indisponível', error);
+      return [];
+    }
+  }
   function eventDayLayout(core) {
     var layout = core.defaults();
     var positions = {
@@ -487,10 +520,12 @@
       });
       courtCards[0].fast8Groups=boardGroups.filter(g=>Number(g.phaseIndex)===Number(t.currentPhaseIndex || 0)).map(function(group) {
         var games=matches.filter(m=>boardGroupFor(m)?.key===group.key);
+        var rule=t.phases?.[group.phaseIndex]?.classification?.rotationCategoryRules?.find(r=>r.category===group.category);
+        var totalRounds=Number(rule?.rounds || t.fmt2?.rodadas?.n || 7);
         var standingsGroup=typeof window._super8StandingsGroups==='function' && window._super8StandingsGroups(t,games).find(g=>
           Number(g.phaseIndex)===Number(group.phaseIndex) && g.category===group.category && Number(g.groupIdx)+1===group.groupNumber);
         var standings=standingsGroup && typeof window._computeMonarchStandings==='function' ? window._computeMonarchStandings(standingsGroup,t,group.category) : [];
-        return {label:group.label,category:group.category,cutoff:typeof window._phaseClassifiedCount==='function' ?
+        return {label:group.label,category:group.category,completedRound:completedGroupRounds(games,totalRounds,occupancy),rounds:totalRounds,cutoff:typeof window._phaseClassifiedCount==='function' ?
           window._phaseClassifiedCount(t,standings.length,group.category,group.phaseIndex) : 0,
           standings:standings.map(r=>({name:r.name,wins:r.wins,losses:r.losses,played:r.played,gamesWon:r.gamesWon,gamesLost:r.gamesLost}))};
       });
@@ -653,6 +688,9 @@
         .map(function (m) { return { number:m._gameNum || m.scheduledGameNumber || m.matchNumber || '',
           a:sideName(t, m, 'p1'), b:sideName(t, m, 'p2') }; });
     });
+    if (!tieOverride && !(nextSelection && nextSelection.waitingForTie)) {
+      nextGames = nextGames.concat(scheduledEliminationPreview(t, matches, nextGames));
+    }
     // O primeiro fixado faz parte do limite. Séries agrupadas contam cada jogo.
     var upcomingSlots = 2 * Math.max(1, courtNames.length);
     nextGames = nextGames.reduce(function (visible, game) {
@@ -704,7 +742,9 @@
           : 'Horário indisponível';
         var hasScore = !m.wo && ended > 0 && ((m.scoreP1 != null && m.scoreP2 != null) ||
           (Array.isArray(m.sets) && m.sets.some(function (set) { return set && set.gamesP1 != null && set.gamesP2 != null; })));
-        return { id: String(m.id || ''), resultAt: ended, hasScore: hasScore, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', time: resultTime, category: String(m.category || ''), stage: courtPhase(m), groupName: m.scheduledGroupLabel || (m.isMonarch ? monarchGroupName(m) : ''), seriesPosition: seriesPosition, a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
+        var resultGroup = String(m.scheduledGroupLabel || (m.isMonarch ? monarchGroupName(m) : '') || '').trim();
+        if (/^[A-Z]\d*$/i.test(resultGroup)) resultGroup = 'Grupo ' + resultGroup.toUpperCase();
+        return { id: String(m.id || ''), resultAt: ended, hasScore: hasScore, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', time: resultTime, category: String(m.category || ''), stage: courtPhase(m), groupName: resultGroup, seriesPosition: seriesPosition, a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
           ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams), scoreA: m.wo ? 'W.O.' : gameScore(m, 1, true), scoreB: m.wo ? 'W.O.' : gameScore(m, 2, true), duration: duration };
       });
     // Uma decisão por W.O. pode entrar no histórico depois do placar mais
@@ -874,7 +914,7 @@
     }
     return '<style>'+fast8Styles+'</style><div class="tv-fast8-board"><div class="tv-fast8-courts">'+cards.map(game).join('')+
       '</div><div class="tv-fast8-rankings">'+cards[0].fast8Groups.map(function(group) {
-        return '<section class="tv-fast8-standing"><header class="tv-fast8-standing-heading"><h3>Grupo '+esc(String(group.label).replace(/^Grupo\s+/i,''))+'</h3><small>· '+esc(group.category)+'</small></header>'+
+        return '<section class="tv-fast8-standing"><header class="tv-fast8-standing-heading"><h3>Grupo '+esc(String(group.label).replace(/^Grupo\s+/i,''))+'</h3><small>· '+esc(group.category)+' ('+esc(group.completedRound)+'/'+esc(group.rounds)+')</small></header>'+
           '<table><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>D</th><th title="Saldo de games">Saldo<br>games</th><th>%</th></tr></thead><tbody>'+
           group.standings.map(function(row,index) {
             var diff=Number(row.gamesWon || 0)-Number(row.gamesLost || 0),rate=gamesPercent(row);

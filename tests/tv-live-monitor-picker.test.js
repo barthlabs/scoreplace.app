@@ -46,7 +46,7 @@ const { chromium } = require('@playwright/test');
       (await getScreenDetails()).currentScreen.label === 'HDMI virtual');
     assert.equal(await tv.title(), 'TV · Outro torneio');
     assert.deepEqual((await cdp.send('Browser.getWindowForTarget')).bounds,originalWindow.bounds,'control window stays on its original monitor and retains its bounds');
-    assert.equal(await tv.locator('#tv-monitor-picker').count(), 0);
+    await tv.locator('#tv-monitor-picker').waitFor({ state:'detached' });
     assert.equal(await page.evaluate(() => !!document.fullscreenElement), false);
     assert.equal(new URL(page.url()).pathname, '/');
     await tv.close();

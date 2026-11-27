@@ -234,6 +234,7 @@
      edge-to-edge; o padding interno de cada card segura a leitura. Vertical
      (0.75rem) preservado. body{overflow-x:hidden} é rede contra transbordo. */
   .view-container {
+    --sp-view-gutter: 0px;
     padding: 0.75rem 0;
   }
 
@@ -422,6 +423,7 @@
   }
 
   .view-container {
+    --sp-view-gutter: 1.5rem;
     padding: 1.5rem;
   }
 
@@ -541,6 +543,7 @@
   }
 
   .view-container {
+    --sp-view-gutter: 2rem;
     padding: 2rem;
   }
 
@@ -760,6 +763,7 @@ img {
   }
 
   .view-container {
+    --sp-view-gutter: 0.75rem;
     padding: 0.75rem;
   }
 

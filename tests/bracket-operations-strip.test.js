@@ -41,12 +41,15 @@ assert.equal(operationStage({ isTieBreak:true }, {}, []), 'Desempate');
 const futureStart = source.indexOf('function _bracketOperationsFutureEstimates(');
 const operationStageLabel = new Function(source.slice(stageStart, futureStart) + '\nreturn _bracketOperationsStageLabel;')();
 assert.equal(operationStageLabel({ isMonarch:true, scheduledGroupLabel:'B1', groupName:'R1 Grupo F' },
-  {phases:[{kind:'classification'}]},[]),'Classificatória · B1');
+  {phases:[{kind:'classification'}]},[]),'Classificatória');
 assert.equal(operationStageLabel({ isMonarch:true, groupName:'R1 Grupo F' }, { phases:[{ kind:'classification' }] }, []),
-  'Classificatória · Grupo F', 'jogo em quadra identifica o grupo da classificatória');
+  'Classificatória', 'cabeçalho mantém apenas a fase');
 assert.equal(operationStageLabel({ isMonarch:true, monarchGroup:5, category:'Fem Prata' },
   { phases:[{ kind:'classification' }] }, [{ monarchGroup:5, category:'Fem Prata', groupName:'R1 Grupo F' }]),
-  'Classificatória · Grupo F', 'segundo jogo recupera o grupo da mesma série');
+  'Classificatória', 'grupo sai do cabeçalho da série');
+const operationGroupLabel = new Function(source.slice(stageStart, futureStart) + '\nreturn _bracketOperationsDisplayGroup;')();
+assert.equal(operationGroupLabel({ isMonarch:true, groupName:'R1 Grupo F' }, {}, []), 'Grupo F');
+assert.equal(operationGroupLabel({ scheduledGroupLabel:'A' }, {}, []), 'Grupo A');
 const futureEnd = source.indexOf('function _bracketOperationsReplica(', futureStart);
 assert(futureStart > 0 && futureEnd > futureStart);
 const futureEstimates = new Function('window', source.slice(futureStart, futureEnd) +
@@ -1445,12 +1448,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const nextGlyph = strip.querySelector('.sp-operations-next [data-operations-nav="next"] > svg');
       const category = strip.querySelector('.sp-operations-next [data-match-time-status]');
       camisUi.categoryText = category.textContent.trim();
-      const categoryWord = category.querySelector('span:first-child');
-      const groupCode = category.querySelector('.sp-operations-group-code');
-      camisUi.groupTypographyMatches = !!groupCode &&
-        getComputedStyle(groupCode).fontSize === getComputedStyle(categoryWord).fontSize &&
-        getComputedStyle(groupCode).color === getComputedStyle(categoryWord).color &&
-        getComputedStyle(groupCode).fontWeight === getComputedStyle(categoryWord).fontWeight;
+      const groupCode = category.querySelector('.sp-operations-group-label');
+      camisUi.groupTypographyMatches = !!groupCode && groupCode.textContent.startsWith('Grupo ');
       const actionButtons = [...strip.querySelectorAll('.sp-operations-next .sp-operations-replica:first-child .sp-mc-acts button')];
       camisUi.fontSize = parseFloat(getComputedStyle(gameTitle).fontSize);
       camisUi.arrowGap = {
@@ -1551,8 +1550,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(carousel.camis.labels, ['R1 Grupo A1', 'R1 Grupo A2', 'R1 Grupo A3', 'R2 Grupo A4']);
     assert.equal(carousel.camis.sixGamesHaveNav, false);
     assert.equal(carousel.camis.idLabel, 'R1 Grupo A2');
-    assert.equal(carousel.camis.ui.categoryText, 'Fem Diamante\u00a0A1');
-    assert(carousel.camis.ui.groupTypographyMatches, 'A1 deve usar a mesma fonte, peso e cor da categoria');
+    assert.equal(carousel.camis.ui.categoryText, 'Grupo A1 · Fem Diamante');
+    assert(carousel.camis.ui.groupTypographyMatches, 'o grupo vem destacado antes da categoria');
     assert.deepEqual({ title:carousel.camis.ui.title, arrows:carousel.camis.ui.arrows, nextTitle:carousel.camis.ui.nextTitle },
       { title: 'JOGO 1 (1/3)', arrows: 2, nextTitle: 'JOGO 2 (2/3)' });
     assert(Math.max(...carousel.camis.ui.measuredHeights.map(item => item.card)) -

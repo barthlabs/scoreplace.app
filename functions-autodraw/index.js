@@ -7581,8 +7581,10 @@ function _applyProjectedSchedule(t) {
 }
 
 function _materializeInterleavedReadyCategories(t, tId, nowIso) {
-  if (t && t.phaseBracketPlanVersion === 1) return [];
   const plan = t && t.scheduleWindow && t.scheduleWindow.interleavedPlan;
+  // Na grade v2, a chave oficial foi planejada no sorteio, mas sua ativação
+  // por chamada é desabilitada. Os resultados precisam instalar os jogos.
+  if (t && t.phaseBracketPlanVersion === 1 && plan?.schema !== 2) return [];
   if (plan?.schema===2 && !drawWindow.ScoreplacePhaseGridPlan.canInterleave(t)) return [];
   if (!plan || Number(t.currentPhaseIndex || 0) !== 0 || (t.phases?.[0]?.classification?.rotationCategoryRules && !t.phases[1])) return [];
   const phaseEngine = drawWindow && drawWindow._phasesEngine;

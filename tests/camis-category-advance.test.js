@@ -149,7 +149,8 @@ const freshEngine = { prevPhaseGroups:freshGroups, projectPhaseCfg:() => ({}),
     return {ok:true};
   } };
 const freshWindow = { _phasesEngine:freshEngine, _schGradeEstimada:() => ({cabe:true,interleaved:true,slots:[]}),
-  _schAplicarGrade:() => {}, _collectAllMatches:() => [] };
+  _schAplicarGrade:() => {}, _collectAllMatches:() => [],
+  ScoreplacePhaseGridPlan:{canInterleave:() => true} };
 const freshAdvance = vm.runInNewContext(source.slice(source.indexOf('function _materializeInterleavedReadyCategories('), to) +
   '\n_materializeInterleavedReadyCategories;', {
   drawWindow:freshWindow, phaseStandingsFn:g => g.rows,
@@ -157,6 +158,7 @@ const freshAdvance = vm.runInNewContext(source.slice(source.indexOf('function _m
     ({id:'group-'+index,group,rows:group.rows})), nextCfg:{}, compareForPool:() => () => 0 }),
   _phaseTieCore:{resolvePhaseTies:(_, __, pools) => ({status:'ready',orderedPools:pools.map(pool => ({
     id:pool.id,rows:[pool.rows[0],pool.rows[2],pool.rows[1]]}))})},
+  _applyProjectedSchedule:() => {},
   HttpsError:class extends Error {}
 });
 assert.deepEqual(Array.from(freshAdvance({ id:'fresh-groups', currentPhaseIndex:0,
@@ -165,4 +167,10 @@ assert.deepEqual(Array.from(freshAdvance({ id:'fresh-groups', currentPhaseIndex:
   ['Fem Diamante']);
 assert(reads >= 2 && qualifiedNames.join(',') === 'Bianca,Nina,Leticia',
   'desempate decidido é preservado quando a materialização relê o grupo');
+const plannedV2 = { id:'official-grid-v2', currentPhaseIndex:0, phaseBracketPlanVersion:1,
+  phases:[{},{}], combinedCategories:['Fem Diamante'], scheduleWindow:{interleavedPlan:{schema:2,
+    blocks:[{kind:'groups',phaseIndex:0,category:'Fem Diamante',groupNumber:1,games:3},
+      {kind:'elimination',phaseIndex:1,category:'Fem Diamante',games:1}]}} };
+assert.deepEqual(Array.from(freshAdvance(plannedV2, plannedV2.id, '2026-11-13T13:00:00Z')),
+  ['Fem Diamante'], 'chave oficial com grade v2 avança pelos resultados da classificatória');
 console.log('CAMIS: 1º+2º formam uma dupla por grupo; categorias avançam separadamente');

@@ -1582,10 +1582,14 @@ window._bracketOperationsSimulate = async function (tId, categoryFilter) {
         sets: multi.sets, setsWonP1: multi.setsWonP1, setsWonP2: multi.setsWonP2,
         isFixedSet: !!sc.fixedSet };
     } else {
-      var target = Math.max(1, Number(sc && sc.gamesPerSet) || 6);
-      var loser = Math.floor(Math.random() * Math.max(1, target - 1));
+      var fixedTotal = sc && sc.fixedSet === true ? Number(sc.fixedSetGames || sc.gamesPerSet) : 0;
+      var target = Math.max(1, fixedTotal || Number(sc && sc.gamesPerSet) || 6);
+      var loser = fixedTotal
+        ? Math.floor(Math.random() * Math.ceil(target / 2))
+        : Math.floor(Math.random() * Math.max(1, target - 1));
+      var winner = fixedTotal ? target - loser : target;
       var firstWins = Math.random() < 0.5;
-      payload = { s1: firstWins ? target : loser, s2: firstWins ? loser : target,
+      payload = { s1: firstWins ? winner : loser, s2: firstWins ? loser : winner,
         useSets: !!(window._scoringUsesSets && window._scoringUsesSets(sc)),
         isFixedSet: !!sc.fixedSet };
     }
@@ -1981,16 +1985,18 @@ function _bracketOperationsStage(m, t, allMatches) {
 }
 
 function _bracketOperationsStageLabel(m, t, allMatches) {
-  var stage = _bracketOperationsStage(m, t, allMatches);
-  if (!m || stage !== 'Classificatória') return stage;
-  if (m.scheduledGroupLabel) return stage+' · '+m.scheduledGroupLabel;
+  return _bracketOperationsStage(m, t, allMatches);
+}
+
+function _bracketOperationsDisplayGroup(m, t, allMatches, seriesGroup) {
+  if (!m || m.isTieBreak) return '';
   var groupSource = m.groupName || m.monarchGroup == null ? m : (allMatches || []).find(function (item) { return item && item.groupName &&
     Number(item.monarchGroup) === Number(m.monarchGroup) && Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
     String(item.category || '') === String(m.category || ''); }) || m;
-  var officialGroup = m.isMonarch && typeof _bracketOperationsGroup === 'function' ? _bracketOperationsGroup(t, m, allMatches) : null;
-  var group = String(officialGroup && officialGroup.name || groupSource.groupName || '').replace(/^R\d+\s+/i, '').trim();
+  var group = String(m.scheduledGroupLabel || (seriesGroup && seriesGroup.name) || groupSource.groupName || '').replace(/^R\d+\s+/i, '').trim();
   if (!group && m.monarchGroup != null) group = 'Grupo ' + String.fromCharCode(65 + Number(m.monarchGroup));
-  return stage + (group ? ' · ' + group : '');
+  if (/^[A-Z]\d*$/i.test(group)) group = 'Grupo ' + group.toUpperCase();
+  return group;
 }
 
 function _bracketOperationsFutureEstimates(state, t) {
@@ -2263,20 +2269,21 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         card.classList.add('sp-operations-two-line-header');
         titleRow.style.flexWrap = 'nowrap';
         titleRow.style.gap = '0';
-        var groupLabel = String(group.name).replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '');
-        if (category.textContent.indexOf(groupLabel) === -1) {
-          // O rótulo da categoria já traz a fonte e a cor aprovadas. Reutilize
-          // esse mesmo elemento para o código do grupo; texto solto herdava a
-          // fonte grande do card e fazia "A1" parecer outro título.
-          var categoryStyle = category.querySelector('span');
-          var groupCode = categoryStyle ? categoryStyle.cloneNode(false) : document.createElement('span');
-          groupCode.classList.add('sp-operations-group-code');
-          groupCode.textContent = '\u00a0' + groupLabel;
-          category.appendChild(groupCode);
-        }
       }
     }
     html = card.outerHTML;
+  }
+  if (html && !selected.isTieBreak) {
+    var displayGroup = _bracketOperationsDisplayGroup(selected, t, allMatches, group);
+    if (displayGroup) {
+      var categoryHost = document.createElement('template');
+      categoryHost.innerHTML = html;
+      var categoryLine = categoryHost.content.querySelector('[data-match-time-status]');
+      if (categoryLine) {
+        categoryLine.insertAdjacentHTML('afterbegin', '<strong class="sp-operations-group-label">' + safe(displayGroup) + '</strong> · ');
+        html = categoryHost.innerHTML;
+      }
+    }
   }
   if ((role.active || role.pending) && html) {
     var activeHost = document.createElement('template');
@@ -2961,6 +2968,13 @@ window._bracketOperationsRefresh = function (t, root) {
   var nextCards = (state.queue || []).concat(state.future || []).filter(categoryMatches).filter(function (m, index, list) {
     return m && list.findIndex(function (item) { return item && String(item.id) === String(m.id); }) === index;
   });
+  var plannedNumbers = state.matches.filter(function (m) { return m && !m.isBye && !m.isSitOut; })
+    .map(function (m) { return Number(m.scheduledGameNumber || m._gameNum) || 0; });
+  var totalPlanned = Math.max(Number(t._nJogos) || 0, plannedNumbers.length,
+    plannedNumbers.length ? Math.max.apply(null, plannedNumbers) : 0);
+  var alreadyStarted = state.matches.filter(function (m) {
+    return m && !m.isBye && !m.isSitOut && (m.winner || m.startedAt || m.courtCalledAt);
+  }).length;
   var readyIds = new Set((state.queue || []).map(function (m) { return String(m.id); }));
   var releasedMatches = window._bracketCourtReleased(t.id);
   var estimates = _bracketOperationsFutureEstimates(state, t);
@@ -2999,7 +3013,8 @@ window._bracketOperationsRefresh = function (t, root) {
       preferFirstFreeCourt:true,
       preferredCourt:(root._bracketOperationsManualCourt || {})[String(m.id)] || '',
       categoryFilter:categoryFilter
-    }, index === 0 ? nextLabel : 'PRÓXIMO JOGO · ' + (index + 1) + '/' + nextCards.length,
+    }, index === 0 ? nextLabel : 'PRÓXIMO JOGO · ' +
+      (Number(m.scheduledGameNumber || m._gameNum) || (alreadyStarted + index + 1)) + '/' + totalPlanned,
     availability, root, state.matches, 'next:' + String(m.id));
   });
   var fast8Queue = !!state.fast8 && nextCardFragments.length > 0;
