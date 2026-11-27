@@ -3136,7 +3136,8 @@ window._bracketOperationsRefresh = function (t, root) {
       });
       var restoreNextScroll = function () {
         if (!nextScroll.isConnected || !nextScroll.clientHeight) return;
-        nextScroll.scrollTop = anchor ? anchor.offsetTop + visibleNextOffset : nextScrollTop;
+        nextScroll.scrollTop = Math.max(0, Math.min(anchor ? anchor.offsetTop + visibleNextOffset : nextScrollTop,
+          nextScroll.scrollHeight - nextScroll.clientHeight));
         nextScrollMemory[String(t.id)] = nextScroll.scrollTop;
         if (existing._spNextScrollRestoreObserver) { existing._spNextScrollRestoreObserver.disconnect(); existing._spNextScrollRestoreObserver = null; }
       };
