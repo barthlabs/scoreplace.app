@@ -197,5 +197,20 @@ const row = (s, p) => s.find(p);
   eq(rows.length,2,'retired pair label never becomes eligible');
  }
 }
+{
+  const game=(round,a,b,winner)=>({id:'movement-'+round,round,isMonarch:true,
+    team1:a.split(','),team2:b.split(','),p1:a.replace(',',' / '),p2:b.replace(',',' / '),
+    winner,scoreP1:winner==='p1'?7:0,scoreP2:winner==='p2'?7:0});
+  const group={players:['A','B','C','D'],matches:[game(1,'A,B','C,D','p1'),game(2,'A,C','B,D','p2')]};
+  const rows=W._computeMonarchStandings(group,{});
+  const completed=W._monarchCompletedGroupRounds(group.matches,m=>!!m.winner);
+  eq(completed,2,'duas rodadas completas para comparar posições');
+  const movement=W._monarchStandingMovement(group,{},null,rows,completed,m=>!!m.winner);
+  eq(movement['name:B'],1,'B subiu uma posição desde a primeira rodada');
+  eq(movement['name:A'],-1,'A caiu uma posição desde a primeira rodada');
+  ok(W._standingMovementHeaderHtml().includes('▲') && W._standingMovementHeaderHtml().includes('▼'),
+    'cabeçalho mostra setas verde e vermelha');
+  ok(W._standingMovementHtml(0).includes('■0'),'posição estável usa quadrado azul com zero');
+}
 console.log((fail === 0 ? '✅' : '❌') + ' standings-uid-identity: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);

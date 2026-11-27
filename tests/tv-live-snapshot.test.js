@@ -185,12 +185,24 @@ assert.equal(window._tvLiveBuildSnapshot(emptyQueue).nextGame, null, 'sem jogo e
   window.ScoreplacePhaseGridPlan={...G,describeProjectedTiles:(t,tiles)=>G.describeProjectedTiles(t,tiles,w)};
   try {
     const preview=window._tvLiveBuildSnapshot(projected);
-    assert.deepEqual(Array.from(preview.nextGames,g=>g.number),Array.from({length:12},(_,i)=>i+79),
-      'depois dos jogos 79 a 84, a TV já mostra semifinais 85 a 90');
+    assert.deepEqual(Array.from(preview.nextGames,g=>g.number),Array.from({length:14},(_,i)=>i+79),
+      'depois dos jogos 79 a 84, a TV mostra todas as eliminatórias projetadas');
     assert.equal(preview.nextGames[6].stage,'Semifinal');
     assert.equal(preview.nextGames[6].a,'Vencedor do Grupo B1');
     assert.equal(preview.nextGames[6].b,'3º/4º do Grupo B2');
+    assert.equal(preview.nextGames.at(-1).stage,'Final');
+    assert.match(preview.nextGames.at(-1).a,/Vencedor do jogo \d+/);
+    assert.equal(preview.nextGames[6].blocked,true);
     assert.match(window._tvLiveBodyHtml(preview),/JOGO 85[\s\S]*Vencedor do Grupo B1/);
+    window._phasesEngine={prevPhaseGroups:()=>[{category:'Categoria B',groupIdx:0,
+      matches:[{winner:'p1'}],players:['Primeira','Segunda','Terceira','Quarta']} ]};
+    window._computeMonarchStandings=group=>group.players.map(name=>({name}));
+    const partiallyResolved=window._tvLiveBuildSnapshot(projected);
+    assert.equal(partiallyResolved.nextGames[6].a,'Primeira / Segunda',
+      'grupo encerrado preenche seu lado da semifinal antes dos demais grupos');
+    assert.equal(partiallyResolved.nextGames[6].b,'3º/4º do Grupo B2',
+      'grupo ainda aberto conserva a origem da vaga');
+    delete window._phasesEngine;delete window._computeMonarchStandings;
   } finally { delete window.ScoreplacePhaseGridPlan; }
 }
 const pendingTie = { ...emptyQueue, phaseTieDecisions: { 0: { 'group-0:1:2': {

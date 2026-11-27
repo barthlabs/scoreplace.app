@@ -12158,6 +12158,13 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       if (!_compacta) _configuredColumns.push({key:'rate',label:'%',title:_percentageTitle,
         value:s=>(_isSuperEightMon?Math.round(_gamesRateOf(s)*100):s.played>0?Math.round(s.wins/s.played*100):0)+'%'});
     }
+    var _monGroupForMovement = { players:_stPlayers, playersUids:_stRoster.map(function (r) { return r.uid; }),
+      playersSlotIds:_stRoster.map(function (r) { return r.slotId || null; }), matches:_standingsMatches };
+    var _monRoundForMovement = typeof window._monarchCompletedGroupRounds === 'function'
+      ? window._monarchCompletedGroupRounds(sg.matches, function (m) { return !!(m && (m.winner || m.resultAt || m.wo || m.isBye || m.isSitOut)); }) : 0;
+    var _monMovement = typeof window._monarchStandingMovement === 'function'
+      ? window._monarchStandingMovement(_monGroupForMovement, t, sg.category || null, standings, _monRoundForMovement,
+        function (m) { return !!(m && (m.winner || m.resultAt || m.wo || m.isBye || m.isSitOut)); }) : {};
     var standingsRows = standings.map(function(s, i) {
       var diff = (_isSuperEightMon || _gamesPrimaryMonarch) ? s.gamesWon - s.gamesLost : s.pointsFor - s.pointsAgainst;
       var setDiff = s.setsWon - s.setsLost;
@@ -12178,6 +12185,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + window._spCor(bg, 'background') + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + window._spCor(clr, 'color') + ';text-align:center;">' + (i + 1) + 'º</td>' +
         '<td class="sp-monarch-standings-name" style="padding:6px 10px;font-weight:600;color:' + window._spCor((_presM ? '#4ade80' : 'var(--text-bright)'), 'color') + ';"><div class="sp-monarch-standings-box" data-sp-card-name-box data-sp-one-line-h="2.3rem" data-sp-two-line-h="2.3rem"><span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.34" data-two-line-maxrem="0.85">' + _presDotM + _nameCellHtml + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</span></div></td>' +
+        '<td style="padding:6px 5px;text-align:center;">' + window._standingMovementHtml(_monMovement[s.key]) + '</td>' +
         (_configuredColumns ? _configuredColumns.map(function(column) { return '<td style="padding:6px 10px;text-align:center;" title="'+window._safeHtml(column.title)+'">'+window._safeHtml(column.value(s))+'</td>'; }).join('') : (
         (_isSuperEightMon && _gamesPrimaryMonarch ? '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;" title="Critério principal: saldo de games">' + (gameDiff >= 0 ? '+' : '') + gameDiff + '</td>' : '') +
       '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + s.wins + '</td>' +
@@ -12220,6 +12228,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       // colunas numéricas (estreitas e de largura fixa pelo conteúdo) se servem. É assim que
       // o nome ganha o espaço que D/Pts/% liberaram, em vez de a tabela só encolher.
       '<th style="padding:6px 10px;color:var(--text-muted);font-size:0.7rem;' + (_compacta ? 'width:100%;' : '') + '">Jogador</th>' +
+      '<th style="padding:6px 5px;text-align:center;font-size:0.7rem;" title="Variação desde a rodada anterior">' + window._standingMovementHeaderHtml() + '</th>' +
       (_configuredColumns ? _configuredColumns.map(function(column) { return '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="'+window._safeHtml(column.title)+'">'+column.label+'</th>'; }).join('') : (
       (_isSuperEightMon && _gamesPrimaryMonarch ? '<th tabindex="0" data-explain-title="Saldo de games" data-explain="Games vencidos menos games perdidos. É o critério principal desta classificação." style="width:62px;max-width:72px;padding:4px 5px;text-align:center;vertical-align:bottom;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.66rem;line-height:1.08;white-space:normal;" title="Critério principal: saldo de games (games vencidos − perdidos)">Saldo<br>games</th>' : '') +
       '<th tabindex="0" data-explain-title="V — Vitórias" data-explain="Número de partidas vencidas." style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Número de vitórias">V</th>' +
@@ -13617,6 +13626,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // Apontado/W.O. AFUNDA pro fim da tabela do grupo (pedido do dono) —
             // âmbar antes do vermelho; estável entre os demais.
             _gst = _gst.slice().sort(function (a, b) { return _woMark(a) - _woMark(b); });
+            var _gstRound = typeof window._monarchCompletedGroupRounds === 'function'
+              ? window._monarchCompletedGroupRounds(g.matches, function (m) { return !!(m && (m.winner || m.resultAt || m.wo || m.isBye || m.isSitOut)); }) : 0;
+            var _gstMovement = typeof window._monarchStandingMovement === 'function'
+              ? window._monarchStandingMovement({ players:_stPlayers, playersUids:_stRoster.map(function (r) { return r.uid; }),
+                playersSlotIds:_stRoster.map(function (r) { return r.slotId || null; }), matches:g.matches },
+                t, g.category || null, _gst, _gstRound,
+                function (m) { return !!(m && (m.winner || m.resultAt || m.wo || m.isBye || m.isSitOut)); }) : {};
             // v1.8.65: PRESENÇA na classificação do grupo (pedido do dono) — quem marcou
             // "Cheguei" ganha bolinha verde + nome verde na lista. Antes a única pista
             // era o pontinho de check-in POR TIME no card do jogo (âmbar = parcial),
@@ -13735,6 +13751,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                    * aconteceu AQUI, e a indicação conta onde ela está — duas informações
                    * diferentes não podem ter a mesma cor. */
                   '<td style="padding:3px 6px;color:' + window._spCor(_nmColor, 'color') + ';">' + (_md ? _md + ' ' : '') + _presDot + _gstNameHtml(s) + _woTag + _grupoNovoTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + (typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: _gHasMe }) : '') + '</td>' +
+                  '<td style="padding:3px 5px;text-align:center;">' + window._standingMovementHtml(_gstMovement[s.key]) + '</td>' +
                   (_advPtsOn ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, g.category || '') : '') + ' style="padding:3px 6px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + (typeof s.points === 'number' ? s.points : 0) + '</td>' : '') +
                   '<td style="padding:3px 6px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + (s.wins || 0) + '</td>' +
                   (_gamesPrimaryGroup ? '<td style="padding:3px 6px;text-align:center;color:var(--text-muted);">' + (s.losses || 0) + '</td>' : '') +
@@ -13744,7 +13761,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               }).join('');
               _grpStTable = '<div style="margin-bottom:0.6rem;background:var(--sp-g-0-0-0-018,rgba(0,0,0,0.18));border-radius:8px;padding:6px 9px;">' +
                 '<div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.4px;color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;margin-bottom:3px;">📊 Classificação do grupo</div>' +
-                '<table style="width:100%;border-collapse:collapse;font-size:0.76rem;"><thead><tr style="color:var(--text-muted);font-size:0.58rem;text-transform:uppercase;"><th></th><th style="text-align:left;font-weight:600;">Jogador</th>' + (_advPtsOn ? '<th style="font-weight:600;color:var(--sp-c-fbbf24,#fbbf24);" title="Pontos Avançados — critério principal da classificação">💯 PA</th>' : '') + '<th style="font-weight:600;" title="Vitórias">V</th>' + (_gamesPrimaryGroup ? '<th style="font-weight:600;" title="Derrotas">D</th>' : '') + '<th style="font-weight:600;" title="' + (_gamesPrimaryGroup ? 'Saldo de games — critério principal' : 'Saldo de pontos — desempate') + '">' + (_gamesPrimaryGroup ? 'Saldo games' : 'Saldo') + '</th>' + (_gamesPrimaryGroup ? '<th style="font-weight:600;" title="Aproveitamento de vitórias">%</th>' : '') + '</tr></thead><tbody>' + _gstRows + '</tbody></table>' +
+                '<table style="width:100%;border-collapse:collapse;font-size:0.76rem;"><thead><tr style="color:var(--text-muted);font-size:0.58rem;text-transform:uppercase;"><th></th><th style="text-align:left;font-weight:600;">Jogador</th><th title="Variação desde a rodada anterior">' + window._standingMovementHeaderHtml() + '</th>' + (_advPtsOn ? '<th style="font-weight:600;color:var(--sp-c-fbbf24,#fbbf24);" title="Pontos Avançados — critério principal da classificação">💯 PA</th>' : '') + '<th style="font-weight:600;" title="Vitórias">V</th>' + (_gamesPrimaryGroup ? '<th style="font-weight:600;" title="Derrotas">D</th>' : '') + '<th style="font-weight:600;" title="' + (_gamesPrimaryGroup ? 'Saldo de games — critério principal' : 'Saldo de pontos — desempate') + '">' + (_gamesPrimaryGroup ? 'Saldo games' : 'Saldo') + '</th>' + (_gamesPrimaryGroup ? '<th style="font-weight:600;" title="Aproveitamento de vitórias">%</th>' : '') + '</tr></thead><tbody>' + _gstRows + '</tbody></table>' +
               '</div>';
             }
           }

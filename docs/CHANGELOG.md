@@ -4,6 +4,8 @@
 - Em janelas de desktop com altura útil até 720 px, a faixa operacional reduz margens e espaçamentos internos sem diminuir o tamanho dos nomes e botões.
 - Na tela no ar, os tempos das quadras ficam ancorados à direita, alinhados abaixo da borda dos boxes das equipes.
 - Nas classificações da tela no ar, nomes longos diminuem a fonte até caber em uma linha, preservando a faixa de avanço dentro do grupo.
+- As classificações por grupo mostram a variação de posição desde a última rodada concluída nas chaves e na tela no ar: ▲ verde para subida, ▼ vermelha para queda e ■ azul com zero para posição estável. O cabeçalho reúne as duas setas.
+- Os próximos jogos da tela no ar incluem todas as semifinais e finais da grade, identificando os lados ainda pendentes pela origem e bloqueando a chamada até a definição. Grupos já encerrados preenchem seu lado do confronto sem aguardar os outros grupos.
 - Nos cards de chamada e em quadra, a rodada fica junto do número do jogo; grupo e categoria ocupam linhas próprias abaixo. O seletor da próxima quadra mantém largura fixa e folga após as equipes, deixando o botão OK estável.
 - Uma alteração remota só de quadra ou relógio atualiza a faixa operacional sem reconstruir o detalhe inteiro, preservando a rolagem da tela observadora.
 - Teste em Chromium cobre entrada e saída do modo tela cheia, geometria do seletor e a atualização recebida de outra janela; o teste da tela no ar segue aprovado.

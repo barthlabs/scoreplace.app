@@ -171,7 +171,8 @@ const { chromium } = require('@playwright/test');
           document.head.querySelectorAll('style').forEach(n=>n.textContent=n.textContent.replace(css,''));
           const old=document.createElement('style');old.textContent='.tv-super8-games.tv-series-games{overflow-y:auto}';document.head.appendChild(old);
           document.querySelectorAll('.tv-super8-lane-header strong').forEach(n=>n.textContent='Tempo de jogo 00:00:30');
-          document.querySelectorAll('.tv-super8-standing td:nth-child(2)').forEach(n=>n.textContent='Atleta Sobrenome Composto');
+          document.querySelectorAll('.tv-super8-standing .tv-standing-name').forEach(n=>n.textContent='Atleta Sobrenome Composto');
+          if (window.__tvFitLabels) window.__tvFitLabels();
         });
         const geometry=await page.evaluate(()=>{
           const rect=n=>n.getBoundingClientRect().toJSON();

@@ -13,6 +13,58 @@ window._groupLetter = window._groupLetter || function (i) {
   return String.fromCharCode(65 + (i % 26)) + (tier === 0 ? '' : (tier + 1));
 };
 
+// Compara a classificação exibida com a última rodada concluída. Ao terminar
+// uma rodada, usa a anterior; durante a rodada seguinte, usa a recém-concluída.
+window._monarchStandingMovement = function (group, tournament, category, currentRows, completedRound, isFinished) {
+  var games = Array.isArray(group && group.matches) ? group.matches : [];
+  var round = Number(completedRound) || 0;
+  var finished = typeof isFinished === 'function' ? isFinished : function (game) {
+    return !!(game && (game.resultAt || game.winner != null || game.wo));
+  };
+  var partialNext = games.some(function (game) { return Number(game.round) > round && finished(game); });
+  var baselineRound = partialNext ? round : round - 1;
+  if (baselineRound < 1 || typeof window._computeMonarchStandings !== 'function') return {};
+  var previous = window._computeMonarchStandings(Object.assign({}, group, {
+    matches: games.filter(function (game) { return Number(game.round) <= baselineRound; }),
+    rounds: null, classifCongelada: null
+  }), tournament, category) || [];
+  var previousPosition = Object.create(null);
+  previous.forEach(function (row, index) {
+    if (row && row.key) previousPosition[row.key] = index + 1;
+  });
+  var movement = Object.create(null);
+  (currentRows || []).forEach(function (row, index) {
+    if (row && row.key && previousPosition[row.key]) movement[row.key] = previousPosition[row.key] - (index + 1);
+  });
+  return movement;
+};
+window._monarchCompletedGroupRounds = function (games, isFinished) {
+  games = Array.isArray(games) ? games : [];
+  var rounds = Array.from(new Set(games.map(function (game) { return Number(game.round) || 0; }).filter(Boolean))).sort(function (a, b) { return a - b; });
+  var perRound = rounds.length ? games.length / rounds.length : 0;
+  if (!Number.isInteger(perRound) || perRound < 1) return 0;
+  var completed = 0;
+  for (var round = 1; round <= rounds.length; round++) {
+    var slice = games.filter(function (game) { return Number(game.round) === round; });
+    if (slice.length !== perRound || !slice.every(isFinished)) break;
+    completed = round;
+  }
+  return completed;
+};
+window._standingMovementHtml = function (change) {
+  var value = Number(change) || 0;
+  var color = value > 0 ? '#4ade80' : value < 0 ? '#f87171' : '#60a5fa';
+  var symbol = value > 0 ? '▲' : value < 0 ? '▼' : '■';
+  var title = value > 0 ? 'Subiu ' + value + ' posição(ões)' :
+    value < 0 ? 'Desceu ' + (-value) + ' posição(ões)' : 'Permaneceu na posição';
+  return '<span title="' + title + '" style="color:' + color + ';font-weight:800;white-space:nowrap;">' +
+    symbol + (value < 0 ? -value : value) + '</span>';
+};
+window._standingMovementHeaderHtml = function () {
+  return '<span title="Variação desde a rodada anterior" style="white-space:nowrap;">' +
+    '<span style="color:#4ade80;">▲</span><span style="color:#f87171;">▼</span></span>';
+};
+
 // Nome COMPLETO do grupo a partir do índice: "Grupo A2" (prefixo via i18n
 // label.group). Único ponto que monta "Grupo " + letra — usar na CRIAÇÃO do
 // grupo (onde o name é gravado).

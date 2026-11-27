@@ -18,12 +18,13 @@ function ok(name, cond, got) {
 const fs = require('fs'), path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8');
 const g = { window: {} };
-// extrai o bloco `window._tournamentDetailSig = function (t) { ... };`
-const m = src.match(/window\._tournamentDetailSig = function[\s\S]*?\n};/);
-if (!m) { console.log('  ✗ não achei _tournamentDetailSig no store.js'); process.exit(1); }
+// Extrai as três funções da assinatura sem inicializar o restante do store.
+const start = src.indexOf('window._tournamentDetailSig = function');
+const end = src.indexOf('// v1.3.93', start);
+if (start < 0 || end < 0) { console.log('  ✗ não achei o bloco de assinaturas no store.js'); process.exit(1); }
 // _collectAllMatches simples (só t.matches) pra o teste
 g.window._collectAllMatches = function (t) { return Array.isArray(t.matches) ? t.matches : []; };
-new Function('window', m[0] + '\nwindow.__sig = window._tournamentDetailSig;')(g.window);
+new Function('window', src.slice(start,end) + '\nwindow.__sig = window._tournamentDetailSig;')(g.window);
 const sig = g.window.__sig;
 
 function mk() {
@@ -112,7 +113,12 @@ ok('placar continua detectável com máscara local',sig(local,false,{m1:true})!=
   const assert=require('node:assert/strict');
   const bracket=fs.readFileSync(path.join(__dirname,'..','js/views/bracket.js'),'utf8');
   const helper=bracket.slice(bracket.indexOf('function _courtOperationFields('),bracket.indexOf('// A confirmação grava quadra e instante'));
-  const w={location:{hash:'#tournaments/T1'},_collectAllMatches:g.window._collectAllMatches,_tournamentDetailSig:sig};
+  const w={location:{hash:'#tournaments/T1'},_collectAllMatches:g.window._collectAllMatches,
+    _tournamentDetailSig:sig,_tournamentDetailSigWithoutCourt:g.window._tournamentDetailSigWithoutCourt,
+    _stampTournamentDetailSig:function (t) {
+      this._tdetailSig=this._tournamentDetailSig(t);
+      this._tdetailSigWithoutCourt=this._tournamentDetailSigWithoutCourt(t);
+    }};
   let current=mk(),refreshes=0;
   w._findTournamentById=()=>current;w._softRefreshView=()=>refreshes++;
   new Function('window',helper+';window.begin=_beginCourtOperation;')(w);
