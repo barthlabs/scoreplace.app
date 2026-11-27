@@ -8,8 +8,8 @@
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "6410b40509a3dfa235f67d26a349c1429da8c998",
-      "deployedAt": "2026-11-26T20:33:55.871Z",
+      "backendCommit": "d3eacfb967250e20c0090863581e3c376a3840f3",
+      "deployedAt": "2026-11-27T23:48:58.281Z",
       "result": "success",
       "mode": "only"
     },
@@ -62,8 +62,8 @@
       "mode": "only"
     },
     "tournamentSummary": {
-      "backendCommit": "6410b40509a3dfa235f67d26a349c1429da8c998",
-      "deployedAt": "2026-11-26T20:33:55.871Z",
+      "backendCommit": "d3eacfb967250e20c0090863581e3c376a3840f3",
+      "deployedAt": "2026-11-27T23:48:58.281Z",
       "result": "success",
       "mode": "only"
     },
