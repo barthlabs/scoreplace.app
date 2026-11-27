@@ -120,6 +120,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         { id: 'm1', _gameNum: 1, p1: 'A / B', p2: 'C / D', scheduledAt: '2026-10-22T18:00:00Z', court: 'Quadra 5' },
         { id: 'm2', _gameNum: 2, p1: 'E / F', p2: 'G / H', scheduledAt: '2026-10-22T18:35:00Z', court: 'Quadra 4' }
       ] };
+      window._tournamentGamesPlan = () => ({ totalPlanned: 90 });
       window._findTournamentById = () => t;
       window._openLiveScoringForMatch = (tid, mid) => { window.live = [tid, mid]; };
       window._woOpenClaim = (tid, key) => { window.wo = [tid, key]; };
@@ -221,6 +222,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const ids = [...document.querySelectorAll('[id]')].map(node => node.id);
       const initial = { full: !!next && next.querySelectorAll('.team').length === 2 && !!next.querySelector('.sp-mc-head, .versus, .sp-match-operational'),
         nextCards: [...strip.querySelectorAll('.sp-operations-next-scroll > .sp-operations-replica')].map(card => card.getAttribute('data-operations-base-match')),
+        nextLabels: [...strip.querySelectorAll('.sp-operations-next-scroll > .sp-operations-replica > .sp-operations-label')].map(label => label.textContent.trim()),
         futureAsFullCard: !!strip.querySelector('.sp-operations-next-scroll [data-operations-base-match="m2"] .sp-match-card .team'),
         noTextList: !strip.querySelector('.sp-operations-future'),
         futureScrollable: (() => { const scroller = strip.querySelector('.sp-operations-next-scroll');
@@ -287,6 +289,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const clockRect = strip.querySelector('.sp-operations-court-slot--active .sp-match-court-clock').getBoundingClientRect();
       const goldRect = strip.querySelector('.sp-operations-next .sp-match-card').getBoundingClientRect();
       const afterCall = { called: window.called, saved: window.saved, scoreSourceCleared: window._bracketOperationsScoreSource == null,
+        nextLabel: strip.querySelector('.sp-operations-next-scroll > .sp-operations-replica > .sp-operations-label')?.textContent.trim(),
         simulateEnabled: !strip.querySelector('[data-operations-simulate]').disabled,
         clock: window.clock, live: window.live, wo: window.wo,
         opened: window.opened, confirmVisible,
@@ -353,6 +356,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     });
     assert(state.initial.full && state.initial.names && state.initial.noCanonical && state.initial.uniqueIds && state.initial.linked && state.initial.noInline);
     assert.deepEqual(state.initial.nextCards, ['m1', 'm2']);
+    assert.deepEqual(state.initial.nextLabels, ['PRÓXIMO JOGO A CHAMAR · 1/90', 'PRÓXIMO JOGO · 2/90']);
     assert(state.initial.futureAsFullCard && state.initial.noTextList && state.initial.futureScrollable,
       'os próximos jogos são cards completos e rolam dentro da primeira coluna');
     assert.equal(state.initial.stage, 'Classificatória', 'o próximo jogo na operação mostra a etapa da rodada');
@@ -361,6 +365,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert(state.initial.freeSlotFillsTrack, 'Quadra X deve alinhar com X quadras livres: ' + JSON.stringify(state.initial));
     assert(state.initial.freeSlotMatchesCard, 'o box vazio deve ter a mesma altura e alinhamento do card do próximo jogo: ' + JSON.stringify(state.initial));
     assert.deepEqual(state.afterCall.called, ['sb_test', 'm1', 'Quadra 5']);
+    assert.equal(state.afterCall.nextLabel, 'PRÓXIMO JOGO A CHAMAR · 2/90');
     assert(state.afterCall.simulateEnabled && state.refereeView.simulateHidden,
       'Simular habilita com jogo em quadra para a organização e não aparece para árbitro');
     assert.deepEqual(state.afterCall.live, ['sb_test', 'm1']);

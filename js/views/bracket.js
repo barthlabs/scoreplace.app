@@ -3005,7 +3005,9 @@ window._bracketOperationsRefresh = function (t, root) {
   });
   var plannedNumbers = state.matches.filter(function (m) { return m && !m.isBye && !m.isSitOut; })
     .map(function (m) { return Number(m.scheduledGameNumber || m._gameNum) || 0; });
-  var totalPlanned = Math.max(Number(t._nJogos) || 0, plannedNumbers.length,
+  var tournamentPlan = typeof window._tournamentGamesPlan === 'function' ? window._tournamentGamesPlan(t) : null;
+  var totalPlanned = Math.max(Number(tournamentPlan && tournamentPlan.totalPlanned) || 0,
+    Number(t._nJogos) || 0, plannedNumbers.length,
     plannedNumbers.length ? Math.max.apply(null, plannedNumbers) : 0);
   var readyIds = new Set((state.queue || []).map(function (m) { return String(m.id); }));
   var releasedMatches = window._bracketCourtReleased(t.id);
@@ -3046,8 +3048,8 @@ window._bracketOperationsRefresh = function (t, root) {
       preferFirstFreeCourt:true,
       preferredCourt:(root._bracketOperationsManualCourt || {})[String(m.id)] || '',
       categoryFilter:categoryFilter
-    }, index === 0 ? nextLabel : gameNumber && totalPlanned
-      ? 'PRÓXIMO JOGO · ' + gameNumber + '/' + totalPlanned : 'PRÓXIMO JOGO',
+    }, (index === 0 ? nextLabel : 'PRÓXIMO JOGO') + (gameNumber && totalPlanned
+      ? ' · ' + gameNumber + '/' + totalPlanned : ''),
     availability, root, state.matches, 'next:' + String(m.id));
   });
   var fast8Queue = !!state.fast8 && nextCardFragments.length > 0;

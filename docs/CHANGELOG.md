@@ -1,3 +1,8 @@
+## 2.7.90 — 27/nov/2026 (numeração dos próximos jogos)
+
+- O primeiro jogo na faixa de chamada exibe seu número sobre o total do torneio. Os cards seguintes usam o mesmo total canônico do resumo do torneio, incluindo as fases eliminatórias projetadas: 1/90, 2/90 e assim por diante no exemplo de 90 jogos.
+- Teste em Chromium confere os dois primeiros cards e a atualização do primeiro após chamar o jogo 1.
+
 ## 2.7.89 — 27/nov/2026 (grupo nos cards operacionais)
 
 - Grupo e categoria passam a ocupar a largura inteira abaixo do número do jogo e dos botões Aplicar W.O. e Ao Vivo, tanto na chamada quanto em quadra.

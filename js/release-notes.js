@@ -1,3 +1,4 @@
+// 2.7.90 — Próximos jogos mostram a numeração do torneio completo, incluindo as fases eliminatórias, já no primeiro card de chamada.
 // 2.7.89 — Grupo e categoria ocupam a linha inteira abaixo do número do jogo e dos botões; o grupo usa fonte apenas um pouco maior que a categoria, sem quebrar em várias linhas.
 // 2.7.88 — O atalho de controles posiciona filtros, progresso e quadras; os botões W.O. e Ao Vivo ficam junto ao número do jogo. A barra NO AR ganha folga, a quadra se separa das equipes e as setas de Chamado ficam mais escuras. A fila preserva a posição possível após atualizar os próximos jogos.
 // 2.7.87 — Atualização consolidada de produção com as correções validadas desde a última publicação.
