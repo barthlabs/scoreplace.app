@@ -3289,6 +3289,7 @@ function renderParticipants(container, tournamentId) {
     ${rollCallBanner}
     ${startBanner}
     ${startedBadge}
+    <aside data-roster-provenance role="status" style="font-size:.76rem;margin:8px 0;color:var(--text-muted);">Conferindo histórico do elenco…</aside>
     ${_participantCategoryTabs}
     ${_filterBarCtrls}
     ${parts.length > 0 ? `
@@ -3303,6 +3304,22 @@ function renderParticipants(container, tournamentId) {
     ${readyBannerHtml}
     ${standbyPanelHtml}
   `;
+  if (window.ScoreplaceRosterProvenance) {
+    var _rosterNotice = container.querySelector('[data-roster-provenance]');
+    window.ScoreplaceRosterProvenance.load(t.id, true).then(function(events) {
+      if (container.querySelector('[data-roster-provenance]') !== _rosterNotice) return;
+      var esc = window._safeHtml || function(value) { return String(value); };
+      var stamp = typeof window._documentGenerationStamp === 'function'
+        ? window._documentGenerationStamp(new Date()) : 'Consulta atual';
+      _rosterNotice.innerHTML = '<strong>' + esc(stamp) + '</strong>' +
+        (events.length ? '<br>' + events.map(function(event) {
+          return esc((event.kind === 'substitution' ? '* ' : '') + window.ScoreplaceRosterProvenance.description(event));
+        }).join('<br>') : ' · Nenhuma alteração de nome registrada.');
+    }).catch(function() {
+      if (container.querySelector('[data-roster-provenance]') === _rosterNotice)
+        _rosterNotice.textContent = 'Histórico indisponível. Recarregue para conferir as alterações.';
+    });
+  }
   var _geracao = window._inscritosNovaGeracao();
 
   // ── DEPOIS QUE A ÚLTIMA FATIA ENTROU ────────────────────────────────────────

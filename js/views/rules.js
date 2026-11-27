@@ -74,6 +74,8 @@
       const pd = window._publishedInitialDrawData && window._publishedInitialDrawData(t);
       const model = pd && window._initialDrawGroupsModel && window._initialDrawGroupsModel(t, pd);
       if (!model || model.groupCount !== 6 || model.playerCount !== 48) throw new Error('Grupos incompletos.');
+      const provenance = window.ScoreplaceRosterProvenance;
+      const rosterEvents = provenance ? await provenance.load(t.id, true) : [];
       const response = await fetch('assets/regulamentos/cult-2026/regulamento-cult-2026.html', { cache:'no-store' });
       if (!response.ok) throw new Error('HTML indisponível.');
       const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
@@ -92,8 +94,16 @@
           const li = doc.createElement('li');
           const number = doc.createElement('b'); number.textContent = String(index + 1) + '.';
           const label = doc.createElement('span'); label.textContent = name;
+          const event = provenance && provenance.forAthlete(rosterEvents, name, letter);
+          if (event) { const mark = doc.createElement('sup'); mark.textContent = ' *'; label.append(mark); }
           li.append(number, label); return li;
         }));
+        const changes = rosterEvents.filter(event => event.kind === 'substitution' &&
+          event.group === letter && group.players.includes(event.toName));
+        changes.forEach(event => {
+          const note = doc.createElement('p'); note.className = 'sp-roster-change';
+          note.textContent = '* ' + provenance.description(event); article.append(note);
+        });
       });
       doc.querySelectorAll('.group-note').forEach(note => {
         if (/Os grupos da categoria/.test(note.textContent || '')) note.textContent += ' A lista mostra a ordem do sorteio, não a classificação atual.';
@@ -102,7 +112,8 @@
         ? window._documentGenerationStamp(new Date()) : '';
       const style = doc.createElement('style');
       style.textContent = '.sp-generated-stamp{font:600 12px "DM Sans",sans-serif;color:#614d37;margin:14px 0 0}' +
-        '@media print{.sp-generated-stamp{font-size:10px;margin-top:6px}}';
+        '.sp-roster-change{font:500 11px "DM Sans",sans-serif;color:#614d37;margin:4px 0}' +
+        '@media print{.sp-generated-stamp{font-size:10px;margin-top:6px}.sp-roster-change{font-size:9px}}';
       doc.head.append(style);
       doc.querySelectorAll('.print-page').forEach(page => {
         const label = doc.createElement('p'); label.className = 'sp-generated-stamp'; label.textContent = stamp;

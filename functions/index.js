@@ -4666,6 +4666,7 @@ const _pairCore = require("./pair-core");
 const _monarchPairPolicy = require("./monarch-pair-policy");
 const _participantRename = require("./participant-rename-core");
 const _renameCanonicalParticipant = require("./rename-canonical-participant-core");
+const _tournamentRosterHistory = require('./tournament-roster-history');
 const _camisManualEdit = require("./camis-manual-edit-core");
 const _ligaAvailability = require("./liga-availability-core");
 // Codebases Firebase são pacotes isolados. Em desenvolvimento aproveita o motor
@@ -4831,6 +4832,10 @@ async function _applyUniversalParticipantSlot(tx,ref,raw,state,checked,edit,part
     tx.create(ref.collection('slotEditAudits').doc(),{sourceRegistrationId:edit.source.registrationId,targetIdentity:to,
       categoryId:context.categoryId,pointsPolicy:context.pointsPolicy,matchIds:Array.from(writes.values()).filter(row=>(row.data.jogo || row.data).id).map(row=>(row.data.jogo || row.data).id),
       historicalMatchIds,liveMatchIds,presencePreserved:true,editedByUid:context.callerUid,editedAt:_FV.serverTimestamp()});
+    if (context.recordRosterHistory) {
+      const category = String((raw.categoryDefinitions || []).find(item => item.id === context.categoryId)?.label || context.categoryId);
+      context.recordRosterHistory(category);
+    }
     return {ok:true,participantsCount:next.participants.length,liveMatchIds,pointsPolicy:context.pointsPolicy};
   }catch(error){if(error instanceof HttpsError) throw error;throw new HttpsError('failed-precondition',error.message);}
 }
@@ -4860,6 +4865,8 @@ exports.editCanonicalTournamentSlot = onCall(
     }
     const db = admin.firestore();
     const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tournamentId);
+    const historyRef = sandbox ? null : db.collection('tournamentRosterHistory').doc(tournamentId);
+    const historyId = crypto.randomUUID(), changedAt = new Date().toISOString();
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
@@ -4881,6 +4888,7 @@ exports.editCanonicalTournamentSlot = onCall(
         throw new HttpsError('failed-precondition', 'torneio encerrado; não há jogo futuro para substituir');
       }
       const logicalId = sandbox ? String(raw.sandboxOf) : tournamentId;
+      const historySnap = historyRef ? await tx.get(historyRef) : null;
       const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament, sandbox ? logicalId : '');
       const identity = uid ? { uid } : { manualParticipantId };
       let destinationName = newName;
@@ -4895,6 +4903,13 @@ exports.editCanonicalTournamentSlot = onCall(
       let edit;
       try { edit = _editCanonicalSlot.plan(logicalId, checked.registrations, identity, categoryId, expectedName, destinationName, null, targetUid, data.pointsPolicy); }
       catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      const recordRosterHistory = (category) => {
+        if (!historyRef) return;
+        tx.set(historyRef, { schema:1, updatedAt:changedAt,
+          events:_tournamentRosterHistory.append(historySnap.exists ? historySnap.data().events : [],
+            { id:historyId, kind:'substitution', fromName:expectedName, toName:edit.newName,
+              category, at:changedAt }) });
+      };
       const universalSlot=edit.solo || state.hasPublishedGroups ||
         ['groups','rounds','phaseRounds','rodadas'].some(key=>_slotHasIdentity(state.tournament[key],identity) || _slotHasIdentity(slotRoot[key],identity));
       if (!universalSlot && ['classification', 'classificationEntries', 'standings'].some((key) =>
@@ -4923,7 +4938,7 @@ exports.editCanonicalTournamentSlot = onCall(
       const mirrorSnap = await tx.get(mirrorCol);
       const mirrorDocuments = mirrorSnap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() || {} }));
       if(universalSlot) return _applyUniversalParticipantSlot(tx,ref,slotRoot,state,checked,edit,mirrorDocuments,
-        {callerUid,logicalId,sandbox,categoryId,expectedName,pointsPolicy:data.pointsPolicy});
+        {callerUid,logicalId,sandbox,categoryId,expectedName,pointsPolicy:data.pointsPolicy,recordRosterHistory});
       let match;
       try { match = _editCanonicalSlot.findLegacyMirror(mirrorDocuments, edit); }
       catch (error) { throw new HttpsError('failed-precondition', error.message); }
@@ -4996,6 +5011,8 @@ exports.editCanonicalTournamentSlot = onCall(
         });
       } else tx.update(match.ref, _editCanonicalSlot.mirrorWritePatch(patchedMirror, edit, _FV.delete(), oldSlot));
       if (draft) tx.update(state.privateDrawRef, { draft, updatedAt: _FV.serverTimestamp() });
+      const category = String((raw.categoryDefinitions || []).find(item => item.id === categoryId)?.label || categoryId);
+      recordRosterHistory(category);
       return { ok: true, participantsCount: next.participants.length, replacedAccount: !!uid,
         liveMatchIds: published ? published.liveMatchIds : [] };
     });
@@ -8063,13 +8080,22 @@ exports.renameTournamentParticipant = onCall(
     if (newName.length > 160) throw new HttpsError("invalid-argument", "nome muito longo");
     const db = admin.firestore();
     const ref = db.collection("tournaments").doc(tournamentId);
+    const historyRef = db.collection('tournamentRosterHistory').doc(tournamentId);
+    const historyId = crypto.randomUUID();
+    const changedAt = new Date().toISOString();
     return db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
+      const [snap, historySnap] = await Promise.all([tx.get(ref), tx.get(historyRef)]);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const raw = snap.data() || {};
       const t = Object.assign({ id: tournamentId }, raw);
       if (!_isTournamentOrgCaller(t, callerUid)) throw new HttpsError("permission-denied", "só a organização edita nome de participante");
       _assertNoRehearsalEnrollment(t);
+      const recordNameChange = () => tx.set(historyRef, {
+        schema:1, updatedAt:changedAt,
+        events:_tournamentRosterHistory.append(historySnap.exists ? historySnap.data().events : [],
+          { id:historyId, kind:'rename', fromName:oldName, toName:newName,
+            manualParticipantId, at:changedAt })
+      });
       const canonicalProbe = await tx.get(ref.collection("registrations").limit(1));
       if (!canonicalProbe.empty || Object.prototype.hasOwnProperty.call(raw, 'canonicalRegistrationMigration')) {
         // A coleção canônica e o recibo são uma unidade. Se um deles faltar,
@@ -8116,6 +8142,7 @@ exports.renameTournamentParticipant = onCall(
         planned.documents.forEach((item) => tx.set(item.ref, item.data));
         tx.update(ref, Object.assign({ updatedAt: _FV.serverTimestamp(),
           _phaseReadCertificate: _FV.delete() }, planned.rootPatch));
+        recordNameChange();
         return { ok: true, changed: true, oldName, newName };
       }
       const hydrated = await _splitParts.hidratar(tx, ref, t);
@@ -8125,6 +8152,7 @@ exports.renameTournamentParticipant = onCall(
       catch (err) { throw new HttpsError("failed-precondition", err && err.message ? err.message : "não foi possível renomear participante"); }
       if (!renamed.changed) return { ok: true, changed: false };
       _splitParts.gravar(tx, ref, before, Object.assign({}, renamed.update, { updatedAt: new Date().toISOString() }));
+      recordNameChange();
       return { ok: true, changed: true, oldName, newName };
     });
   }
@@ -8148,8 +8176,10 @@ exports.editCamisManualParticipant = onCall(
     const newManualParticipantId = action === 'replace' ? 'manual-camis-sub-' + require('node:crypto').randomUUID() : '';
     const db = admin.firestore(),ref = db.collection('tournaments').doc(_camisManualEdit.ID);
     const baselineRef = db.collection('tournamentRehearsalBaselines').doc(_camisManualEdit.ID);
+    const historyRef = db.collection('tournamentRosterHistory').doc(_camisManualEdit.ID);
+    const historyId = require('node:crypto').randomUUID();
     return db.runTransaction(async tx => {
-      const [rootSnap,baseSnap] = await Promise.all([tx.get(ref),tx.get(baselineRef)]);
+      const [rootSnap,baseSnap,historySnap] = await Promise.all([tx.get(ref),tx.get(baselineRef),tx.get(historyRef)]);
       if (!rootSnap.exists || !baseSnap.exists) throw new HttpsError('failed-precondition','torneio ou fotografia ausente');
       const [registrationSnap,matchSnap] = await Promise.all([
         tx.get(ref.collection('registrations')),tx.get(ref.collection('matches'))
@@ -8178,6 +8208,12 @@ exports.editCamisManualParticipant = onCall(
         });
       }
       planned.liveMatches.forEach(item => tx.set(ref.collection('matches').doc(item.id),item.data));
+      tx.set(historyRef, { schema:1, updatedAt:now.toDate().toISOString(),
+        events:_tournamentRosterHistory.append(historySnap.exists ? historySnap.data().events : [],
+          { id:historyId, kind:action === 'replace' ? 'substitution' : 'rename',
+            fromName:oldName, toName:newName, manualParticipantId:action === 'replace'
+              ? newManualParticipantId : manualParticipantId, group:planned.group,
+            category:planned.category, at:now.toDate().toISOString() }) });
       return { ok:true,action,oldName,newName,category:planned.category,group:planned.group,
         updatedGames:planned.liveMatches.length,completedGamesPreserved:planned.completedGames };
     });
@@ -16072,3 +16108,6 @@ exports.uploadTournamentRegulation = onCall({ timeoutSeconds:120, memory:'512MiB
 // O arquivo original só é entregue depois de revalidar a permissão do torneio.
 exports.getTournamentRegulationFile = onCall({ timeoutSeconds:120, memory:'512MiB', concurrency:4 }, request =>
   require('./tournament-regulation').makeService({ db:admin.firestore(), storage:admin.storage(), HttpsError }).getFile(request));
+
+exports.getTournamentRosterHistory = onCall({ timeoutSeconds:30, memory:'256MiB', concurrency:8 }, request =>
+  _tournamentRosterHistory.makeService({ db:admin.firestore(), HttpsError }).list(request));

@@ -7573,6 +7573,17 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
   var canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
   if (!ctx) return null;
   options = options || {};
+  var provenance = window.ScoreplaceRosterProvenance;
+  var rosterEvents = options.rosterEvents || [];
+  function marked(name, group) {
+    return String(name || '') + (provenance && provenance.forAthlete(rosterEvents, name, group) ? ' *' : '');
+  }
+  var pageChanges = rosterEvents.filter(function (event) {
+    return event.kind === 'substitution' && pageGroups.some(function (group) {
+      return (!event.group || provenance.sameGroup(group.label || group.name, event.group)) &&
+        group.players && group.players.some(function (name) { return String(name) === event.toName; });
+    });
+  });
   var schedule = options.schedule || { items:{} };
   var width = 1500, margin = 48, gap = 20, cardWidth = (width - 2 * margin - gap) / 2, line = 30;
   var sideWidth = 252, leftX = 70, versusX = 354, rightX = cardWidth - 22;
@@ -7590,14 +7601,14 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
   var blocks = pageGroups.map(function (g) {
     if (options.rosterOnly) {
       var rosterRows = g.players.map(function (name) {
-        var parts = lines(name, cardWidth - 40);
+        var parts = lines(marked(name, g.label || g.name), cardWidth - 40);
         return { one:[parts], height:Math.max(line + 12, parts.length * line + 12) };
       });
       return { group:g, rows:rosterRows, height:74 + rosterRows.reduce(function (n, row) { return n + row.height; }, 0) + 14 };
     }
     var rows = g.matches.map(function (m, i) {
-      var one = (m.onePlayers || [m.one]).map(function (name) { return lines(name, sideWidth); });
-      var two = (m.twoPlayers || [m.two]).map(function (name) { return lines(name, sideWidth); });
+      var one = (m.onePlayers || [m.one]).map(function (name) { return lines(marked(name, g.label || g.name), sideWidth); });
+      var two = (m.twoPlayers || [m.two]).map(function (name) { return lines(marked(name, g.label || g.name), sideWidth); });
       var rowLines = Math.max(2, one.reduce(function (n, parts) { return n + parts.length; }, 0), two.reduce(function (n, parts) { return n + parts.length; }, 0));
       var slot = schedule.items[m.id] || {};
       return { label:'J' + (schedule.canonicalNumbers ? slot.number : (m.number || i + 1)), slot:slot, one:one, two:two, height:rowLines * line + 12 };
@@ -7608,7 +7619,7 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
   canvas.width = width;
   var rowHeights = [];
   for (var bi = 0; bi < blocks.length; bi += 2) rowHeights.push(Math.max(blocks[bi].height, blocks[bi + 1] ? blocks[bi + 1].height : 0));
-  canvas.height = 180 + rowHeights.reduce(function (sum, h) { return sum + h + gap; }, 0) + extras.length * 42 + 68;
+  canvas.height = 180 + rowHeights.reduce(function (sum, h) { return sum + h + gap; }, 0) + extras.length * 42 + pageChanges.length * 30 + 68;
   function hex(value, fallback) { return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback; }
   function mix(a, b, amount) {
     var v = [1, 3, 5].map(function (i) { return Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - amount) + parseInt(b.slice(i, i + 2), 16) * amount); });
@@ -7721,6 +7732,11 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
     ctx.fillStyle = '#ffffff'; ctx.font = '22px Arial, sans-serif';
     ctx.fillText(extra.label + ': ' + extra.name + when, margin, y + 20, width - 2 * margin); y += 42;
   });
+  pageChanges.forEach(function (event) {
+    ctx.fillStyle = '#ffffff'; ctx.font = '17px Arial, sans-serif';
+    ctx.fillText('* ' + provenance.description(event), margin, y + 20, width - 2 * margin);
+    y += 30;
+  });
   ctx.fillStyle = luminance(footerBg) >= .18 ? '#000000' : '#ffffff'; ctx.font = '18px Arial, sans-serif';
   ctx.textAlign = 'left';
   if (options.generatedStamp) ctx.fillText(options.generatedStamp, margin, canvas.height - 28, width - 2 * margin - 190);
@@ -7762,6 +7778,14 @@ window._initialDrawPdfBlob = function (canvases) {
 window._downloadInitialDrawPdf = async function (t, pd, options) {
   options = options || {};
   var timeMode = options.timeMode === 'first' ? 'first' : 'all';
+  var rosterEvents = [];
+  if (window.ScoreplaceRosterProvenance && t && t.id) {
+    try { rosterEvents = await window.ScoreplaceRosterProvenance.load(t.id, true); }
+    catch (error) {
+      if (window.showNotification) window.showNotification('Histórico indisponível', 'Não foi possível conferir as substituições. Tente novamente.', 'error');
+      return false;
+    }
+  }
   var composition;
   try { composition = window._initialDrawGroupsModel(t, pd); }
   catch (error) {
@@ -7804,7 +7828,7 @@ window._downloadInitialDrawPdf = async function (t, pd, options) {
     var generatedStamp = typeof window._documentGenerationStamp === 'function'
       ? window._documentGenerationStamp(new Date()) : '';
     var canvases = plan.map(function (entry, i) {
-      return window._initialDrawPdfPage(t, entry.category, entry.groups, entry.extras, i + 1, plan.length, logo, { timeMode:composition ? null : timeMode, schedule:schedule, rosterOnly:!!composition, generatedStamp:generatedStamp });
+      return window._initialDrawPdfPage(t, entry.category, entry.groups, entry.extras, i + 1, plan.length, logo, { timeMode:composition ? null : timeMode, schedule:schedule, rosterOnly:!!composition, generatedStamp:generatedStamp, rosterEvents:rosterEvents });
     });
     if (canvases.some(function (c) { return !c; })) throw new Error('canvas unavailable');
     var url = URL.createObjectURL(window._initialDrawPdfBlob(canvases));
@@ -7845,6 +7869,18 @@ window._renderPendingDrawPreview = function (t) {
   var pd = t && ((window.__pendingInitialDraws || {})[String(t.id)] || t.pendingDraw);
   if (!pd) return '<div style="color:var(--text-muted);font-size:0.8rem;">(sem dados)</div>';
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
+  var provenance = window.ScoreplaceRosterProvenance;
+  var rosterEvents = t._rosterEvents || [];
+  function playerHtml(name, group) {
+    var event = provenance && provenance.forAthlete(rosterEvents, name, group);
+    return esc(name) + (event ? '<sup title="' + esc(provenance.description(event)) + '">*</sup>' : '');
+  }
+  function changesHtml(group) {
+    return rosterEvents.filter(function (event) {
+      return event.kind === 'substitution' && (!event.group || provenance.sameGroup(group.label || group.name, event.group)) &&
+        group.players && group.players.includes(event.toName);
+    }).map(function (event) { return '<p class="sp-draw-change">* ' + esc(provenance.description(event)) + '</p>'; }).join('');
+  }
   /* Sorteio inicial por times: o rascunho contém os jogos materializados, mas
    * ainda não existe em `t.matches`. A prévia é exclusivamente para conferência
    * da organização; a chave pública segue vazia até "Publicar sorteio". */
@@ -7863,8 +7899,8 @@ window._renderPendingDrawPreview = function (t) {
         rosterHtml += '<h3>' + esc(category.name) + '</h3>';
         category.groups.forEach(function (group) {
           rosterHtml += '<section class="sp-draw-roster"><h4>' + esc(group.name) + '</h4><ul>';
-          group.players.forEach(function (name) { rosterHtml += '<li class="sp-draw-player">' + esc(name) + '</li>'; });
-          rosterHtml += '</ul></section>';
+          group.players.forEach(function (name) { rosterHtml += '<li class="sp-draw-player">' + playerHtml(name, group.label || group.name) + '</li>'; });
+          rosterHtml += '</ul>' + changesHtml(group) + '</section>';
         });
       });
       return rosterHtml;
@@ -7882,13 +7918,13 @@ window._renderPendingDrawPreview = function (t) {
       category.groups.forEach(function (group) {
         initialHtml += '<div style="background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.25);border-radius:8px;padding:8px 10px;margin-bottom:7px;"><strong style="font-size:.82rem;color:var(--sp-c-e2e8f0,#e2e8f0);">' + esc(group.name) + '</strong>';
         group.matches.forEach(function (m, i) {
-          function playersHtml(names) { return names.map(function (name) { return '<span class="sp-draw-player">' + esc(name) + '</span>'; }).join(''); }
+          function playersHtml(names) { return names.map(function (name) { return '<span class="sp-draw-player">' + playerHtml(name, group.label || group.name) + '</span>'; }).join(''); }
           initialHtml += '<div class="sp-draw-result-match"><span class="sp-draw-game">J' + (m.number || i + 1) + '</span>' +
             '<span class="sp-draw-side">' + playersHtml(m.onePlayers || [m.one]) + '</span>' +
             '<span class="sp-draw-versus">×</span>' +
             '<span class="sp-draw-side">' + playersHtml(m.twoPlayers || [m.two]) + '</span></div>';
         });
-        initialHtml += '</div>';
+        initialHtml += changesHtml(group) + '</div>';
       });
       category.extras.forEach(function (extra) { initialHtml += '<div style="font-size:.76rem;color:var(--text-muted);">' + esc(extra.label) + ': ' + esc(extra.name) + '</div>'; });
     });
@@ -7931,7 +7967,7 @@ window._publishedInitialDrawData = function (t) {
   return matches.length ? { kind:'initial', draft:{ matches:matches, rounds:[], competitionTeams:t.competitionTeams || [] } } : null;
 };
 
-window._openPublishedInitialDrawResult = function (tId) {
+window._openPublishedInitialDrawResult = async function (tId) {
   var t = window._findTournamentById ? window._findTournamentById(tId) :
     window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
   var pd = window._publishedInitialDrawData(t);
@@ -7939,10 +7975,18 @@ window._openPublishedInitialDrawResult = function (tId) {
     if (window.showNotification) window.showNotification('Resultado indisponível', 'Os jogos do sorteio ainda não foram carregados.', 'error');
     return;
   }
+  var rosterEvents = [];
+  if (window.ScoreplaceRosterProvenance) {
+    try { rosterEvents = await window.ScoreplaceRosterProvenance.load(t.id, true); }
+    catch (_error) {
+      if (window.showNotification) window.showNotification('Histórico indisponível', 'Não foi possível conferir as substituições. Tente novamente.', 'error');
+      return;
+    }
+  }
   var old = document.getElementById('published-draw-result-overlay'); if (old) old.remove();
   var overlay = document.createElement('div');
   overlay.id = 'published-draw-result-overlay'; overlay.className = 'modal-overlay active';
-  var preview = window._renderPendingDrawPreview(Object.assign({}, t, { id:'published:' + String(t.id), pendingDraw:pd }));
+  var preview = window._renderPendingDrawPreview(Object.assign({}, t, { id:'published:' + String(t.id), pendingDraw:pd, _rosterEvents:rosterEvents }));
   overlay.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-label="Resultado do sorteio" style="width:min(920px,96vw);max-height:88%;display:flex;flex-direction:column;">' +
     '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px;"><h2 style="margin:0;font-size:1.15rem;">Resultado do sorteio</h2><button class="btn btn-outline" data-close>Fechar</button></div>' +
     '<div style="overflow:auto;padding-right:4px;">' + preview + '</div></div>';

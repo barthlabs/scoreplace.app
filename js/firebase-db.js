@@ -482,6 +482,11 @@ window.FirestoreDB = {
     return snap.exists ? snap.data() : null;
   },
 
+  async loadTournamentRosterHistory(tournamentId) {
+    return this._callFn('getTournamentRosterHistory', { tournamentId:String(tournamentId) },
+      { semLogin:true, falha:'Não foi possível consultar o histórico de alterações do elenco.' });
+  },
+
   async saveTournament(tourData, options) {
     if (tourData && (tourData._resumo === true || tourData.requiresFullRead === true)) throw new Error('Resumo de torneio é somente leitura; carregue o documento canônico antes de salvar.');
     if (!this.db) return;

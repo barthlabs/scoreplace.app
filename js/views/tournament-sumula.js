@@ -1244,6 +1244,26 @@
     });
     return pages;
   }
+  function rosterHistoryPages(events, generatedAt) {
+    if (!events.length) return [];
+    var provenance = root.ScoreplaceRosterProvenance;
+    var pages = [];
+    for (var offset = 0; offset < events.length; offset += 24) {
+      var page = pdfPage(595, 842);
+      page.write('HISTÓRICO DO ELENCO', 26, 38, 16, true);
+      page.write('Situação consultada em ' + documentStamp(generatedAt).replace(/^Gerado em /, ''), 26, 57, 9);
+      events.slice(offset, offset + 24).forEach(function (event, index) {
+        var y = 83 + index * 30;
+        var kind = event.kind === 'substitution' ? 'Substituição' :
+          event.kind === 'spelling' ? 'Correção de grafia' : 'Alteração de nome';
+        page.write(kind + (event.group ? ' - Grupo ' + event.group : ''), 26, y, 9, true);
+        page.write(event.fromName + ' para ' + event.toName, 26, y + 11, 9, false, 100);
+        if (provenance) page.write(provenance.dateLabel(event.at), 26, y + 21, 7);
+      });
+      pages.push(page);
+    }
+    return pages;
+  }
   function filename(model, orientation, onlyAttendance) {
     return (onlyAttendance ? 'presenca-' : 'sumula-') + model.tournament.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0,45) + (onlyAttendance ? '' : '-' + (orientation === 'portrait' ? 'vertical' : 'horizontal')) + '.pdf';
   }
@@ -1286,7 +1306,7 @@
     all.forEach(function (part) { result.set(part, pos); pos += part.length; });
     return result;
   }
-  function download(id, orientation, onlyAttendance) {
+  async function download(id, orientation, onlyAttendance) {
     var t = root._findTournamentById && root._findTournamentById(id);
     if (!t) return;
     var user = root.AppStore && root.AppStore.currentUser;
@@ -1307,9 +1327,21 @@
     var both = orientation === 'both' && !onlyAttendance;
     orientation = orientation === 'portrait' ? 'portrait' : 'landscape';
     var generatedAt = new Date();
+    var rosterEvents = [];
+    if (root.ScoreplaceRosterProvenance) {
+      try { rosterEvents = await root.ScoreplaceRosterProvenance.load(t.id, true); }
+      catch (_error) {
+        if (typeof root.showNotification === 'function') root.showNotification('Histórico indisponível', 'Não foi possível conferir as alterações do elenco. Tente novamente.', 'error');
+        return;
+      }
+    }
+    var makeStamped = function (direction) {
+      var pages = onlyAttendance ? makeAttendancePages(model) : makePages(model, { orientation:direction });
+      return encodePdf(stampPages(pages.concat(rosterHistoryPages(rosterEvents, generatedAt)), generatedAt));
+    };
     var bytes = both ? zipFiles(['landscape','portrait'].map(function (direction) {
-      return { name:filename(model, direction, false), bytes:encodePdf(stampPages(makePages(model, { orientation:direction }), generatedAt)) };
-    })) : encodePdf(stampPages(onlyAttendance ? makeAttendancePages(model) : makePages(model, { orientation:orientation }), generatedAt));
+      return { name:filename(model, direction, false), bytes:makeStamped(direction) };
+    })) : makeStamped(orientation);
     var name = both ? filename(model, 'landscape', false).replace(/-horizontal\.pdf$/, '-horizontal-vertical.zip')
       : filename(model, orientation, onlyAttendance);
     var url = URL.createObjectURL(new Blob([bytes], { type:both ? 'application/zip' : 'application/pdf' }));

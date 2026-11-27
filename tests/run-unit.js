@@ -1036,6 +1036,7 @@ const SUITES = [
   'tests/grade-estimada-e-propor-datas.test.js',
   'tests/schedule-organizer.test.js',
   'tests/initial-draw-result.test.js',
+  'tests/tournament-roster-history.test.js',
   'tests/initial-draw-pdf-browser.test.js',
   'tests/draw-result-after-publish.test.js',
   'tests/monarch-court-series.test.js',

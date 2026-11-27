@@ -122,6 +122,11 @@ async function driver() {
       categoryId: cat, expectedName: sourceUid ? 'Conta antiga' : 'Pessoa antiga',
       newName: targetUid ? '' : 'Pessoa nova', targetUid: targetUid ? 'new-edit' : '' });
     assert.equal(published.ok, true, 'chave publicada: ' + kind);
+    const rosterHistory = (await db.doc('tournamentRosterHistory/' + tid).get()).data();
+    assert.equal(rosterHistory.events.length, 1, 'histórico público da troca: ' + kind);
+    assert.equal(rosterHistory.events[0].fromName, sourceUid ? 'Conta antiga' : 'Pessoa antiga');
+    assert.equal(rosterHistory.events[0].toName, targetUid ? 'Conta nova' : 'Pessoa nova');
+    assert.equal((await db.doc('tournamentRosterHistory/' + sid).get()).exists, false, 'sandbox não escreve histórico público');
     const edited = (await db.doc('tournaments/' + tid + '/matches/game-1').get()).data().jogo;
     assert.equal(edited.p1, (targetUid ? 'Conta nova' : 'Pessoa nova') + ' / Parceira', kind);
     assert.equal(edited.court, 'Quadra 4', kind);
@@ -186,6 +191,11 @@ async function driver() {
     const result=await call({tournamentId:tid,uid:sourceUid?'old-edit':'',manualParticipantId:sourceUid?'':'solo-old',categoryId:cat,
       expectedName:names[0],newName:targetUid?'':'Nova manual',targetUid:targetUid?'new-edit':'',pointsPolicy:policy});
     assert.equal(result.ok,true);
+    const rosterHistory = (await db.doc('tournamentRosterHistory/' + tid).get()).data();
+    assert.equal(rosterHistory.events.length, 1);
+    assert.equal(rosterHistory.events[0].kind, 'substitution');
+    assert.equal(rosterHistory.events[0].fromName, names[0]);
+    assert.equal(rosterHistory.events[0].toName, targetUid ? 'Conta nova' : 'Nova manual');
     assert.deepEqual((await db.doc(base+'/matches/solo-history').get()).data().jogo,history);
     const nextGame=(await db.doc(base+'/matches/solo-future').get()).data().jogo;
     assert.equal(nextGame.team1Uids[0],targetUid?'new-edit':null);assert.equal(nextGame.scheduledAt,game.scheduledAt);assert.equal(nextGame.court,game.court);

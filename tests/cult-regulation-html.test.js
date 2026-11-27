@@ -15,6 +15,7 @@ const { chromium } = require('@playwright/test');
       contentType:'text/html', body:fs.readFileSync(path.resolve(__dirname, '../assets/regulamentos/cult-2026/regulamento-cult-2026.html'))
     }));
     await page.goto('https://scoreplace.test/');
+    await page.addScriptTag({ path:path.resolve(__dirname, '../js/domain/roster-provenance.js') });
     await page.addScriptTag({ path:path.resolve(__dirname, '../js/views/rules.js') });
     await page.evaluate(() => {
       const t = { id:'tour_1793227218863_f9a70f41fdf7250b0199ba263caa424a', name:'CULT', matches:[] };
@@ -26,7 +27,11 @@ const { chromium } = require('@playwright/test');
       window._publishedInitialDrawData = () => ({ kind:'initial' });
       window._initialDrawGroupsModel = () => ({ groupCount:6, playerCount:48,
         categories:[{ groups:['A','B','C','D','E','F'].map(letter => ({ label:letter,
-          players:Array.from({ length:8 }, (_, i) => letter + ' Atleta ' + (i + 1)) })) }] });
+          players:Array.from({ length:8 }, (_, i) => letter === 'B' && i === 0 ? 'Camila Calia' : letter + ' Atleta ' + (i + 1)) })) }] });
+      window.FirestoreDB = { loadTournamentRosterHistory: async () => ({ events:[{
+        id:'e1', kind:'substitution', fromName:'Fabíola Baldscci', toName:'Camila Calia',
+        group:'B', at:'2026-11-27T16:52:23.803Z'
+      }] }) };
       window._documentGenerationStamp = () => 'Gerado em 27/11/2026 às 12:04:05 (Brasília)';
       renderRules(document.querySelector('#view'), t.id, { regulation });
     });
@@ -38,6 +43,9 @@ const { chromium } = require('@playwright/test');
     assert.equal(await frame.getByText('Atleta C1').count(), 0);
     assert.equal(await frame.locator('.sp-generated-stamp').count(), 4);
     assert.match(await frame.locator('.sp-generated-stamp').first().innerText(), /27\/11\/2026 às 12:04:05/);
+    const groupB = frame.locator('article.group').filter({ has:frame.locator('h3', { hasText:'Grupo B' }) });
+    assert.match(await groupB.locator('li').first().innerText(), /Camila Calia\s*\*/);
+    assert.match(await groupB.locator('.sp-roster-change').innerText(), /substituição a Fabíola Baldscci/);
     assert.equal(await page.locator('iframe').getAttribute('src'), null, 'regulamento é HTML, sem PDF incorporado');
     await frame.locator('nav a').first().click();
     assert.equal(await frame.getByText('Atleta C1').count(), 0, 'navegação interna preserva os nomes atuais');

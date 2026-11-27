@@ -165,6 +165,7 @@ assert.match(callable, /_manualClaimGuard\(state, true\)/);
 assert.match(callable, /classificação contém identidade individual/);
 assert.match(callable, /pendingCanonicalParticipantClaims/);
 assert.match(callable, /_writeCanonicalRosterChanges\(tx/);
+assert.match(callable, /recordRosterHistory\(category\)/, 'troca canônica registra a origem no histórico');
 assert.match(callable, /_editCanonicalSlot\.findLegacyMirror\(mirrorDocuments, edit\)/);
 assert.match(callable, /tx\.update\(match\.ref, _editCanonicalSlot\.mirrorWritePatch\(patchedMirror, edit, _FV\.delete\(\), oldSlot\)\)/);
 assert.match(callable, /tx\.update\(state\.privateDrawRef, \{ draft/);

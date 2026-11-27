@@ -54,6 +54,8 @@ function fixture(root, records) {
     _FV: { serverTimestamp: () => 'server-time', delete: () => 'delete-marker' },
     _splitParts: { async hidratar(_tx, _ref, data) { return { ...data, hydrated: true }; },
       gravar(_tx, _ref, before, update) { writes.push({ kind: 'legacy', before, update }); } },
+    crypto: require('node:crypto'),
+    _tournamentRosterHistory: require('../functions/tournament-roster-history'),
     _participantRename: { renameTournamentParticipant(t) {
       assert.equal(t.hydrated, true); return { changed: true, update: { participants: [] } };
     } }, Date, Promise, Object, String, Set, Array, console };
