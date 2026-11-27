@@ -3,7 +3,7 @@
 - O atalho ao lado de Voltar ancora as barras de progresso abaixo dos filtros, preservando a faixa de comando e zerando a rolagem lateral.
 - Aplicar W.O. e Ao Vivo ocupam a linha do número do jogo tanto no próximo jogo quanto nas quadras. A identificação de grupo e categoria fica abaixo.
 - A barra de filtros reserva folga à esquerda de NO AR, a indicação da quadra se separa da última equipe e as setas de Chamado têm azul mais escuro.
-- Teste em Chromium cobre o enquadramento e a geometria da faixa operacional.
+- A restauração da fila limita a posição salva ao alcance real após recalcular a altura dos cards. Teste em Chromium cobre o enquadramento e a geometria da faixa operacional.
 
 ## 2.7.83 — 26/nov/2026 (fila, origens e ficha)
 

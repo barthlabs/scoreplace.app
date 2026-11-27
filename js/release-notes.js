@@ -1,4 +1,4 @@
-// 2.7.88 — O atalho de controles posiciona filtros, progresso e quadras; os botões W.O. e Ao Vivo ficam junto ao número do jogo. A barra NO AR ganha folga, a quadra se separa das equipes e as setas de Chamado ficam mais escuras.
+// 2.7.88 — O atalho de controles posiciona filtros, progresso e quadras; os botões W.O. e Ao Vivo ficam junto ao número do jogo. A barra NO AR ganha folga, a quadra se separa das equipes e as setas de Chamado ficam mais escuras. A fila preserva a posição possível após atualizar os próximos jogos.
 // 2.7.87 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.86 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.7.85 — Atualização consolidada de produção com as correções validadas desde a última publicação.
