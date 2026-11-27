@@ -1098,6 +1098,37 @@ assert.equal(require('node:crypto').createHash('sha256').update(camisHtml).diges
     assert.equal(progressGroups.find(g=>g.label==='B1').completedRound,2,'jogo isolado da rodada 3 não conclui a rodada');
     assert.equal(progressGroups.find(g=>g.label==='B2').completedRound,0,'cada grupo conta apenas os próprios resultados');
     assert.match(window._tvLiveBodyHtml(progressSnapshot),/Grupo B1<\/h3><small>· Categoria B \(2\/7\)<\/small>/);
+    const transition=JSON.parse(JSON.stringify(fast));transition.id='fast8-elimination-transition';
+    transition.matches.forEach(m=>{
+      delete m.court;delete m.courtCalledAt;
+      if(m.scheduledGameNumber<84)Object.assign(m,{winner:m.p1,scoreP1:7,scoreP2:0,resultAt:'2026-10-22T21:04:00Z'});
+      else Object.assign(m,{court:'Areia F',courtCalledAt:'2026-10-22T21:05:00Z'});
+    });
+    for(let i=0;i<6;i++)transition.matches.push({id:'elim-'+i,phaseIndex:1,round:i<4?1:2,
+      category:i%2?'Categoria C':'Categoria B',scheduledGameNumber:85+i,
+      scheduledAt:new Date(Date.parse('2026-10-22T22:00:00Z')+i*60000).toISOString(),p1:'TBD',p2:'TBD'});
+    const transitionBoard=window._tvLiveBuildSnapshot(transition,Date.parse('2026-10-22T21:06:00Z'));
+    assert.deepEqual(Array.from(transitionBoard.nextGames,g=>g.number),[85,86,87,88,89,90],
+      'após a última chamada classificatória, semifinais e finais já numeradas continuam anunciadas');
+    assert(transitionBoard.nextGames.every(g=>g.blocked),'semifinais sem as duas duplas continuam bloqueadas');
+    assert.equal(transitionBoard.courts[0].fast8Groups.length,6,'classificações dos grupos permanecem na transição');
+    assert.match(window._tvLiveBodyHtml(transitionBoard),/tv-upcoming-pinned[^]*JOGO 85/);
+    const finalBoard=JSON.parse(JSON.stringify(transitionBoard));
+    finalBoard.tournamentComplete=true;
+    finalBoard.nextGames=[];
+    finalBoard.finalPlacements=[{category:'Categoria B',entries:[{pos:1,name:'Campeã B'}]},
+      {category:'Categoria C',entries:[{pos:1,name:'Campeã C'}]}];
+    const finalHtml=window._tvLiveBodyHtml(finalBoard);
+    assert.match(finalHtml,/CLASSIFICAÇÃO FINAL DO TORNEIO[^]*Campeã B[^]*Campeã C/);
+    assert.match(finalHtml,/Torneio encerrado/);
+    assert.doesNotMatch(finalHtml,/class="tv-fast8-board"/);
+    const completed=JSON.parse(JSON.stringify(transition));completed.currentPhaseIndex=1;
+    completed.phases[1].thirdPlacePolicy='optional_super8';completed.phases[1].thirdPlace=false;
+    completed.matches.forEach(m=>Object.assign(m,{winner:m.p1,scoreP1:7,scoreP2:0,resultAt:'2026-10-22T23:00:00Z'}));
+    completed.matches.push({id:'unused-third',label:'BUI.THIRDPLACEMATCH',phase:'thirdplace',p1:'TBD',p2:'TBD'});
+    const completedBoard=window._tvLiveBuildSnapshot(completed,Date.parse('2026-10-22T23:05:00Z'));
+    assert.equal(completedBoard.tournamentComplete,true,'marcador sem número não impede a classificação final');
+    assert.equal(completedBoard.nextGames.length,0,'nenhuma partida fantasma permanece após as finais');
     // Próximo 12: a cauda nunca volta aos jogos 7–11 de outras quadras.
     const forward=JSON.parse(JSON.stringify(fast));forward.id='forward-tv-window';
     forward.matches.forEach(m=>{for(const key of ['winner','resultAt','court','courtCalledAt','startedAt','courtClockBaseAt','scoreP1','scoreP2'])delete m[key];

@@ -241,11 +241,12 @@ const { chromium } = require('@playwright/test');
             const cell=name.parentElement,range=document.createRange();range.selectNodeContents(name);
             const text=range.getBoundingClientRect(),box=cell.getBoundingClientRect();
             return {font:parseFloat(getComputedStyle(name).fontSize),fits:text.right<=box.right+1&&text.left>=box.left-1,
-              oneLine:text.height<=parseFloat(getComputedStyle(name).lineHeight)+1};
+              height:name.getBoundingClientRect().height,cellHeight:box.height,lines:range.getClientRects().length,
+              visible:text.bottom<=box.bottom+1};
           }),footerInside:standing.querySelector(':scope > small').getBoundingClientRect().bottom<=standing.getBoundingClientRect().bottom+1};
         });
-        assert(standingNames.rows.every(row=>row.font<standingNames.base&&row.fits&&row.oneLine)&&standingNames.footerInside,
-          'nomes longos da classificação cabem em uma linha e a faixa de avanço permanece no box: '+JSON.stringify({viewport,standingNames}));
+        assert(standingNames.rows.every(row=>row.font>=standingNames.base*.75&&row.fits&&row.visible&&row.lines<=2&&row.height<=row.cellHeight+1)&&standingNames.footerInside,
+          'nomes longos da classificação continuam legíveis em até duas linhas e a faixa de avanço permanece no box: '+JSON.stringify({viewport,standingNames}));
         const geometry=await page.evaluate(()=>Array.from(document.querySelectorAll('.tv-fast8-court'),court=>{
           const card=court.querySelector('.tv-fast8-game-card'),header=court.querySelector('header'),teams=card.querySelectorAll('.tv-series-side'),vs=card.querySelector('.tv-fast8-versus'),footer=card.querySelector('footer');
           const r=n=>n.getBoundingClientRect();

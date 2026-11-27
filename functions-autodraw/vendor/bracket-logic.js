@@ -4451,6 +4451,11 @@ window._maybeFinishElimination = _maybeFinishElimination;
 // Garante que o thirdPlaceMatch existe com TBD e preenche progressivamente
 // com os perdedores das semifinais conforme os resultados são lançados
 function _maybeGenerate3rdPlace(t) {
+  var currentPhase = t && Array.isArray(t.phases) && t.phases[Number(t.currentPhaseIndex || 0)];
+  if (currentPhase && currentPhase.thirdPlacePolicy === 'optional_super8' && currentPhase.thirdPlace === false) {
+    if (t.thirdPlaceMatch && !t.thirdPlaceMatch.winner && !t.thirdPlaceMatch.resultAt) delete t.thirdPlaceMatch;
+    return;
+  }
   // Classificatória não tem disputa de 3º lugar. `_advanceWinner` chama este
   // helper após cada resultado, inclusive em fases classificatórias; sem esta
   // guarda ele recriava um campo separado mesmo com os jogos canônicos corretos.

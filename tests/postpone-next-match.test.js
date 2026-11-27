@@ -49,6 +49,14 @@ const withPending = context.window._bracketOperationsSelect({ id:'tour_future_ev
 assert(!withPending.future.some(m => m.id === 'j1'), 'placar pendente não reaparece nos próximos jogos');
 assert(withPending.pending.some(m => m.id === 'j1'), 'placar permanece acessível em pendentes');
 context.window._bracketCourtReleased = () => ({});
+const originalKnownSide=context.window.ScoreplaceNextMatch.knownSide;
+context.window.ScoreplaceNextMatch.knownSide=value=>!!value && value!=='TBD';
+const finalCalled={id:'final',scheduledGameNumber:90,p1:'Ana',p2:'Bia',court:'Quadra 1',courtCalledAt:'2026-11-27T19:00:00Z'};
+const phantomThird={id:'third-legacy',label:'BUI.THIRDPLACEMATCH',phase:'thirdplace',p1:'TBD',p2:'TBD'};
+const finishedQueue=context.window._bracketOperationsSelect({id:'no-third-place',courtCount:2,matches:[finalCalled,phantomThird]});
+assert(!finishedQueue.next,'sem confronto real ainda chamável, não há próxima partida');
+assert.equal(finishedQueue.future.length,0,'placeholder de terceiro lugar sem número não aparece após a final');
+context.window.ScoreplaceNextMatch.knownSide=originalKnownSide;
 const groupStart = source.indexOf('function _bracketOperationsGroup(');
 const groupEnd = source.indexOf('\nfunction _bracketOperationsNavHtml(', groupStart);
 assert(groupStart > 0 && groupEnd > groupStart);

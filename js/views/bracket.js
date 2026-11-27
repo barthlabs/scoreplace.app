@@ -1563,7 +1563,8 @@ window._bracketOperationsSelect = function (t) {
   // confrontos são apenas informativos até que ambos os lados sejam conhecidos.
   var future = matches.filter(function (m) {
     return m && !released[String(m.id)] && !occupancy.isFinished(m) && !m.isBye && !m.isSitOut &&
-      !m.courtCalledAt && !m.startedAt && !occupancy.occupiesCourt(m);
+      !m.courtCalledAt && !m.startedAt && !occupancy.occupiesCourt(m) &&
+      (Number(m.scheduledGameNumber || m._gameNum || m.matchNumber) > 0 || known(m.p1) && known(m.p2));
   }).filter(function (m) {
     var group = _bracketOperationsGroup(t, m, matches);
     return !group || String((group.matches.find(function (item) { return !released[String(item.id)] && !occupancy.isFinished(item); }) || {}).id) === String(m.id);
@@ -3058,7 +3059,8 @@ window._bracketOperationsRefresh = function (t, root) {
   var nextContentHtml = '<div class="sp-operations-next-scroll" aria-label="Próximos jogos">' + advancePhaseHtml +
       (nextCardsHtml || '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (categoryFilter ? 'Nenhum próximo jogo nesta categoria.' : state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
-        'Nenhum jogo aguardando chamada') + '</div>') + '</div>';
+        state.matches.some(function (m) { return m && (m.courtCalledAt || m.startedAt || window.ScoreplaceCourtOccupancy.isFinished(m)); })
+          ? 'Encerrado' : 'Nenhum jogo aguardando chamada') + '</div>') + '</div>';
   if (existing._spNextScrollRestoreObserver) { existing._spNextScrollRestoreObserver.disconnect(); existing._spNextScrollRestoreObserver = null; }
   if (existing._spSeriesLabelObserver) { existing._spSeriesLabelObserver.disconnect(); existing._spSeriesLabelObserver = null; }
   existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next' + (fast8Queue ? ' sp-operations-next--fast8' : '') + '">' + nextContentHtml + '</div>' + (state.pending.some(categoryMatches) ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
@@ -3143,7 +3145,7 @@ window._bracketOperationsRefresh = function (t, root) {
       });
       var restoreNextScroll = function () {
         if (!nextScroll.isConnected || !nextScroll.clientHeight) return;
-        nextScroll.scrollTop = Math.max(0, Math.min(anchor ? anchor.offsetTop + visibleNextOffset : nextScrollTop,
+        nextScroll.scrollTop = Math.max(0, Math.min(anchor ? anchor.offsetTop + visibleNextOffset : visibleNextId ? 0 : nextScrollTop,
           nextScroll.scrollHeight - nextScroll.clientHeight));
         nextScrollMemory[String(t.id)] = nextScroll.scrollTop;
         if (existing._spNextScrollRestoreObserver) { existing._spNextScrollRestoreObserver.disconnect(); existing._spNextScrollRestoreObserver = null; }
