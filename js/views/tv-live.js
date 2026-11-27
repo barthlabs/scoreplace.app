@@ -923,7 +923,7 @@
           '<table><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>D</th><th title="Saldo de games">Saldo<br>games</th><th>%</th></tr></thead><tbody>'+
           group.standings.map(function(row,index) {
             var diff=Number(row.gamesWon || 0)-Number(row.gamesLost || 0),rate=gamesPercent(row);
-            return '<tr'+(index<group.cutoff?' class="tv-fast8-qualifying"':'')+'><td>'+(index+1)+'º</td><td>'+esc(row.name)+
+            return '<tr'+(index<group.cutoff?' class="tv-fast8-qualifying"':'')+'><td>'+(index+1)+'º</td><td><span class="tv-standing-name" title="'+esc(row.name)+'">'+esc(row.name)+'</span>'+
               '</td><td>'+row.wins+'</td><td>'+row.losses+'</td><td>'+(diff>=0?'+':'')+diff+'</td><td>'+rate+'%</td></tr>';
           }).join('')+'</tbody></table><small>Faixa de avanço: '+group.cutoff+'</small></section>';
       }).join('')+'</div></div>';
@@ -967,7 +967,7 @@
         '<h3>Classificação parcial · Grupo '+esc(group.label)+'</h3><table><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>D</th><th title="Saldo de games">Saldo<br>games</th><th>%</th></tr></thead><tbody>'+
         (group.standings || []).map(function(r,index) {
           var diff=Number(r.gamesWon || 0)-Number(r.gamesLost || 0), rate=gamesPercent(r);
-          return '<tr'+(index<group.cutoff?' class="tv-super8-qualifying"':'')+'><td>'+(index+1)+'º</td><td>'+esc(r.name)+'</td><td>'+r.wins+'</td><td>'+r.losses+'</td><td>'+(diff>=0?'+':'')+diff+'</td><td>'+rate+'%</td></tr>';
+          return '<tr'+(index<group.cutoff?' class="tv-super8-qualifying"':'')+'><td>'+(index+1)+'º</td><td><span class="tv-standing-name" title="'+esc(r.name)+'">'+esc(r.name)+'</span></td><td>'+r.wins+'</td><td>'+r.losses+'</td><td>'+(diff>=0?'+':'')+diff+'</td><td>'+rate+'%</td></tr>';
         }).join('')+'</tbody></table><p>Faixa de avanço: '+group.cutoff+'</p></section></div></article></div>';
     }).join('');
     // Surviving TV windows can receive new markup from a refreshed controller.
@@ -1280,10 +1280,30 @@
   }
   window._tvFitSeriesNames = fitSeriesNames;
   var fitSeriesNamesSource = fitSeriesNames.toString() + ';';
+  function fitStandingNames(doc) {
+    doc = doc && typeof doc.querySelectorAll === 'function' ? doc : document;
+    var canvas = doc.createElement('canvas');
+    var context = canvas.getContext('2d');
+    if (!context) return;
+    doc.querySelectorAll('.tv-standing-name').forEach(function (name) {
+      name.style.fontSize = '';
+      var cell = name.parentElement;
+      var computed = doc.defaultView.getComputedStyle(name);
+      var cellStyle = doc.defaultView.getComputedStyle(cell);
+      var available = cell.clientWidth - parseFloat(cellStyle.paddingLeft) - parseFloat(cellStyle.paddingRight);
+      if (available <= 0) return;
+      var base = parseFloat(computed.fontSize) || 12;
+      context.font = computed.fontStyle + ' ' + computed.fontWeight + ' ' + base + 'px ' + computed.fontFamily;
+      var measured = context.measureText(name.textContent).width;
+      if (measured > available) name.style.fontSize = (base * available / (measured + 1)) + 'px';
+    });
+  }
+  window._tvFitStandingNames = fitStandingNames;
+  var fitStandingNamesSource = fitStandingNames.toString() + ';';
   function childScript(tournamentId, generation) {
     var id = JSON.stringify(String(tournamentId || '')).replace(/</g, '\\u003c');
     var origin = JSON.stringify(window.location.origin).replace(/</g, '\\u003c');
-    return '<script>(function(){"use strict";var id=' + id + ',gen=' + Number(generation) + ',origin=' + origin + ';window.__tvGeneration=gen;var timer,resultPosition=0,resultCycle=0,resultAt=Date.now(),highlightedResultId="",pinArmed=false,boxLoops={};' + fitSeriesNamesSource +
+    return '<script>(function(){"use strict";var id=' + id + ',gen=' + Number(generation) + ',origin=' + origin + ';window.__tvGeneration=gen;var timer,resultPosition=0,resultCycle=0,resultAt=Date.now(),highlightedResultId="",pinArmed=false,boxLoops={};' + fitSeriesNamesSource + fitStandingNamesSource +
       'function fit(){if(typeof window.getComputedStyle!=="function")return;' +
       'document.querySelectorAll(".tv-team-tag,.tv-result-team,.tv-score").forEach(function(el){el.style.fontSize="";' +
       'var box=el.closest(".tv-side,.tv-result-side");if(!box||!box.clientHeight||!el.clientHeight)return;' +
@@ -1292,7 +1312,7 @@
       'document.querySelectorAll(".tv-upcoming .tv-result-players").forEach(function(box){var names=box.querySelectorAll("span");' +
       'names.forEach(function(el){el.style.fontSize="";});if(!box.clientHeight||!names.length)return;' +
       'var size=parseFloat(window.getComputedStyle(names[0]).fontSize)||12;' +
-      'while(box.scrollHeight>box.clientHeight+1&&size>10){size=Math.max(10,size-.5);names.forEach(function(el){el.style.fontSize=size+"px";});}});fitSeriesNames();}' +
+      'while(box.scrollHeight>box.clientHeight+1&&size>10){size=Math.max(10,size-.5);names.forEach(function(el){el.style.fontSize=size+"px";});}});fitSeriesNames();fitStandingNames();}' +
       'function ensureCycle(){if(window.__tvGeneration!==gen)return;var list=document.querySelector(".tv-results-list");resultCycle=0;if(!list)return;' +
       'list.querySelectorAll("[data-tv-repeat]").forEach(function(node){node.remove();});' +
       'var originals=list.querySelectorAll(".tv-result,.tv-final-standings");if(!originals.length||list.scrollHeight-list.clientHeight<=2||' +
@@ -1373,7 +1393,7 @@
     '.tv-court-top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:.4vw;border-bottom:1px solid #314151;padding-bottom:.25vw}.tv-court-phase{justify-self:center;color:#fff;font-size:clamp(.65rem,.78vw,1rem);font-weight:800;white-space:nowrap}.tv-court-top h2{color:#38bdf8;font-size:clamp(.85rem,1.1vw,1.5rem);white-space:nowrap}.tv-court-top>span{color:#fbbf24;font-size:clamp(.65rem,.78vw,1rem);font-weight:800;text-align:right;justify-self:end}.tv-side{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:1fr;align-items:stretch;gap:.55vw;border-left:0;border-radius:.45vw;min-width:0;padding:.35vw;background:#222}.tv-team-tag{display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);padding:.25vw .15vw;border:1px solid var(--team);border-radius:999px;background:color-mix(in srgb,var(--team) 28%,#222);color:#fff;font-size:clamp(.65rem,.8vw,1rem);font-weight:900;white-space:nowrap}.tv-players{min-width:0;display:flex;flex-direction:column;justify-content:space-evenly;gap:.15vw}.tv-players span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:clamp(.8rem,1vw,1.3rem);font-weight:750}.tv-score{grid-column:3;grid-row:1;align-self:center;min-width:2vw;padding:.1em .3em;border:1px solid #555;border-radius:.35em;background:#303030;text-align:center;font-size:clamp(1.4rem,2.3vw,3rem)}' +
     '.tv-versus{font-size:clamp(.7rem,.8vw,1rem);letter-spacing:.1em}.tv-court-footer{display:grid;justify-items:end;width:100%;margin-top:.35vw;color:#34d399;font-weight:800;text-align:right}.tv-court-footer strong{font-variant-numeric:tabular-nums;font-size:clamp(1rem,1.2vw,1.8rem);white-space:nowrap}' +
     '.tv-sidebar{grid-template-rows:60% 40%}' +
-    '.tv-rankings{display:flex;flex-direction:column}' +
+    '.tv-rankings{display:flex;flex-direction:column}.tv-standing-name{display:block;width:100%;white-space:nowrap;line-height:1.2;overflow:visible}' +
     '.tv-ranking-group{overflow:hidden;max-height:none;min-height:0}' +
     '.tv-ranking-group h3{font-size:clamp(.9rem,1.05vw,1.35rem)}' +
     '.tv-ranking-head,.tv-ranking-row{display:grid;grid-template-columns:2vw minmax(0,1fr) 4vw 5.5vw repeat(3,2vw);gap:.35vw;align-items:center}' +

@@ -3,6 +3,7 @@
 - A tela do torneio oferece um botão de tela cheia ao lado de Voltar. O controle acompanha o estado do navegador e permite sair pelo próprio botão ou por Esc.
 - Em janelas de desktop com altura útil até 720 px, a faixa operacional reduz margens e espaçamentos internos sem diminuir o tamanho dos nomes e botões.
 - Na tela no ar, os tempos das quadras ficam ancorados à direita, alinhados abaixo da borda dos boxes das equipes.
+- Nas classificações da tela no ar, nomes longos diminuem a fonte até caber em uma linha, preservando a faixa de avanço dentro do grupo.
 - Nos cards de chamada e em quadra, a rodada fica junto do número do jogo; grupo e categoria ocupam linhas próprias abaixo. O seletor da próxima quadra mantém largura fixa e folga após as equipes, deixando o botão OK estável.
 - Uma alteração remota só de quadra ou relógio atualiza a faixa operacional sem reconstruir o detalhe inteiro, preservando a rolagem da tela observadora.
 - Teste em Chromium cobre entrada e saída do modo tela cheia, geometria do seletor e a atualização recebida de outra janela; o teste da tela no ar segue aprovado.

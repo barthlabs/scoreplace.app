@@ -229,6 +229,22 @@ const { chromium } = require('@playwright/test');
       for(const viewport of [{width:1920,height:1080},{width:3840,height:2160}]) {
         const page=await browser.newPage({viewport});
         await page.setContent(fs.readFileSync(fast8Capture,'utf8'),{waitUntil:'domcontentloaded'});
+        const standingNames=await page.evaluate(()=>{
+          const standing=document.querySelector('.tv-fast8-standing');
+          const names=standing.querySelectorAll('.tv-standing-name');
+          const base=parseFloat(getComputedStyle(names[0]).fontSize);
+          names[0].textContent='Maria Angélica Cristina Pereira de Albuquerque';
+          names[1].textContent='Ana Carolina Beatriz Montenegro da Silva';
+          window.__tvFitLabels();
+          return {base,rows:[...names].slice(0,2).map(name=>{
+            const cell=name.parentElement,range=document.createRange();range.selectNodeContents(name);
+            const text=range.getBoundingClientRect(),box=cell.getBoundingClientRect();
+            return {font:parseFloat(getComputedStyle(name).fontSize),fits:text.right<=box.right+1&&text.left>=box.left-1,
+              oneLine:text.height<=parseFloat(getComputedStyle(name).lineHeight)+1};
+          }),footerInside:standing.querySelector(':scope > small').getBoundingClientRect().bottom<=standing.getBoundingClientRect().bottom+1};
+        });
+        assert(standingNames.rows.every(row=>row.font<standingNames.base&&row.fits&&row.oneLine)&&standingNames.footerInside,
+          'nomes longos da classificação cabem em uma linha e a faixa de avanço permanece no box: '+JSON.stringify({viewport,standingNames}));
         const geometry=await page.evaluate(()=>Array.from(document.querySelectorAll('.tv-fast8-court'),court=>{
           const card=court.querySelector('.tv-fast8-game-card'),header=court.querySelector('header'),teams=card.querySelectorAll('.tv-series-side'),vs=card.querySelector('.tv-fast8-versus'),footer=card.querySelector('footer');
           const r=n=>n.getBoundingClientRect();
