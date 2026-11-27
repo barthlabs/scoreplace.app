@@ -364,10 +364,24 @@
     var tail = label.slice(cut).trim();
     return [label.slice(0, cut).trim(), tail];
   }
-  // Larguras médias da Helvetica em pontos por mil. Servem tanto para manter
-  // os nomes dentro da coluna quanto para alinhar a dupla da direita ao limite.
+  // Avanços da Helvetica-Bold do Adobe Core 14 AFM, em milésimos de em.
+  // O alinhamento à direita precisa da largura real: a média fazia nomes
+  // longos ultrapassarem a borda da coluna.
+  var boldUpperWidths = [722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611];
+  var boldLowerWidths = [556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500];
+  function boldGlyphWidth(ch) {
+    var plain = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    var code = plain.charCodeAt(0);
+    if (code >= 65 && code <= 90) return boldUpperWidths[code - 65];
+    if (code >= 97 && code <= 122) return boldLowerWidths[code - 97];
+    if (code >= 48 && code <= 57) return 556;
+    return ({' ':278,'.':278,',':278,'-':333,'/':278,'(':333,')':333,':':333,';':333,'+':584,'&':722,'!':333,'?':611})[ch] || 556;
+  }
+  // As demais legendas preservam a estimativa anterior; os nomes em negrito
+  // usam os avanços exatos da fonte embutida no PDF.
   function labelWidth(value, size, bold) {
     return Array.from(latin(value)).reduce(function (sum, ch) {
+      if (bold) return sum + boldGlyphWidth(ch);
       if (/[ilI1.,:;!'| ]/.test(ch)) return sum + (ch === ' ' ? 278 : 250);
       if (/[MW@%]/.test(ch)) return sum + (bold ? 944 : 889);
       if (/[mw]/.test(ch)) return sum + (bold ? 833 : 778);

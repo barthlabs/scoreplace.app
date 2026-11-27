@@ -50,6 +50,19 @@ for (const orientation of ['landscape','portrait']) {
     assert(content.includes(label), 'coluna ou atleta ausente: ' + label);
 }
 const at = (day, hour) => new Date(day + 'T' + hour + ':00-03:00').toISOString();
+const rightSidePage = core.makePages(core.collect({name:'Súmula',sport:'Beach Tennis',
+  scoring:{type:'sets',setsToWin:1,gamesPerSet:7}}, [{id:'right-side',scheduledGameNumber:1,
+  scheduledAt:at('2026-11-27','09:00'),court:'Quadra 1',
+  p1:'Ana / Bia',p2:'Neyller Montoni / Angélica Alves da Silva'}]))[0];
+const rightNameX = label => {
+  const line = rightSidePage.commands.find(command => command.includes(label));
+  assert(line, 'nome da direita ausente da súmula: ' + label);
+  return Number(line.match(/1 0 0 1 ([\d.]+) [\d.]+ Tm/)[1]);
+};
+const upperEdge = rightNameX('(Neyller Montoni)') + 69.7593;
+const lowerEdge = rightNameX('(Ang\\351lica Alves da Silva)') + 103.8996;
+assert(Math.abs(upperEdge - lowerEdge) < 0.1 && upperEdge <= 548.1,
+  'os dois nomes da equipe da direita terminam alinhados dentro da borda');
 const superEight = { name:'Super 8', superEight:true, sport:'Beach Tennis', scoring:{type:'sets',setsToWin:1,gamesPerSet:6} };
 const superEightGames = Array.from({length:14}, (_, i) => ({
   id:'super8-' + (i + 1), scheduledGameNumber:i + 1,
