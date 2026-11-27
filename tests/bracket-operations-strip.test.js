@@ -700,7 +700,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
           });
         } finally { Date.now=realNow; }
       },theme);
-      assert.deepEqual(phases.map(p=>p.fill),['rgb(3, 105, 161)','rgb(161, 98, 7)','rgb(21, 128, 61)','rgb(185, 28, 28)']);
+      assert.deepEqual(phases.map(p=>p.fill),['rgb(3, 70, 108)','rgb(161, 98, 7)','rgb(21, 128, 61)','rgb(185, 28, 28)']);
       assert.deepEqual(phases.map(p=>p.count),[3,3,2,2]);
       assert(phases.every(p=>p.fits && p.contrast>=4.5),JSON.stringify({theme,phases}));
     }
@@ -1878,6 +1878,24 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(fastPinned.next,'A-1-1',JSON.stringify(fastPinned));
     assert(fastPinned.movedWithScroll && fastPinned.stationaryAtStart && fastPinned.manualPositionStable && fastPinned.unpausedConditions && fastPinned.refreshPreserved && fastPinned.noDuplicates && fastPinned.allFirstRound && fastPinned.secondaryCount>=12 &&
       fastPinned.disposed,JSON.stringify(fastPinned));
+    const controlsPage = await browser.newPage({ viewport:{ width:1100, height:750 } });
+    await controlsPage.setContent('<main id="view-container" style="height:2100px;width:1500px"><div id="toolbar" style="position:fixed;top:100px;height:70px"></div>' +
+      '<nav data-bracket-tabs-root="1" data-bracket-detail-tabs="1" data-tournament-id="sb_test"></nav>' +
+      '<div data-bracket-operations-progress="1" data-operations-tournament-id="sb_test" style="position:absolute;top:300px;height:35px"></div>' +
+      '<div data-bracket-operations-strip="1" data-operations-tournament-id="sb_test" style="position:absolute;top:500px"></div></main>');
+    await controlsPage.addScriptTag({ content: 'function _bracketPinnedChromeBottom(root) { return root._bracketDetailToolbar.getBoundingClientRect().bottom; }\n' +
+      source.slice(source.indexOf('window._bracketFocusOperationsControls = function'), source.indexOf('/* A LARGURA ÚTIL DA CHAVE')) });
+    const controls = await controlsPage.evaluate(() => {
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      root._bracketDetailToolbar = document.getElementById('toolbar');
+      window.scrollTo(200, 900);
+      const found = window._bracketFocusOperationsControls('sb_test', 'instant');
+      return { found, x:window.scrollX, progressTop:document.querySelector('[data-bracket-operations-progress]').getBoundingClientRect().top,
+        stripTop:document.querySelector('[data-bracket-operations-strip]').getBoundingClientRect().top };
+    });
+    assert(controls.found && controls.x === 0 && Math.abs(controls.progressTop - 178) <= 1 && controls.stripTop > controls.progressTop,
+      'atalho restaura as barras abaixo dos filtros, a faixa de comando e a rolagem horizontal: ' + JSON.stringify(controls));
+    await controlsPage.close();
     console.log('✓ Fast 8 só rola manualmente, conserva a posição ao atualizar e descarta a superfície ao sair');
     console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');
   } finally { await browser.close(); }

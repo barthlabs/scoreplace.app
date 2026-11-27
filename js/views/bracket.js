@@ -943,6 +943,34 @@ window._bracketFocusOperationsStrip = function(tId, behavior) {
   return true;
 };
 
+// O atalho do cabeçalho restaura a visão de CONTROLE: filtros, progresso e
+// quadras. Focar só a faixa de jogos esconderia as duas barras de progresso.
+window._bracketFocusOperationsControls = function(tId, behavior) {
+  var root = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(node) {
+    return node.getAttribute('data-tournament-id') === String(tId);
+  });
+  var detail = root && root.closest('#view-container');
+  var strip = root && root._bracketOperationsStrip;
+  if ((!strip || !strip.isConnected) && detail) strip = Array.prototype.find.call(detail.querySelectorAll('[data-bracket-operations-strip]'), function(node) {
+    return node.getAttribute('data-operations-tournament-id') === String(tId);
+  });
+  if (!root || !strip || !strip.isConnected) return false;
+  var progress = root._bracketOperationsProgress;
+  if ((!progress || !progress.isConnected) && detail) progress = Array.prototype.find.call(detail.querySelectorAll('[data-bracket-operations-progress]'), function(node) {
+    return node.getAttribute('data-operations-tournament-id') === String(tId);
+  });
+  var anchor = progress && progress.isConnected && !progress.hidden ? progress : strip;
+  try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
+  var top = Math.max(0, (window.scrollY || window.pageYOffset || 0) + anchor.getBoundingClientRect().top -
+    Math.max(12, _bracketPinnedChromeBottom(root, false) + 8));
+  // Um atalho da dashboard ainda pode ter reafirmações pendentes para o card.
+  window._tournamentUpcomingEntryToken = null;
+  if (window._bracketEntryToken && typeof window._bracketEntryToken.cancel === 'function') window._bracketEntryToken.cancel();
+  try { window.scrollTo({ left: 0, top: top, behavior: behavior || 'auto' }); }
+  catch (eScroll) { try { window.scrollTo(0, top); } catch (eFallback) {} }
+  return true;
+};
+
 /* A LARGURA ÚTIL DA CHAVE, MEDIDA — nunca deduzida de `100vw` (ver `_cardMax`).
  * Fonte: o `clientWidth` do rolador horizontal da chave, que já desconta a barra de rolagem
  * e o padding do container. Sem rolador na tela (lista, classificação), vale o
@@ -2258,18 +2286,6 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         head.firstChild.textContent = '';
         head.insertAdjacentHTML('afterbegin', _bracketOperationsNavHtml(group, index, slot));
       }
-      // Na réplica, navegação e categoria formam a coluna esquerda. As ações
-      // permanecem na coluna direita e ocupam a altura das duas linhas.
-      // O card canônico da chave conserva sua estrutura e seus handlers.
-      var leading = head.firstElementChild;
-      var titleRow = leading && leading.firstElementChild;
-      var category = leading && leading.querySelector('[data-match-time-status]');
-      var actions = head.querySelector('.sp-mc-acts');
-      if (titleRow && category && category.parentElement === leading && actions) {
-        card.classList.add('sp-operations-two-line-header');
-        titleRow.style.flexWrap = 'nowrap';
-        titleRow.style.gap = '0';
-      }
     }
     html = card.outerHTML;
   }
@@ -2283,6 +2299,21 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         categoryLine.insertAdjacentHTML('afterbegin', '<strong class="sp-operations-group-label">' + safe(displayGroup) + '</strong> · ');
         html = categoryHost.innerHTML;
       }
+    }
+    // Próximo jogo e jogos em quadra usam a mesma cabeça: ações na linha do
+    // número do jogo, identificação do grupo e categoria na linha seguinte.
+    var headerHost = document.createElement('template');
+    headerHost.innerHTML = html;
+    var headerCard = headerHost.content.firstElementChild;
+    var header = headerCard && headerCard.querySelector('.sp-mc-head');
+    var leading = header && header.firstElementChild;
+    var titleRow = leading && leading.firstElementChild;
+    var category = leading && leading.querySelector('[data-match-time-status]');
+    if (titleRow && category && category.parentElement === leading && header.querySelector('.sp-mc-acts')) {
+      headerCard.classList.add('sp-operations-two-line-header');
+      titleRow.style.flexWrap = 'nowrap';
+      titleRow.style.gap = '0';
+      html = headerHost.innerHTML;
     }
   }
   if ((role.active || role.pending) && html) {

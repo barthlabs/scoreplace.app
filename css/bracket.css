@@ -135,7 +135,7 @@
 .sp-operations-pending-track .sp-operations-replica { display:grid;grid-template-rows:minmax(var(--sp-operations-line-height),max-content) var(--sp-operations-card-height);gap:0; }
 .sp-operations-replica > .sp-match-card { width:100%;max-width:none;min-height:0;height:var(--sp-operations-card-height);box-sizing:border-box;padding-bottom:14px!important; }
 .sp-operations-replica .sp-mc-head { gap:4px;margin-bottom:6px; }
-.sp-operations-replica .sp-mc-head [data-match-time-status] { white-space:nowrap; }
+.sp-operations-replica .sp-mc-head [data-match-time-status] { white-space:normal;overflow-wrap:anywhere; }
 .sp-operations-two-line-header .sp-mc-head { display:flex;flex-wrap:nowrap;align-items:flex-start;gap:6px; }
 .sp-operations-two-line-header .sp-mc-head > div:first-child { flex:1 1 auto;width:auto;min-width:0;gap:0!important; }
 .sp-operations-two-line-header .sp-mc-head > div:first-child > div:first-child { height:23px; }
@@ -146,7 +146,7 @@
 .sp-operations-replica .sp-mc-acts > button.btn { box-sizing:border-box;flex:0 0 auto;align-self:flex-start!important;height:42px!important;min-height:42px!important;max-height:42px!important; }
 .sp-operations-two-line-header [data-match-time-status] .sp-operations-group-code { font-size:.62rem;font-weight:700;color:var(--sp-c-7dd3fc,#7dd3fc);line-height:1.2; }
 .sp-operations-court-footer-actions { display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;margin-left:auto; }
-.sp-operations-court-card .sp-match-operational { column-gap:6px!important;row-gap:4px;margin-top:8px; }
+.sp-operations-court-card .sp-match-operational { column-gap:6px!important;row-gap:4px;margin-top:14px; }
 .sp-operations-court-card .sp-match-operational .sp-match-court { flex:0 1 96px;max-width:96px;min-width:0;margin-top:0; }
 .sp-operations-court-card .sp-match-operational .sp-match-court select { width:100%;padding:0 2px;font-size:.68rem; }
 .sp-operations-court-card .sp-operations-court-footer-actions { gap:6px; }
@@ -259,6 +259,7 @@
 #view-container > #fbwrap-chaves[data-bracket-detail-toolbar] {
   margin-left:calc(-1 * var(--sp-view-gutter, 0px))!important;
   margin-right:calc(-1 * var(--sp-view-gutter, 0px))!important;
+  padding-left:calc(var(--sp-view-gutter, 0px) + 12px)!important;
 }
 /* Controles primeiro; abas da chave em faixa própria, inclusive em TV. */
 [data-bracket-tabs-root][data-bracket-search-layout="inline"] > [data-bracket-tabs-primary] {
@@ -482,7 +483,7 @@ summary::-webkit-details-marker { display: none; }
 }
 .sp-match-clock-action::before {
   content:'';position:absolute;z-index:-1;width:27px;height:27px;border-radius:50%;
-  background:var(--sp-clock-button-fill,#0369a1);pointer-events:none;
+  background:var(--sp-clock-button-fill,#03466c);pointer-events:none;
 }
 .sp-match-clock-action svg { display:block;width:17px;height:17px;flex:none;pointer-events:none; }
 .sp-match-phase-warmup, .sp-match-operational:has(> .sp-match-phase-warmup) { --sp-clock-button-fill:#a16207; }
