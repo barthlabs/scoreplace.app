@@ -4611,6 +4611,18 @@ window._tournamentDetailSig = function (t, withoutPresence, localCourtIds) {
     (withoutPresence ? '' : _k(t.checkedInConfirmed)) + '|' +
     _all.length + '|' + _mc;
 };
+// A quadra e o relógio mudam várias vezes durante a chamada. Uma assinatura sem
+// esses campos permite atualizar só a faixa operacional nas outras janelas.
+window._tournamentDetailSigWithoutCourt = function (t) {
+  var ids = Object.create(null);
+  var games = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : (t && t.matches) || [];
+  games.forEach(function (game) { if (game && game.id != null) ids[String(game.id)] = true; });
+  return window._tournamentDetailSig(t, false, ids);
+};
+window._stampTournamentDetailSig = function (t) {
+  window._tdetailSig = window._tournamentDetailSig(t);
+  window._tdetailSigWithoutCourt = window._tournamentDetailSigWithoutCourt(t);
+};
 // v1.3.93 (dono, "continua sorteando entre todos — sem gambiarra"): as DECISÕES do pré-sorteio
 // (scope presentes/todos, sem-dupla, pow2, flexibilizar, resto) vivem num MAPA POR TID — NÃO no
 // objeto do torneio. Por quê: o objeto é TROCADO pelo onSnapshot a CADA write (o persist do move
@@ -4759,7 +4771,19 @@ window._softRefreshView = function() {
               !(typeof window._estadoDasPartes === 'function' && window._estadoDasPartes(_tdetail) === 'erro')) return;
           var _tsig = window._tournamentDetailSig(_tdetail);
           if (_tsig === window._tdetailSig) return; // nada relevante mudou → sem re-render (sem pulinho)
+          var _courtOnlySig = window._tournamentDetailSigWithoutCourt(_tdetail);
+          var _operationsRoot = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
+            return node.getAttribute('data-tournament-id') === String(_tid);
+          });
+          if (_courtOnlySig === window._tdetailSigWithoutCourt && _operationsRoot && _operationsRoot.isConnected &&
+              _operationsRoot._bracketOperationsStrip && _operationsRoot._bracketOperationsStrip.isConnected &&
+              typeof window._bracketOperationsRefresh === 'function') {
+            window._bracketOperationsRefresh(_tdetail, _operationsRoot);
+            window._stampTournamentDetailSig(_tdetail);
+            return;
+          }
           window._tdetailSig = _tsig;
+          window._tdetailSigWithoutCourt = _courtOnlySig;
         }
       }
     } catch (e) {}

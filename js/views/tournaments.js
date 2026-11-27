@@ -3,6 +3,28 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 // Dynamically update stat-boxes after participant/waitlist changes
 var _t = window._t || function(k) { return k; };
 
+window._syncTournamentControlFullscreen = function () {
+  var active = !!document.fullscreenElement;
+  document.querySelectorAll('[data-tournament-control-fullscreen]').forEach(function (button) {
+    button.setAttribute('aria-pressed', String(active));
+    button.setAttribute('aria-label', active ? 'Sair da tela cheia' : 'Abrir tela cheia');
+    button.title = active ? 'Sair da tela cheia (Esc)' : 'Abrir tela cheia';
+  });
+};
+document.addEventListener('fullscreenchange', window._syncTournamentControlFullscreen);
+window._toggleTournamentControlFullscreen = function () {
+  var action = document.fullscreenElement
+    ? document.exitFullscreen && document.exitFullscreen.bind(document)
+    : document.documentElement.requestFullscreen && document.documentElement.requestFullscreen.bind(document.documentElement);
+  if (!action) {
+    if (typeof window.showNotification === 'function') window.showNotification('Tela cheia indisponível', 'Use F11 no navegador.', 'warning');
+    return;
+  }
+  Promise.resolve(action()).catch(function () {
+    if (typeof window.showNotification === 'function') window.showNotification('Não foi possível abrir a tela cheia', 'Use F11 no navegador.', 'warning');
+  });
+};
+
 window._soloPartnerCandidates = function(participants, currentUid) {
   return (Array.isArray(participants) ? participants : [])
     .filter(function(p) {
@@ -1014,7 +1036,7 @@ function _renderAfterParticipantRemoval(tId, viewBeforeRemoval) {
     try { renderTournaments(container, tId); }
     catch (e) { cleanup(); throw e; }
     var t = window._findTournamentById && window._findTournamentById(tId);
-    if (t && typeof window._tournamentDetailSig === 'function') window._tdetailSig = window._tournamentDetailSig(t);
+    if (t && typeof window._stampTournamentDetailSig === 'function') window._stampTournamentDetailSig(t);
     restore();
     requestAnimationFrame(function () { restore(); requestAnimationFrame(restore); });
     setTimeout(restore, 120);
@@ -5577,6 +5599,8 @@ function renderTournaments(container, tournamentId = null) {
         var _hdrMiddle = '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;">' +
           '<button type="button" class="btn btn-outline btn-sm hover-lift no-print" aria-label="Voltar aos controles do torneio" title="Voltar aos controles do torneio" onclick="if(window._bracketFocusOperationsControls)window._bracketFocusOperationsControls(\'' + String(_grpTour.id).replace(/['\\]/g, '') + '\',\'smooth\')" style="display:inline-flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;padding:0;border-radius:50%;">' +
           '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="17" r="2"/></svg></button>' +
+          '<button type="button" class="btn btn-outline btn-sm hover-lift no-print" data-tournament-control-fullscreen aria-label="' + (document.fullscreenElement ? 'Sair da tela cheia' : 'Abrir tela cheia') + '" aria-pressed="' + !!document.fullscreenElement + '" title="' + (document.fullscreenElement ? 'Sair da tela cheia (Esc)' : 'Abrir tela cheia') + '" onclick="window._toggleTournamentControlFullscreen()" style="display:inline-flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;padding:0;border-radius:50%;">' +
+          '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg></button>' +
           '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;">' +
           _hdrNameHtml(_grpTour && _grpTour.name) +
           (_grpNavHtml ? '<div style="max-width:100%;overflow-x:auto;">' + _grpNavHtml + '</div>' : '') +
@@ -5861,9 +5885,7 @@ function renderTournaments(container, tournamentId = null) {
     if (tournamentId) {
         try {
             var _tSigDet = window._findTournamentById ? window._findTournamentById(tournamentId) : null;
-            if (_tSigDet && typeof window._tournamentDetailSig === 'function') {
-                window._tdetailSig = window._tournamentDetailSig(_tSigDet);
-            }
+            if (_tSigDet && typeof window._stampTournamentDetailSig === 'function') window._stampTournamentDetailSig(_tSigDet);
         } catch (_eSigDet) {}
     }
 

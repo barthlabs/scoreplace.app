@@ -2296,7 +2296,8 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
       categoryHost.innerHTML = html;
       var categoryLine = categoryHost.content.querySelector('[data-match-time-status]');
       if (categoryLine) {
-        categoryLine.insertAdjacentHTML('afterbegin', '<strong class="sp-operations-group-label">' + safe(displayGroup) + '</strong> · ');
+        categoryLine.innerHTML = '<strong class="sp-operations-group-label">' + safe(displayGroup) + '</strong>' +
+          '<span class="sp-operations-category-label">' + categoryLine.innerHTML + '</span>';
         html = categoryHost.innerHTML;
       }
     }
@@ -5590,7 +5591,7 @@ function renderBracket(container, tournamentId, isInline) {
   }
   // Store for crown helper access in sub-functions
   window._currentBracketTournament = t;
-  if (/^#bracket\//.test(String(window.location.hash || '')) && typeof window._tournamentDetailSig === 'function') window._tdetailSig = window._tournamentDetailSig(t);
+  if (/^#bracket\//.test(String(window.location.hash || '')) && typeof window._stampTournamentDetailSig === 'function') window._stampTournamentDetailSig(t);
 
   // v4.1.20: carimba a numeração GLOBAL "JOGO N" (fonte única) ANTES de renderizar — o
   // render exibe estes números e a dashboard lê o MESMO `m._gameNum`, sempre em sincronia.
@@ -6693,7 +6694,7 @@ window._courtOperationEchoRefresh = function (current, local) {
   });
   if (!known) { window._courtOperationEcho = null; return false; }
   if (latest) {
-    window._tdetailSig = window._tournamentDetailSig(current);
+    window._stampTournamentDetailSig(current);
     if (!local) window._courtOperationEcho = null;
   }
   return true;
@@ -10240,7 +10241,7 @@ if (!window._bracketPresenceClickInstalled && typeof document.addEventListener =
       // ainda o entregará pela assinatura completa.
       if (window.location.hash === '#tournaments/' + tId && window._tournamentDetailSig &&
           nonPresenceBefore === window._tournamentDetailSig(fresh || t, true)) {
-        window._tdetailSig = window._tournamentDetailSig(fresh || t);
+        window._stampTournamentDetailSig(fresh || t);
       }
     }).finally(function () {
       delete window._bracketPresencePending[key];
@@ -11118,7 +11119,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   }
 
   const p1Row = `
-    <div style="${rowStyle(p1IsWinner, 'p1')}">
+    <div class="sp-mc-team-row" style="${rowStyle(p1IsWinner, 'p1')}">
       <div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m, 'p1', showIndividualCheckIn, _canCheckInFromBracket && !_readOnly && _presencaImporta)}</div>
       ${_p1PromotedBadge}${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" class="sp-mc-sc">
@@ -11127,7 +11128,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     </div>`;
 
   const p2Row = `
-    <div style="${rowStyle(p2IsWinner, 'p2')}">
+    <div class="sp-mc-team-row" style="${rowStyle(p2IsWinner, 'p2')}">
       <div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m, 'p2', showIndividualCheckIn, _canCheckInFromBracket && !_readOnly && _presencaImporta)}</div>
       ${_p2PromotedBadge}${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" class="sp-mc-sc">

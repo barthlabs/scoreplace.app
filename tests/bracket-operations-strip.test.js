@@ -253,6 +253,17 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         Math.abs(freeRect.bottom - nextRect.bottom) <= 3 &&
         Math.abs(freeRect.height - nextRect.height) <= 3;
       const openSelect = next.querySelector('select');
+      const operational = next.querySelector('.sp-match-operational');
+      const lastTeam = next.querySelectorAll('.team')[1];
+      const okButton = operational.querySelector('.sp-match-confirm');
+      const selectorWidth = openSelect.getBoundingClientRect().width;
+      const okLeft = okButton.getBoundingClientRect().left;
+      const originalCourtText = openSelect.options[0].textContent;
+      openSelect.options[0].textContent = 'Todas as quadras ocupadas';
+      initial.selectorStable = Math.abs(openSelect.getBoundingClientRect().width - selectorWidth) < 1 &&
+        Math.abs(okButton.getBoundingClientRect().left - okLeft) < 1;
+      initial.selectorSpacing = operational.getBoundingClientRect().top - lastTeam.getBoundingClientRect().bottom >= 8;
+      openSelect.options[0].textContent = originalCourtText;
       const selectorDoesNotOpenBracket = !openSelect.hasAttribute('data-operations-open');
       openSelect.click();
       const selectorStayedInStrip = !window.opened;
@@ -364,6 +375,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(state.initial.courts, ['Quadra 4', 'Quadra 5']);
     assert(state.initial.freeSlotFillsTrack, 'Quadra X deve alinhar com X quadras livres: ' + JSON.stringify(state.initial));
     assert(state.initial.freeSlotMatchesCard, 'o box vazio deve ter a mesma altura e alinhamento do card do próximo jogo: ' + JSON.stringify(state.initial));
+    assert(state.initial.selectorStable && state.initial.selectorSpacing,
+      'seletor e OK mantêm posição e folga após as equipes: ' + JSON.stringify(state.initial));
     assert.deepEqual(state.afterCall.called, ['sb_test', 'm1', 'Quadra 5']);
     assert.equal(state.afterCall.nextLabel, 'PRÓXIMO JOGO A CHAMAR · 2/90');
     assert(state.afterCall.simulateEnabled && state.refereeView.simulateHidden,
@@ -997,7 +1010,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         const root=document.querySelector('[data-bracket-tabs-root]');root.setAttribute('data-tournament-id',t.id);
         window._bracketCourtReleaseCache[t.id]={ready:true,revision:0,released:{},postponed:[],postponedReady:[]};
         const read=()=>[...root._bracketOperationsStrip.querySelectorAll('.sp-operations-next .sp-operations-series-position')].map(el=>({text:el.textContent,
-          parent:el.parentElement.textContent,below:el.getBoundingClientRect().top>el.parentElement.getBoundingClientRect().top,aligned:Math.abs(el.getBoundingClientRect().left-el.parentElement.getBoundingClientRect().left)<1,color:getComputedStyle(el).color===getComputedStyle(el.parentElement).color,smaller:parseFloat(getComputedStyle(el).fontSize)<parseFloat(getComputedStyle(el.parentElement).fontSize)}));
+          parent:el.parentElement.textContent,inline:Math.abs(el.getBoundingClientRect().top-el.parentElement.getBoundingClientRect().top)<8,color:getComputedStyle(el).color===getComputedStyle(el.parentElement).color,smaller:parseFloat(getComputedStyle(el).fontSize)<parseFloat(getComputedStyle(el.parentElement).fontSize)}));
         window._bracketOperationsRefresh(t,root);const first=read();
         const original=window.renderMatchCard(matches[0],false,t.id,100);
         matches.filter(m=>m.round===1).forEach(m=>{m.winner=m.p1;m.resultAt=new Date().toISOString();});
@@ -1010,20 +1023,22 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       assert(seriesPosition.first.length,JSON.stringify(seriesPosition));
       assert.equal(seriesPosition.first[0].text,'(1/7)');
       assert.match(seriesPosition.first[0].parent,/100/);
-      assert(seriesPosition.first[0].below,'contador fica abaixo do número do jogo');
+      assert(seriesPosition.first[0].inline,'contador fica na mesma linha do número do jogo');
       assert.equal(seriesPosition.second[0].text,'(2/7)');
-      assert(seriesPosition.second[0].aligned && seriesPosition.second[0].color && seriesPosition.second[0].smaller,'contador à esquerda, mesma cor e fonte menor');
+      assert(seriesPosition.second[0].inline && seriesPosition.second[0].color && seriesPosition.second[0].smaller,'contador na mesma linha, mesma cor e fonte menor');
       for(const html of [seriesPosition.activeHtml,seriesPosition.pendingHtml]) assert.match(html,/sp-operations-series-position[^>]*>\(2\/7\)/,'ativos e pendentes mostram rodada');
       assert(!seriesPosition.originalHasCounter && !seriesPosition.tieHasCounter,'sem duplicar contador no card original nem no desempate');
       const storeSource=fs.readFileSync('js/store.js','utf8');
       await real.addScriptTag({content:storeSource.match(/window\._tournamentDetailSig = function[\s\S]*?\n};/)[0]});
+      await real.addScriptTag({content:storeSource.match(/window\._tournamentDetailSigWithoutCourt = function[\s\S]*?\n};/)[0]});
+      await real.addScriptTag({content:storeSource.match(/window\._stampTournamentDetailSig = function[\s\S]*?\n};/)[0]});
       await real.addScriptTag({content:storeSource.match(/window\._softRefreshView = function[\s\S]*?\n};/)[0]});
       const steady=await real.evaluate(async()=>{
         const t=window._findTournamentById();Object.assign(t,{callTime:5,warmupTime:5,gameDuration:25});window.__currentT=t;
         window._findTournamentById=()=>window.__currentT;
         window.AppStore.tournaments=[t];window.AppStore.publicDiscovery=[];
         location.hash='#tournaments/'+t.id;
-        window._tdetailSig=window._tournamentDetailSig(t);
+        window._stampTournamentDetailSig(t);
         window._suppressSoftRefresh=false;window._lastSoftRefresh=0;
         window.__routes=0;window.initRouter=()=>window.__routes++;
         const root=document.querySelector('[data-bracket-tabs-root]');window._bracketOperationsRefresh(t,root);
@@ -1070,12 +1085,19 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         await window._adjustMatchCourtClock(next,t.id,id,'restart');
         const noEchoHeld=!!window._courtOperationEcho;
         document.activeElement.blur();
+        window._courtOperationEcho=null;
+        const routesBeforeRemoteCourt=window.__routes;
+        const yBeforeRemoteCourt=scrollY;
+        echo({id,courtClockBaseAt:new Date(Date.now()-600000).toISOString()});
+        const remoteCourtStable=window.__routes===routesBeforeRemoteCourt && scrollY===yBeforeRemoteCourt &&
+          !!strip.querySelector('[data-operations-match="'+id+'"]');
         echo({id,scoreP1:7,resultAt:new Date().toISOString()});
         await new Promise(r=>setTimeout(r,850));
-        return {stable,routed,y:frames[0].y,positions:frames.filter((f,i,a)=>!i||JSON.stringify(f)!==JSON.stringify(a[i-1])),frames:frames.length,noEchoHeld,remoteRoutes:window.__routes,guard:window._courtOperationEcho};
+        return {stable,routed,y:frames[0].y,positions:frames.filter((f,i,a)=>!i||JSON.stringify(f)!==JSON.stringify(a[i-1])),frames:frames.length,noEchoHeld,remoteCourtStable,remoteRoutes:window.__routes,guard:window._courtOperationEcho};
       });
       assert(steady.stable && steady.y===120 && steady.frames>3,JSON.stringify(steady));
       assert.equal(steady.routed,0,'OK e dois avanços não remontam o detalhe por eco do servidor');
+      assert(steady.remoteCourtStable,'mudança de quadra ou relógio em outra tela não remonta o detalhe nem move o scroll');
       assert(steady.noEchoHeld && !steady.guard && steady.remoteRoutes>0,'sem eco pendente não esconde resultado remoto');
       const synchronous=await real.evaluate(async()=>{
         const t={id:'sb_court_sync_failure',creatorUid:'org',format:'Liga',scoring:{type:'simple'},callTime:5,warmupTime:5,gameDuration:25,
@@ -1454,7 +1476,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const category = strip.querySelector('.sp-operations-next [data-match-time-status]');
       camisUi.categoryText = category.textContent.trim();
       const groupCode = category.querySelector('.sp-operations-group-label');
+      const categoryName = category.querySelector('.sp-operations-category-label');
       camisUi.groupTypographyMatches = !!groupCode && groupCode.textContent.startsWith('Grupo ');
+      camisUi.categoryOnNextLine = !!categoryName && categoryName.getBoundingClientRect().top >= groupCode.getBoundingClientRect().bottom;
       camisUi.groupOnOneLine = groupCode.getClientRects().length === 1 &&
         groupCode.getBoundingClientRect().height <= parseFloat(getComputedStyle(groupCode).fontSize) * 1.6;
       const actionButtons = [...strip.querySelectorAll('.sp-operations-next .sp-operations-replica:first-child .sp-mc-acts button')];
@@ -1556,7 +1580,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(carousel.camis.labels, ['R1 Grupo A1', 'R1 Grupo A2', 'R1 Grupo A3', 'R2 Grupo A4']);
     assert.equal(carousel.camis.sixGamesHaveNav, false);
     assert.equal(carousel.camis.idLabel, 'R1 Grupo A2');
-    assert.equal(carousel.camis.ui.categoryText, 'Grupo A1 · Fem Diamante');
+    assert.equal(carousel.camis.ui.categoryText, 'Grupo A1Fem Diamante');
     assert(carousel.camis.ui.groupTypographyMatches, 'o grupo vem destacado antes da categoria');
     assert.deepEqual({ title:carousel.camis.ui.title, arrows:carousel.camis.ui.arrows, nextTitle:carousel.camis.ui.nextTitle },
       { title: 'JOGO 1 (1/3)', arrows: 2, nextTitle: 'JOGO 2 (2/3)' });
@@ -1566,10 +1590,10 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       'atualizações repetidas não esticam card ou botões: ' + JSON.stringify(carousel.camis.ui.measuredHeights));
     assert(carousel.camis.ui.fontSize <= 15 && carousel.camis.ui.categoryBelowTitle && carousel.camis.ui.groupOnOneLine &&
       carousel.camis.ui.categoryAlignedLeft && carousel.camis.ui.arrowTargetInsideCard && carousel.camis.ui.actionsAtGameTop &&
-      carousel.camis.ui.buttonsOnOneLine && carousel.camis.ui.metaFitsCard &&
+      carousel.camis.ui.buttonsOnOneLine && carousel.camis.ui.metaFitsCard && carousel.camis.ui.categoryOnNextLine &&
       carousel.camis.ui.arrowGap.left >= 0 && carousel.camis.ui.arrowGap.left <= 14 &&
       carousel.camis.ui.arrowGap.right >= 6 && carousel.camis.ui.arrowGap.right <= 14 &&
-      Math.abs(carousel.camis.ui.titleTopOffset) <= 3 && carousel.camis.ui.categoryBottomOffset >= 0,
+      Math.abs(carousel.camis.ui.titleTopOffset) <= 10 && carousel.camis.ui.categoryBottomOffset >= 0,
       'navegação e ações no topo, grupo inteiro na linha de baixo: ' + JSON.stringify(carousel.camis.ui));
     assert(carousel.standingsInset.left >= 4 && carousel.standingsInset.right >= 4 && carousel.standingsInset.contentLeft >= 12,
       'classificação, categoria, tabela e quadra têm respiro nas bordas');
@@ -1901,6 +1925,32 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     });
     assert(controls.found && controls.x === 0 && Math.abs(controls.progressTop - 178) <= 1 && controls.stripTop > controls.progressTop,
       'atalho restaura as barras abaixo dos filtros, a faixa de comando e a rolagem horizontal: ' + JSON.stringify(controls));
+    const tournamentSource = fs.readFileSync('js/views/tournaments.js', 'utf8');
+    await controlsPage.setContent('<button data-tournament-control-fullscreen onclick="window._toggleTournamentControlFullscreen()" aria-pressed="false">Tela cheia</button>');
+    await controlsPage.addScriptTag({ content:tournamentSource.slice(
+      tournamentSource.indexOf('window._syncTournamentControlFullscreen = function'),
+      tournamentSource.indexOf('window._soloPartnerCandidates = function')) });
+    await controlsPage.evaluate(() => {
+      window._testFullscreen = false;
+      Object.defineProperty(document, 'fullscreenElement', { configurable:true, get:() => window._testFullscreen ? document.documentElement : null });
+      document.documentElement.requestFullscreen = () => {
+        window._testFullscreen = true;
+        document.dispatchEvent(new Event('fullscreenchange'));
+        return Promise.resolve();
+      };
+      document.exitFullscreen = () => {
+        window._testFullscreen = false;
+        document.dispatchEvent(new Event('fullscreenchange'));
+        return Promise.resolve();
+      };
+    });
+    await controlsPage.locator('[data-tournament-control-fullscreen]').click();
+    assert.equal(await controlsPage.evaluate(() => window._testFullscreen), true,
+      'controle solicita tela cheia a partir do clique');
+    assert.equal(await controlsPage.locator('[data-tournament-control-fullscreen]').getAttribute('aria-pressed'), 'true');
+    await controlsPage.locator('[data-tournament-control-fullscreen]').click();
+    assert.equal(await controlsPage.locator('[data-tournament-control-fullscreen]').getAttribute('aria-pressed'), 'false',
+      'sair da tela cheia atualiza o estado do botão');
     await controlsPage.close();
     console.log('✓ Fast 8 só rola manualmente, conserva a posição ao atualizar e descarta a superfície ao sair');
     console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');

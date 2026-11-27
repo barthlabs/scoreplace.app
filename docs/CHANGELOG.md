@@ -1,3 +1,12 @@
+## 2.7.91 — 27/nov/2026 (tela cheia e altura útil)
+
+- A tela do torneio oferece um botão de tela cheia ao lado de Voltar. O controle acompanha o estado do navegador e permite sair pelo próprio botão ou por Esc.
+- Em janelas de desktop com altura útil até 720 px, a faixa operacional reduz margens e espaçamentos internos sem diminuir o tamanho dos nomes e botões.
+- Na tela no ar, os tempos das quadras ficam ancorados à direita, alinhados abaixo da borda dos boxes das equipes.
+- Nos cards de chamada e em quadra, a rodada fica junto do número do jogo; grupo e categoria ocupam linhas próprias abaixo. O seletor da próxima quadra mantém largura fixa e folga após as equipes, deixando o botão OK estável.
+- Uma alteração remota só de quadra ou relógio atualiza a faixa operacional sem reconstruir o detalhe inteiro, preservando a rolagem da tela observadora.
+- Teste em Chromium cobre entrada e saída do modo tela cheia, geometria do seletor e a atualização recebida de outra janela; o teste da tela no ar segue aprovado.
+
 ## 2.7.90 — 27/nov/2026 (numeração dos próximos jogos)
 
 - O primeiro jogo na faixa de chamada exibe seu número sobre o total do torneio. Os cards seguintes usam o mesmo total canônico do resumo do torneio, incluindo as fases eliminatórias projetadas: 1/90, 2/90 e assim por diante no exemplo de 90 jogos.
