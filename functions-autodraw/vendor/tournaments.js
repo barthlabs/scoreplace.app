@@ -11,7 +11,7 @@ window._syncTournamentControlFullscreen = function () {
     button.title = active ? 'Sair da tela cheia (Esc)' : 'Abrir tela cheia';
   });
 };
-document.addEventListener('fullscreenchange', window._syncTournamentControlFullscreen);
+if (typeof document !== 'undefined') document.addEventListener('fullscreenchange', window._syncTournamentControlFullscreen);
 window._toggleTournamentControlFullscreen = function () {
   var action = document.fullscreenElement
     ? document.exitFullscreen && document.exitFullscreen.bind(document)
