@@ -104,8 +104,8 @@
       "mode": "only"
     },
     "advanceTournamentPhase": {
-      "backendCommit": "6410b40509a3dfa235f67d26a349c1429da8c998",
-      "deployedAt": "2026-11-26T20:33:55.871Z",
+      "backendCommit": "3bf293967ba14bfbc129cd04d40213b82e9b1b80",
+      "deployedAt": "2026-11-27T11:19:39.814Z",
       "result": "success",
       "mode": "only"
     },
@@ -140,8 +140,8 @@
       "mode": "only"
     },
     "applyMatchResult": {
-      "backendCommit": "6410b40509a3dfa235f67d26a349c1429da8c998",
-      "deployedAt": "2026-11-26T20:45:25.010Z",
+      "backendCommit": "3bf293967ba14bfbc129cd04d40213b82e9b1b80",
+      "deployedAt": "2026-11-27T11:19:39.814Z",
       "result": "success",
       "mode": "only"
     },
@@ -152,8 +152,8 @@
       "mode": "only"
     },
     "applyTournamentWO": {
-      "backendCommit": "6410b40509a3dfa235f67d26a349c1429da8c998",
-      "deployedAt": "2026-11-26T20:33:55.871Z",
+      "backendCommit": "3bf293967ba14bfbc129cd04d40213b82e9b1b80",
+      "deployedAt": "2026-11-27T11:19:39.814Z",
       "result": "success",
       "mode": "only"
     },
@@ -422,8 +422,8 @@
       "mode": "only"
     },
     "manageWOClaim": {
-      "backendCommit": "6410b40509a3dfa235f67d26a349c1429da8c998",
-      "deployedAt": "2026-11-26T20:33:55.871Z",
+      "backendCommit": "3bf293967ba14bfbc129cd04d40213b82e9b1b80",
+      "deployedAt": "2026-11-27T11:19:39.814Z",
       "result": "success",
       "mode": "only"
     },
