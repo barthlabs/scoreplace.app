@@ -1450,6 +1450,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       camisUi.categoryText = category.textContent.trim();
       const groupCode = category.querySelector('.sp-operations-group-label');
       camisUi.groupTypographyMatches = !!groupCode && groupCode.textContent.startsWith('Grupo ');
+      camisUi.groupOnOneLine = groupCode.getClientRects().length === 1 &&
+        groupCode.getBoundingClientRect().height <= parseFloat(getComputedStyle(groupCode).fontSize) * 1.6;
       const actionButtons = [...strip.querySelectorAll('.sp-operations-next .sp-operations-replica:first-child .sp-mc-acts button')];
       camisUi.fontSize = parseFloat(getComputedStyle(gameTitle).fontSize);
       camisUi.arrowGap = {
@@ -1463,10 +1465,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       camisUi.categoryBottomOffset = category.getBoundingClientRect().bottom - actionButtons[0].getBoundingClientRect().bottom;
       camisUi.arrowTargetInsideCard = previousArrow.getBoundingClientRect().left >=
         strip.querySelector('.sp-operations-next .sp-match-card').getBoundingClientRect().left + 2;
-      camisUi.actionsSpanTwoLines = actionButtons.every(button =>
-        button.parentElement?.parentElement === category.parentElement?.parentElement &&
-        button.getBoundingClientRect().top <= gameTitle.getBoundingClientRect().top + 5 &&
-        button.getBoundingClientRect().bottom >= category.getBoundingClientRect().bottom - 5);
+      camisUi.actionsAtGameTop = actionButtons.every(button =>
+        button.parentElement?.parentElement === category.parentElement &&
+        button.getBoundingClientRect().top <= gameTitle.getBoundingClientRect().top + 5);
       camisUi.buttonsOnOneLine = actionButtons.length === 2 &&
         Math.abs(actionButtons[0].getBoundingClientRect().top - actionButtons[1].getBoundingClientRect().top) < 4;
       const operationCard = strip.querySelector('.sp-operations-next .sp-match-card');
@@ -1481,7 +1482,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         lastButtonRight: actionButtons[1].getBoundingClientRect().right,
         cardPaddingRight: getComputedStyle(operationCard).paddingRight };
       camisUi.metaFitsCard = actionButtons[1].getBoundingClientRect().right <= operationCard.getBoundingClientRect().right - 2 &&
-        category.getBoundingClientRect().right < actionButtons[0].getBoundingClientRect().left;
+        category.getBoundingClientRect().right <= operationHead.getBoundingClientRect().right + 1;
       camisUi.measuredHeights = [];
       for (let refresh = 0; refresh < 12; refresh++) {
         window._bracketOperationsRefresh(t, root);
@@ -1558,13 +1559,13 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       Math.min(...carousel.camis.ui.measuredHeights.map(item => item.card)) <= 2 &&
       Math.max(...carousel.camis.ui.measuredHeights.map(item => item.button)) <= 44,
       'atualizações repetidas não esticam card ou botões: ' + JSON.stringify(carousel.camis.ui.measuredHeights));
-    assert(carousel.camis.ui.fontSize <= 15 && carousel.camis.ui.categoryBelowTitle && carousel.camis.ui.titleCategoryGap <= 8 &&
-      carousel.camis.ui.categoryAlignedLeft && carousel.camis.ui.arrowTargetInsideCard && carousel.camis.ui.actionsSpanTwoLines &&
+    assert(carousel.camis.ui.fontSize <= 15 && carousel.camis.ui.categoryBelowTitle && carousel.camis.ui.groupOnOneLine &&
+      carousel.camis.ui.categoryAlignedLeft && carousel.camis.ui.arrowTargetInsideCard && carousel.camis.ui.actionsAtGameTop &&
       carousel.camis.ui.buttonsOnOneLine && carousel.camis.ui.metaFitsCard &&
       carousel.camis.ui.arrowGap.left >= 0 && carousel.camis.ui.arrowGap.left <= 14 &&
       carousel.camis.ui.arrowGap.right >= 6 && carousel.camis.ui.arrowGap.right <= 14 &&
-      Math.abs(carousel.camis.ui.titleTopOffset) <= 3 && Math.abs(carousel.camis.ui.categoryBottomOffset) <= 3,
-      'navegação e categoria alinhadas à esquerda, ações ocupando as duas linhas à direita: ' + JSON.stringify(carousel.camis.ui));
+      Math.abs(carousel.camis.ui.titleTopOffset) <= 3 && carousel.camis.ui.categoryBottomOffset >= 0,
+      'navegação e ações no topo, grupo inteiro na linha de baixo: ' + JSON.stringify(carousel.camis.ui));
     assert(carousel.standingsInset.left >= 4 && carousel.standingsInset.right >= 4 && carousel.standingsInset.contentLeft >= 12,
       'classificação, categoria, tabela e quadra têm respiro nas bordas');
     assert.deepEqual(carousel.fullUniqueness, { games: 108, min: 1, max: 108,

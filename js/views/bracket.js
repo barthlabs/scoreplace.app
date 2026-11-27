@@ -2309,10 +2309,14 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
     var leading = header && header.firstElementChild;
     var titleRow = leading && leading.firstElementChild;
     var category = leading && leading.querySelector('[data-match-time-status]');
-    if (titleRow && category && category.parentElement === leading && header.querySelector('.sp-mc-acts')) {
+    var headerActions = header && header.querySelector('.sp-mc-acts');
+    if (titleRow && category && category.parentElement === leading && headerActions) {
       headerCard.classList.add('sp-operations-two-line-header');
       titleRow.style.flexWrap = 'nowrap';
       titleRow.style.gap = '0';
+      // A categoria precisa ocupar toda a largura do card. Dentro da coluna
+      // do título ela ficava comprimida pelos botões e quebrava "Grupo A".
+      header.appendChild(category);
       html = headerHost.innerHTML;
     }
   }

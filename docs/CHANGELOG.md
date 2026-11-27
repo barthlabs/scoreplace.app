@@ -1,3 +1,8 @@
+## 2.7.89 — 27/nov/2026 (grupo nos cards operacionais)
+
+- Grupo e categoria passam a ocupar a largura inteira abaixo do número do jogo e dos botões Aplicar W.O. e Ao Vivo, tanto na chamada quanto em quadra.
+- O grupo fica só um pouco maior que a categoria e não se quebra em várias linhas. Teste em Chromium confere a geometria do cabeçalho.
+
 ## 2.7.88 — 27/nov/2026 (controles operacionais)
 
 - O atalho ao lado de Voltar ancora as barras de progresso abaixo dos filtros, preservando a faixa de comando e zerando a rolagem lateral.
