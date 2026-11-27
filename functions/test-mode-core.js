@@ -7,15 +7,18 @@ function active(tournament) {
 }
 
 function memberUids(tournament, normalUids) {
-  return active(tournament) ? [DEVELOPER_UID] : normalUids;
+  return active(tournament)
+    ? [...new Set([tournament.creatorUid, ...(tournament.adminUids || [])].filter(Boolean))]
+    : normalUids;
 }
 
 function refereeUids(tournament, normalUids) {
-  return active(tournament) ? [] : normalUids;
+  return normalUids;
 }
 
 function canAccess(tournament, uid) {
-  return !active(tournament) || uid === DEVELOPER_UID;
+  return !active(tournament) || !!uid && (uid === tournament.creatorUid ||
+    (tournament.adminUids || []).includes(uid) || (tournament.refereeUids || []).includes(uid));
 }
 
 function notificationTournamentId(item) {

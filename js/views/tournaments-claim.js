@@ -65,13 +65,15 @@
   }
   function showPreview(current) {
     if (!page() || claim !== current) return;
-    status('Confira o nome antes de vincular sua conta.');
+    status('Confira a vaga e o nome do seu perfil antes de confirmar.');
     var details = page().querySelector('[data-claim-details]');
     if (!details) return;
-    details.innerHTML = '<div class="sp-claim-person"><strong>' + esc(current.preview.name) + '</strong>' +
+    details.innerHTML = '<div class="sp-claim-person"><strong>Vaga: ' + esc(current.preview.name) + '</strong>' +
       '<span>' + esc(current.preview.tournamentName) + ' · ' + esc(current.preview.categoryId) + '</span></div>' +
-      '<p>Confirme somente se esta inscrição é sua. Sua conta substituirá a vaga manual nesta dupla.</p>' +
-      '<button type="button" class="btn btn-primary" data-claim-accept>Sou esta pessoa — vincular minha conta</button>';
+      '<p>Seu nome no perfil: <strong>' + esc(current.preview.profileName || 'Nome não cadastrado') + '</strong></p>' +
+      '<p>Confirme somente se esta vaga é sua. O nome do seu perfil será exibido no torneio.</p>' +
+      '<button type="button" class="btn btn-primary" data-claim-accept' +
+      (!current.preview.profileName ? ' disabled' : '') + '>Esta vaga é minha — vincular minha conta</button>';
     details.querySelector('[data-claim-accept]').addEventListener('click', function (event) {
       if (current.busy) return;
       current.busy = true; event.currentTarget.disabled = true; status('Vinculando sua conta…');
@@ -96,7 +98,7 @@
     dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true');
     dialog.setAttribute('aria-label', 'Links de reconhecimento');
     dialog.innerHTML = '<div class="sp-manual-invites-panel"><header><h2>Links de reconhecimento</h2><button type="button" data-close aria-label="Fechar">×</button></header>' +
-      '<p>Crie um link individual e envie à pessoa correta. Um novo link revoga o anterior.</p><div data-invite-list>Consultando inscritos…</div></div>';
+      '<p>Crie um link individual e envie à pessoa correta. Quando houver perfil sugerido, somente aquela conta poderá aceitar. Um novo link revoga o anterior.</p><div data-invite-list>Consultando inscritos…</div></div>';
     document.body.appendChild(dialog);
     organizer = { tournamentId: String(tournamentId), dialog: dialog };
     dialog.querySelector('[data-close]').addEventListener('click', function () { dialog.remove(); if (organizer && organizer.dialog === dialog) organizer = null; });
@@ -104,12 +106,13 @@
     call('listManualClaimInvites', { tournamentId: String(tournamentId) }).then(function (data) {
       if (!organizer || organizer.dialog !== dialog) return;
       var list = dialog.querySelector('[data-invite-list]');
-      if (!data.canInvite) { list.textContent = 'O sorteio já ocorreu; a identidade não pode ser trocada por este fluxo.'; return; }
+      if (!data.canInvite) { list.textContent = 'O reconhecimento individual está indisponível após o início das partidas.'; return; }
       if (!Array.isArray(data.people) || !data.people.length) { list.textContent = 'Nenhuma inscrição manual nomeada aguarda vínculo.'; return; }
       list.textContent = '';
       data.people.forEach(function (person) {
         var row = document.createElement('div'); row.className = 'sp-manual-invite-row';
-        row.innerHTML = '<div><strong>' + esc(person.name) + '</strong><small>' + esc(person.categoryId) + '</small></div>' +
+        row.innerHTML = '<div><strong>' + esc(person.name) + '</strong><small>' + esc(person.categoryId) + '</small>' +
+          (person.suggestedProfileName ? '<small>Perfil sugerido: ' + esc(person.suggestedProfileName) + '</small>' : '') + '</div>' +
           '<button type="button" class="btn btn-secondary">Criar link</button><div class="sp-manual-invite-result" role="status"></div>';
         row.querySelector('button').addEventListener('click', function (event) {
           var button = event.currentTarget, result = row.querySelector('.sp-manual-invite-result');

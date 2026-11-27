@@ -59,7 +59,7 @@ service cloud.firestore {
 
     function canReadTournamentData(data) {
       return data.get('testModeEnabled', false) == true
-        ? (request.auth != null && request.auth.uid == 'B17n7JCXYOfqahlcLZ0fKxGGyUu1')
+        ? (isTournamentAdmin(data) || isConfirmedTournamentReferee(data))
         : data.get('organizerOnly', false) == true
         ? (isTournamentAdmin(data) || isConfirmedTournamentReferee(data))
         : (data.get('membersOnly', false) == true
@@ -1232,6 +1232,11 @@ service cloud.firestore {
       // Tokens de reconhecimento de inscrição são provas do servidor. Nem o
       // organizador nem o convidado leem o hash diretamente: só as Functions.
       match /manualClaimInvites/{inviteId} {
+        allow read, write: if false;
+      }
+      // Correspondências de UID são confirmadas pela organização e lidas apenas
+      // pelas Functions. O cliente não escolhe a conta destinatária do convite.
+      match /manualClaimSuggestions/{suggestionId} {
         allow read, write: if false;
       }
       // O recibo do vínculo histórico é prova da transação da Function.

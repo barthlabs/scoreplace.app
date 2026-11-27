@@ -26,6 +26,8 @@ async function driver() {
     ['claimant-one', 'claimant-one@example.com'], ['claimant-two', 'claimant-two@example.com'],
     ['claimant-three', 'claimant-three@example.com']]) {
     await admin.auth().createUser({ uid, email, password: 'senha123' });
+    await db.doc('users/' + uid).set({ displayName: uid === 'claimant-one' ? 'Ana Perfil' :
+      uid === 'claimant-two' ? 'Cris Perfil' : uid === 'claimant-three' ? 'Dani Perfil' : email });
   }
   await db.doc('users/' + linkedUid).set({ displayName: 'Beatriz Teste', displayName_lower: 'beatriz teste' });
   await db.doc('users/' + mergedUid).set({ displayName: 'Betina Antiga', displayName_lower: 'betina antiga', mergedInto: linkedUid });

@@ -176,6 +176,69 @@ async function driver() {
   assert.equal((await call('resolveCanonicalParticipantClaim', {
     tournamentId: tid, claimId: 'claim-after-draw', action: 'reject',
   })).reason, 'already-resolved');
+  // Vaga individual em sorteio publicado: a atleta mantém o nome que escolheu
+  // no perfil, mesmo quando a grafia da lista manual é diferente.
+  const soloTid = 'test-solo-published-claim';
+  const soloRef = db.doc('tournaments/' + soloTid);
+  const soloRegs = [['solo-a', 'Maira Cavalcante'], ['solo-b', 'Outra Atleta']].map(([manualParticipantId, manualDisplayName]) => ({
+    registrationId: reg.registrationId('manual:' + manualParticipantId, 'fem-light'), tournamentId: soloTid,
+    categoryId: 'fem-light', participantKey: 'manual:' + manualParticipantId, participantKind: 'manual',
+    participantUid: null, manualParticipantId, manualDisplayName, status: 'confirmed',
+    validationState: 'approved', fixedPairId: null,
+  }));
+  await admin.auth().createUser({ uid: 'maira-claim', email: 'maira@claim.test', password: 'senha123' });
+  await db.doc('users/maira-claim').set({ displayName: 'Maira Cavalcanti' });
+  const soloPeople = soloRegs.map((item) => ({ name: item.manualDisplayName,
+    displayName: item.manualDisplayName, manualParticipantId: item.manualParticipantId }));
+  const soloMatch = { id: 'solo-game-1', category: 'Fem Light', phaseIndex: 0,
+    p1: 'Maira Cavalcante', p2: 'Outra Atleta', team1: ['Maira Cavalcante'], team2: ['Outra Atleta'],
+    team1SlotIds: ['manual:solo-a'], team2SlotIds: ['manual:solo-b'], team1Uids: [], team2Uids: [],
+    scoreP1: 0, scoreP2: 0, winner: null, court: '2' };
+  const soloParts = split.dividir({ participants: soloPeople, matches: [soloMatch] }, ['participants', 'matches']);
+  await soloRef.set({ creatorUid: 'org-claim', adminUids: ['org-claim'], memberUids: [], status: 'active',
+    name: 'Torneio solo', currentPhaseIndex: 0, categoryDefinitions: [{ id: 'fem-light', label: 'Fem Light' }],
+    canonicalRegistrationMigration: { fingerprint: 'solo-claim-fixture', registrationCount: 2 },
+    _semPesados: ['participants', 'matches'], _nPartes: { participants: 2, matches: 1 }, participants: [], matches: [] });
+  for (const item of soloRegs) await soloRef.collection('registrations').doc(item.registrationId).set(item);
+  for (const part of soloParts.participants) await soloRef.collection('inscritos').doc(part._k).set(part);
+  await soloRef.collection('matches').doc('solo-game-1').set(soloParts.matches[0]);
+  await soloRef.collection('grupos').doc('a').set({ category: 'Fem Light', players: ['Maira Cavalcante'],
+    playersSlotIds: ['manual:solo-a'] });
+  await soloRef.collection('manualClaimSuggestions').doc(require('crypto').createHash('sha256').update('solo-a').digest('hex'))
+    .set({ manualParticipantId: 'solo-a', suggestedUid: 'maira-claim' });
+  await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('org@claim.test', 'senha123');
+  const soloListed = await call('listManualClaimInvites', { tournamentId: soloTid });
+  assert.equal(soloListed.canInvite, true);
+  assert.equal(soloListed.people.find((item) => item.manualParticipantId === 'solo-a').suggestedProfileName,
+    'Maira Cavalcanti');
+  const soloLink = await call('createManualClaimInvite', { tournamentId: soloTid, manualParticipantId: 'solo-a' });
+  await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('anna@claim.test', 'senha123');
+  await assert.rejects(call('previewManualClaimInvite', { tournamentId: soloTid,
+    manualParticipantId: 'solo-a', token: soloLink.token }), /outra conta/);
+  await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('maira@claim.test', 'senha123');
+  const soloPreview = await call('previewManualClaimInvite', { tournamentId: soloTid,
+    manualParticipantId: 'solo-a', token: soloLink.token });
+  assert.equal(soloPreview.name, 'Maira Cavalcante');
+  assert.equal(soloPreview.profileName, 'Maira Cavalcanti');
+  assert.deepEqual((await soloRef.collection('inscritos').get()).docs.map((doc) => doc.data().item.manualParticipantId),
+    ['solo-a', 'solo-b']);
+  await call('acceptManualClaimInvite', { tournamentId: soloTid,
+    manualParticipantId: 'solo-a', token: soloLink.token });
+  const claimedSolo = (await soloRef.collection('matches').doc('solo-game-1').get()).data().jogo;
+  assert.equal(claimedSolo.p1, 'Maira Cavalcanti');
+  assert.deepEqual(claimedSolo.team1Uids, ['maira-claim']);
+  assert.deepEqual(claimedSolo.team1SlotIds, ['uid:maira-claim']);
+  assert.equal(claimedSolo.scoreP1, 0);
+  const soloGroup = (await soloRef.collection('grupos').doc('a').get()).data();
+  assert.deepEqual(soloGroup.players, ['Maira Cavalcanti']);
+  const soloActive = (await soloRef.collection('registrations').get()).docs.map((doc) => doc.data())
+    .filter((item) => item.status === 'confirmed');
+  assert(soloActive.some((item) => item.participantUid === 'maira-claim'));
+  assert(!soloActive.some((item) => item.manualParticipantId === 'solo-a'));
+  assert.equal((await soloRef.get()).data().participantSlotReplacements, undefined);
   console.log('✓ EMULATOR_SHARED_CLAIM_OK: sandbox, UID existente, disputa e chave dividida publicada');
   process.exit(0);
 }

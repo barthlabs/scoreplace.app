@@ -14,7 +14,7 @@ try {
   await env.withSecurityRulesDisabled(async ctx => {
     const db = ctx.firestore();
     const t = { name:'Ensaio', creatorUid:org, adminUids:[org], testModeEnabled:true,
-      isPublic:false, organizerOnly:true, membersOnly:false, memberUids:[dev], refereeUids:[] };
+      isPublic:false, organizerOnly:true, membersOnly:false, memberUids:[org], refereeUids:[referee] };
     await setDoc(doc(db, root), t);
     await setDoc(doc(db, summary), t);
     for (const col of ['matches', 'inscritos', 'courtState', 'billingReceipts', 'paymentSecrets']) {
@@ -22,11 +22,12 @@ try {
     }
   });
   for (const path of [root, summary, root+'/matches/one', root+'/inscritos/one', root+'/courtState/one']) {
-    await assertSucceeds(getDoc(doc(userDb(dev), path)));
-    for (const uid of [null, org, member, referee]) await assertFails(getDoc(doc(userDb(uid), path)));
+    for (const uid of [org, referee]) await assertSucceeds(getDoc(doc(userDb(uid), path)));
+    for (const uid of [null, dev, member]) await assertFails(getDoc(doc(userDb(uid), path)));
   }
   for (const col of ['billingReceipts', 'paymentSecrets']) {
-    for (const uid of [org, member]) await assertFails(getDoc(doc(userDb(uid), root, col, 'one')));
+    await assertSucceeds(getDoc(doc(userDb(org), root, col, 'one')));
+    await assertFails(getDoc(doc(userDb(member), root, col, 'one')));
   }
   for (const col of ['tournaments', 'tournaments_summary']) {
     const list = (uid, field, value) => getDocs(query(collection(userDb(uid), col),
@@ -35,9 +36,11 @@ try {
     if (publicResult.docs.some(d => d.id === 'test_mode_fixture')) throw new Error('Teste na descoberta');
     const memberResult = await assertSucceeds(list(member, 'memberUids', member));
     if (memberResult.docs.some(d => d.id === 'test_mode_fixture')) throw new Error('Teste na lista do inscrito');
-    const devResult = await assertSucceeds(list(dev, 'memberUids', dev));
-    if (!devResult.docs.some(d => d.id === 'test_mode_fixture')) throw new Error('Teste ausente para dev');
-    await assertFails(list(org, 'creatorUid', org));
+    const orgResult = await assertSucceeds(list(org, 'memberUids', org));
+    if (!orgResult.docs.some(d => d.id === 'test_mode_fixture')) throw new Error('Teste ausente para organizador');
+    const refereeResult = await assertSucceeds(list(referee, 'refereeUids', referee));
+    if (!refereeResult.docs.some(d => d.id === 'test_mode_fixture')) throw new Error('Teste ausente para árbitro');
+    await assertFails(list(dev, 'creatorUid', org));
   }
   await assertFails(setDoc(doc(userDb(org), root), { name:'Alterado' }, { merge:true }));
   await assertFails(setDoc(doc(userDb(dev), root), { testModeEnabled:false }, { merge:true }));

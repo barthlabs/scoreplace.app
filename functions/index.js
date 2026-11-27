@@ -4730,6 +4730,22 @@ function _manualClaimGuard(state, allowPrivate) {
   }
 }
 
+// O convite individual também pode reconhecer uma vaga de chave já publicada,
+// desde que nenhuma partida tenha começado. A troca de UID/nome precisa então
+// alcançar jogos e espelhos no mesmo commit da inscrição canônica.
+function _manualClaimBeforeFirstGame(state) {
+  if (!state.hasPublishedDraw) return _manualClaimGuard(state, false);
+  const t = state.tournament;
+  const slots = require('./vendor/participant-slot-core');
+  const games = Array.isArray(t.matches) ? t.matches : [];
+  if (t.pendingDraw || state.privateDraw || Number(t.currentPhaseIndex || 0) !== 0 ||
+      !games.length || _slotPublishedExtras(t) ||
+      games.some((game) => slots.finished(game) || slots.scored(game) ||
+        game.courtCalledAt || game.startedAt || game.gameStartedAt)) {
+    throw new HttpsError('failed-precondition', 'vínculo indisponível após o início das partidas');
+  }
+}
+
 function _slotHasIdentity(value, identity) {
   return _editCanonicalSlot.hasIdentity(value, identity);
 }
@@ -4770,7 +4786,8 @@ async function _applyUniversalParticipantSlot(tx,ref,raw,state,checked,edit,part
   const mirror=mirrors[0],mirrorItem=_editCanonicalSlot.legacyItem(mirror.data);
   const definition=(raw.categoryDefinitions || []).find(item=>item.id===context.categoryId);
   const category=String(definition?.label || mirrorItem.category || context.categoryId);
-  const change={...edit,from,to,categoryId:context.categoryId,category,oldName:context.expectedName,allowManualNameFallback:!from.uid};
+  const change={...edit,from,to,categoryId:context.categoryId,category,oldName:context.expectedName,
+    allowManualNameFallback:!from.uid && !context.identityClaim};
   const [matchesSnap,groupsSnap,claimsSnap]=await Promise.all([
     tx.get(ref.collection(_tSplitFn.colecaoDaParte('matches')).limit(401)),
     tx.get(ref.collection(_tSplitFn.colecaoDaParte('grupos')).limit(401)),
@@ -4820,8 +4837,12 @@ async function _applyUniversalParticipantSlot(tx,ref,raw,state,checked,edit,part
     const mirrorData=mirror.data.item?{...mirror.data,_k:newId,item:patchedItem}:patchedItem;
     const event={from,to,categoryId:context.categoryId,category,phaseIndex:Number(raw.currentPhaseIndex || 0),
       pointsPolicy:context.pointsPolicy,newName:edit.newName,oldName:context.expectedName,editedByUid:context.callerUid,editedAt:new Date().toISOString()};
-    book=slots.appendEvent(raw,event);
-    rootPatch.participantSlotReplacements=book;
+    if (!context.identityClaim) {
+      book=slots.appendEvent(raw,event);
+      rootPatch.participantSlotReplacements=book;
+    } else {
+      rootPatch.pendingCanonicalParticipantClaims=context.remainingClaims;
+    }
     slots.assertBudget(writes.size+edit.changes.updates.length+edit.changes.creates.length+7,[...Array.from(writes.values(),row=>row.data),{...raw,...rootPatch},mirrorData]);
     // Every read/plan above completes before the first write. Firestore retries on conflicts.
     const next=_writeCanonicalRosterChanges(tx,ref,state.tournament,checked.registrations,edit.changes,rootPatch,context.sandbox?context.logicalId:'');
@@ -4829,7 +4850,8 @@ async function _applyUniversalParticipantSlot(tx,ref,raw,state,checked,edit,part
     if(newId===mirror.ref.id) tx.set(mirror.ref,mirrorData);
     else {tx.create(mirror.ref.parent.doc(newId),mirrorData);tx.delete(mirror.ref);}
     tx.update(ref,{_phaseReadCertificate:_FV.delete()});
-    tx.create(ref.collection('slotEditAudits').doc(),{sourceRegistrationId:edit.source.registrationId,targetIdentity:to,
+    tx.create(ref.collection('slotEditAudits').doc(),{kind:context.identityClaim?'identity_claim':'replacement',
+      sourceRegistrationId:edit.source.registrationId,targetIdentity:to,
       categoryId:context.categoryId,pointsPolicy:context.pointsPolicy,matchIds:Array.from(writes.values()).filter(row=>(row.data.jogo || row.data).id).map(row=>(row.data.jogo || row.data).id),
       historicalMatchIds,liveMatchIds,presencePreserved:true,editedByUid:context.callerUid,editedAt:_FV.serverTimestamp()});
     if (context.recordRosterHistory) {
@@ -6070,6 +6092,7 @@ exports.resolveCanonicalParticipantClaim = onCall(
 const _manualClaimActive = (item) => item && ['pending', 'confirmed', 'waitlisted'].includes(item.status);
 const _manualClaimKey = (manualId) => crypto.createHash('sha256').update(String(manualId)).digest('hex');
 const _manualClaimInviteRef = (tournamentRef, manualId) => tournamentRef.collection('manualClaimInvites').doc(_manualClaimKey(manualId));
+const _manualClaimSuggestionRef = (tournamentRef, manualId) => tournamentRef.collection('manualClaimSuggestions').doc(_manualClaimKey(manualId));
 function _manualClaimRecord(registrations, manualId) {
   const found = registrations.filter((item) => item.participantKind === 'manual' &&
     item.manualParticipantId === manualId && _manualClaimActive(item));
@@ -6085,12 +6108,14 @@ function _manualClaimTokenMatches(invite, token) {
   const expected = Buffer.from(invite.tokenHash, 'hex');
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
-function _manualClaimValidInvite(invite, token, manualId) {
+function _manualClaimValidInvite(invite, token, manualId, callerUid) {
   if (!invite || invite.manualParticipantId !== manualId || invite.consumedAt ||
       !Number.isSafeInteger(invite.expiresAtMs) || invite.expiresAtMs <= Date.now() ||
       !_manualClaimTokenMatches(invite, token)) {
     throw new HttpsError('failed-precondition', 'convite expirado, revogado ou já utilizado');
   }
+  if (invite.suggestedUid && invite.suggestedUid !== callerUid)
+    throw new HttpsError('permission-denied', 'este convite pertence a outra conta');
 }
 function _manualClaimInput(data, withToken) {
   const tournamentId = String((data && data.tournamentId) || '').trim();
@@ -6124,10 +6149,27 @@ exports.listManualClaimInvites = onCall(
         .forEach((item) => counts.set(item.manualParticipantId, (counts.get(item.manualParticipantId) || 0) + 1));
       const people = checked.registrations.filter((item) => item.participantKind === 'manual' &&
         _manualClaimActive(item) && counts.get(item.manualParticipantId) === 1 &&
+        (!state.hasPublishedDraw || !item.fixedPairId) &&
         String(item.manualDisplayName || '').trim() && !/^Jogador\s*\d+$/i.test(String(item.manualDisplayName || '').trim()))
         .map((item) => ({ manualParticipantId: item.manualParticipantId,
           name: String(item.manualDisplayName).trim(), categoryId: item.categoryId }));
-      return { people, canInvite: !state.hasPublishedDraw && !state.tournament.pendingDraw && !state.privateDraw };
+      const suggestionSnap = await tx.get(ref.collection('manualClaimSuggestions').limit(201));
+      if (suggestionSnap.size > 200) throw new HttpsError('resource-exhausted', 'sugestões demais para o torneio');
+      const suggestions = new Map(suggestionSnap.docs.map((doc) => {
+        const value = doc.data() || {};
+        return [String(value.manualParticipantId || ''), String(value.suggestedUid || '')];
+      }).filter(([id, uid]) => id && uid));
+      const matched = await Promise.all(people.filter((person) => suggestions.has(person.manualParticipantId))
+        .map(async (person) => {
+          const uid = suggestions.get(person.manualParticipantId);
+          const profile = await tx.get(db.collection('users').doc(uid));
+          return [person.manualParticipantId, profile.exists ? String(profile.data().displayName || '').trim() : ''];
+        }));
+      const profileNames = new Map(matched);
+      people.forEach((person) => { person.suggestedProfileName = profileNames.get(person.manualParticipantId) || ''; });
+      let canInvite = true;
+      try { _manualClaimBeforeFirstGame(state); } catch (_) { canInvite = false; }
+      return { people, canInvite: canInvite && (!state.hasPublishedDraw || people.length > 0) };
     });
   }
 );
@@ -6149,12 +6191,17 @@ exports.createManualClaimInvite = onCall(
       const tournament = snap.data() || {};
       if (!_isTournamentOrgCaller(tournament, callerUid)) throw new HttpsError('permission-denied', 'somente a organização cria convites');
       const state = await _manualClaimReadState(tx, ref, tournament);
-      _manualClaimGuard(state, false);
+      _manualClaimBeforeFirstGame(state);
+      const suggestionSnap = await tx.get(_manualClaimSuggestionRef(ref, manualParticipantId));
       const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament);
       const manual = _manualClaimRecord(checked.registrations, manualParticipantId);
+      if (state.hasPublishedDraw && manual.fixedPairId)
+        throw new HttpsError('failed-precondition', 'use o reconhecimento de duplas para esta vaga');
       const claims = Array.isArray(tournament.pendingCanonicalParticipantClaims) ? tournament.pendingCanonicalParticipantClaims : [];
       const remaining = claims.filter((item) => item && item.manualParticipantId !== manualParticipantId);
+      const suggestedUid = suggestionSnap.exists ? String(suggestionSnap.data().suggestedUid || '') : '';
       tx.set(inviteRef, { manualParticipantId, tokenHash, expiresAtMs, createdByUid: callerUid,
+        suggestedUid: suggestedUid || null,
         createdAt: _FV.serverTimestamp(), consumedAt: null });
       if (remaining.length !== claims.length) tx.update(ref, { pendingCanonicalParticipantClaims: remaining, updatedAt: _FV.serverTimestamp() });
       return { name: String(manual.manualDisplayName).trim(), categoryId: manual.categoryId };
@@ -6170,15 +6217,21 @@ exports.previewManualClaimInvite = onCall(
     const { tournamentId, manualParticipantId, token } = _manualClaimInput(request.data, true);
     const db = admin.firestore(), ref = db.collection('tournaments').doc(tournamentId);
     return db.runTransaction(async (tx) => {
-      const [snap, inviteSnap] = await Promise.all([tx.get(ref), tx.get(_manualClaimInviteRef(ref, manualParticipantId))]);
+      const [snap, inviteSnap, profileSnap] = await Promise.all([
+        tx.get(ref), tx.get(_manualClaimInviteRef(ref, manualParticipantId)),
+        tx.get(db.collection('users').doc(request.auth.uid))]);
       if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
       const tournament = snap.data() || {};
       const state = await _manualClaimReadState(tx, ref, tournament);
-      _manualClaimGuard(state, false);
-      _manualClaimValidInvite(inviteSnap.exists ? inviteSnap.data() : null, token, manualParticipantId);
+      _manualClaimBeforeFirstGame(state);
+      _manualClaimValidInvite(inviteSnap.exists ? inviteSnap.data() : null, token, manualParticipantId, request.auth.uid);
       const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament);
       const manual = _manualClaimRecord(checked.registrations, manualParticipantId);
-      return { tournamentName: String(tournament.name || 'Torneio'), name: String(manual.manualDisplayName).trim(), categoryId: manual.categoryId };
+      if (state.hasPublishedDraw && manual.fixedPairId)
+        throw new HttpsError('failed-precondition', 'use o reconhecimento de duplas para esta vaga');
+      return { tournamentName: String(tournament.name || 'Torneio'), name: String(manual.manualDisplayName).trim(),
+        profileName: profileSnap.exists ? String(profileSnap.data().displayName || '').trim() : '',
+        categoryId: manual.categoryId };
     });
   }
 );
@@ -6192,14 +6245,19 @@ exports.acceptManualClaimInvite = onCall(
     const db = admin.firestore(), ref = db.collection('tournaments').doc(tournamentId);
     const inviteRef = _manualClaimInviteRef(ref, manualParticipantId);
     return db.runTransaction(async (tx) => {
-      const [snap, inviteSnap] = await Promise.all([tx.get(ref), tx.get(inviteRef)]);
+      const [snap, inviteSnap, profileSnap] = await Promise.all([
+        tx.get(ref), tx.get(inviteRef), tx.get(db.collection('users').doc(callerUid))]);
       if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
       const tournament = snap.data() || {};
       const state = await _manualClaimReadState(tx, ref, tournament);
-      _manualClaimGuard(state, false);
-      _manualClaimValidInvite(inviteSnap.exists ? inviteSnap.data() : null, token, manualParticipantId);
+      _manualClaimBeforeFirstGame(state);
+      _manualClaimValidInvite(inviteSnap.exists ? inviteSnap.data() : null, token, manualParticipantId, callerUid);
       const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament);
-      _manualClaimRecord(checked.registrations, manualParticipantId);
+      const manual = _manualClaimRecord(checked.registrations, manualParticipantId);
+      if (state.hasPublishedDraw && manual.fixedPairId)
+        throw new HttpsError('failed-precondition', 'use o reconhecimento de duplas para esta vaga');
+      const profileName = profileSnap.exists ? String(profileSnap.data().displayName || '').trim() : '';
+      if (!profileName) throw new HttpsError('failed-precondition', 'complete o nome do seu perfil antes de confirmar a vaga');
       if (checked.registrations.some((item) => item.participantKind === 'account' &&
           item.participantUid === callerUid && _manualClaimActive(item))) {
         throw new HttpsError('failed-precondition', 'sua conta já ocupa outra inscrição neste torneio');
@@ -6209,7 +6267,19 @@ exports.acceptManualClaimInvite = onCall(
       catch (error) { throw new HttpsError('failed-precondition', error.message); }
       const claims = Array.isArray(tournament.pendingCanonicalParticipantClaims) ? tournament.pendingCanonicalParticipantClaims : [];
       const remaining = claims.filter((item) => item && item.manualParticipantId !== manualParticipantId);
-      _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, { pendingCanonicalParticipantClaims: remaining }, '', true);
+      if (state.hasPublishedDraw) {
+        const participantSnap = await tx.get(ref.collection(_tSplitFn.colecaoDaParte('participants')).limit(401));
+        if (participantSnap.size > 400) throw new HttpsError('resource-exhausted', 'inscrições demais para o vínculo');
+        const edit = { source: manual, newIdentity: { uid: callerUid }, newName: profileName,
+          changes, solo: true };
+        await _applyUniversalParticipantSlot(tx, ref, tournament, state, checked, edit,
+          participantSnap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() })),
+          { callerUid, categoryId: manual.categoryId, expectedName: manual.manualDisplayName,
+            pointsPolicy: 'inherit', identityClaim: true, remainingClaims: remaining });
+      } else {
+        _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes,
+          { pendingCanonicalParticipantClaims: remaining }, '', true);
+      }
       tx.update(inviteRef, { consumedAt: _FV.serverTimestamp(), consumedByUid: callerUid });
       return { ok: true, outcome: changes.outcome, tournamentId };
     });
@@ -7311,6 +7381,7 @@ exports.getCanonicalTournamentRoster = onCall(
     // só UIDs que já constam do jogo público podem aparecer na projeção.
     const publicUids = new Set();
     const publicPairs = new Map();
+    const publicManualSlots = new Map();
     const addUid = (value) => { if (typeof value === "string" && value.trim()) publicUids.add(value.trim()); };
     let cursor = null;
     while (true) {
@@ -7322,6 +7393,19 @@ exports.getCanonicalTournamentRoster = onCall(
       page.forEach((doc) => {
         const raw = doc.data() || {};
         const game = raw.jogo || raw;
+        // O sorteio já publica estes nomes e IDs estruturais em cada jogo.
+        // Exigir a correspondência exata dos dois impede que um homônimo ou
+        // uma inscrição fora da chave apareça no elenco público.
+        [[game.team1SlotIds, game.team1], [game.team2SlotIds, game.team2]].forEach(([ids, names]) => {
+          if (!Array.isArray(ids) || !Array.isArray(names) || ids.length !== names.length) return;
+          ids.forEach((slotId, index) => {
+            if (typeof slotId !== "string" || !slotId.startsWith("manual:")) return;
+            const name = typeof names[index] === "string" ? names[index].trim() : "";
+            if (!name) return;
+            const previous = publicManualSlots.get(slotId);
+            publicManualSlots.set(slotId, publicManualSlots.has(slotId) && previous !== name ? null : name);
+          });
+        });
         [game.team1Obj, game.team2Obj].forEach((side) => {
           if (!side || typeof side !== "object") return;
           if (typeof side.fixedPairId === "string" && side.fixedPairId.trim()) {
@@ -7354,6 +7438,14 @@ exports.getCanonicalTournamentRoster = onCall(
           ...(entry.p1Uid ? { p1Uid: entry.p1Uid } : {}),
           ...(entry.p2Uid ? { p2Uid: entry.p2Uid } : {})
         };
+      }
+      if (entry.manualParticipantId && !entry.uid) {
+        const slotId = "manual:" + String(entry.manualParticipantId);
+        const name = String(entry.displayName || entry.name || "").trim();
+        if (!name || publicManualSlots.get(slotId) !== name) return null;
+        return { categoryId: entry.categoryId, category: entry.category,
+          categories: entry.categories, manualParticipantId: entry.manualParticipantId,
+          displayName: name, name };
       }
       if (!entry.uid || !publicUids.has(String(entry.uid))) return null;
       return { categoryId: entry.categoryId, category: entry.category,

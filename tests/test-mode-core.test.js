@@ -4,13 +4,15 @@ const policy = require('../functions/test-mode-core');
 
 const dev = policy.DEVELOPER_UID;
 const live = { testModeEnabled:false };
-const test = { testModeEnabled:true };
+const test = { testModeEnabled:true, creatorUid:dev, adminUids:['cohost'], refereeUids:['referee'] };
 assert.equal(policy.active(live), false);
 assert.equal(policy.active(test), true);
-assert.deepEqual(policy.memberUids(test, ['athlete', dev]), [dev]);
-assert.deepEqual(policy.refereeUids(test, ['referee']), []);
+assert.deepEqual(policy.memberUids(test, ['athlete', dev]), [dev, 'cohost']);
+assert.deepEqual(policy.refereeUids(test, ['referee']), ['referee']);
 assert.deepEqual(policy.memberUids(live, ['athlete']), ['athlete']);
 assert.equal(policy.canAccess(test, dev), true);
+assert.equal(policy.canAccess(test, 'cohost'), true);
+assert.equal(policy.canAccess(test, 'referee'), true);
 assert.equal(policy.canAccess(test, 'athlete'), false);
 assert.equal(policy.canAccess(live, 'athlete'), true);
 assert.equal(policy.notificationTournamentId({ tournamentId:' tour_1 ' }), 'tour_1');

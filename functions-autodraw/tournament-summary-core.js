@@ -217,6 +217,8 @@ function buildSummary(t, id, H) {
 
     // ── configuração que o cartão mostra ──────────────────────────────────
     enrollmentMode: String(t.enrollmentMode || ''),
+    registrationSettings: t.registrationSettings && typeof t.registrationSettings === 'object'
+      ? { source: String(t.registrationSettings.source || '') } : null,
     lateEnrollment: t.lateEnrollment || null,
     registrationLimit: (t.registrationLimit != null) ? t.registrationLimit : null,
     ligaSeasonMonths: (t.ligaSeasonMonths != null) ? t.ligaSeasonMonths : null,
@@ -297,7 +299,7 @@ var CAMPOS_QUE_IMPORTAM = [
   'name', 'sport', 'format', 'status', 'isPublic', 'organizerOnly', 'membersOnly', 'isSandbox', 'venueName', 'venue',
   'venuePlaceId', 'startDate', 'endDate', 'createdAt', 'updatedAt', 'finishedAt',
   'autoClosed', 'tournamentStarted', 'creatorUid', 'coHosts', 'adminUids', 'memberUids', 'refereeUids',
-  'enrollmentMode', 'lateEnrollment', 'registrationLimit', 'ligaSeasonMonths',
+  'enrollmentMode', 'registrationSettings', 'lateEnrollment', 'registrationLimit', 'ligaSeasonMonths',
   'combinedCategories', 'categories', 'participants', 'placeholderReservations',
   'waitlist', 'standbyParticipants', 'matches', 'rounds', 'groups', 'phases',
   'coverUrl', 'logoUrl', 'coverMode', 'coverColor', 'coverGradientColor', 'coverGradientEnabled',

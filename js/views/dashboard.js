@@ -767,7 +767,7 @@ function renderDashboard(container) {
     // seria pior: viraria um "finished" de pódio vazio. Ver store._isTorneioParadoSemJogo.
     if (window._isTorneioParadoSemJogo && window._isTorneioParadoSemJogo(t)) return null;
     if (t.status === 'finished') return 'finished';
-    const hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) ||
+    const hasDraw = t.hasDraw === true || (Array.isArray(t.matches) && t.matches.length > 0) ||
                     (Array.isArray(t.rounds) && t.rounds.length > 0) ||
                     (Array.isArray(t.groups) && t.groups.length > 0);
     // v1.3.35-beta: "inProgress" só quando o organizador clicou em

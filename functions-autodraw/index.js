@@ -1546,7 +1546,8 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   if (rehearsalState === 'capturing' || rehearsalState === 'resetting') {
     throw new HttpsError('failed-precondition', 'Ensaio em captura ou restauração; operação temporariamente bloqueada.');
   }
-  if (rehearsalState === 'active' && ['isPublic', 'membersOnly', 'organizerOnly', 'notificationsMuted']
+  if (rehearsalState === 'active' && !ctx?.finishingRehearsal &&
+      ['isPublic', 'membersOnly', 'organizerOnly', 'notificationsMuted']
     .some(key => (tDepois && tDepois[key] === true) !== (tAntes && tAntes[key] === true))) {
     throw new HttpsError('failed-precondition', 'A privacidade e o silêncio de notificações do ensaio devem ser mantidos até a restauração.');
   }
@@ -6442,6 +6443,23 @@ exports.updateTournamentConfiguration = onCall({ timeoutSeconds:540, memory:'512
     if (preserveDraw && !testEnabledAfter) {
       throw new HttpsError('failed-precondition', '“Preservar sorteio” só pode ficar ativado em torneio de teste.');
     }
+    let retiringRehearsal = null;
+    if (t.rehearsal?.state === 'active' && !testEnabledAfter && !preserveDraw) {
+      const baselineRef = db.collection('tournamentRehearsalBaselines').doc(tId);
+      const summaryRef = db.collection('tournaments_summary').doc(tId);
+      const [baseline, summary] = await Promise.all([tx.get(baselineRef), tx.get(summaryRef)]);
+      const saved = baseline.exists ? baseline.data() : null;
+      const slots = require('./vendor/participant-slot-core');
+      const games = Array.isArray(t.matches) ? t.matches : [];
+      if (sandbox || uid !== _rehearsal.OWNER_UID || t.creatorUid !== uid || !saved ||
+          saved.state !== 'active' || saved.epoch !== t.rehearsal.epoch ||
+          saved.hash !== t.rehearsal.hash || Number(t.currentPhaseIndex || 0) !== 0 ||
+          games.some(game => slots.finished(game) || slots.scored(game) ||
+            game.courtCalledAt || game.startedAt || game.gameStartedAt)) {
+        throw new HttpsError('failed-precondition', 'Restaure os resultados do ensaio antes de entrar em produção.');
+      }
+      retiringRehearsal = { baselineRef, summaryRef, summaryExists: summary.exists };
+    }
     if (_drawCheckpoint.locked(t)) throw new HttpsError('failed-precondition', 'A fotografia do sorteio está em andamento.');
     let existingCapture = null;
     if (preserveDraw && hasDrawnBracket(t) && !_drawCheckpoint.preserved(t)) {
@@ -7057,20 +7075,26 @@ exports.updateTournamentConfiguration = onCall({ timeoutSeconds:540, memory:'512
       t.isPublic = false;
       t.membersOnly = false;
       t.organizerOnly = true;
-      t.memberUids = [TEST_DEVELOPER_UID];
-      t.refereeUids = [];
+      t.memberUids = Array.from(new Set([t.creatorUid, ...(t.adminUids || [])].filter(Boolean)));
       tx.delete(db.collection('tournaments_summary').doc(tId));
       tx.delete(db.collection('discoveryFeed').doc(tId));
     } else if (turningTestOff) {
       const previous = t.testModeVisibilityBefore;
-      if (!previous || typeof previous !== 'object') {
-        throw new HttpsError('failed-precondition', 'Visibilidade anterior do teste ausente.');
+      if (!['isPublic', 'membersOnly', 'organizerOnly'].every(key => Object.prototype.hasOwnProperty.call(patch, key))) {
+        if (!previous || typeof previous !== 'object') {
+          throw new HttpsError('failed-precondition', 'Escolha a visibilidade ao desativar o teste.');
+        }
+        t.isPublic = previous.isPublic === true;
+        t.membersOnly = previous.membersOnly === true;
+        t.organizerOnly = previous.organizerOnly === true;
       }
-      t.isPublic = previous.isPublic === true;
-      t.membersOnly = previous.membersOnly === true;
-      t.organizerOnly = previous.organizerOnly === true;
       delete t.testModeVisibilityBefore;
-      t.memberUids = [];
+      t.memberUids = Array.from(new Set([t.creatorUid, ...(t.adminUids || []),
+        ...(t.participants || []).flatMap(person => [person.uid, person.p1Uid, person.p2Uid])].filter(Boolean)));
+    }
+    if (retiringRehearsal) {
+      delete t.rehearsal;
+      t.notificationsMuted = false;
     }
     if (turningTestOff || (Object.prototype.hasOwnProperty.call(patch, 'preserveDrawOnTestReset') &&
         patch.preserveDrawOnTestReset === false)) {
@@ -7153,7 +7177,16 @@ exports.updateTournamentConfiguration = onCall({ timeoutSeconds:540, memory:'512
       captureEpoch = _drawCheckpoint.prepareDraw(t);
       Object.assign(t.drawCheckpoint, existingCapture);
     }
-    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso, extras });
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso, extras,
+      finishingRehearsal: !!retiringRehearsal });
+    if (retiringRehearsal) {
+      tx.update(retiringRehearsal.baselineRef, { state: 'retired', finalize: true,
+        retiredAt: FieldValue.serverTimestamp(), retiredReason: 'production-configuration' });
+      const visibleSummary = { isPublic: t.isPublic === true, membersOnly: t.membersOnly === true,
+        organizerOnly: t.organizerOnly === true, notificationsMuted: false, testModeEnabled: false };
+      if (retiringRehearsal.summaryExists) tx.update(retiringRehearsal.summaryRef, visibleSummary);
+      else tx.set(retiringRehearsal.summaryRef, { id: tId, requiresFullRead: true, ...visibleSummary });
+    }
     if (camisNameRebase) {
       tx.update(camisNameRebase.baselineRef, {
         root:camisNameRebase.root, summary:camisNameRebase.summary, hash:camisNameRebase.hash

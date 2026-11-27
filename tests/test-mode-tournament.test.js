@@ -16,11 +16,38 @@ assert.deepEqual(patch(null, null), {});
 assert.deepEqual(patch(toggle(true, true), toggle(true, true)), {});
 assert.deepEqual(patch(toggle(false, true), toggle(false, true)), { testModeEnabled:true, preserveDrawOnTestReset:true });
 assert.deepEqual(patch(toggle(true, false), toggle(true, true)), { testModeEnabled:false });
+assert.deepEqual(patch(toggle(true, false), toggle(true, false)),
+  { testModeEnabled:false, preserveDrawOnTestReset:false });
 assert.deepEqual(patch(toggle(true, true), toggle(true, false)), { preserveDrawOnTestReset:false });
 assert.deepEqual(patch(toggle(false, true), toggle(false, true), false), {});
 assert.deepEqual(patch(toggle(false, true), toggle(false, true), true, ''), {});
 assert.deepEqual(patch(toggle(false, true), toggle(false, true), true, 'other'), {});
 assert(form.includes('...editedTestSettings(editId),'));
+const visibilityButtons = ['public', 'members', 'organizers'].map(value => ({
+  value, disabled:false, getAttribute:() => value
+}));
+const nodes = {
+  'tourn-test-mode':{ checked:false, dataset:{} },
+  'tourn-test-mode-state':{ style:{} },
+  'tourn-test-mode-row':{ style:{} },
+  'tourn-preserve-draw':{ checked:true },
+  'tourn-preserve-draw-state':{ style:{} },
+  'tourn-preserve-draw-row':{ style:{} },
+  'tourn-visibility':{ value:'public' },
+  'tournament-visibility-mode':{ querySelectorAll:() => visibilityButtons }
+};
+const syncWindow = { _setVisibility(value) { nodes['tourn-visibility'].value = value; } };
+new Function('window', 'document', form.slice(form.indexOf('  window._syncTournamentTestMode ='),
+  form.indexOf('  window.openEditTournamentModal =')))(syncWindow, { getElementById:id => nodes[id] });
+nodes['tourn-test-mode'].checked = true;
+syncWindow._syncTournamentTestMode(true);
+assert.equal(nodes['tourn-visibility'].value, 'organizers');
+assert.deepEqual(visibilityButtons.map(button => button.disabled), [true,true,false]);
+nodes['tourn-test-mode'].checked = false;
+syncWindow._syncTournamentTestMode(true);
+assert.equal(nodes['tourn-visibility'].value, 'public');
+assert.equal(nodes['tourn-preserve-draw'].checked, false);
+assert.deepEqual(visibilityButtons.map(button => button.disabled), [false,false,false]);
 const ranking = form.indexOf('id="ranking-primary-choice"');
 const scores = form.indexOf('id="result-entry-section"');
 const tie = form.indexOf('id="tie-resolution-section"');
@@ -67,6 +94,11 @@ assert(fs.readFileSync('functions-autodraw/tournament-create.js', 'utf8')
   .includes("key === 'testModeEnabled'"), 'criação não aceita ativação forjada do modo de teste');
 
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
+const rules = fs.readFileSync('firestore.rules', 'utf8');
+assert(rules.includes("? (isTournamentAdmin(data) || isConfirmedTournamentReferee(data))"),
+  'um torneio em teste só é visível para organização e árbitros confirmados');
+assert(!source.includes('      t.refereeUids = [];\n      tx.delete(db.collection(\'tournaments_summary\')'),
+  'ativar teste preserva os árbitros confirmados');
 const flagRules = source.slice(source.indexOf("  if ('testModeEnabled' in patch"), source.indexOf("  if ('dateCardColors' in patch"));
 assert(flagRules.includes("'preserveDrawOnTestReset' in patch"));
 const validateFlags = new Function('patch','uid','TEST_DEVELOPER_UID','HttpsError', flagRules);

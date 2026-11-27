@@ -550,7 +550,7 @@ function setupCreateTournamentModal() {
                 <div id="tournament-template-shortcuts" aria-label="Modelos de torneio salvos" style="display:none;gap:8px;flex-wrap:wrap;align-items:center;"></div>
                 <label id="tourn-test-mode-row" class="form-group full-width" style="display:none;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);">
                   <span class="toggle-switch" style="--toggle-on-bg:#16a34a;--toggle-on-glow:rgba(34,197,94,.35);--toggle-on-border:#4ade80;">
-                    <input type="checkbox" role="switch" id="tourn-test-mode" aria-label="Ativar modo de teste" onchange="window._syncTournamentTestMode()">
+                    <input type="checkbox" role="switch" id="tourn-test-mode" aria-label="Ativar modo de teste" onchange="window._syncTournamentTestMode(true)">
                     <span class="toggle-slider"></span>
                   </span>
                   <span id="tourn-test-mode-state">Teste desativado · produção</span>
@@ -3388,7 +3388,9 @@ function setupCreateTournamentModal() {
     var hidden = document.getElementById('tourn-public');
     var scope = document.getElementById('tourn-visibility');
     var desc = document.getElementById('vis-desc');
-    var chosen = vis === 'organizers' ? 'organizers' : (vis === 'members' || vis === 'private' ? 'members' : 'public');
+    var testInput = document.getElementById('tourn-test-mode');
+    var chosen = testInput && testInput.checked ? 'organizers' :
+      (vis === 'organizers' ? 'organizers' : (vis === 'members' || vis === 'private' ? 'members' : 'public'));
     if (hidden) hidden.value = chosen === 'public' ? 'true' : 'false';
     if (scope) scope.value = chosen;
     if (desc) desc.textContent = _t(chosen === 'public' ? 'create.publicDesc' : chosen === 'members' ? 'create.visibilityMembersDesc' : 'create.visibilityOrganizersDesc');
@@ -5925,12 +5927,12 @@ function setupCreateTournamentModal() {
     if (!test || test.dataset.tournamentId !== String(editId)) return patch;
     if (test.dataset.initialChecked !== String(test.checked)) patch.testModeEnabled = test.checked;
     var preserve = document.getElementById('tourn-preserve-draw');
-    if (test.checked && preserve && preserve.dataset.tournamentId === String(editId) &&
+    if (preserve && preserve.dataset.tournamentId === String(editId) &&
         preserve.dataset.initialChecked !== String(preserve.checked)) patch.preserveDrawOnTestReset = preserve.checked;
     return patch;
   }
 
-  window._syncTournamentTestMode = function () {
+  window._syncTournamentTestMode = function (changedByUser) {
     var input = document.getElementById('tourn-test-mode');
     var state = document.getElementById('tourn-test-mode-state');
     var row = document.getElementById('tourn-test-mode-row');
@@ -5943,6 +5945,7 @@ function setupCreateTournamentModal() {
     var preserveState = document.getElementById('tourn-preserve-draw-state');
     var preserveRow = document.getElementById('tourn-preserve-draw-row');
     if (preserveInput && preserveState && preserveRow) {
+      if (!input.checked) preserveInput.checked = false;
       preserveInput.disabled = !input.checked;
       preserveState.textContent = preserveInput.checked
         ? 'Preservar sorteio · reset volta ao pós-sorteio' : 'Preservar sorteio';
@@ -5952,6 +5955,17 @@ function setupCreateTournamentModal() {
       preserveRow.style.borderColor = preserveInput.checked && input.checked ? 'rgba(34,197,94,.7)' : 'rgba(255,255,255,.15)';
       preserveRow.style.background = preserveInput.checked && input.checked ? 'rgba(34,197,94,.13)' : 'transparent';
     }
+    var visibility = document.getElementById('tourn-visibility');
+    var visibilityRow = document.getElementById('tournament-visibility-mode');
+    if (input.checked) {
+      if (changedByUser && visibility && visibility.value !== 'organizers') input.dataset.visibilityBeforeTest = visibility.value;
+      window._setVisibility('organizers');
+    } else if (changedByUser && input.dataset.visibilityBeforeTest) {
+      window._setVisibility(input.dataset.visibilityBeforeTest);
+    }
+    if (visibilityRow) visibilityRow.querySelectorAll('[data-visibility]').forEach(function (button) {
+      button.disabled = input.checked && button.getAttribute('data-visibility') !== 'organizers';
+    });
   };
 
   window.openEditTournamentModal = function (tId, skipNav, loadedTournament) {
@@ -5987,6 +6001,9 @@ function setupCreateTournamentModal() {
       testModeInput.checked = t.testModeEnabled === true;
       testModeInput.dataset.initialChecked = String(testModeInput.checked);
       testModeInput.dataset.tournamentId = String(tId);
+      var previousVisibility = t.testModeVisibilityBefore;
+      testModeInput.dataset.visibilityBeforeTest = previousVisibility && previousVisibility.isPublic ? 'public' :
+        previousVisibility && previousVisibility.membersOnly ? 'members' : 'organizers';
     }
     if (preserveDrawInput) {
       preserveDrawInput.checked = t.preserveDrawOnTestReset === true;
@@ -6200,6 +6217,7 @@ function setupCreateTournamentModal() {
     if (typeof window._syncCallPolicy === 'function') window._syncCallPolicy();
     if (typeof window._syncEnrollLimitMode === 'function') window._syncEnrollLimitMode();
     window._setVisibility(t.organizerOnly === true ? 'organizers' : t.membersOnly === true ? 'members' : t.isPublic !== false ? 'public' : 'members');
+    window._syncTournamentTestMode();
     window._registrationSettingsTouched = false;
     var _regSettingsEdit = t.registrationSettings;
     window._registrationSettingsOriginal = _regSettingsEdit || null;
