@@ -7721,7 +7721,10 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
     ctx.fillStyle = '#ffffff'; ctx.font = '22px Arial, sans-serif';
     ctx.fillText(extra.label + ': ' + extra.name + when, margin, y + 20, width - 2 * margin); y += 42;
   });
-  ctx.fillStyle = luminance(footerBg) >= .18 ? '#000000' : '#ffffff'; ctx.font = '18px Arial, sans-serif'; ctx.textAlign = 'right';
+  ctx.fillStyle = luminance(footerBg) >= .18 ? '#000000' : '#ffffff'; ctx.font = '18px Arial, sans-serif';
+  ctx.textAlign = 'left';
+  if (options.generatedStamp) ctx.fillText(options.generatedStamp, margin, canvas.height - 28, width - 2 * margin - 190);
+  ctx.textAlign = 'right';
   ctx.fillText('Página ' + pageNumber + ' de ' + pageCount, width - margin, canvas.height - 28);
   ctx.textAlign = 'left';
   return canvas;
@@ -7798,8 +7801,10 @@ window._downloadInitialDrawPdf = async function (t, pd, options) {
     }
   }
   try {
+    var generatedStamp = typeof window._documentGenerationStamp === 'function'
+      ? window._documentGenerationStamp(new Date()) : '';
     var canvases = plan.map(function (entry, i) {
-      return window._initialDrawPdfPage(t, entry.category, entry.groups, entry.extras, i + 1, plan.length, logo, { timeMode:composition ? null : timeMode, schedule:schedule, rosterOnly:!!composition });
+      return window._initialDrawPdfPage(t, entry.category, entry.groups, entry.extras, i + 1, plan.length, logo, { timeMode:composition ? null : timeMode, schedule:schedule, rosterOnly:!!composition, generatedStamp:generatedStamp });
     });
     if (canvases.some(function (c) { return !c; })) throw new Error('canvas unavailable');
     var url = URL.createObjectURL(window._initialDrawPdfBlob(canvases));
@@ -7849,7 +7854,9 @@ window._renderPendingDrawPreview = function (t) {
     try { composition = window._initialDrawGroupsModel(t, pd); }
     catch (error) { return '<div role="alert">' + esc(error.message) + '</div>'; }
     if (composition) {
-      var rosterHtml = '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
+      var stamp = typeof window._documentGenerationStamp === 'function' ? window._documentGenerationStamp(new Date()) : '';
+      var rosterHtml = '<p class="sp-draw-generated-at">' + esc(stamp) + '</p>' +
+        '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
         '<span>' + composition.groupCount + ' grupos · ' + composition.playerCount + ' atletas</span>' +
         '<button class="btn btn-outline" data-draw-pdf="groups">Baixar PDF dos grupos</button></div>';
       composition.categories.forEach(function (category) {
@@ -7864,7 +7871,9 @@ window._renderPendingDrawPreview = function (t) {
     }
     var model = window._initialDrawResultModel(pd);
     if (!model.gameCount) return '<div style="color:var(--text-muted);font-size:0.8rem;">(rascunho sem jogos)</div>';
-    var initialHtml = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">' +
+    var initialStamp = typeof window._documentGenerationStamp === 'function' ? window._documentGenerationStamp(new Date()) : '';
+    var initialHtml = '<p class="sp-draw-generated-at">' + esc(initialStamp) + '</p>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">' +
       '<span style="font-size:0.78rem;color:var(--text-muted);">' +
       (model.teamCount ? esc(String(model.teamCount)) + ' times · ' : '') + esc(String(model.gameCount)) + ' jogos</span>' +
       '<button class="btn btn-outline" data-draw-pdf="all">PDF com horários</button><button class="btn btn-outline" data-draw-pdf="first">PDF só com início</button></div>';
@@ -7914,9 +7923,11 @@ window._renderPendingDrawPreview = function (t) {
 // descartado nesse momento, mas os jogos Rei/Rainha publicados preservam os
 // mesmos confrontos. A imagem e a prévia usam o mesmo modelo de dados.
 window._publishedInitialDrawData = function (t) {
-  var matches = t && Array.isArray(t.matches) ? t.matches.filter(function (m) {
+  var allMatches = t && typeof window._collectAllMatches === 'function'
+    ? window._collectAllMatches(t) : t && t.matches || [];
+  var matches = allMatches.filter(function (m) {
     return m && (m.isMonarch === true || m.monarchGroup != null);
-  }) : [];
+  });
   return matches.length ? { kind:'initial', draft:{ matches:matches, rounds:[], competitionTeams:t.competitionTeams || [] } } : null;
 };
 

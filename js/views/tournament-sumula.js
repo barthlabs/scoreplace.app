@@ -3,6 +3,19 @@
   'use strict';
 
   function text(value) { return String(value == null ? '' : value).trim(); }
+  function documentStamp(value) {
+    var date = value instanceof Date ? value : new Date(value == null ? Date.now() : value);
+    if (!Number.isFinite(date.getTime())) throw new Error('Data de geração inválida.');
+    var parts = new Intl.DateTimeFormat('pt-BR', {
+      timeZone:'America/Sao_Paulo', day:'2-digit', month:'2-digit', year:'numeric',
+      hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23'
+    }).formatToParts(date);
+    var fields = {};
+    parts.forEach(function (part) { fields[part.type] = part.value; });
+    return 'Gerado em ' + fields.day + '/' + fields.month + '/' + fields.year +
+      ' às ' + fields.hour + ':' + fields.minute + ':' + fields.second + ' (Brasília)';
+  }
+  root._documentGenerationStamp = documentStamp;
   function categoryKey(value) {
     return text(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').replace(/\s+/g,' ');
   }
@@ -1224,6 +1237,13 @@
     for (var b=0;b<output.length;b++) bytes[b] = output.charCodeAt(b) & 255;
     return bytes;
   }
+  function stampPages(pages, generatedAt) {
+    var label = documentStamp(generatedAt);
+    pages.forEach(function (page) {
+      page.write(label, 18, page.height - 7, 7, false, null, '0.25 0.25 0.25');
+    });
+    return pages;
+  }
   function filename(model, orientation, onlyAttendance) {
     return (onlyAttendance ? 'presenca-' : 'sumula-') + model.tournament.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0,45) + (onlyAttendance ? '' : '-' + (orientation === 'portrait' ? 'vertical' : 'horizontal')) + '.pdf';
   }
@@ -1286,9 +1306,10 @@
     // A chave usa sempre retrato; as demais folhas seguem a escolha do pacote.
     var both = orientation === 'both' && !onlyAttendance;
     orientation = orientation === 'portrait' ? 'portrait' : 'landscape';
+    var generatedAt = new Date();
     var bytes = both ? zipFiles(['landscape','portrait'].map(function (direction) {
-      return { name:filename(model, direction, false), bytes:encodePdf(makePages(model, { orientation:direction })) };
-    })) : encodePdf(onlyAttendance ? makeAttendancePages(model) : makePages(model, { orientation:orientation }));
+      return { name:filename(model, direction, false), bytes:encodePdf(stampPages(makePages(model, { orientation:direction }), generatedAt)) };
+    })) : encodePdf(stampPages(onlyAttendance ? makeAttendancePages(model) : makePages(model, { orientation:orientation }), generatedAt));
     var name = both ? filename(model, 'landscape', false).replace(/-horizontal\.pdf$/, '-horizontal-vertical.zip')
       : filename(model, orientation, onlyAttendance);
     var url = URL.createObjectURL(new Blob([bytes], { type:both ? 'application/zip' : 'application/pdf' }));
@@ -1298,7 +1319,7 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
   }
   root.ScoreplaceSumula = { collect:collect, attendance:attendance, callList:callList, makePages:makePages,
-    makeCallListPages:makeCallListPages, makeAttendancePages:makeAttendancePages, encodePdf:encodePdf,
+    makeCallListPages:makeCallListPages, makeAttendancePages:makeAttendancePages, stampPages:stampPages, encodePdf:encodePdf,
     filename:filename, zipFiles:zipFiles };
   root._downloadTournamentSumula = download;
 })(typeof window !== 'undefined' ? window : globalThis);

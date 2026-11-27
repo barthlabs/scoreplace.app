@@ -132,6 +132,7 @@ const SUITES = [
   'tests/tournament-regulation-db.test.js',
   'tests/tournament-regulation-emulator.test.js',
   'tests/tournament-regulation-browser.test.js',
+  'tests/cult-regulation-html.test.js',
   'tests/neon-sequencia-fotos.test.js',
   'tests/tournament-import.test.js',
   'tests/discovery-cache-account-scope.test.js',

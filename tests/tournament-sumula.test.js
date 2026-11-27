@@ -36,11 +36,21 @@ delete globalThis._souOrganizador;
 delete globalThis.showNotification;
 delete globalThis.AppStore;
 const core = globalThis.ScoreplaceSumula;
+assert.strictEqual(globalThis._documentGenerationStamp(new Date('2026-11-27T15:04:05Z')),
+  'Gerado em 27/11/2026 às 12:04:05 (Brasília)');
 const officialModel = core.collect({ id:'camis-test', name:'CAMIS', camisOfficialGroups:{
   'Fem Diamante':[['Ana', 'Bia', 'Clara', 'Dora']],
   'Fem Ouro':[['Eva', 'Flávia', 'Gabi', 'Helena']]
 } }, []);
 assert.strictEqual(officialModel.groupStandings.length, 2);
+for (const orientation of ['landscape','portrait']) {
+  const stamped = core.stampPages(core.makePages(officialModel, { orientation }), new Date('2026-11-27T15:04:05Z'));
+  assert(stamped.length > 0 && stamped.every(page => page.commands.join('\n').includes('(Gerado em 27/11/2026')),
+    'todas as folhas da súmula recebem data e hora em ' + orientation);
+}
+assert(core.stampPages(core.makeAttendancePages(officialModel), new Date('2026-11-27T15:04:05Z'))
+  .every(page => page.commands.join('\n').includes('(Gerado em 27/11/2026')),
+  'a lista de presença também recebe a chancela');
 for (const orientation of ['landscape','portrait']) {
   const page = core.makePages(officialModel, { orientation }).find(item =>
     item.commands.some(command => command.includes('CLASSIFICA')));

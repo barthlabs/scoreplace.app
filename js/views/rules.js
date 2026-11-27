@@ -61,6 +61,68 @@
       reader.querySelector('[data-regulation-retry]').onclick = () => renderRules(container, t.id);
     });
   };
+  window._renderCultRegulationHtml = function(container, t, regulation, controls) {
+    window._releaseRegulationBlob();
+    const header = window._renderBackHeader({ href:'#tournaments/' + t.id, label:'Voltar' });
+    container.innerHTML = header + controls + '<h2>Regulamento e resultado do sorteio</h2>' +
+      '<p>Os grupos abaixo refletem o sorteio publicado no torneio.</p>' +
+      '<button type="button" class="btn btn-secondary" data-regulation-print>Imprimir ou salvar PDF</button>' +
+      '<div data-regulation-html-status role="status">Preparando regulamento…</div>';
+    window._bindRegulationUpload(container, t, regulation);
+    const status = container.querySelector('[data-regulation-html-status]');
+    Promise.resolve().then(async () => {
+      const pd = window._publishedInitialDrawData && window._publishedInitialDrawData(t);
+      const model = pd && window._initialDrawGroupsModel && window._initialDrawGroupsModel(t, pd);
+      if (!model || model.groupCount !== 6 || model.playerCount !== 48) throw new Error('Grupos incompletos.');
+      const response = await fetch('assets/regulamentos/cult-2026/regulamento-cult-2026.html', { cache:'no-store' });
+      if (!response.ok) throw new Error('HTML indisponível.');
+      const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+      if (container.querySelector('[data-regulation-html-status]') !== status) return;
+      doc.querySelectorAll('style').forEach(sheet => {
+        sheet.textContent = sheet.textContent.replace(/url\(cult-fonts\//g,
+          'url(/assets/regulamentos/cult-2026/cult-fonts/');
+      });
+      const byLetter = new Map(model.categories.flatMap(category => category.groups.map(group => [group.label, group])));
+      doc.querySelectorAll('article.group').forEach(article => {
+        const letter = /Grupo\s+([A-F])/.exec(article.querySelector('h3')?.textContent || '')?.[1];
+        const group = byLetter.get(letter);
+        if (!group || group.players.length !== 8) throw new Error('Grupo não conferido.');
+        const list = article.querySelector('ol');
+        list.replaceChildren(...group.players.map((name, index) => {
+          const li = doc.createElement('li');
+          const number = doc.createElement('b'); number.textContent = String(index + 1) + '.';
+          const label = doc.createElement('span'); label.textContent = name;
+          li.append(number, label); return li;
+        }));
+      });
+      doc.querySelectorAll('.group-note').forEach(note => {
+        if (/Os grupos da categoria/.test(note.textContent || '')) note.textContent += ' A lista mostra a ordem do sorteio, não a classificação atual.';
+      });
+      const stamp = typeof window._documentGenerationStamp === 'function'
+        ? window._documentGenerationStamp(new Date()) : '';
+      const style = doc.createElement('style');
+      style.textContent = '.sp-generated-stamp{font:600 12px "DM Sans",sans-serif;color:#614d37;margin:14px 0 0}' +
+        '@media print{.sp-generated-stamp{font-size:10px;margin-top:6px}}';
+      doc.head.append(style);
+      doc.querySelectorAll('.print-page').forEach(page => {
+        const label = doc.createElement('p'); label.className = 'sp-generated-stamp'; label.textContent = stamp;
+        page.append(label);
+      });
+      const iframe = document.createElement('iframe');
+      iframe.title = 'Regulamento e resultado do sorteio';
+      iframe.dataset.regulationDocument = '';
+      iframe.style.cssText = 'display:block;width:100%;height:78vh;min-height:550px;border:1px solid var(--border-color);border-radius:12px;margin-top:12px;';
+      iframe.srcdoc = '<!doctype html>' + doc.documentElement.outerHTML;
+      status.replaceWith(iframe);
+      container.querySelector('[data-regulation-print]').onclick = () => iframe.contentWindow?.print();
+    }).catch(() => {
+      if (container.querySelector('[data-regulation-html-status]') !== status) return;
+      status.setAttribute('role', 'alert');
+      status.innerHTML = '<p>Não foi possível conferir os grupos do sorteio para abrir o regulamento atualizado.</p>' +
+        '<button type="button" class="btn btn-secondary" data-regulation-retry>Tentar novamente</button>';
+      status.querySelector('[data-regulation-retry]').onclick = () => renderRules(container, t.id);
+    });
+  };
   window._bindRegulationUpload = function(container, t, regulation) {
     if (!container.querySelector) return;
     const button = container.querySelector('[data-regulation-upload]'), input = container.querySelector('[data-regulation-input]');
@@ -145,6 +207,11 @@ function renderRules(container, tournamentId, regulationState) {
   const regulation = regulationState && regulationState.regulation || null;
   const regulationControls = window._regulationControls(t, regulation);
   if (regulation) {
+    if (String(t.id) === 'tour_1793227218863_f9a70f41fdf7250b0199ba263caa424a' &&
+        regulation.sha256 === 'f5d7b672abe16416fc31b1d5a12b40b2c4f371a0231625c247fbd2a2baee1b0c') {
+      window._renderCultRegulationHtml(container, t, regulation, regulationControls);
+      return;
+    }
     window._renderRegulationAttachment(container, t, regulation, regulationControls);
     return;
   }

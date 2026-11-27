@@ -28,6 +28,7 @@ function makeCanvas() {
 const link = { click() { downloaded = true; }, remove() {} };
 const notices = [];
 const window = { _groupName(index) { return 'Grupo ' + String.fromCharCode(65 + index); },
+  _documentGenerationStamp() { return 'Gerado em 27/11/2026 às 12:04:05 (Brasília)'; },
   showNotification(...args) { notices.push(args); },
   _tourLogoSrc(t) { return t.logoUrl || t.logoData || ''; } };
 class FakeImage {
@@ -67,6 +68,8 @@ assert.strictEqual(pdfBlob.type, 'application/pdf');
 assert.strictEqual(canvases.length, 3, 'as três categorias entram no mesmo PDF');
 assert(canvases.every(c => c.width === 1500 && c.height > 500));
 assert(calls.some(c => c[0] === 'text' && c[1] === 'Grupo A1'));
+assert.strictEqual(calls.filter(c => c[0] === 'text' && c[1] === 'Gerado em 27/11/2026 às 12:04:05 (Brasília)').length,
+  3, 'todas as páginas do resultado recebem a mesma chancela');
 assert(calls.some(c => c[0] === 'text' && String(c[1]).includes('atleta 3d')));
 assert(calls.some(c => c[0] === 'gradient' && c[2] === '#ab301e'), 'o PDF usa a primeira cor exata do torneio');
 assert(calls.some(c => c[0] === 'gradient' && c[2] === '#f2d7cb'), 'o PDF usa a segunda cor exata do torneio');
@@ -193,7 +196,7 @@ const bytes = await pdfBlob.arrayBuffer();
   sandbox.Image=FakeImage;assert((await window._downloadInitialDrawPdf(official,officialDraft)).url);
   assert.equal(link.download,'resultado-sorteio-conferencia-grupos.pdf');assert.equal(canvases.length-countOfficial,2);
   const resultTexts=calls.filter(c=>c[0]==='text').map(c=>String(c[1]));
-  assert(!resultTexts.some(x=>/^J\d+$/.test(x)||x==='×'||/\d{2}:\d{2}/.test(x)));
+  assert(!resultTexts.some(x=>/^J\d+$/.test(x)||x==='×'||!x.startsWith('Gerado em ')&&/\d{2}:\d{2}/.test(x)));
   assert.equal(resultTexts.filter(x=>/Pessoa/.test(x)).length,48);
   assert.equal(JSON.stringify({official,officialDraft}),beforeOfficial,'exportação não muda o sorteio');
   const central=window._super8StandingsGroups;delete window._super8StandingsGroups;
