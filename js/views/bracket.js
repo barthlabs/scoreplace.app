@@ -2972,9 +2972,6 @@ window._bracketOperationsRefresh = function (t, root) {
     .map(function (m) { return Number(m.scheduledGameNumber || m._gameNum) || 0; });
   var totalPlanned = Math.max(Number(t._nJogos) || 0, plannedNumbers.length,
     plannedNumbers.length ? Math.max.apply(null, plannedNumbers) : 0);
-  var alreadyStarted = state.matches.filter(function (m) {
-    return m && !m.isBye && !m.isSitOut && (m.winner || m.startedAt || m.courtCalledAt);
-  }).length;
   var readyIds = new Set((state.queue || []).map(function (m) { return String(m.id); }));
   var releasedMatches = window._bracketCourtReleased(t.id);
   var estimates = _bracketOperationsFutureEstimates(state, t);
@@ -3007,14 +3004,15 @@ window._bracketOperationsRefresh = function (t, root) {
     var availability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + (playerBusy ? ' sp-operations-availability--player-busy' : '') + '"><span data-operations-availability-label data-availability-normal="' + safe(normalLabel) + '">' +
       safe(courtsFull ? _matchAllCourtsOccupiedLabel() : playerBusy ? _matchPlayerBusyLabel() : normalLabel) + '</span>' +
       '<strong class="sp-operations-stage">' + safe(_bracketOperationsStageLabel(m, t, state.matches)) + '</strong></div>';
+    var gameNumber = Number(m.scheduledGameNumber || m._gameNum || m.matchNumber) || 0;
     return _bracketOperationsReplica(m, t, {
       canCall:callable, active:false, readOnly:!readyIds.has(String(m.id)),
       finalTie:m.isTieBreak && canCall && index === 0 && readyIds.has(String(m.id)) && !state.tieCanPostpone,
       preferFirstFreeCourt:true,
       preferredCourt:(root._bracketOperationsManualCourt || {})[String(m.id)] || '',
       categoryFilter:categoryFilter
-    }, index === 0 ? nextLabel : 'PRÓXIMO JOGO · ' +
-      (Number(m.scheduledGameNumber || m._gameNum) || (alreadyStarted + index + 1)) + '/' + totalPlanned,
+    }, index === 0 ? nextLabel : gameNumber && totalPlanned
+      ? 'PRÓXIMO JOGO · ' + gameNumber + '/' + totalPlanned : 'PRÓXIMO JOGO',
     availability, root, state.matches, 'next:' + String(m.id));
   });
   var fast8Queue = !!state.fast8 && nextCardFragments.length > 0;

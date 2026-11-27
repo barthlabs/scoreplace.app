@@ -138,8 +138,8 @@
     var descriptions=new Map(project(t,context).jobs.map(job=>[positionKey(job),job.display]));
     return tiles.map(tile=>Object.assign({},tile,{display:descriptions.get(positionKey(tile))}));
   }
-  function matchupLabel(tile,tiles,plan) {
-    if(!tile.display?.sources?.some(Boolean)) return '';
+  function matchupSides(tile,tiles,plan) {
+    if(!tile.display?.sources?.some(Boolean)) return [];
     var byPosition=new Map(tiles.map(other=>[positionKey(other),other]));
     var numbers=plan ? numbered(tiles,plan) : {};
     function sourceLabel(source) {
@@ -155,7 +155,10 @@
       if(previous && numbers[previous.id]) return (source.outcome==='winner'?'Vencedor':'Perdedor')+' do jogo '+numbers[previous.id];
       return (source.outcome==='winner'?'Vencedor':'Perdedor')+' da '+(previous?.display?.stage || 'partida')+' '+(previous?.sequence || '');
     }
-    return tile.display.sources.map(sourceLabel).join(' × ');
+    return tile.display.sources.map(sourceLabel);
+  }
+  function matchupLabel(tile,tiles,plan) {
+    return matchupSides(tile,tiles,plan).join(' × ');
   }
   function groupCode(category,number) {
     var code=String(category || '').match(/(?:^|[\s(\[])([A-Za-z])(?:[)\]]|$)$/);
@@ -1148,7 +1151,7 @@
   }
   var api = {rebuildFuture:rebuildFuture,estimateOperation:estimateOperation,displayDays:displayDays, suggestedAssignments:suggestedAssignments,applyAssignments:applyAssignments,bindAssignments:bindAssignments,precedes:precedes,v2Duration:v2Duration,canInterleave:canInterleave,assertPlan:assertPlan,project:project,technicalPositions:technicalPositions,positionKey:positionKey,suggestProjected:suggestProjected, minutes:minutes, clock:clock, duration:duration, expand:expand, validate:validate,
     move:move, toPlan:toPlan, preset:preset, stageKey:stageKey, groupLabel:groupLabel, numbered:numbered,
-    gameStarts:gameStarts, eliminationLabels:eliminationLabels,describeProjectedTiles:describeProjectedTiles,matchupLabel:matchupLabel, suggest:suggest,
+    gameStarts:gameStarts, eliminationLabels:eliminationLabels,describeProjectedTiles:describeProjectedTiles,matchupSides:matchupSides,matchupLabel:matchupLabel, suggest:suggest,
     expectedSignatures:expectedSignatures, signatures:signatures,
     outsideWindow:outsideWindow, overlapIds:overlapIds, daysOf:daysOf, dayOf:dayOf };
   root.ScoreplacePhaseGridPlan = api;

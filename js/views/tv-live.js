@@ -266,17 +266,20 @@
     }).filter(Boolean);
   }
   function completedGroupRounds(games, totalRounds, occupancy) {
+    var perRound = totalRounds > 0 ? games.length / totalRounds : 0;
+    if (!Number.isInteger(perRound) || perRound < 1) return 0;
     var completed = 0;
     for (var round = 1; round <= totalRounds; round++) {
       var roundGames = games.filter(function (game) { return Number(game.round) === round; });
-      if (roundGames.length !== 2 || !roundGames.every(function (game) { return occupancy.isFinished(game); })) break;
+      if (roundGames.length !== perRound || !roundGames.every(function (game) { return occupancy.isFinished(game); })) break;
       completed = round;
     }
     return completed;
   }
   function scheduledEliminationPreview(t, matches, announced) {
     var model = window.ScoreplacePhaseGridPlan, plan = t.scheduleWindow?.interleavedPlan;
-    if (plan?.schema !== 2 || !model || typeof model.describeProjectedTiles !== 'function') return [];
+    if (plan?.schema !== 2 || !model || typeof model.describeProjectedTiles !== 'function' ||
+        typeof model.matchupSides !== 'function') return [];
     try {
       var tiles = model.describeProjectedTiles(t, model.expand(plan, t), window);
       var numbers = model.numbered(tiles, plan), stages = model.eliminationLabels(tiles);
@@ -287,7 +290,9 @@
         return tile.kind === 'elimination' && Number(tile.phaseIndex || 0) > Number(t.currentPhaseIndex || 0) &&
           !knownNumbers.has(Number(numbers[tile.id]));
       }).map(function (tile) {
-        var matchup = model.matchupLabel(tile, tiles, plan).replace(/\bgrupo\b/gi, 'Grupo').split(' × ');
+        var matchup = model.matchupSides(tile, tiles, plan).map(function(side) {
+          return side.replace(/\bgrupo\b/gi, 'Grupo');
+        });
         if (matchup.length !== 2 || !matchup[0] || !matchup[1]) return null;
         return { number:numbers[tile.id], category:String(tile.category || ''),
           stage:String(stages[tile.id] || 'Eliminatória').replace(/^Semifinais$/, 'Semifinal'),
@@ -521,7 +526,7 @@
       courtCards[0].fast8Groups=boardGroups.filter(g=>Number(g.phaseIndex)===Number(t.currentPhaseIndex || 0)).map(function(group) {
         var games=matches.filter(m=>boardGroupFor(m)?.key===group.key);
         var rule=t.phases?.[group.phaseIndex]?.classification?.rotationCategoryRules?.find(r=>r.category===group.category);
-        var totalRounds=Number(rule?.rounds || t.fmt2?.rodadas?.n || 7);
+        var totalRounds=Number(rule?.rounds || t.fmt2?.rodadas?.n || Math.max(0,...games.map(function(game){return Number(game.round)||0;})));
         var standingsGroup=typeof window._super8StandingsGroups==='function' && window._super8StandingsGroups(t,games).find(g=>
           Number(g.phaseIndex)===Number(group.phaseIndex) && g.category===group.category && Number(g.groupIdx)+1===group.groupNumber);
         var standings=standingsGroup && typeof window._computeMonarchStandings==='function' ? window._computeMonarchStandings(standingsGroup,t,group.category) : [];

@@ -167,6 +167,8 @@ if (require.main===module) {
   assert.deepEqual(crossSemis.map(t=>G.matchupLabel(t,crossPlan.tiles)),[
     'Vencedor do grupo B1 × 3º/4º do grupo B2','3º/4º do grupo B1 × Vencedor do grupo B2',
     'Vencedor do grupo C1 × Vencedor do grupo C4','Vencedor do grupo C2 × Vencedor do grupo C3']);
+  assert.deepEqual(G.matchupSides(crossSemis[0],crossPlan.tiles),
+    ['Vencedor do grupo B1','3º/4º do grupo B2']);
   assert.equal(new Set(crossSemis.map(t=>t.startTime)).size,1,'four semis use the first free courts');
   assert.deepEqual(crossSemis.map(t=>t.court),[1,2,3,4]);
   const decisions=crossPlan.tiles.filter(t=>t.kind==='elimination' && t.round===2);
