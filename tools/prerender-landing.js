@@ -140,7 +140,9 @@ async function main() {
     });
 
     console.log(`[prerender] navegando pra http://127.0.0.1:${PORT}/…`);
-    await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
+    // Recursos externos podem atrasar o evento load sem impedir a landing.
+    // Os seletores e o dicionário abaixo são as provas reais do prerender.
+    await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'domcontentloaded' });
 
     // Esperar a landing renderizar de fato
     console.log('[prerender] aguardando landing renderizar…');
