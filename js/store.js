@@ -925,6 +925,18 @@ window._marcaPartesQueFaltam = function (t, documentoDeTorneio) {
  * [[feedback_unify_dual_entry_points]] */
 window._preservaPartesMontadas = function (novo, velho, documentoDeTorneio) {
     if (!novo) return novo;
+    // O ouvinte entrega um documento magro. Se o elenco já foi conferido pela
+    // callable para este mesmo recibo, mantenha a projeção junto com a prova.
+    // Isto também vale quando o documento não anuncia partes em `_semPesados`.
+    if (velho && typeof window._elencoCanonicoAtual === 'function' && window._elencoCanonicoAtual(velho) &&
+        novo.canonicalRegistrationMigration && velho.canonicalRegistrationMigration &&
+        String(novo.canonicalRegistrationMigration.fingerprint || '') === String(velho.canonicalRegistrationMigration.fingerprint || '') &&
+        Number(novo.canonicalRegistrationMigration.registrationCount) === Number(velho.canonicalRegistrationMigration.registrationCount)) {
+      novo.participants = velho.participants;
+      Object.defineProperty(novo, '_canonicalRosterReceipt', {
+        value: velho._canonicalRosterReceipt, writable: true, configurable: true, enumerable: false
+      });
+    }
     var _splitPreserva = (typeof window !== 'undefined') ? window._tSplit : null;
     var fora = (documentoDeTorneio && _splitPreserva && typeof _splitPreserva.partesDe === 'function')
       ? _splitPreserva.partesDe(novo) : [];
@@ -948,16 +960,6 @@ window._preservaPartesMontadas = function (novo, velho, documentoDeTorneio) {
         if (nome === 'matches' || nome === 'grupos') return;   // aninhados: ② e ③
         if (_vazio(novo[nome]) && _cheio(velho[nome])) novo[nome] = velho[nome];
       });
-      // Um eco magro do documento não apaga a prova de leitura do elenco canônico
-      // enquanto o fingerprint e a contagem do recibo continuarem os mesmos.
-      if (!novo._canonicalRosterReceipt && typeof window._elencoCanonicoAtual === 'function' && window._elencoCanonicoAtual(velho) &&
-          novo.canonicalRegistrationMigration && velho.canonicalRegistrationMigration &&
-          String(novo.canonicalRegistrationMigration.fingerprint || '') === String(velho.canonicalRegistrationMigration.fingerprint || '') &&
-          Number(novo.canonicalRegistrationMigration.registrationCount) === Number(velho.canonicalRegistrationMigration.registrationCount)) {
-        Object.defineProperty(novo, '_canonicalRosterReceipt', {
-          value: velho._canonicalRosterReceipt, writable: true, configurable: true, enumerable: false
-        });
-      }
     }
 
     // ② GRUPOS, aninhados em rounds[] — rodada é APPEND-ONLY, o índice é estável.
@@ -11765,14 +11767,19 @@ window._findTournamentById = function (tId) {
   var A = window.AppStore;
   if (!A) return null;
   var lists = [A.tournaments, A.publicDiscovery];
+  var first = null;
   for (var li = 0; li < lists.length; li++) {
     var arr = lists[li];
     if (!Array.isArray(arr)) continue;
     for (var i = 0; i < arr.length; i++) {
-      if (arr[i] && String(arr[i].id) === s) return arr[i];
+      if (arr[i] && String(arr[i].id) === s) {
+        if (!first) first = arr[i];
+        if (arr[i].canonicalRegistrationMigration && arr[i].canonicalRegistrationMigration.fingerprint &&
+            typeof window._elencoCanonicoAtual === 'function' && window._elencoCanonicoAtual(arr[i])) return arr[i];
+      }
     }
   }
-  return null;
+  return first;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

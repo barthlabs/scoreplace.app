@@ -23,11 +23,11 @@ const countdownAt = detail.indexOf('Evento concentrado: a janela publicada manda
 const detailSlotAt = detail.indexOf('data-vlogo-pid', titleAt);
 const overviewAt = detail.indexOf('class="sp-overview-stats"', datesAt);
 const podiumAt = detail.indexOf('tournamentId ? podiumHtml', overviewAt);
-ok(titleAt >= 0 && slotAt > titleAt && detailSlotAt > slotAt && detailSlotAt < datesAt && datesAt < actionsAt,
-  'logo do local e data ficam na coluna do título, antes das ações');
+ok(titleAt >= 0 && slotAt > titleAt && detailSlotAt > slotAt && detailSlotAt < actionsAt && actionsAt < datesAt,
+  'logo do local fica junto ao título e data vem após as ações na mesma faixa');
 ok(detail.includes('!tournamentId && !dateCardHtml && t.venuePlaceId'),
   'cards da lista conservam o logo do local ao lado da data textual');
-ok(datesAt > detailSlotAt && actionsAt > datesAt && overviewAt > actionsAt && podiumAt > overviewAt && podiumAt < countdownAt,
+ok(datesAt > detailSlotAt && actionsAt < datesAt && overviewAt > datesAt && podiumAt > overviewAt && podiumAt < countdownAt,
   'data e contagem de inscritos por categoria vêm antes do pódio e da classificação');
 ok(detail.includes('var _detailOverviewAtTop = !!tournamentId;'), 'ordem da ficha vale para todo torneio');
 ok(detail.includes('class="sp-tournament-logo"') &&

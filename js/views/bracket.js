@@ -3920,6 +3920,9 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
   }
   if (!isOperationalView) {
     _bracketGeneralView(root, false, gender);
+    // A agenda esconde a fonte dos cards. Quando a busca abre uma categoria,
+    // a fonte inteira precisa voltar antes de avaliar a visibilidade dos jogos.
+    if (root._bracketTabsScope && root._bracketTabsScope.hidden) root._bracketTabsScope.hidden = false;
   }
   root.setAttribute('data-bracket-operational-view', isOperationalView ? '1' : '0');
   _bracketMonarchGroupsApply(root, category, isOperationalView);
@@ -15282,12 +15285,13 @@ window._bracketApplyFilter = function (origin) {
           var _tabRound = _target.getAttribute('data-bracket-tab-round') || '';
           var _state = window._bracketTabState && window._bracketTabState[_tabTid] || {};
           if (_state.gender !== _tabGender || _state.category !== _tabCategory ||
-              (_tabRoot.getAttribute('data-bracket-round-tabs') === '1' && _state.round !== _tabRound)) {
+              (_tabRoot.getAttribute('data-bracket-round-tabs') === '1' && _state.round !== _tabRound) ||
+              !_searchCardVisible(_target)) {
             var _hadFocus = document.activeElement === inp;
             var _beforeTabY = window.scrollY;
             window._bracketAutoTabBusy = true;
             try {
-              _bracketTabsApply(_tabTid, _tabGender, _tabCategory, _tabRound, false);
+              _bracketTabsApply(_tabTid, _tabGender, _tabCategory, _tabRound, true);
               window._bracketApplyFilter('after-tab');
               if (_hadFocus && inp && inp.isConnected && inp.focus) inp.focus({ preventScroll: true });
               if (Number.isFinite(_beforeTabY) && typeof window.scrollTo === 'function' &&

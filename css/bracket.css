@@ -301,6 +301,19 @@
   grid-row:2;
 }
 [data-bracket-tabs-root] > [data-bracket-category-tabs] { clear:both; }
+@media (max-width:767px) {
+  [data-bracket-main-tabs] > button[data-bracket-primary-tab],
+  [data-bracket-tabs-root] > [data-bracket-category-tabs] > button {
+    height:58px;
+    box-sizing:border-box;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    line-height:1.15;
+    flex-shrink:0;
+  }
+}
 details[open] > summary .standings-toggle-show { display: none; }
 details[open] > summary .standings-toggle-hide { display: inline !important; }
 summary::-webkit-details-marker { display: none; }

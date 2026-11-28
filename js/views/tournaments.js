@@ -2714,6 +2714,7 @@ window._respondRefereeInvite = async function(tournamentId, action) {
   }
 };
 
+var _canonicalDetailRecovery = {};
 function renderTournaments(container, tournamentId = null) {
     if (!window.AppStore) return;
     /* ⛔ Detalhe e chave não podem usar outra coleção ou exibir o espelho
@@ -2722,14 +2723,36 @@ function renderTournaments(container, tournamentId = null) {
       var _tRoster = window._findTournamentById && window._findTournamentById(tournamentId);
       if (_tRoster && _tRoster.canonicalRegistrationMigration && _tRoster.canonicalRegistrationMigration.fingerprint &&
           (!window._elencoCanonicoAtual || !window._elencoCanonicoAtual(_tRoster))) {
+        var _recovery = _canonicalDetailRecovery[tournamentId] || (_canonicalDetailRecovery[tournamentId] = { pending: false, failed: false });
+        if (!_recovery.pending && !_recovery.failed && typeof window._ensureTournamentLoaded === 'function') {
+          _recovery.pending = true;
+          setTimeout(function () {
+            window._ensureTournamentLoaded(tournamentId, function (loaded) {
+              _recovery.pending = false;
+              var current = window._findTournamentById && window._findTournamentById(tournamentId);
+              if (loaded && current && window._elencoCanonicoAtual && window._elencoCanonicoAtual(current)) {
+                delete _canonicalDetailRecovery[tournamentId];
+              } else {
+                _recovery.failed = true;
+              }
+              if (container && container.isConnected) renderTournaments(container, tournamentId);
+            }, true);
+          }, 0);
+        }
         var _canonicalFailed = typeof window._estadoDasPartes === 'function' &&
-          window._estadoDasPartes(_tRoster) === 'erro';
-        var _retryCanonical = _canonicalFailed && typeof window._botaoTentarPartes === 'function'
-          ? window._botaoTentarPartes(_tRoster.id) : '';
+          window._estadoDasPartes(_tRoster) === 'erro' || _recovery.failed;
         container.innerHTML = '<div class="card" role="status" style="padding:1.5rem;text-align:center;">' +
-          (_canonicalFailed ? 'Não foi possível carregar. ' + _retryCanonical : 'Carregando…') + '</div>';
+          (_canonicalFailed ? 'Não foi possível carregar o torneio. <button type="button" class="btn" data-canonical-retry>Tentar novamente</button>' : 'Carregando…') + '</div>';
+        if (_canonicalFailed) {
+          var _retryButton = container.querySelector('[data-canonical-retry]');
+          if (_retryButton) _retryButton.onclick = function () {
+            delete _canonicalDetailRecovery[tournamentId];
+            renderTournaments(container, tournamentId);
+          };
+        }
         return;
       }
+      if (_canonicalDetailRecovery[tournamentId]) delete _canonicalDetailRecovery[tournamentId];
     }
     if (window._autoKeepScroll) window._autoKeepScroll(); // v2.8.82: re-render por ação não pula scroll
     // Clear one-time check flags for OTHER tournaments (keep current)
@@ -4511,7 +4534,6 @@ function renderTournaments(container, tournamentId = null) {
                   ${window._safeHtml(t.name)}
                 </h4>
                 ${tournamentId && t.venuePlaceId && !(dateCardHtml && !window._tourLogoSrc(t)) ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="width:clamp(42px,6vw,64px);aspect-ratio:1/1;display:none;margin-top:10px;"></span>' : ''}
-                ${tournamentId && dateCardHtml && window._tourLogoSrc(t) ? `<div id="sp-tournament-detail-date" class="sp-tournament-date-stack">${calendarDateHtml(dateCardHtml)}</div>` : ''}
               </div>
               ${/* v2.7.36: coração de favorito SEMPRE à direita, alinhado à 1ª linha do nome
                     (align-self:flex-start + margin-top centra na primeira linha do h4). */ ''}
@@ -4535,7 +4557,7 @@ function renderTournaments(container, tournamentId = null) {
                     saiu na 1.8.30, ele ficava sem NENHUM acesso ao grupo (era o estado do
                     Confra). Criar/trocar/abrir agora vivem no painel que este botão abre. */ ''}
               ${(!_waChipJuntoDoEnroll && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
-            </div></div>` : ''}
+            </div>${dateCardHtml && window._tourLogoSrc(t) ? `<div id="sp-tournament-detail-date" class="sp-tournament-date-stack">${calendarDateHtml(dateCardHtml)}</div>` : ''}</div>` : ''}
 
             <!-- Sem card visual de data, a data textual permanece sob a identidade. -->
             <div style="display:${dateCardHtml ? 'none' : 'flex'};align-items:center;gap:12px;min-width:0;">
@@ -5598,10 +5620,10 @@ function renderTournaments(container, tournamentId = null) {
           return '<div title="' + window._safeHtml(nm) + '" style="font-weight:800;color:var(--text-bright);font-size:' + fs + ';line-height:1.15;text-align:center;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;padding:0 4px;">' + window._safeHtml(nm) + '</div>';
         };
         var _hdrMiddle = '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;">' +
-          '<button type="button" class="btn btn-outline btn-sm hover-lift no-print" aria-label="Voltar aos controles do torneio" title="Voltar aos controles do torneio" onclick="if(window._bracketFocusOperationsControls)window._bracketFocusOperationsControls(\'' + String(_grpTour.id).replace(/['\\]/g, '') + '\',\'smooth\')" style="display:inline-flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;padding:0;border-radius:50%;">' +
-          '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="17" r="2"/></svg></button>' +
-          '<button type="button" class="btn btn-outline btn-sm hover-lift no-print" data-tournament-control-fullscreen aria-label="' + (document.fullscreenElement ? 'Sair da tela cheia' : 'Abrir tela cheia') + '" aria-pressed="' + !!document.fullscreenElement + '" title="' + (document.fullscreenElement ? 'Sair da tela cheia (Esc)' : 'Abrir tela cheia') + '" onclick="window._toggleTournamentControlFullscreen()" style="display:inline-flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;padding:0;border-radius:50%;">' +
-          '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg></button>' +
+          (isOrg ? '<button type="button" class="btn btn-outline btn-sm hover-lift no-print" aria-label="Voltar aos controles do torneio" title="Voltar aos controles do torneio" onclick="if(window._bracketFocusOperationsControls)window._bracketFocusOperationsControls(\'' + String(_grpTour.id).replace(/['\\]/g, '') + '\',\'smooth\')" style="display:inline-flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;padding:0;border-radius:50%;">' +
+          '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg></button>' : '') +
+          (isOrg && !(window.matchMedia && window.matchMedia('(max-width: 767px)').matches) ? '<button type="button" class="btn btn-outline btn-sm hover-lift no-print" data-tournament-control-fullscreen aria-label="' + (document.fullscreenElement ? 'Sair da tela cheia' : 'Abrir tela cheia') + '" aria-pressed="' + !!document.fullscreenElement + '" title="' + (document.fullscreenElement ? 'Sair da tela cheia (Esc)' : 'Abrir tela cheia') + '" onclick="window._toggleTournamentControlFullscreen()" style="display:inline-flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;padding:0;border-radius:50%;">' +
+          '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg></button>' : '') +
           '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;">' +
           _hdrNameHtml(_grpTour && _grpTour.name) +
           (_grpNavHtml ? '<div style="max-width:100%;overflow-x:auto;">' + _grpNavHtml + '</div>' : '') +

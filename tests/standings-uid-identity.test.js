@@ -210,7 +210,7 @@ const row = (s, p) => s.find(p);
   eq(movement['name:A'],-1,'A caiu uma posição desde a primeira rodada');
   ok(W._standingMovementHeaderHtml().includes('▲') && W._standingMovementHeaderHtml().includes('▼'),
     'cabeçalho mostra setas verde e vermelha');
-  ok(W._standingMovementHtml(0).includes('■0'),'posição estável usa quadrado azul com zero');
+  eq(W._standingMovementHtml(0),'','posição estável não mostra indicador');
 }
 console.log((fail === 0 ? '✅' : '❌') + ' standings-uid-identity: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);

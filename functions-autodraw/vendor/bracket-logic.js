@@ -53,10 +53,10 @@ window._monarchCompletedGroupRounds = function (games, isFinished) {
 };
 window._standingMovementHtml = function (change) {
   var value = Number(change) || 0;
-  var color = value > 0 ? '#4ade80' : value < 0 ? '#f87171' : '#60a5fa';
-  var symbol = value > 0 ? '▲' : value < 0 ? '▼' : '■';
-  var title = value > 0 ? 'Subiu ' + value + ' posição(ões)' :
-    value < 0 ? 'Desceu ' + (-value) + ' posição(ões)' : 'Permaneceu na posição';
+  if (!value) return '';
+  var color = value > 0 ? '#4ade80' : '#f87171';
+  var symbol = value > 0 ? '▲' : '▼';
+  var title = value > 0 ? 'Subiu ' + value + ' posição(ões)' : 'Desceu ' + (-value) + ' posição(ões)';
   return '<span title="' + title + '" style="color:' + color + ';font-weight:800;white-space:nowrap;">' +
     symbol + (value < 0 ? -value : value) + '</span>';
 };
