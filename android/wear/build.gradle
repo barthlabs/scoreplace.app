@@ -29,8 +29,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion  // v1.7.76: era 35 CRAVADO enquanto a raiz
                                                    // já estava em 36 — era ISSO que deixava o
                                                    // relógio um degrau atrás a cada subida.
-        versionCode 185
-        versionName "2.7.96"
+        versionCode 187
+        versionName "2.7.97"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
