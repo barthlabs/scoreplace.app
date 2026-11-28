@@ -10,7 +10,7 @@ function ok(condition, message) { if (condition) { pass++; console.log('  ✓ ' 
 
 console.log('──── visibilidade explícita do torneio ────');
 ok(['public', 'members', 'organizers'].every(mode => src.includes('data-visibility="' + mode + '"')), 'o formulário oferece Geral, Inscritos e Apenas organizadores');
-ok(src.includes("var chosen = vis === 'organizers'") && src.includes("btn.setAttribute('aria-pressed', selected ? 'true' : 'false')"), 'selecionar um escopo desativa visualmente os outros');
+ok(src.includes("var chosen = testInput && testInput.checked ? 'organizers'") && src.includes("btn.setAttribute('aria-pressed', selected ? 'true' : 'false')"), 'selecionar um escopo desativa visualmente os outros');
 ok(src.includes("hidden.value = chosen === 'public' ? 'true' : 'false'") && src.includes("scope.value = chosen") && src.includes("membersOnly: visibilityVal === 'members'") && src.includes("organizerOnly: visibilityVal === 'organizers'"), 'os campos persistidos refletem o escopo escolhido');
 ok(src.includes("window._setVisibility(t.organizerOnly === true ? 'organizers'") && src.includes("window._setVisibility(tpl.organizerOnly ? 'organizers'"), 'edição e template reidratam a seleção visível');
 ok(['create.visibilityGeneral', 'create.visibilityMembers', 'create.visibilityOrganizers'].every(key => pt.includes("'" + key + "'")), 'rótulos em português existem');

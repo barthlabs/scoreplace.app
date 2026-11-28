@@ -77,7 +77,7 @@ function servidor() {
   const b = await chromium.launch();
   const p = await b.newPage();
   await p.setViewportSize({ width: 390, height: 844 });
-  await p.goto(base + '/index.html', { waitUntil: 'load' });
+  await p.goto(base + '/index.html', { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(2000);
 
   const fx = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', 'confra-pos-sorteio.json'), 'utf8'));
