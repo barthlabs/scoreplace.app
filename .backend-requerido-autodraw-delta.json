@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "1809f016e2ac78f37c637c6bf82c6c2c0a039c1a",
-  "scopeNote": "A atualização de configuração marca e remove a prévia de audiência da Kelly ao alternar o modo de teste. O manifesto compartilhado de 34 funções e as portas regionais permanecem no corte anterior.",
+  "backendCommit": "593b71a6be329cc0ad5db937928a317d56e42cc3",
+  "scopeNote": "A função updateTournamentConfiguration marca a prévia real da Kelly. A sincronização do vendor de torneios desta versão removeu o atalho de criação de sandbox; os demais alvos do manifesto regional continuam no corte anterior.",
   "functions": [
     "updateTournamentConfiguration"
   ]
