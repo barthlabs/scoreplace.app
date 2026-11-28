@@ -37,6 +37,7 @@ const ESCOPOS = {
 const git = (args) => execFileSync('git', args, { cwd: RAIZ, encoding: 'utf8' }).trim();
 const receiptPath = path.join(RAIZ, '.backend-publicado-autodraw-funcoes.json');
 const manifestPath = path.join(RAIZ, '.backend-requerido-autodraw.json');
+const deltaManifestPath = path.join(RAIZ, '.backend-requerido-autodraw-delta.json');
 const exportsAutodraw = () => autodrawExports(fs.readFileSync(path.join(RAIZ, 'functions-autodraw/index.js'), 'utf8'));
 const readJson = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return null; } };
 
@@ -120,7 +121,8 @@ Object.keys(ESCOPOS).forEach((nome) => {
   if (nome === 'autodraw') {
     const manifest = readJson(manifestPath);
     const sameTree = manifest && mesmoAutodrawPublicado(RAIZ, manifest.backendCommit);
-    const result = checkTargetedPublication(manifest, readJson(receiptPath),
+    const currentManifest = sameTree ? manifest : readJson(deltaManifestPath);
+    const result = checkTargetedPublication(currentManifest, readJson(receiptPath),
       sameTree ? manifest.backendCommit : ultimo, exportsAutodraw());
     if (result.ok) {
       console.log('✓ autodraw direcionado — VERIFICADAS: ' + result.verified.join(', '));
