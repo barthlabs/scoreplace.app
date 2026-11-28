@@ -1843,8 +1843,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketOperationsRefresh(t,root);
       return { full, released:snapshot() };
     });
-    assert.deepEqual(saturated.full, { ids:['a','b','c'], skip:false, free:0, readOnly:false });
-    assert.deepEqual(saturated.released.ids, ['a','b','c']);
+    assert.deepEqual(saturated.full, { ids:['outside','a','b','c'], skip:false, free:0, readOnly:false },
+      'a aba A não oculta jogos da categoria B na linha de controle');
+    assert.deepEqual(saturated.released.ids, ['outside','a','b','c']);
     assert.equal(saturated.released.free, 1);
     await page.bringToFront();
     await page.mouse.move(-100,-100);
