@@ -17,8 +17,8 @@ let failed = 0;
 function ok(value, label) { console.log((value ? '✓ ' : '✗ ') + label); if (!value) failed++; }
 const titleAt = detail.indexOf('Middle Left: Nome + Logo + Favorito');
 const slotAt = detail.indexOf('sp-tournament-title-slot', titleAt);
-const datesAt = detail.indexOf('sp-tournament-date-stack', slotAt);
-const actionsAt = detail.indexOf('sp-tournament-date-actions', datesAt);
+const actionsAt = detail.indexOf('sp-tournament-date-actions', slotAt);
+const datesAt = detail.indexOf('id="sp-tournament-detail-date"', actionsAt);
 const countdownAt = detail.indexOf('Evento concentrado: a janela publicada manda no relógio');
 const detailSlotAt = detail.indexOf('data-vlogo-pid', titleAt);
 const overviewAt = detail.indexOf('class="sp-overview-stats"', datesAt);
