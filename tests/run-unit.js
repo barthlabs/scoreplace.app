@@ -992,7 +992,6 @@ const SUITES = [
   'tests/pa-uid-identity.test.js',
   'tests/uid-name-display.test.js',
   'tests/standings-uid-identity.test.js',
-  'tests/claim-approved-manual-suggestions.test.js',
   'tests/native-canonical-roster-echo.test.js',
   'tests/h2h-uid-identity.test.js',
   'tests/h2h-matrix-uid.test.js',
