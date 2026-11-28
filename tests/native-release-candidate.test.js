@@ -25,7 +25,12 @@ try {
   write('ios/App/App.xcodeproj/project.pbxproj', 'MARKETING_VERSION = 2.5.29;\nCURRENT_PROJECT_VERSION = 289;\n');
   write('android/app/build.gradle', 'versionCode 176\nversionName "2.5.18"\n');
   write('android/wear/build.gradle', 'versionCode 177\nversionName "2.5.18"\n');
+  write('android/app/build.gradle', 'versionCode 178\nversionName "2.5.18"\n');
   let result = run();
+  assert.equal(result.status, 1);
+  assert.match(result.output, /Wear deve usar versionCode maior/);
+  write('android/app/build.gradle', 'versionCode 176\nversionName "2.5.18"\n');
+  result = run();
   assert.equal(result.status, 0, result.output);
   write('android/wear/build.gradle', 'versionCode 177\nversionName "9.4.17"\n');
   result = run();

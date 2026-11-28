@@ -26,6 +26,7 @@ for (const file of ['android/app/build.gradle', 'android/wear/build.gradle']) {
 }
 if (unique(androidVersions).length !== 1) fail(`telefone e Wear divergem: ${androidVersions.join(', ')}.`);
 if (unique(androidCodes).length !== androidCodes.length) fail('telefone e Wear não podem reutilizar o mesmo versionCode.');
+if (Number(androidCodes[1]) <= Number(androidCodes[0])) fail('Wear deve usar versionCode maior que o do telefone; a Play Console exige códigos únicos entre as faixas.');
 const capacitor = JSON.parse(read('capacitor.config.json'));
 if (capacitor.server && capacitor.server.url) fail('server.url está ativo; este contrato exige bundle local verificável.');
 console.log(`✓ candidato nativo coerente: web ${webVersion} · iOS ${iosVersions[0]} (${iosBuilds[0]}) · Android ${androidVersions[0]} (${androidCodes.join('/')}).`);

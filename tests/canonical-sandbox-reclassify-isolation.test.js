@@ -111,7 +111,7 @@ for (const name of callableNames) {
   assert(/isSandbox === true/.test(block), name + ' rejeita clone no ramo de produção');
   if (['enrollParticipant', 'deenrollParticipant', 'leaveStandby', 'formPair', 'splitPair'].includes(name)) {
     assert(/_splitParts\.gravar\(tx, docRef,/.test(block), name + ' grava o resultado legado na referência já roteada dentro da transação');
-    assert(/if \(!sandbox && !out\.canonical\)/.test(block), name + ' não replica a mutação do sandbox para outro torneio');
+    assert(!/if \(!sandbox && !out\.canonical\)/.test(block), name + ' não mantém o antigo ramo de replicação de sandbox');
   }
   const clientStart = clientCode.indexOf("_callFn('" + name + "'");
   assert(clientStart >= 0 && /sandbox: this\._ehSandbox\(tournamentId\)/.test(clientCode.slice(clientStart, clientStart + 600)), name + ' passa flag no cliente');
