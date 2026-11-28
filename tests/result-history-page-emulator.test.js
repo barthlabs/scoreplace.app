@@ -9,23 +9,30 @@ const ROOT = path.join(__dirname, '..');
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) {
   const { execFileSync } = require('node:child_process');
-  const port = Number(execFileSync(process.execPath, ['-e',
-    "const s=require('net').createServer();s.listen(0,'127.0.0.1',()=>{console.log(s.address().port);s.close();});"],
-  { encoding: 'utf8' }).trim());
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-result-page-'));
-  const config = path.join(dir, 'firebase.json');
-  fs.writeFileSync(config, JSON.stringify({ firestore: {
-    rules: path.join(ROOT, 'firestore.rules'), indexes: path.join(ROOT, 'firestore.indexes.json') },
-  emulators: { firestore: { host: '127.0.0.1', port }, ui: { enabled: false },
-    singleProjectMode: true } }));
-  try {
-    const output = rodarNoEmulador(['emulators:exec', '--only', 'firestore', '--config', config,
-      '--project', 'demo-scoreplace', 'node tests/result-history-page-emulator.test.js'],
-    { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, PATH: '/opt/homebrew/opt/openjdk/bin:' + process.env.PATH } });
-    assert.match(output, /result history page emulator: OK/);
-    console.log('result history page emulator: OK');
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const port = Number(execFileSync(process.execPath, ['-e',
+      "const s=require('net').createServer();s.listen(0,'127.0.0.1',()=>{console.log(s.address().port);s.close();});"],
+    { encoding: 'utf8' }).trim());
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-result-page-'));
+    const config = path.join(dir, 'firebase.json');
+    fs.writeFileSync(config, JSON.stringify({ firestore: {
+      rules: path.join(ROOT, 'firestore.rules'), indexes: path.join(ROOT, 'firestore.indexes.json') },
+    emulators: { firestore: { host: '127.0.0.1', port }, ui: { enabled: false },
+      singleProjectMode: true } }));
+    try {
+      const output = rodarNoEmulador(['emulators:exec', '--only', 'firestore', '--config', config,
+        '--project', 'demo-scoreplace', 'node tests/result-history-page-emulator.test.js'],
+      { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, PATH: '/opt/homebrew/opt/openjdk/bin:' + process.env.PATH } });
+      assert.match(output, /result history page emulator: OK/);
+      console.log('result history page emulator: OK');
+      break;
+    } catch (error) {
+      const output = String(error.stdout || '') + String(error.stderr || '');
+      if (attempt === 3 || !/Could not start Firestore Emulator, port taken/.test(output)) throw error;
+      console.warn('Porta do emulador ocupada antes de iniciar; tentando outra (' + attempt + '/3).');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }
 } else {
   assert.match(String(process.env.FIRESTORE_EMULATOR_HOST), /^127\.0\.0\.1:\d+$/);
   process.env.GCLOUD_PROJECT = 'demo-scoreplace';
