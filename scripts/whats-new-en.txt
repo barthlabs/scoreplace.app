@@ -1,3 +1,5 @@
 On the tournament screen, you can see all categories together or tap a category to view its bracket. The tabs stay in view as you scroll.
 
 On the court control screen, the timer buttons change color to show when players have been called, are warming up, are playing or are running late. Organizers can also free up the court for the next match and enter the previous score later.
+
+On the control bar, category tabs filter only the brackets; match calling considers every category. The control bar shortcut now has its own icon.
