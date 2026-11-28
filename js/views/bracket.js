@@ -2576,13 +2576,9 @@ function _bracketTieLive(tId, decisionId, matchId) {
 }
 
 function _bracketOperationsCategoryFilter(root, tournamentId) {
-  if (!root || root.getAttribute('data-bracket-line-tabs') !== '1') return '';
-  var state = window._bracketTabState && window._bracketTabState[String(tournamentId)] || null;
-  if (!state || !state.category) {
-    try { state = JSON.parse(sessionStorage.getItem('scoreplace_bracket_tab_state_' + String(tournamentId)) || '{}') || {}; }
-    catch (e) { state = null; }
-  }
-  return state && state.category && state.category !== '__all_categories' ? String(state.category) : '';
+  // As abas filtram apenas as chaves abaixo da linha de controle.
+  // A fila, os placares pendentes e as quadras mostram o torneio inteiro.
+  return '';
 }
 
 function _bracketOperationsApplyCategoryFilter(root, strip, tournamentId) {

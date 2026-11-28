@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { chromium } = require('@playwright/test');
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ executablePath: process.env.SCOREPLACE_TEST_CHROME || undefined });
   try {
     const page = await browser.newPage({ viewport:{ width:965, height:800 } });
     const shell = `<!doctype html><style>
@@ -73,6 +73,19 @@ const { chromium } = require('@playwright/test');
       assert.deepEqual(result.counts,[1,1,1,+expectedOperations,+expectedOperations,1,1,1]);
     }
     await order(true);
+    const operationCategories = () => page.locator('[data-bracket-operations-strip] .sp-operations-replica')
+      .evaluateAll(nodes => nodes.filter(node => !node.hidden)
+        .map(node => node.getAttribute('data-bracket-tab-category')).filter(Boolean));
+    const allOperationCategories = await operationCategories();
+    assert(allOperationCategories.includes('Fem Ouro') && allOperationCategories.includes('Fem Prata'),
+      'a fila inicial reúne as duas categorias');
+    for (const category of ['Fem Ouro', 'Fem Prata']) {
+      await page.locator('[data-bracket-subtab="' + category + '"]').click();
+      assert.deepEqual(await operationCategories(), allOperationCategories,
+        'aba ' + category + ' não filtra a linha de controle');
+    }
+    await page.locator('[data-bracket-subtab="__all_categories"]').click();
+    await page.locator('#bracket-search').focus();
     assert(await page.locator('#bracket-search').evaluate(el=>el===document.activeElement));
     await page.evaluate(() => {
       const original = window._confirmMatchCourtCall;

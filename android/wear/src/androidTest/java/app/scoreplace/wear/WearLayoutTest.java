@@ -24,6 +24,7 @@ public class WearLayoutTest {
     private int textCount;
     private int touchCount;
     private Throwable measurementError;
+    private Activity activity;
 
     @Test public void allScreensRespectSystemFontAndRoundFace() throws Throwable {
         checkPage(new JSONObject(), R.id.idle_overlay, "Sem partida");
@@ -54,20 +55,46 @@ public class WearLayoutTest {
         checkPage(state, R.id.winner_overlay, "🥇 Alexandriamarques · 3V");
         android.util.Log.i("WearLayoutTest", "PASS 9 screens, " + textCount + " text layouts and "
                 + touchCount + " touch targets; " + instrumentation.getTargetContext().getResources().getConfiguration());
+        instrumentation.runOnMainSync(() -> activity.finish());
     }
 
     private void checkPage(JSONObject state, int pageId, String... expected) throws Throwable {
-        Intent intent = new Intent(instrumentation.getTargetContext(), MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        intent.putExtra("sp_mock", state.toString());
-        Activity activity = instrumentation.startActivitySync(intent);
-        instrumentation.waitForIdleSync();
+        if (activity == null) {
+            Intent intent = new Intent(instrumentation.getTargetContext(), MainActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            intent.putExtra("sp_mock", state.toString());
+            activity = instrumentation.startActivitySync(intent);
+        } else {
+            instrumentation.runOnMainSync(() -> {
+                try {
+                    java.lang.reflect.Method render = MainActivity.class.getDeclaredMethod("render", JSONObject.class);
+                    render.setAccessible(true);
+                    render.invoke(activity, state);
+                } catch (Exception error) {
+                    throw new RuntimeException(error);
+                }
+            });
+        }
+        // A troca do overlay pode concluir no frame seguinte ao retorno de render().
+        // Aguarde a página real ficar visível antes de medir corte de texto.
+        for (int attempt = 0; attempt < 30; attempt++) {
+            instrumentation.waitForIdleSync();
+            View target = activity.findViewById(pageId);
+            ScrollView page = target instanceof ScrollView ? (ScrollView) target
+                    : activity.findViewById(R.id.winner_scroll);
+            if (page.isShown() && page.getHeight() > 0) break;
+            Thread.sleep(50);
+        }
+        measurementError = null;
         instrumentation.runOnMainSync(() -> {
             try {
                 View viewport = activity.findViewById(R.id.watch_viewport);
                 View root = activity.findViewById(pageId);
                 ScrollView page = root instanceof ScrollView ? (ScrollView) root : activity.findViewById(R.id.winner_scroll);
-                require(page.isShown() && page.getHeight() > 0, "missing page " + pageId);
+                require(page.isShown() && page.getHeight() > 0, "missing page " + pageId
+                        + " pageShown=" + page.isShown() + " pageHeight=" + page.getHeight()
+                        + " rootVisibility=" + root.getVisibility() + " rootHeight=" + root.getHeight()
+                        + " windowVisibility=" + page.getWindowVisibility());
                 require(activity.getResources().getConfiguration().isScreenRound(), "requires round AVD");
                 Rect bounds = new Rect();
                 require(root.getGlobalVisibleRect(bounds), "hidden scroll viewport");
@@ -105,8 +132,6 @@ public class WearLayoutTest {
                 }
             } catch (Throwable error) {
                 measurementError = error;
-            } finally {
-                activity.finish();
             }
         });
         instrumentation.waitForIdleSync();
