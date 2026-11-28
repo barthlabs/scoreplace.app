@@ -13605,6 +13605,17 @@ window.AppStore = {
       sessionUnsubs.push(unsub);
       return unsub;
     }
+    function _listenAudiencePreview() {
+      if (!audiencePreviewActive) return;
+      try {
+        _listen(db.collection('tournaments').where('testAudiencePreviewUid', '==', _uid)
+          .where('testModeEnabled', '==', true), 'audiencePreview', false, 'full');
+      } catch (e) {
+        if (window._warn) window._warn('[realtime] prévia da audiência indisponível:', e);
+        ready.audiencePreview = true;
+        _applyRemoteSnapshot();
+      }
+    }
     function _startFullFallback() {
       if (!_isCurrentListener() || fallbackStarted) return;
       fallbackStarted = true;
@@ -13620,9 +13631,7 @@ window.AppStore = {
       // Legacy root tournaments may omit isSandbox; the rules default it to false.
       // Filtering for explicit false would silently omit those referee-only records.
       _listen(db.collection('tournaments').where('refereeUids', 'array-contains', _uid), 'referees', false, 'full');
-      if (audiencePreviewActive) _listen(db.collection('tournaments')
-        .where('testAudiencePreviewUid', '==', _uid),
-        'audiencePreview', false, 'full');
+      _listenAudiencePreview();
     }
 
     // Two rule-compatible server feeds form the full current list. Each emits only
@@ -13642,12 +13651,7 @@ window.AppStore = {
           .where('testModeEnabled', '==', true), 'developerTests', false, 'summary');
       }
     } catch (e) { if (window._warn) window._warn('[realtime] feed opcional de teste indisponível:', e); }
-    if (audiencePreviewActive && !fallbackStarted) {
-      try {
-        _listen(db.collection('tournaments').where('testAudiencePreviewUid', '==', _uid),
-          'audiencePreview', false, 'full');
-      } catch (e) { if (window._warn) window._warn('[realtime] prévia da audiência indisponível:', e); }
-    }
+    if (!fallbackStarted) _listenAudiencePreview();
 
 
     // v1.9.92: gatilho tempo-real da descoberta pública (camada ADITIVA;

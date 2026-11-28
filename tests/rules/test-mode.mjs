@@ -26,6 +26,10 @@ try {
       ...t, creatorUid:dev, adminUids:[dev], memberUids:[dev], refereeUids:[],
       testAudiencePreviewUid:'uid_other'
     });
+    await setDoc(doc(db, 'tournaments/stale_preview'), {
+      ...t, creatorUid:dev, adminUids:[dev], memberUids:[dev], refereeUids:[],
+      testModeEnabled:false, testAudiencePreviewUid:kelly
+    });
     for (const col of ['matches', 'inscritos', 'courtState', 'billingReceipts', 'paymentSecrets']) {
       await setDoc(doc(db, root, col, 'one'), { participantUid:member, id:'one' });
       await setDoc(doc(db, 'tournaments/kelly_preview', col, 'one'), { participantUid:member, id:'one' });
@@ -50,7 +54,7 @@ try {
     await assertFails(getDoc(doc(userDb(kelly), 'tournaments/kelly_preview', col, 'one')));
   }
   const previewList = uid => getDocs(query(collection(userDb(uid), 'tournaments'),
-    where('testAudiencePreviewUid', '==', uid)));
+    where('testAudiencePreviewUid', '==', uid), where('testModeEnabled', '==', true)));
   const kellyList = await assertSucceeds(previewList(kelly));
   if (kellyList.docs.map(d => d.id).join(',') !== 'kelly_preview') throw new Error('Prévia exclusiva da Kelly falhou');
   await assertFails(previewList(member));

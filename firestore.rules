@@ -859,6 +859,7 @@ service cloud.firestore {
         || isConfirmedTournamentReferee(resource.data)
         || (request.auth != null
           && request.auth.uid == 'OkQJOEkLMchgKYFZb8nLJm7nLPH2'
+          && resource.data.testModeEnabled == true
           && resource.data.testAudiencePreviewUid == request.auth.uid);
 
       // ⛔ CREATE: FECHADO. Torneio NASCE NO SERVIDOR — a porta é a Function
