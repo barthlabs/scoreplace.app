@@ -244,7 +244,8 @@ async function run() {
       teamOrigins: p.teamOrigins,
       _phaseReadCertificate: admin.firestore.FieldValue.delete(), updatedAt: stamp });
     return { claims: p.mappings.length, updatedMatches: p.matches.length,
-      registrationCount: p.migration.registrationCount, memberCount: p.memberUids.length };
+      registrationCount: p.migration.registrationCount, memberCount: p.memberUids.length,
+      memberUidsHash: digest(p.memberUids), teamOriginsHash: digest(p.teamOrigins) };
   });
   try {
   const [rootAfter, regsAfter, matchesAfter, auditsAfter] = await Promise.all([
@@ -260,9 +261,9 @@ async function run() {
   boundary.verifiedRoster(tournamentAfter, registrationsAfter);
   if (tournamentAfter.canonicalRegistrationMigration.fingerprint !== before.migration.fingerprint ||
       tournamentAfter.canonicalRegistrationMigration.registrationCount !== result.registrationCount ||
-      JSON.stringify(tournamentAfter.memberUids) !== JSON.stringify(before.memberUids) ||
+      digest(tournamentAfter.memberUids) !== result.memberUidsHash ||
       auditsAfter.size !== before.auditsBefore + before.mappings.length ||
-      !isDeepStrictEqual(tournamentAfter.teamOrigins, before.teamOrigins)) {
+      digest(tournamentAfter.teamOrigins) !== result.teamOriginsHash) {
     throw new Error('Pós-verificação do torneio falhou.');
   }
   const expectedRegistrations = new Map([...before.updates, ...before.creates].map((item) => [item.registrationId, item]));

@@ -53,4 +53,7 @@ for (let i = 0; i < 18; i++) {
 const started = structuredClone(matches);
 started[0].data.jogo.courtCalledAt = '2026-11-29T08:00:00Z';
 assert.throws(() => plan(tournament, registrations, started, suggestions, profiles, new Set()), /jogo em andamento/);
+const wrongCategory = structuredClone(matches);
+wrongCategory[0].data.jogo.category = 'Retinol · Categoria B';
+assert.throws(() => plan(tournament, registrations, wrongCategory, suggestions, profiles, new Set()), /Conta sem confronto atualizado/);
 console.log('claim-approved-manual-suggestions: ok');
