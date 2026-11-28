@@ -7,6 +7,8 @@
  * do SB entrariam nas stats globais. NOVO: helper + filtros escondem e excluem.
  */
 const { sandbox: W } = require('./render-harness');
+const fs = require('node:fs');
+const path = require('node:path');
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -133,6 +135,12 @@ var otherTest = { id:'other-test', testModeEnabled:true, organizerOnly:true,
 AS.currentUser = { uid:'OkQJOEkLMchgKYFZb8nLJm7nLPH2', displayName:'Kelly Barth' };
 AS.tournaments = [normal, sb, preview, otherTest];
 ok(W._isTestAudiencePreview(preview), 'D: Kelly reconhece a prévia marcada para ela');
+const indexes = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'firestore.indexes.json'), 'utf8'));
+ok(indexes.indexes.some(index => index.collectionGroup === 'tournaments' &&
+   index.queryScope === 'COLLECTION' &&
+   index.fields.some(field => field.fieldPath === 'testAudiencePreviewUid') &&
+   index.fields.some(field => field.fieldPath === 'testModeEnabled')),
+   'D: consulta da prévia possui índice composto declarado');
 ok(!W._isTestAudiencePreview(otherTest), 'D: outro teste não vira prévia');
 ok(W._dropSandboxForNonDev(AS.tournaments).map(t => t.id).join(',') === 'N1,preview',
    'D: ingestão entrega à Kelly somente o teste autorizado');

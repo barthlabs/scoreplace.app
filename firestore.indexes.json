@@ -35,6 +35,14 @@
       ]
     },
     {
+      "collectionGroup": "tournaments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "testAudiencePreviewUid", "order": "ASCENDING" },
+        { "fieldPath": "testModeEnabled", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "casualMatches",
       "queryScope": "COLLECTION",
       "fields": [
