@@ -87,10 +87,6 @@ const EMULADOR_MANUAL = {
     'cd functions-autodraw && firebase emulators:exec --only functions,firestore,auth --config firebase.emulator.json --project demo-scoreplace "node test-reconciliacao-marca-emu.js"',
   'functions-autodraw/test-canonical-sandbox-emu.js':
     'npm run test:emu:autodraw',
-  'functions/test-pair-replicate.js':
-    'firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/test-pair-replicate.js"',
-  'functions/test-sandbox-replicate.js':
-    'firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/test-sandbox-replicate.js"',
   'functions/test-canonical-registration-query-emu.js':
     'firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/test-canonical-registration-query-emu.js"',
   'functions/test-reminders-emulator.js':

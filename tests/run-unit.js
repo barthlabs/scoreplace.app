@@ -458,10 +458,6 @@ const SUITES = [
   // religava DEPOIS da montagem — `_phasesPhaseComplete` respondia `false` pra sempre.
   // O torneio real disfarçava: o ouvinte reidrata a cada eco, e sandbox não ecoa.
   'tests/atalho-de-avancar-aparece-no-sandbox-do-dono.test.js',
-  // ⭐ E o eco do ouvinte de `tournaments` não pode expulsar o sandbox da memória: a lista é
-  // uma só, alimentada por DOIS ouvintes de DUAS coleções, e o snapshot de uma nunca fala
-  // sobre a outra. Ciclo completo com os ouvintes REAIS, do documento MAGRO até o render.
-  'tests/eco-de-tournaments-nao-expulsa-sandbox.test.js',
   // A sincronização administrativa é uma fotografia parcial. No sandbox dividido ela
   // não pode recalcular as partes nem transformar ausência em delete de inscritos/jogos.
   'tests/sandbox-sync-nao-apaga-partes.test.js',
@@ -470,15 +466,6 @@ const SUITES = [
   // mas como INFORMAÇÃO: virar uma terceira opção é o defeito da v2.0.36 (W.O. na lista de
   // espera). Mais Cancelar/Confirmar e Cancelar/Seguir em barra FIXA no topo dos dois painéis.
   'tests/quem-nao-entra-no-sorteio-aparece.test.js',
-  // O sandbox nascia de um clone do objeto da TELA — que num torneio dividido é o documento
-  // MAGRO: saía com 14 inscritos e 0 jogos, gravado com `_semPesados` prometendo partes que
-  // NINGUÉM pode escrever (a regra nega o cliente; a CF pula o que está no marcador). Agora
-  // ele lê o original COMPLETO pela porta canônica, PROVA a igualdade e só então grava.
-  // O cliente não fabrica mais sandbox: ele PEDE à CF (só o id) e ROTEIA a coleção. A
-  // fidelidade em si é provada no Emulator (tests/sandbox-cf-emulador.test.js, fora da
-  // suíte unitária porque sobe Firestore+Auth+Functions).
-  'tests/sandbox-cliente-roteia-e-nao-fabrica.test.js',
-  'tests/sandbox-autorizacao-perfis.test.js',
   // O sandbox no banco já era réplica fiel (CONFRA.QA.S1: 0 divergências) e a TELA mostrava
   // torneio vazio — o defeito era só o caminho de LEITURA: o ouvinte de `sandboxes` não
   // passava pela porta de hidratação que o de `tournaments` usa. Executa o `_sbIngest` REAL
@@ -1429,9 +1416,6 @@ const SUITES = [
   // pra não-dev. Trava _statsEligibleTournaments + getVisibleTournaments/getMyParticipations +
   // ENTREGA (memberUids do SB = só o dev, senão o Firestore entrega o doc pra todo participante).
   'tests/sandbox-isolation.test.js',
-  // Sandbox — criação do clone: _openOrCreateSandbox clona o estado atual (deep-copy), privado +
-  // notif mudas + isSandbox, dev-only, sem tocar no original; 2ª chamada abre o mesmo SB.
-  'tests/sandbox-create.test.js',
   // Sandbox — espelho one-way no cliente: a MESMA AppStore.mutate roda o MESMO mutator no SB.
   // Guardas: só dev, mão única (nada volta), só enquanto o SB não foi sorteado.
   'tests/sandbox-mirror-mutate.test.js',
@@ -1492,7 +1476,6 @@ const SUITES = [
   'tests/atribuir-quadra-nao-sobrescreve-placar.test.js',
   'tests/chamada-quadra-sandbox.test.js',
   'tests/end-court-remaining-emulator.test.js',
-  'tests/sandbox-lifecycle.test.js',
   'tests/postpone-next-match.test.js',
   'tests/tie-card-uses-match-card.test.js',
   'tests/operation-regions-mixed.test.js',

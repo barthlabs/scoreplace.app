@@ -4816,7 +4816,6 @@ function renderTournaments(container, tournamentId = null) {
             ${/* Sandbox (só o dev): FORA do bloco de organizador — o dev cria/abre o SB de
                   QUALQUER torneio que enxerga, mesmo sem ser o organizador. Não aparece no
                   próprio SB. */ ''}
-            ${(tournamentId && typeof window._isTestIdentity === 'function' && window._isTestIdentity() && !(window._isSandboxTournament && window._isSandboxTournament(t))) ? `<div style="margin-top:10px;"><button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._openOrCreateSandbox('${t.id}')" title="DEV (só você): clona este torneio num Sandbox PRIVADO que espelha o original e roda as mesmas Cloud Functions — sem notificações nem stats">🧪 ${(window._findSandboxOf && window._findSandboxOf(t.id)) ? 'Abrir' : 'Criar'} Sandbox</button></div>` : ''}
 
             ${/* v2.1.51: box de progresso movido pra logo acima do badge
                   "Torneio em andamento" (topo do actionsHtml), abaixo das

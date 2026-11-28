@@ -99,7 +99,6 @@ const TABELA = [
   { nome: "confirmSecondaryEmail", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "createCheckoutSession", regiao: "southamerica-east1", modo: "naoSondada", origemRegiao: {"tipo":"literal"} },
   { nome: "createDrawPoll", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
-  { nome: "createSandbox", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "createTeamEmailInvite", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "createTeamPhoneInvite", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "createTournament", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },

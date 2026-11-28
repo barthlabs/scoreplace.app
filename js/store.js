@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.97';
+window.SCOREPLACE_VERSION = '2.7.98';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -3493,9 +3493,9 @@ window._isTestAudiencePreview = function (t) {
 // memberUids só-dev, que impede o doc de sequer ser entregue. Ver project_sandbox_tournament.
 window._dropSandboxForNonDev = function (list) {
   var arr = Array.isArray(list) ? list : [];
-  if (window._isDeveloperIdentity && window._isDeveloperIdentity()) return arr;
+  var developer = !!(window._isTestIdentity && window._isTestIdentity());
   return arr.filter(function (t) { return !(t && (t.isSandbox === true ||
-    (t.testModeEnabled === true && !window._isTestAudiencePreview(t)))); });
+    (t.testModeEnabled === true && !developer && !window._isTestAudiencePreview(t)))); });
 };
 // Lista de torneios elegível pra STATS GLOBAIS (perfil, troféus, pills, confrontos):
 // exclui os sandboxes — resultados do SB não vazam pra agregação nenhuma. Recebe a
@@ -13097,42 +13097,6 @@ window.AppStore = {
       window._warn('[realtime] sem uid — listener não inicia (identidade é uid)');
       return;
     }
-    /* ═══ O OUVINTE DE SANDBOX É OUTRO, E EM OUTRA COLEÇÃO (FIX.SANDBOX.P2, 2.1.87) ═══
-     * ⭐ O ouvinte acima fica EXCLUSIVO de torneio real: o sandbox não está mais em
-     * `tournaments`, então ele nunca mais é entregue no aparelho de participante nenhum —
-     * e isso deixou de depender de a tela lembrar de filtrar.
-     * ⚠️ A query é POR DONO (`sandboxOwnerUid`), não por membership: a regra lê
-     * `resource.data`, então uma consulta que não constranja esse campo é recusada inteira.
-     * É de propósito — é o que impede varredura da coleção.
-     * ⛔ E só entra o que está `ready`: o documento nasce `creating` e a CF só promove
-     * depois da prova canônica. Sem este filtro, uma criação interrompida apareceria como
-     * sandbox utilizável pela metade — que é exatamente o que o dono proibiu. */
-    try {
-      if (window._sbUnsub) { try { window._sbUnsub(); } catch (e) {} window._sbUnsub = null; }
-      window._sbIdsConhecidos = window._sbIdsConhecidos || {};
-      window._sbUnsub = window.FirestoreDB.db.collection('sandboxes')
-        .where('sandboxOwnerUid', '==', _uid)
-        .onSnapshot({ includeMetadataChanges: true }, function (snap) {
-          if (!window._isRemoteFirestoreSnapshot(snap)) return;
-          try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-sandboxes'); } catch (e) {}
-          /* ⭐ 2.1.89 — UMA CHAMADA, E QUEM DECIDE É `_sbIngest`. Aqui havia um laço sobre
-           * `docChanges` que registrava/desregistrava ids por conta própria: uma SEGUNDA
-           * fonte da mesma decisão, ao lado da que o ingest passou a tomar. Duas fontes da
-           * mesma pergunta divergem — e neste projeto já divergiram três vezes.
-           * ⛔ O conjunto entregue é o COMPLETO de `ready` deste dono: é ele que permite ao
-           * ingest reconciliar REMOÇÃO (o que sumiu do snapshot sai da memória). Mandar só
-           * o delta deixaria sandbox apagado vivo na lista. */
-          var vivos = snap.docs.filter(function (d) { return (d.data() || {}).sbState === 'ready'; });
-          try { window._sbIngest(vivos.map(function (d) { return d.data(); })); } catch (e) {
-            if (window._error) window._error('[sandbox] ingest falhou', e);
-          }
-        }, function (err) {
-          // ⚠️ falhar aqui NÃO pode derrubar a lista de torneios reais — são ouvintes
-          // independentes de propósito.
-          if (window._warn) window._warn('[sandbox] ouvinte de sandboxes falhou', err);
-        });
-    } catch (e) { if (window._warn) window._warn('[sandbox] não consegui abrir o ouvinte', e); }
-
     // 1.9.79: o corpo do listener vira função NOMEADA e MEDIDA ('snapshot-torneios')
     // — o relato do aparelho (78) mostrou travadas de ~1,2s repetidas com 'trechos:
     // nenhum': era exatamente este callback, sem nome, pagando doc.data() de TODOS os

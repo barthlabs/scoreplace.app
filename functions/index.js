@@ -2677,12 +2677,6 @@ exports.drainPendingPasswordResets = onSchedule(
 // bug de inscrição vira `firebase deploy` de minutos, não release nativo de dias.
 // Lógica pura vive em ./enroll-core.js (espelha o cliente). Ver
 // [[project_firestore_assertion_bug]] / [[project_result_launch_cf_evaluation]].
-// Sandbox (SB): replicação one-way original→SB via a MESMA CF + o MESMO core. A lógica
-// vive em ./sandbox-replicate.js (módulo isolado só pra ser testável contra o emulador —
-// o código que roda é ESTE, não uma cópia). enrollParticipant/deenrollParticipant, depois
-// de aplicar no original, rodam o MESMO computeEnroll/computeDeenroll no doc do SB.
-const { replicateRosterToSandbox: _replicateRosterToSandbox } = require("./sandbox-replicate");
-
 // Deploy:  firebase deploy --only functions:enrollParticipant,functions:deenrollParticipant
 
 /**
@@ -3267,13 +3261,6 @@ exports.enrollParticipant = onCall(
     const withDuplicateSignal = (payload) => duplicateSignal
       ? Object.assign(payload, { dupSuspect: duplicateSignal })
       : payload;
-
-    // Sandbox: a MESMA CF replica a inscrição no SB via o MESMO core (best-effort).
-    if (!sandbox && !out.canonical) {
-      await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-        return _enrollCore.computeEnroll(sbData, sanitizedParticipantObj, extraUpdates, nowMs);
-      });
-    }
 
     // ── ESPELHO DO ROSTER (v1.7.40) ─────────────────────────────────────────
     // O dual-write da 1.7.29 (`tournaments/{id}/participants/{uid}`) existe pra ser a rede
@@ -4591,13 +4578,6 @@ exports.deenrollParticipant = onCall(
       return r;
     });
 
-    // Sandbox: a MESMA CF replica a desinscrição no SB via o MESMO core (best-effort).
-    if (!sandbox && !out.canonical) {
-      await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-        return _enrollCore.computeDeenroll(sbData, userUid);
-      });
-    }
-
     if (out.outcome === "notFound") return { notFound: true, participants: out.participants,
       ...(out.canonical ? { placeholderReservations: out.placeholderReservations } : {}) };
     return { notFound: false, participants: out.participants,
@@ -4640,12 +4620,6 @@ exports.leaveStandby = onCall(
       if (r.updateData) _splitParts.gravar(tx, docRef, t, r.updateData);
       return r;
     });
-
-    if (!sandbox && !out.canonical) {
-      await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-        return _enrollCore.computeLeaveStandby(sbData, callerUid);
-      });
-    }
 
     const receipt = { removed: out.outcome === "removed", participants: out.participants || [] };
     if (out.canonical) receipt.canonical = true;
@@ -8752,13 +8726,6 @@ exports.formPair = onCall(
       return r;
     });
 
-    // Sandbox: a MESMA CF replica a formação no SB via o MESMO core (best-effort).
-    if (!sandbox && !out.canonical) {
-      await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-        return _pairCore.computeFormPair(sbData, opts);
-      });
-    }
-
     if (out.outcome === "alreadyPaired") {
       return { notFound: false, alreadyPaired: true, who: out.who || "", participants: out.participants };
     }
@@ -8835,13 +8802,6 @@ exports.splitPair = onCall(
       if (r.updateData) _splitParts.gravar(tx, docRef, t, r.updateData);
       return r;
     });
-
-    // Sandbox: a MESMA CF replica o desfazer no SB via o MESMO core (best-effort).
-    if (!sandbox && !out.canonical) {
-      await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-        return _pairCore.computeSplitPair(sbData, opts);
-      });
-    }
 
     if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
     return { outcome: 'split', notFound: false, participants: out.participants };
@@ -15523,223 +15483,6 @@ exports.removeFriend = onCall(_AMIZADE_OPTS, async (request) => {
   const r = await _amizadeAplicar("remover", caller, String((request.data || {}).friendUid || ""));
   return { ok: true, evento: r.evento };
 });
-
-/* ═══ createSandbox — A CÓPIA FIEL, FEITA NO SERVIDOR (FIX.SANDBOX.P2, 2.1.87) ══════════
- *
- * INVARIANTE DO DONO (01/set/2026): _"O sandbox é uma réplica fiel do original. Qualquer
- * diferença de estado além de id técnico, isSandbox/sandboxOf/sandboxOwnerUid e estado
- * técnico de criação, notificações suprimidas e estatísticas históricas pessoais
- * suprimidas é defeito bloqueante."_ · _"Não é permitido simplificar, limpar, reconstruir,
- * normalizar, reduzir, mover ou substituir participants, inscritos, memberUids, coHosts,
- * adminUids, jogos, resultados, fases, rankings, classificações congeladas, W.O., espera,
- * suplentes, histórico, progresso, barras, chaves; nem a forma persistida."_
- *
- * ⛔ POR QUE ISTO TEM QUE SER SERVIDOR — e não podia ser cliente:
- *   · o cliente NÃO PODE escrever as subcoleções (`firestore.rules`: `allow write: if
- *     false` em inscritos/matches/opponentHistory/...). Um sandbox DIVIDIDO criado pelo
- *     cliente prometia `_nPartes` que ninguém preenchia — foi o "14 inscritos e 0 jogos";
- *   · e o objeto que o cliente tem em mãos é o documento MAGRO (as partes chegam depois),
- *     então clonar dali JÁ NASCE incompleto.
- *   ⇒ aqui roda o Admin SDK: lê o original inteiro, PROVA, e escreve as partes.
- *
- * E05: `results` é o índice legado, não a fonte do placar. Um sandbox novo copia
- * `matches/{id}.jogo` e as outras partes canônicas; não cria `resultsSandbox`.
- * Sandboxes antigos ainda podem ter esse índice e são limpos na exclusão.
- *
- * ⚠️ `creating` → `ready`: o documento nasce com `sbState:'creating'` e só vira `'ready'`
- * DEPOIS da prova canônica. O cliente só lista/abre o que está `ready`, então falha no meio
- * não deixa sandbox utilizável.
- */
-const SB_IDENTIDADES_DE_TESTE = [
-  "rstbarth@gmail.com", "B17n7JCXYOfqahlcLZ0fKxGGyUu1",
-  "rstbarth@hotmail.com",
-  "nelsonterrabarth@gmail.com", "9r1I1brrTecENuQKXYWpAqTmBbQ2",
-];
-/* ⛔ A LISTA VIVE NO SERVIDOR. No cliente ela é `window.SP_TEST_IDENTITIES` e qualquer um
- * a reescreve no console; aqui ela é autoridade. Mesmo conteúdo, dono diferente. */
-function _sbEhIdentidadeDeTeste(uid, email) {
-  const u = String(uid || "").toLowerCase();
-  const e = String(email || "").toLowerCase();
-  return SB_IDENTIDADES_DE_TESTE.some((x) => {
-    const k = String(x).toLowerCase();
-    return k && (k === u || k === e);
-  });
-}
-
-/* JSON canônico (chaves ordenadas) — a régua da prova de igualdade. */
-function _sbCanon(v) {
-  if (v === null || typeof v !== "object") return JSON.stringify(v === undefined ? null : v);
-  if (Array.isArray(v)) return "[" + v.map(_sbCanon).join(",") + "]";
-  return "{" + Object.keys(v).sort().map((k) => JSON.stringify(k) + ":" + _sbCanon(v[k])).join(",") + "}";
-}
-
-/* Campos que PODEM diferir — a lista EXATA autorizada pelo dono (FIX.SANDBOX.P2.P3).
- *
- * ⛔ ELA ENCOLHEU NA 2.1.88, e o motivo é que a de antes MENTIA. Ela listava `name`,
- * `creatorUid`, `organizerEmail`, `organizerName`, `isPublic`, `createdAt`, `updatedAt`,
- * `remindersSent`, `finishNotifiedAt`, `nextDrawAt` e `lastAutoDrawAt` — e a Function
- * de fato TROCAVA os seis primeiros. Ou seja: a prova de igualdade canônica rodava com
- * esses campos ISENTOS e dava verde sobre um documento que já não era o original.
- * Ordem do dono: _"O sandbox deve preservar todos eles byte a byte."_
- *
- * ⭐ O QUE SOBROU É SÓ O QUE FAZ O DOCUMENTO SER UM SANDBOX: o id técnico, os quatro
- * carimbos, as duas datas técnicas e a supressão de notificação. Nada mais.
- * ⚠️ `sandboxCreatedAt` é campo NOVO de propósito: a data técnica da cópia precisa existir
- * em algum lugar, e `createdAt` é do ORIGINAL — sobrescrevê-lo era a adulteração.
- * ⛔ Poder de organizador do dono do sandbox NÃO se resolve aqui: é condição de INTERFACE
- * (`_souDonoDoSandbox`, em js/store.js). Trocar `creatorUid`/`adminUids`/`coHosts` pra
- * conceder botão é justamente o que esta lista proíbe. */
-const SB_ENVELOPE = [
-  "id",                                         // id técnico próprio
-  "isSandbox", "sandboxOf", "sandboxOwnerUid", "sbState",
-  "sandboxCreatedAt", "sandboxSyncedAt",        // datas TÉCNICAS da cópia (não as do torneio)
-  "notificationsMuted",                         // notificações suprimidas
-];
-
-exports.createSandbox = onCall(
-  { region: "us-central1", memory: "512MiB", timeoutSeconds: 300, cors: APP_ORIGINS },
-  async (request) => {
-    const callerUid = request.auth && request.auth.uid;
-    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
-    const db = admin.firestore();
-
-    // ── ① AUTORIZAÇÃO ESTRITA, no servidor ──────────────────────────────────
-    const perfil = await db.collection("users").doc(callerUid).get().catch(() => null);
-    const email = (perfil && perfil.exists && (perfil.data() || {}).email) || "";
-    if (!_sbEhIdentidadeDeTeste(callerUid, email)) {
-      throw new HttpsError("permission-denied", "sandbox é só para a identidade de teste");
-    }
-
-    // ⛔ O CLIENTE MANDA UM ID E MAIS NADA. Nenhum payload de torneio é aceito — é o que
-    // impede "cópia fiel" de virar "o que o cliente disser que é a cópia".
-    const origId = String(((request.data || {}).originalTournamentId) || "");
-    if (!origId) throw new HttpsError("invalid-argument", "originalTournamentId é obrigatório");
-
-    // A identidade de teste não é autorização para clonar o torneio de terceiros.
-    // Validar ANTES do retorno idempotente protege também sandboxes já existentes.
-    const origRef = db.collection("tournaments").doc(origId);
-    const origSnap = await origRef.get();
-    if (!origSnap.exists) throw new HttpsError("not-found", "torneio original não existe");
-    const cfg = origSnap.data() || {};
-    if (cfg.isSandbox === true || !_isTournamentOrgCaller(cfg, callerUid)) {
-      throw new HttpsError("permission-denied", "só a organização pode criar o sandbox");
-    }
-
-    // ── ② IDEMPOTÊNCIA: já existe um sandbox PRONTO deste original para este dono? ──
-    const jaTem = await db.collection("sandboxes")
-      .where("sandboxOwnerUid", "==", callerUid)
-      .where("sandboxOf", "==", origId)
-      .where("sbState", "==", "ready").limit(1).get();
-    if (!jaTem.empty) return { ok: true, id: jaTem.docs[0].id, reaproveitado: true };
-
-    // ── ③ LÊ O ORIGINAL CANÔNICO E COMPLETO ─────────────────────────────────
-    // O original foi lido e autorizado acima, antes mesmo da busca idempotente.
-
-    // Todas as partes do original, exceto os índices legados de resultado.
-    // O placar já está em matches/{id}.jogo; copiá-lo de novo criaria segunda fonte.
-    const subRefs = await origRef.listCollections();
-    const partes = {};
-    for (const c of subRefs) {
-      if (c.id === "results" || c.id === "resultsSandbox") continue;
-      const snap = await c.get();
-      partes[c.id] = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
-    }
-
-    // ── ④ VALIDA AS CONTAGENS PROMETIDAS, ANTES DE ESCREVER ─────────────────
-    const S = require("./vendor/tournament-split-core.js");   // cópia gerada (copy-vendor)
-    /* ⛔ O sandbox copia a forma canônica: `_semPesados` é só compatibilidade com
-     * nativos antigos. Sem ele, validar zero subcoleções aceitaria um clone incompleto. */
-    const fora = S.partesDe(cfg);
-    const faltas = [];
-    const colecaoDaParte = (nome) => (typeof S.colecaoDaParte === "function" ? S.colecaoDaParte(nome) : nome);
-    for (const nome of fora) {
-      const col = colecaoDaParte(nome);
-      const veio = (partes[col] || []).length;
-      const prometido = (cfg._nPartes || {})[nome];
-      if (prometido != null && veio !== prometido) faltas.push(nome + ": " + veio + " de " + prometido);
-    }
-    if (cfg._nJogos != null) {
-      const nj = (partes.matches || []).length;
-      if (nj !== cfg._nJogos) faltas.push("_nJogos: " + nj + " de " + cfg._nJogos);
-    }
-    if (faltas.length) {
-      throw new HttpsError("failed-precondition", "original incompleto — " + faltas.join(", "));
-    }
-
-    // ── ⑤ ESCREVE: `creating` (invisível) + parent + TODAS as subcoleções ───
-    const sbId = "sb_" + origId + "_" + Date.now();
-    const sbRef = db.collection("sandboxes").doc(sbId);
-    const envelope = {
-      id: sbId,
-      isSandbox: true, sandboxOf: String(origId), sandboxOwnerUid: callerUid,
-      sbState: "creating",                       // ⛔ invisível até a prova
-      notificationsMuted: true,                  // notificações suprimidas
-      sandboxCreatedAt: new Date().toISOString(),// data TÉCNICA da cópia — `createdAt` é do original
-      sandboxSyncedAt: Date.now(),
-    };
-    /* ⭐ O DOCUMENTO SAI DO ORIGINAL INTEIRO E SÓ O CARIMBO É SOBREPOSTO (2.1.88).
-     * `name`, `creatorUid`, `organizerEmail`, `organizerName`, `isPublic`, `createdAt`,
-     * `updatedAt`, `remindersSent`, `finishNotifiedAt`, `nextDrawAt`, `lastAutoDrawAt`,
-     * memberUids, coHosts, adminUids, participants, phases, rounds, `_semPesados`,
-     * `_nPartes`, `_nJogos` — TUDO passa como está. É isso que "réplica fiel" quer dizer.
-     * ⛔ E NADA é deletado: o `delete sbDoc.sandboxId` que morava aqui apagava um campo do
-     * ORIGINAL. Campo do original que some é diferença, e diferença é defeito.
-     * ⚠️ `isPublic` viaja igual — e não vaza: as Rules de `sandboxes` autorizam por
-     * `sandboxOwnerUid` e NUNCA olham `isPublic`; quem publica na vitrine é o gatilho
-     * `syncDiscoveryFeed`, que observa `tournaments/{id}` e não enxerga esta coleção. */
-    if (cfg.tvRotation) {
-      try { require("./vendor/tv-layout-core").normalizeRotation(cfg.tvRotation, origId, cfg.tvRotation, admin.storage().bucket().name); }
-      catch (error) { throw new HttpsError("failed-precondition", error.message); }
-    }
-    const sbDoc = Object.assign({}, cfg, envelope);
-    await sbRef.set(sbDoc);
-
-    let escritos = 0;
-    for (const col of Object.keys(partes)) {
-      let lote = db.batch(); let n = 0;
-      for (const d of partes[col]) {
-        lote.set(sbRef.collection(col).doc(d.id), d.data);             // id e campos byte a byte
-        n++; escritos++;
-        if (n >= 400) { await lote.commit(); lote = db.batch(); n = 0; }
-      }
-      if (n > 0) await lote.commit();
-    }
-
-    // ── ⑥ PROVA CANÔNICA, relendo o que foi gravado ─────────────────────────
-    const difs = [];
-    const relido = (await sbRef.get()).data() || {};
-    const chaves = new Set(Object.keys(cfg).concat(Object.keys(relido)));
-    for (const k of chaves) {
-      if (SB_ENVELOPE.indexOf(k) !== -1) continue;
-      if (_sbCanon(cfg[k]) !== _sbCanon(relido[k])) difs.push("campo:" + k);
-    }
-    for (const col of Object.keys(partes)) {
-      const snap = await sbRef.collection(col).get();
-      if (snap.size !== partes[col].length) {
-        difs.push(col + ": " + snap.size + " de " + partes[col].length);
-        continue;
-      }
-      const porId = {}; snap.docs.forEach((d) => { porId[d.id] = d.data(); });
-      for (const d of partes[col]) {
-        if (_sbCanon(porId[d.id]) !== _sbCanon(d.data)) { difs.push(col + "/" + d.id); break; }
-      }
-    }
-    if (difs.length) {
-      // ⛔ NÃO deixa sandbox parcial utilizável: some com o que foi escrito e falha.
-      await db.recursiveDelete(sbRef).catch(() => {});
-      throw new HttpsError("internal", "cópia divergente — " + difs.slice(0, 6).join(", "));
-    }
-
-    // ── ⑦ só agora fica visível ─────────────────────────────────────────────
-    await sbRef.update({ sbState: "ready" });
-    /* ⭐ `envelope` VAI NA RESPOSTA de propósito: é a lista viva do que pode diferir, e é
-     * contra ELA que o controle da suíte cobra as duas exceções da 2.1.86 (membership
-     * trocada, `_semPesados` removido). Teste que carrega a própria cópia da lista fica
-     * verde no dia em que alguém afrouxa a de verdade. */
-    return { ok: true, id: sbId, docsCopiados: escritos, subcolecoes: Object.keys(partes).length,
-      envelope: SB_ENVELOPE.slice() };
-  }
-);
 
 /* ═══════════════════════════════════════════════════════════════════════════════════════════
  * PASSKEY — entrar sem senha, e sem a pergunta "qual conta eu usei"

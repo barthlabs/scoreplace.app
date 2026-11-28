@@ -200,8 +200,8 @@ ok(novo.cohostGrava === 403,
   '⭐ co-organizador não grava no acervo global (got ' + novo.cohostGrava + ')');
 ok(novo.sandboxGrava === 403,
   '⭐ sandbox também não grava no acervo global (got ' + novo.sandboxGrava + ')');
-ok(novo.sandboxColecaoLe === 200 && novo.torneioColecaoLe === 200,
-  '⭐ acervos legados do sandbox e torneio seguem legíveis para o dono');
+ok(novo.sandboxColecaoLe === 403 && novo.torneioColecaoLe === 200,
+  '⭐ coleção sandbox aposentada é inacessível; acervo do torneio permanece legível');
 ok(novo.sandboxColecaoCria === 403 && novo.sandboxColecaoAtualiza === 403 && novo.sandboxColecaoApaga === 403,
   '⭐ sandbox recusa criar, atualizar e apagar scans de terceiros pelo cliente');
 ok(novo.torneioColecaoCria === 403 && novo.torneioColecaoAtualiza === 403 && novo.torneioColecaoApaga === 403,

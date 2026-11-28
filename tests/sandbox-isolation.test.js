@@ -120,7 +120,9 @@ AS.currentUser = { uid: 'B17n7JCXYOfqahlcLZ0fKxGGyUu1', email: 'rstbarth@gmail.c
 ok(W._isTestIdentity(), 'C: rstbarth é dev');
 var visD = AS.getVisibleTournaments().map(function (t) { return t.id; });
 ok(visD.indexOf('N1_SB') !== -1, 'C: dev VÊ o SB');
-ok(W._dropSandboxForNonDev([normal, sb]).length === 2, 'C: ingestão mantém o SB pro dev');
+ok(W._dropSandboxForNonDev([normal, sb]).length === 1, 'C: ingestão não oferece mais SB, nem ao dev');
+ok(W._dropSandboxForNonDev([normal, { id:'real-test', testModeEnabled:true }]).length === 2,
+   'C: organizador de teste continua recebendo torneios reais em teste');
 
 // A Kelly recebe somente a prévia marcada pelo servidor; o sandbox e outros
 // torneios em teste continuam fora da lista e das estatísticas globais.
