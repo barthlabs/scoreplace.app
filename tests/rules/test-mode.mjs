@@ -6,6 +6,7 @@ const [host, port] = String(process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:81
 const env = await initializeTestEnvironment({ projectId:'demo-scoreplace',
   firestore:{ rules:readFileSync('firestore.rules', 'utf8'), host, port:Number(port) } });
 const dev = 'B17n7JCXYOfqahlcLZ0fKxGGyUu1';
+const kelly = 'OkQJOEkLMchgKYFZb8nLJm7nLPH2';
 const org = 'uid_org', member = 'uid_member', referee = 'uid_referee';
 const root = 'tournaments/test_mode_fixture';
 const summary = 'tournaments_summary/test_mode_fixture';
@@ -17,8 +18,17 @@ try {
       isPublic:false, organizerOnly:true, membersOnly:false, memberUids:[org], refereeUids:[referee] };
     await setDoc(doc(db, root), t);
     await setDoc(doc(db, summary), t);
+    await setDoc(doc(db, 'tournaments/kelly_preview'), {
+      ...t, creatorUid:dev, adminUids:[dev], memberUids:[dev], refereeUids:[],
+      testAudiencePreviewUid:kelly
+    });
+    await setDoc(doc(db, 'tournaments/other_preview'), {
+      ...t, creatorUid:dev, adminUids:[dev], memberUids:[dev], refereeUids:[],
+      testAudiencePreviewUid:'uid_other'
+    });
     for (const col of ['matches', 'inscritos', 'courtState', 'billingReceipts', 'paymentSecrets']) {
       await setDoc(doc(db, root, col, 'one'), { participantUid:member, id:'one' });
+      await setDoc(doc(db, 'tournaments/kelly_preview', col, 'one'), { participantUid:member, id:'one' });
     }
   });
   for (const path of [root, summary, root+'/matches/one', root+'/inscritos/one', root+'/courtState/one']) {
@@ -29,6 +39,24 @@ try {
     await assertSucceeds(getDoc(doc(userDb(org), root, col, 'one')));
     await assertFails(getDoc(doc(userDb(member), root, col, 'one')));
   }
+  for (const path of ['tournaments/kelly_preview', ...['matches', 'inscritos', 'courtState']
+    .map(col => `tournaments/kelly_preview/${col}/one`)]) {
+    await assertSucceeds(getDoc(doc(userDb(kelly), path)));
+    await assertFails(getDoc(doc(userDb(member), path)));
+  }
+  await assertFails(getDoc(doc(userDb(kelly), 'tournaments/other_preview')));
+  await assertFails(getDoc(doc(userDb(kelly), root)));
+  for (const col of ['billingReceipts', 'paymentSecrets']) {
+    await assertFails(getDoc(doc(userDb(kelly), 'tournaments/kelly_preview', col, 'one')));
+  }
+  const previewList = uid => getDocs(query(collection(userDb(uid), 'tournaments'),
+    where('testAudiencePreviewUid', '==', uid)));
+  const kellyList = await assertSucceeds(previewList(kelly));
+  if (kellyList.docs.map(d => d.id).join(',') !== 'kelly_preview') throw new Error('Prévia exclusiva da Kelly falhou');
+  await assertFails(previewList(member));
+  await assertFails(setDoc(doc(userDb(kelly), 'tournaments/kelly_preview'), { name:'Alterado' }, { merge:true }));
+  await assertFails(setDoc(doc(userDb(dev), 'tournaments/kelly_preview'),
+    { testAudiencePreviewUid:member }, { merge:true }));
   for (const col of ['tournaments', 'tournaments_summary']) {
     const list = (uid, field, value) => getDocs(query(collection(userDb(uid), col),
       where(field, field === 'memberUids' || field === 'refereeUids' ? 'array-contains' : '==', value)));

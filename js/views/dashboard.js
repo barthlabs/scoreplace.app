@@ -1365,7 +1365,8 @@ function renderDashboard(container) {
   // Grupo 1: torneios que o usuário organiza OU participa (sem duplicata), ordem cronológica
   const seenIds = new Set();
   const meus = [];
-  [...organizadosSorted, ...participacoesSorted].forEach(t => {
+  const audiencePreviews = visible.filter(t => window._isTestAudiencePreview && window._isTestAudiencePreview(t));
+  [...organizadosSorted, ...participacoesSorted, ...audiencePreviews].forEach(t => {
     if (!seenIds.has(t.id)) {
       seenIds.add(t.id);
       meus.push(t);

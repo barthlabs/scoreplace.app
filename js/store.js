@@ -3482,6 +3482,11 @@ window._isSandboxRoute = function () {
 window._tournamentNotificationsMuted = function (t) {
   return !!(t && (t.notificationsMuted === true || t.isSandbox === true || t.testModeEnabled === true));
 };
+window._isTestAudiencePreview = function (t) {
+  var user = window.AppStore && window.AppStore.currentUser;
+  return !!(t && user && user.uid === 'OkQJOEkLMchgKYFZb8nLJm7nLPH2' &&
+    t.testModeEnabled === true && t.isSandbox !== true && t.testAudiencePreviewUid === user.uid);
+};
 // CINTO de ingestão: tira os SB da lista pra quem não é o dev. Aplicado em TODO ponto onde
 // torneios entram no AppStore (listener, load, cache) — assim nenhum consumidor de
 // AppStore.tournaments precisa lembrar de filtrar (eram 2 de dezenas). O suspensório é o
@@ -3489,7 +3494,8 @@ window._tournamentNotificationsMuted = function (t) {
 window._dropSandboxForNonDev = function (list) {
   var arr = Array.isArray(list) ? list : [];
   if (window._isDeveloperIdentity && window._isDeveloperIdentity()) return arr;
-  return arr.filter(function (t) { return !(t && (t.isSandbox === true || t.testModeEnabled === true)); });
+  return arr.filter(function (t) { return !(t && (t.isSandbox === true ||
+    (t.testModeEnabled === true && !window._isTestAudiencePreview(t)))); });
 };
 // Lista de torneios elegível pra STATS GLOBAIS (perfil, troféus, pills, confrontos):
 // exclui os sandboxes — resultados do SB não vazam pra agregação nenhuma. Recebe a
@@ -13504,9 +13510,10 @@ window.AppStore = {
         window._softRefreshView();
     }
     var db = window.FirestoreDB.db;
-    var feeds = { primary: null, referees: null, developerTests: null };
-    var ready = { primary: false, referees: false, developerTests: false };
+    var feeds = { primary: null, referees: null, developerTests: null, audiencePreview: null };
+    var ready = { primary: false, referees: false, developerTests: false, audiencePreview: false };
     var developerTestsActive = !!(window._isTestIdentity && window._isTestIdentity());
+    var audiencePreviewActive = _uid === 'OkQJOEkLMchgKYFZb8nLJm7nLPH2';
     var previousDocs = Object.create(null);
     var activeMode = 'summary';
     var fallbackStarted = false;
@@ -13529,7 +13536,7 @@ window.AppStore = {
       // Primary member feed first; referee feed fills in the remaining documents.
       // Referee documents may overlap members; member snapshots win, and the
       // optional canonical developer-test document has highest precedence.
-      [feeds.referees, feeds.primary, feeds.developerTests].forEach(function (snap) {
+      [feeds.referees, feeds.primary, feeds.developerTests, feeds.audiencePreview].forEach(function (snap) {
         if (!snap || !Array.isArray(snap.docs)) return;
         snap.docs.forEach(function (doc) { if (doc) byId[doc.id] = doc; });
       });
@@ -13562,7 +13569,8 @@ window.AppStore = {
       if (activeMode === 'full' && !ready.primary) return;
       var snap = _makeCombinedSnapshot();
       var optionalFeedsPending = !ready.referees ||
-        (activeMode === 'summary' && developerTestsActive && !ready.developerTests);
+        (activeMode === 'summary' && developerTestsActive && !ready.developerTests) ||
+        (audiencePreviewActive && !ready.audiencePreview);
       if (typeof window._setServerFreshness === 'function') window._setServerFreshness('current');
       window._snapCount = (window._snapCount || 0) + 1;
       if (window._medirTrecho) return window._medirTrecho('snapshot-resumos-torneios', function () { _aplicaSnapTorneios(snap, optionalFeedsPending); });
@@ -13604,14 +13612,17 @@ window.AppStore = {
       sessionUnsubs.forEach(function (un) { try { un(); } catch (e) {} });
       sessionUnsubs.length = 0;
       if (store._summaryUnsubs === sessionUnsubs) store._summaryUnsubs = sessionUnsubs;
-      feeds = { primary: null, referees: null, developerTests: null };
-      ready = { primary: false, referees: false, developerTests: !developerTestsActive };
+      feeds = { primary: null, referees: null, developerTests: null, audiencePreview: null };
+      ready = { primary: false, referees: false, developerTests: !developerTestsActive, audiencePreview: !audiencePreviewActive };
       previousDocs = Object.create(null);
       if (typeof window._setServerFreshness === 'function') window._setServerFreshness('waiting');
       _listen(db.collection('tournaments').where('memberUids', 'array-contains', _uid), 'primary', true, 'full');
       // Legacy root tournaments may omit isSandbox; the rules default it to false.
       // Filtering for explicit false would silently omit those referee-only records.
       _listen(db.collection('tournaments').where('refereeUids', 'array-contains', _uid), 'referees', false, 'full');
+      if (audiencePreviewActive) _listen(db.collection('tournaments')
+        .where('testAudiencePreviewUid', '==', _uid),
+        'audiencePreview', false, 'full');
     }
 
     // Two rule-compatible server feeds form the full current list. Each emits only
@@ -13631,6 +13642,12 @@ window.AppStore = {
           .where('testModeEnabled', '==', true), 'developerTests', false, 'summary');
       }
     } catch (e) { if (window._warn) window._warn('[realtime] feed opcional de teste indisponível:', e); }
+    if (audiencePreviewActive && !fallbackStarted) {
+      try {
+        _listen(db.collection('tournaments').where('testAudiencePreviewUid', '==', _uid),
+          'audiencePreview', false, 'full');
+      } catch (e) { if (window._warn) window._warn('[realtime] prévia da audiência indisponível:', e); }
+    }
 
 
     // v1.9.92: gatilho tempo-real da descoberta pública (camada ADITIVA;
@@ -14997,6 +15014,7 @@ window.AppStore = {
       // Sandbox: invisível pra QUALQUER um que não seja o dev — mesmo tendo os
       // participantes reais espelhados no memberUids. Só o dev enxerga o SB.
       if (t.isSandbox && !_devSees) return false;
+      if (window._isTestAudiencePreview(t)) return true;
       if (t.organizerOnly === true) {
         var uid = cu && cu.uid;
         return !!(uid && (t.creatorUid === uid ||

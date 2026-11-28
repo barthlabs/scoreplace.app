@@ -216,6 +216,7 @@ try {
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
 const CF_VERSION = '2.2.72';
 const TEST_DEVELOPER_UID = 'B17n7JCXYOfqahlcLZ0fKxGGyUu1';
+const TEST_AUDIENCE_PREVIEW_UID = 'OkQJOEkLMchgKYFZb8nLJm7nLPH2'; // Kelly Barth
 
 initializeApp();
 const db = getFirestore();
@@ -7072,6 +7073,7 @@ exports.updateTournamentConfiguration = onCall({ timeoutSeconds:540, memory:'512
     });
     if (turningTestOn) {
       t.testModeVisibilityBefore = testVisibilityBefore;
+      if (!sandbox) t.testAudiencePreviewUid = TEST_AUDIENCE_PREVIEW_UID;
       t.isPublic = false;
       t.membersOnly = false;
       t.organizerOnly = true;
@@ -7079,6 +7081,7 @@ exports.updateTournamentConfiguration = onCall({ timeoutSeconds:540, memory:'512
       tx.delete(db.collection('tournaments_summary').doc(tId));
       tx.delete(db.collection('discoveryFeed').doc(tId));
     } else if (turningTestOff) {
+      delete t.testAudiencePreviewUid;
       const previous = t.testModeVisibilityBefore;
       if (!['isPublic', 'membersOnly', 'organizerOnly'].every(key => Object.prototype.hasOwnProperty.call(patch, key))) {
         if (!previous || typeof previous !== 'object') {

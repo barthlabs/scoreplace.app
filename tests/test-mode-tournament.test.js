@@ -95,8 +95,11 @@ assert(fs.readFileSync('functions-autodraw/tournament-create.js', 'utf8')
 
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const rules = fs.readFileSync('firestore.rules', 'utf8');
-assert(rules.includes("? (isTournamentAdmin(data) || isConfirmedTournamentReferee(data))"),
-  'um torneio em teste só é visível para organização e árbitros confirmados');
+assert(rules.includes("? (isTournamentAdmin(data) || isConfirmedTournamentReferee(data) || isTestAudiencePreview(data))"),
+  'um torneio em teste só é visível para organização, árbitros confirmados e a prévia da Kelly');
+assert(source.includes('if (!sandbox) t.testAudiencePreviewUid = TEST_AUDIENCE_PREVIEW_UID;') &&
+  source.includes('delete t.testAudiencePreviewUid;'),
+  'a prévia é concedida somente enquanto o modo de teste está ativo');
 assert(!source.includes('      t.refereeUids = [];\n      tx.delete(db.collection(\'tournaments_summary\')'),
   'ativar teste preserva os árbitros confirmados');
 const flagRules = source.slice(source.indexOf("  if ('testModeEnabled' in patch"), source.indexOf("  if ('dateCardColors' in patch"));

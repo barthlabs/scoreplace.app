@@ -57,9 +57,16 @@ service cloud.firestore {
         && request.auth.uid in data.get('refereeUids', []);
     }
 
+    function isTestAudiencePreview(data) {
+      return request.auth != null
+        && request.auth.uid == 'OkQJOEkLMchgKYFZb8nLJm7nLPH2'
+        && data.get('testModeEnabled', false) == true
+        && data.get('testAudiencePreviewUid', '') == request.auth.uid;
+    }
+
     function canReadTournamentData(data) {
       return data.get('testModeEnabled', false) == true
-        ? (isTournamentAdmin(data) || isConfirmedTournamentReferee(data))
+        ? (isTournamentAdmin(data) || isConfirmedTournamentReferee(data) || isTestAudiencePreview(data))
         : data.get('organizerOnly', false) == true
         ? (isTournamentAdmin(data) || isConfirmedTournamentReferee(data))
         : (data.get('membersOnly', false) == true
@@ -849,7 +856,10 @@ service cloud.firestore {
       allow get: if canReadTournamentData(resource.data);
       allow list: if resource.data.get('isPublic', false) == true
         || (request.auth != null && request.auth.uid in resource.data.get('memberUids', []))
-        || isConfirmedTournamentReferee(resource.data);
+        || isConfirmedTournamentReferee(resource.data)
+        || (request.auth != null
+          && request.auth.uid == 'OkQJOEkLMchgKYFZb8nLJm7nLPH2'
+          && resource.data.testAudiencePreviewUid == request.auth.uid);
 
       // ⛔ CREATE: FECHADO. Torneio NASCE NO SERVIDOR — a porta é a Function
       // `createTournament` (`functions-autodraw/index.js:3355`), que roda com Admin SDK,
@@ -945,7 +955,7 @@ service cloud.firestore {
           'billingTermsAcceptance', '_phaseReadCertificate', 'refereeUids',
           // A tela No ar é editada pela Function autenticada. Saves genéricos
           // de jogos vindos de abas antigas nunca podem sobrescrevê-la.
-          'participantSlotReplacements', 'tvLayout', 'tvScreens', 'tvActiveScreen', 'tvRotation', 'testModeEnabled', 'testModeVisibilityBefore',
+          'participantSlotReplacements', 'tvLayout', 'tvScreens', 'tvActiveScreen', 'tvRotation', 'testModeEnabled', 'testModeVisibilityBefore', 'testAudiencePreviewUid',
           'preserveDrawOnTestReset', 'drawCheckpoint', 'rehearsal',
           'phaseBracketPlanV1', 'phaseBracketPlanVersion'
         ])

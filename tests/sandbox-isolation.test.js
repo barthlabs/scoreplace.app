@@ -122,6 +122,26 @@ var visD = AS.getVisibleTournaments().map(function (t) { return t.id; });
 ok(visD.indexOf('N1_SB') !== -1, 'C: dev VÊ o SB');
 ok(W._dropSandboxForNonDev([normal, sb]).length === 2, 'C: ingestão mantém o SB pro dev');
 
+// A Kelly recebe somente a prévia marcada pelo servidor; o sandbox e outros
+// torneios em teste continuam fora da lista e das estatísticas globais.
+var preview = { id:'preview', testModeEnabled:true, organizerOnly:true,
+  testAudiencePreviewUid:'OkQJOEkLMchgKYFZb8nLJm7nLPH2', memberUids:['B17n7JCXYOfqahlcLZ0fKxGGyUu1'] };
+var otherTest = { id:'other-test', testModeEnabled:true, organizerOnly:true,
+  memberUids:['B17n7JCXYOfqahlcLZ0fKxGGyUu1'] };
+AS.currentUser = { uid:'OkQJOEkLMchgKYFZb8nLJm7nLPH2', displayName:'Kelly Barth' };
+AS.tournaments = [normal, sb, preview, otherTest];
+ok(W._isTestAudiencePreview(preview), 'D: Kelly reconhece a prévia marcada para ela');
+ok(!W._isTestAudiencePreview(otherTest), 'D: outro teste não vira prévia');
+ok(W._dropSandboxForNonDev(AS.tournaments).map(t => t.id).join(',') === 'N1,preview',
+   'D: ingestão entrega à Kelly somente o teste autorizado');
+ok(AS.getVisibleTournaments().some(t => t.id === 'preview'),
+   'D: Kelly encontra a prévia na lista visível mesmo com organizerOnly');
+ok(!W._statsEligibleTournaments().some(t => t.id === 'preview'),
+   'D: prévia não afeta estatísticas globais');
+AS.currentUser = { uid:'uid_pedro', displayName:'Pedro' };
+ok(!W._isTestAudiencePreview(preview) && !W._dropSandboxForNonDev([preview]).length,
+   'D: outro usuário não recebe a prévia');
+
 console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
 if (fail > 0) { console.error('❌ sandbox-isolation FALHOU'); process.exit(1); }
 console.log('✅ sandbox-isolation: OK');
